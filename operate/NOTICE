@@ -1,0 +1,19 @@
+symaira-operate
+Copyright (c) 2026 Daniel Justus
+
+Part of the Symaira family of AI-agent-native macOS tooling.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Origin
+------
+Derived from the author's own `mac-operator` prototype (ai-mac-use), rebranded
+and aligned to Symaira conventions. Native Swift; no third-party runtime deps.
+
+Safety note
+-----------
+symaira-operate lets an AI agent control the macOS GUI (mouse, keyboard, menus,
+windows). It is intended for supervised, local use over stdio MCP only — not as a
+remote-control daemon. Destructive controls and secure text fields are refused
+for element-based actions; passwords, payments, and permission dialogs must not
+be automated without explicit user confirmation. Use at your own risk; see the
+warranty disclaimer in LICENSE.
