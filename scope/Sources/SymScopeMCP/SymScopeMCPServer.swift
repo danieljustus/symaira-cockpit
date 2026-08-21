@@ -127,8 +127,8 @@ public final class SymScopeMCPServer: @unchecked Sendable {
     }
 
     private func callTool(_ name: String, arguments: [String: Any]) async throws -> [String: Any] {
+        // Models declare explicit snake_case CodingKeys — no key strategy.
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
 
         switch name {
         case "scan":
