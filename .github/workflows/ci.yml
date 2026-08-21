@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Nested packages (tune/, operate/) each have their own Package.swift.
+  # Matrix per package so a failure is attributable by name. macOS-only code
+  # (AppKit/IOKit/AX) — no ubuntu leg for the Swift packages.
+  # Note: scope/ is not in the matrix yet — it lands with the Go→Swift port
+  # (repo consolidation step 8 follow-up).
+  # macos-latest rather than macos-15: tune targets Xcode 27 (Swift 6.4) and
+  # the older runner's Swift 6.0 rejects @unchecked Sendable boundaries that
+  # 6.4 accepts.
+  swift:
+    name: ${{ matrix.pkg }}
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ${{ matrix.pkg }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [tune, operate]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Prefer the Xcode-beta toolchain when present (actool for the app
+      # targets), otherwise fall back to the runner's default swift.
+      - name: Select toolchain
+        run: |
+          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test

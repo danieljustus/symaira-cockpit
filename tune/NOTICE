@@ -1,0 +1,19 @@
+symaira-tune
+Copyright (c) 2026 Daniel Justus
+
+This product is part of the Symaira family of AI-agent-native macOS tooling.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Hardware-safety note
+--------------------
+symaira-tune can read and adjust low-level Mac hardware state such as display
+brightness, fan speed, and battery charging. All write paths are clamped to
+safe ranges and never disable the firmware's thermal protection. Use at your
+own risk; see the warranty disclaimer in LICENSE.
+
+Acknowledgements / prior art
+----------------------------
+This project is inspired by, but contains no code from, the following tools:
+  - Macs Fan Control (crystalidea)        https://crystalidea.com/macs-fan-control
+  - BrightIntosh                          https://brightintosh.de
+Their feature sets informed the capability roadmap (docs/roadmap.md).
