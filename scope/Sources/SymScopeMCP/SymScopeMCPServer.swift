@@ -39,7 +39,7 @@ public final class SymScopeMCPServer: @unchecked Sendable {
         case "ping":
             return [:]
         case "tools/list":
-            return ["tools": tools().map { Self.jsonValue($0) }]
+            return ["tools": tools()]
         case "tools/call":
             guard let name = params["name"] as? String else {
                 throw MCPServerError.invalidParams("tools/call requires a tool name")
