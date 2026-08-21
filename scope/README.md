@@ -28,6 +28,10 @@ symscope mcp list              # MCP-Server über AI-Client-Configs
 symscope mcp health            # Health-Probe aller konfigurierten Server
 symscope containers            # laufende Docker-Container (docker ps)
 symscope conflicts             # Ports, die von mehreren Prozessen gehalten werden
+symscope watch --interval 5    # Änderungen beobachten (NDJSON-Events: port_bound, …)
+symscope cache show|clear      # Snapshot-Cache inspizieren/löschen
+symscope explain port <p>      # was nutzt Port p (Prozesse + MCP-Server)
+symscope explain server <name> # welcher Client/Config gehört zum MCP-Server
 symscope serve                 # stdio MCP-Server (JSON-RPC)
 ```
 

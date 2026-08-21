@@ -9,10 +9,11 @@ let version = Version.info()
 
 let args = Array(CommandLine.arguments.dropFirst())
 
-// Encoder with snake_case keys + pretty output for scan.
+// Encoder for output. Models declare explicit snake_case CodingKeys, so no
+// key strategy conversion is applied (that would double-convert and break
+// keys like generated_at / config_path).
 func makeEncoder(pretty: Bool = false) -> JSONEncoder {
     let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
     if pretty {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     }
@@ -38,6 +39,9 @@ func usage() -> Never {
       symscope mcp health            health-probe configured MCP servers
       symscope containers            running Docker containers (JSON)
       symscope conflicts             ports held by multiple processes
+      symscope watch --interval <s>  watch for changes (NDJSON events)
+      symscope cache show|clear      inspect/clear the snapshot cache
+      symscope explain port|server   explain what uses a port or server
       symscope serve                 run the stdio MCP server
       symscope help                  this text
     """
@@ -104,6 +108,62 @@ func run(_ args: [String]) async throws {
     case "containers":
         let (containers, _) = await ContainerService.list()
         try printJSON(containers)
+
+    case "watch":
+        guard args.count >= 3, args[1] == "--interval", let interval = Double(args[2]), interval > 0 else {
+            fputs("symscope: watch requires --interval <seconds>\n", stderr)
+            exit(2)
+        }
+        var old = await SnapshotService.build()
+        try printJSON(old, pretty: false)
+        while true {
+            try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            let new = await SnapshotService.build()
+            let events = WatchService.diff(old: old, new: new)
+            if !events.isEmpty {
+                for event in events {
+                    try printJSON(event, pretty: false)
+                }
+            }
+            old = new
+        }
+
+    case "cache":
+        guard args.count >= 2 else { usage() }
+        switch args[1] {
+        case "show":
+            try printJSON(CacheService.stats())
+        case "clear":
+            if let error = CacheService.clear() {
+                fputs("symscope: \(error)\n", stderr)
+                exit(1)
+            }
+            print("Cache cleared.")
+        default:
+            usage()
+        }
+
+    case "explain":
+        guard args.count >= 3 else { usage() }
+        switch args[1] {
+        case "port":
+            guard let port = Int(args[2]) else {
+                fputs("symscope: explain port requires a numeric port\n", stderr)
+                exit(2)
+            }
+            let ports = try await PortService.listListening()
+            let (servers, _) = MCPDiscovery.discover()
+            try printJSON(ExplainService.explainPort(port, ports: ports, servers: servers))
+        case "server":
+            let (servers, _) = MCPDiscovery.discover()
+            guard let explanation = ExplainService.explainServer(args[2], servers: servers) else {
+                fputs("symscope: unknown MCP server '\(args[2])'\n", stderr)
+                exit(1)
+            }
+            try printJSON(explanation)
+        default:
+            usage()
+        }
 
     case "conflicts":
         let ports = try await PortService.listListening()
