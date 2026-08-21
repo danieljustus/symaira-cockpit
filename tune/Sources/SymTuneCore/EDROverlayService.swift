@@ -385,10 +385,16 @@ internal final class EDRTriggerWindow: EDRTriggering, @unchecked Sendable {
 
     func remove() {
         onMain {
-            self.window?.orderOut(nil)
-            self.window = nil
-            self.metalLayer = nil
-            self.commandQueue = nil
+            // onMain guarantees this body runs on the main thread (either it
+            // already is, or via DispatchQueue.main.sync), so assuming the
+            // main actor here is safe and makes the AppKit calls (orderOut)
+            // type-check under Swift 6 strict concurrency.
+            MainActor.assumeIsolated {
+                self.window?.orderOut(nil)
+                self.window = nil
+                self.metalLayer = nil
+                self.commandQueue = nil
+            }
         }
     }
 
@@ -396,16 +402,9 @@ internal final class EDRTriggerWindow: EDRTriggering, @unchecked Sendable {
 
     /// Dispatching *synchronously* to the main queue from the main thread traps
     /// libdispatch, and the UI applies brightness from the main thread.
-    /// The work closure is @MainActor so AppKit calls inside it are typed
-    /// correctly under Swift 6 strict concurrency (orderOut etc. are
-    /// main-actor-isolated).
-    private func onMain<T: Sendable>(_ work: @MainActor () -> T) -> T {
-        if Thread.isMainThread {
-            return MainActor.assumeIsolated(work)
-        }
-        return DispatchQueue.main.sync {
-            MainActor.assumeIsolated(work)
-        }
+    private func onMain<T>(_ work: () -> T) -> T {
+        if Thread.isMainThread { return work() }
+        return DispatchQueue.main.sync(execute: work)
     }
 
     private func build(device: MTLDevice) -> Bool {
