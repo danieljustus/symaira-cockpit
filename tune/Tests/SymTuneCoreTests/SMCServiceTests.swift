@@ -271,6 +271,18 @@ final class SMCServiceTests: XCTestCase {
         #endif
     }
 
+    /// SMCService with the generation pinned to the same table
+    /// `currentArchTable` uses. Without this, `readTemperatures` falls back to
+    /// host chip detection, which varies between Macs and CI VMs and makes the
+    /// intersection tests non-deterministic.
+    private func makeService(connection: any SMCConnectionProtocol) -> SMCService {
+        #if arch(arm64)
+        return SMCService(connection: connection, generation: .m4)
+        #else
+        return SMCService(connection: connection)
+        #endif
+    }
+
     func testEnumerationFiltersTemperatureKeysToIntersection() {
         let table = currentArchTable
         let fpe2 = smcEncodeKey("fpe2")
@@ -285,7 +297,7 @@ final class SMCServiceTests: XCTestCase {
 
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = exposed
-        let service = SMCService(connection: conn)
+        let service = makeService(connection: conn)
 
         XCTAssertTrue(service.keyEnumerationAvailable)
         let readings = service.readTemperatures()
@@ -306,7 +318,7 @@ final class SMCServiceTests: XCTestCase {
         }
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = nil // enumeration unavailable
-        let service = SMCService(connection: conn)
+        let service = makeService(connection: conn)
 
         XCTAssertFalse(service.keyEnumerationAvailable)
         XCTAssertNil(service.enumerateKeys())
