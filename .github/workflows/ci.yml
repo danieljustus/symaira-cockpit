@@ -20,9 +20,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Nested packages (tune/, operate/, scope/) each have their own Package.swift.
+  # Nested packages (tune/, operate/) each have their own Package.swift.
   # Matrix per package so a failure is attributable by name. macOS-only code
   # (AppKit/IOKit/AX) — no ubuntu leg for the Swift packages.
+  # Note: scope/ is not in the matrix yet — it lands with the Go→Swift port
+  # (repo consolidation step 8 follow-up).
   swift:
     name: ${{ matrix.pkg }}
     runs-on: macos-15
@@ -32,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [tune, operate, scope]
+        pkg: [tune, operate]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
