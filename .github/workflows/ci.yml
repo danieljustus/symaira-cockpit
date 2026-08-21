@@ -25,9 +25,12 @@ jobs:
   # (AppKit/IOKit/AX) — no ubuntu leg for the Swift packages.
   # Note: scope/ is not in the matrix yet — it lands with the Go→Swift port
   # (repo consolidation step 8 follow-up).
+  # macos-latest rather than macos-15: tune targets Xcode 27 (Swift 6.4) and
+  # the older runner's Swift 6.0 rejects @unchecked Sendable boundaries that
+  # 6.4 accepts.
   swift:
     name: ${{ matrix.pkg }}
-    runs-on: macos-15
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: ${{ matrix.pkg }}

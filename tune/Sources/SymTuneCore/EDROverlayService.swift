@@ -371,12 +371,20 @@ internal final class EDRTriggerWindow: EDRTriggering, @unchecked Sendable {
     /// visible brightening comes from the gamma boost, not from this pixel.
     private static let triggerValue = Double(SafetyPolicy.extendedBrightnessMax)
 
+    /// Metal devices are documented thread-safe by Apple, but the SDK
+    /// protocol existential is not Sendable-annotated. Box it so it can
+    /// cross the onMain boundary under Swift 6 strict concurrency.
+    private struct MetalDeviceBox: @unchecked Sendable {
+        let value: MTLDevice
+    }
+
     init?(displayID: CGDirectDisplayID) {
         self.displayID = displayID
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue() else { return nil }
         self.commandQueue = queue
-        guard onMain({ self.build(device: device) }) else { return nil }
+        let deviceBox = MetalDeviceBox(value: device)
+        guard onMain({ self.build(device: deviceBox.value) }) else { return nil }
     }
 
     func render() {
