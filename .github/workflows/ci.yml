@@ -20,9 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Nested packages (tune/, operate/, scope/) each have their own Package.swift.
-  # Matrix per package so a failure is attributable by name. macOS-only code
-  # (AppKit/IOKit/AX) — no ubuntu leg for the Swift packages.
+  # Packages: the three nested tool packages plus the symcockpit dispatcher
+  # package at the repo root. Matrix per package so a failure is attributable
+  # by name. macOS-only code (AppKit/IOKit/AX) — no ubuntu leg.
   # macos-latest rather than macos-15: tune targets Xcode 27 (Swift 6.4) and
   # the older runner's Swift 6.0 rejects @unchecked Sendable boundaries that
   # 6.4 accepts.
@@ -31,11 +31,11 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: ${{ matrix.pkg }}
+        working-directory: ${{ matrix.pkg == 'root' && '.' || matrix.pkg }}
     strategy:
       fail-fast: false
       matrix:
-        pkg: [tune, operate, scope]
+        pkg: [tune, operate, scope, root]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -56,4 +56,7 @@ jobs:
         run: swift build
 
       - name: Test
+        # The dispatcher package has no test target of its own — the family
+        # packages carry the suites. Skip `swift test` for it.
+        if: matrix.pkg != 'root'
         run: swift test
