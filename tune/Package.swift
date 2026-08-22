@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "SymTuneCore", targets: ["SymTuneCore"]),
         .library(name: "SymTuneMCP", targets: ["SymTuneMCP"]),
+        .library(name: "SymTuneCLI", targets: ["SymTuneCLI"]),
         .executable(name: "symtune", targets: ["symtune"]),
         .executable(name: "SymTuneApp", targets: ["SymTuneApp"]),
     ],
@@ -30,13 +31,19 @@ let package = Package(
                 .product(name: "SymairaMCP", package: "symaira-appkit"),
             ]
         ),
-        .executableTarget(
-            name: "symtune",
+        .target(
+            name: "SymTuneCLI",
             dependencies: [
                 "SymTuneCore",
                 "SymTuneMCP",
                 .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
                 .product(name: "SymairaTheme", package: "symaira-appkit"),
+            ]
+        ),
+        .executableTarget(
+            name: "symtune",
+            dependencies: [
+                "SymTuneCLI"
             ]
         ),
         .executableTarget(

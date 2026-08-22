@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "SymScopeCore", targets: ["SymScopeCore"]),
         .library(name: "SymScopeMCP", targets: ["SymScopeMCP"]),
+        .library(name: "SymScopeCLI", targets: ["SymScopeCLI"]),
         .executable(name: "symscope", targets: ["symscope"]),
     ],
     dependencies: [
@@ -26,11 +27,17 @@ let package = Package(
                 .product(name: "SymairaMCP", package: "symaira-appkit"),
             ]
         ),
-        .executableTarget(
-            name: "symscope",
+        .target(
+            name: "SymScopeCLI",
             dependencies: [
                 "SymScopeCore",
                 "SymScopeMCP",
+            ]
+        ),
+        .executableTarget(
+            name: "symscope",
+            dependencies: [
+                "SymScopeCLI"
             ]
         ),
         .testTarget(
