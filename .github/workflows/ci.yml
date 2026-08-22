@@ -56,4 +56,7 @@ jobs:
         run: swift build
 
       - name: Test
+        # The dispatcher package has no test target of its own — the family
+        # packages carry the suites. Skip `swift test` for it.
+        if: matrix.pkg != 'root'
         run: swift test
