@@ -1,6 +1,7 @@
 # Symaira macOS Agent Guide
 
-> Combined setup for `symaira-operate` (GUI actions) + `symaira-tune` (hardware tuning).
+> Combined setup for the `operate` (GUI actions) and `tune` (hardware tuning)
+> families of `symcockpit`.
 
 ## Overview
 
@@ -71,9 +72,11 @@ For agents that need both GUI automation and hardware tuning:
 ### Homebrew (recommended)
 
 ```bash
-brew install danieljustus/tap/symoperate
-brew install danieljustus/tap/symaira-tune
+brew install danieljustus/tap/symcockpit
 ```
+
+One formula covers all three families — `operate`, `tune` and `scope` are
+subcommands of the same binary.
 
 ### Build from source
 
