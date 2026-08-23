@@ -1,0 +1,69 @@
+# Agent Instructions — symaira-cockpit
+
+**This machine.** One binary, `symcockpit`, with three families of commands:
+thermals/power (`tune`), macOS GUI automation (`operate`), and port/container/MCP
+inventory (`scope`). CLI **and** MCP server per family. macOS-only, Swift 6,
+public Apache-2.0.
+
+This repo is the result of merging the archived `symaira-tune`,
+`symaira-operate` and `symaira-scope` repositories (repo consolidation step 8,
+2026-08-23). Their Homebrew formulae/casks are deprecated and point here.
+
+## Layout
+
+| Path | Family | Language |
+| :--- | :--- | :--- |
+| `Sources/symcockpit/` | dispatcher — routes `tune\|operate\|scope` | Swift 6 |
+| `tune/` | thermals, power, display, brightness | Swift 6 (AppKit/IOKit) |
+| `operate/` | screenshots, AX tree, input, apps/windows | Swift 6 (AppKit/AX/ScreenCaptureKit) |
+| `scope/` | ports, containers, MCP servers, health | Swift 6 |
+
+Each family is its own SPM package with its own `Package.swift` and its own
+`AGENTS.md`. The CLI logic lives in a library target (`SymTuneCLI`,
+`SymOperateCLI`, `SymScopeCLI`) consumed by **both** the package's own
+executable target and the root dispatcher — so a family stays independently
+buildable while only `symcockpit` is released.
+
+## Build & Test
+
+```bash
+make build                 # swift build in every package
+make test                  # swift test in every package
+make build-tune            # a single package (also test-tune, build-operate, …)
+swift build && swift test  # the root dispatcher only
+```
+
+- Xcode(-beta) is required for the app targets and for tests:
+  `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer`.
+  CommandLineTools alone fails on `actool`.
+- CI (`.github/workflows/ci.yml`) runs `swift build` + `swift test` on
+  `macos-latest`.
+
+## Release
+
+Tag `v*` triggers `.github/workflows/release.yml`: it builds a universal
+binary (`--arch arm64 --arch x86_64`), packs a tarball plus checksums, and
+publishes the release. A guard fails the run when the tag and
+`CockpitVersion.current` disagree — bump the version in the same commit that
+carries the tag.
+
+`symcockpit version` prints the dispatcher version plus each family's version.
+
+## Conventions
+
+- **One shipped binary.** Do not add a second product to the root
+  `Package.swift`, and do not reintroduce standalone distribution for
+  `symtune`/`symoperate`/`symscope` — their formulae are deprecated on purpose.
+- **Env prefixes stay per family**: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.
+- XDG paths: `~/.config/<tool>/`, `~/.cache/<tool>/`, `~/.local/share/<tool>/`.
+- Exit codes: `0` ok · `1` error · `2` usage/config · `3` permission ·
+  `4` unsupported/not-implemented.
+- **Zero stdio pollution** in every `serve` (MCP) path: stdout carries JSON-RPC
+  only, everything else goes to stderr.
+- Public Apache-2.0 — no billing, tenant, or cloud code here. There is no Pro
+  edition; see `tune/docs/commercial-boundary.md`.
+- `operate` needs Accessibility and Screen Recording permissions; `tune`'s SMC
+  writes (fans, charge limits) need `sudo`.
+
+Cross-repo conventions live in the workspace `AGENTS.md` and `ECOSYSTEM.md`,
+which are not part of this repository.

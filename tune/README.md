@@ -1,57 +1,62 @@
-# symaira-tune
+# tune — the `symcockpit tune` family
 
-[![CI](https://github.com/danieljustus/symaira-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-tune/actions/workflows/ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/danieljustus/symaira-tune)](https://github.com/danieljustus/symaira-tune/releases/latest)
-[![License](https://img.shields.io/github/license/danieljustus/symaira-tune)](LICENSE)
+[![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit)](https://github.com/danieljustus/symaira-cockpit/releases/latest)
+[![License](https://img.shields.io/github/license/danieljustus/symaira-cockpit)](../LICENSE)
+
+> This package was the standalone `symaira-tune` repository until 2026-08-23.
+> It now ships as the `tune` family of [`symcockpit`](../README.md); the repo
+> is archived and the `symtune` formula is deprecated.
 
 ![Symaira Tune social preview](docs/assets/social-preview.png)
 
 > Tune your Mac — thermals, brightness, power — from the CLI and for AI agents.
 
-`symtune` is a small, native macOS utility that reads your Mac's thermal, power,
+`symcockpit tune` is a small, native macOS facility that reads your Mac's thermal, power,
 and display state and lets you tune it: extended/EDR brightness, software dimming,
 **fan speed**, and **battery charge limits**. Everything is exposed **both** as a
 CLI and as an **MCP server**, so AI agents can observe and adjust the machine —
 e.g. "this render is running hot, ramp the fans and dim the screen."
 
-Part of the [Symaira](../ECOSYSTEM.md) family of AI-agent-native macOS tooling
+Part of the [Symaira](../README.md) family of AI-agent-native macOS tooling
 (Apache-2.0).
 
-> **Status: v0.9.2 core + standalone menu-bar app.** The current release includes
-> fan control and battery charge limiting directly in the open core. SMC writes
-> require `sudo`. Homebrew installs both the app and the CLI from the generated
-> cask (`brew install danieljustus/tap/symtune`).
+> **Status: shipping.** Fan control and battery charge limiting are in the
+> open core. SMC writes require `sudo`. Run `symcockpit version` for the
+> component versions of this build.
 
 ## Why not the Mac App Store?
 
-Fan/SMC control, DDC, and shipping a global `symtune` CLI for agents are
-incompatible with the App Store sandbox. `symtune` is built for **notarized
-direct distribution / Homebrew cask** (the same channel as `symaira-terminal`).
+Fan/SMC control, DDC, and shipping a global CLI for agents are incompatible
+with the App Store sandbox. `symcockpit` is built for **notarized direct
+distribution / Homebrew** (the same channel as `symaira-terminal`).
 
 ## Install
 
-The recommended way is the Homebrew cask, which installs both the `symtune`
-CLI and the menu-bar app:
-
 ```bash
-brew install danieljustus/tap/symtune
+brew install danieljustus/tap/symcockpit
 ```
 
-Prebuilt binaries (DMG with `SymairaTune.app` and the CLI) are also attached
-to each [release](https://github.com/danieljustus/symaira-tune/releases/latest).
+The tarball is also attached to each
+[release](https://github.com/danieljustus/symaira-cockpit/releases/latest).
+The menu-bar app (`SymTuneApp`) is an executable target in this package and is
+built from source; it is not part of the released tarball.
 
 ### Install from source (alternative)
 
 ```bash
-git clone <repo-url> && cd symaira-tune
+git clone https://github.com/danieljustus/symaira-cockpit && cd symaira-cockpit
 swift build -c release
-.build/release/symtune doctor
+.build/release/symcockpit tune doctor
 ```
+
+To build just this package standalone, `cd tune && swift build` produces the
+package-local `symtune` executable.
 
 ## Standalone menu-bar app
 
-The app is a first-class standalone artifact, not a Hub-only component. From a
-macOS checkout with full Xcode and XcodeGen installed:
+The app is a first-class standalone artifact. From a macOS checkout with full
+Xcode and XcodeGen installed:
 
 ```bash
 brew install xcodegen

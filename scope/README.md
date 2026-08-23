@@ -1,7 +1,9 @@
-# symscope — Port-Inventar & MCP-Discovery (Swift)
+# scope — die `symcockpit scope`-Familie
 
-Swift-Port des Go-Originals `symaira-scope` (repo-konsolidierung.md §3.3,
-Schritt 8 — eine Sprache im `symaira-cockpit`-Repo).
+Port-Inventar & MCP-Discovery. Swift-Port des Go-Originals `symaira-scope`
+(repo-konsolidierung.md §6, Schritt 8 — eine Sprache im
+`symaira-cockpit`-Repo); das Ursprungs-Repo ist archiviert und die
+`symscope`-Formula deprecated.
 
 > Inventar der Maschine: **Ports** (lsof), **Container** (docker CLI),
 > **MCP-Server** (AI-Client-Configs) — als CLI und MCP-Server.

@@ -17,10 +17,10 @@ symcockpit operate serve         # GUI-Automation als MCP-Server
 symcockpit version               # alle drei Komponenten-Versionen
 ```
 
-Die Legacy-Binaries `symscope`, `symtune` und `symoperate` sind entfernt
-(2026-08-23); ihre Kommandos sind die Family-Subcommands oben. Die
-Homebrew-Formeln/Casks der drei Vorgänger sind deprecated und zeigen auf
-`symcockpit`.
+Die früher eigenständig verteilten Binaries `symscope`, `symtune` und
+`symoperate` werden nicht mehr ausgeliefert (2026-08-23); ihre Kommandos sind
+die Family-Subcommands oben. Die Homebrew-Formeln/Casks der drei Vorgänger
+sind deprecated und zeigen auf `symcockpit`.
 
 ## Installation
 
@@ -45,15 +45,16 @@ symcockpit 0.1.0 — tune 0.9.3, operate 0.6.1, scope 0.4.1
 
 | Package | Familie | These | Sprache |
 | :--- | :--- | :--- | :--- |
-| [`tune/`](tune/) | `symcockpit tune` (`symtune`) | Thermik, Power, Display, Helligkeit, Token-Kosten | Swift 6 (AppKit/IOKit) |
-| [`operate/`](operate/) | `symcockpit operate` (`symoperate`) | GUI-Automation: Screenshots, AX-Tree, Input, Apps/Windows | Swift 6 (AppKit/AX/SCK) |
-| [`scope/`](scope/) | `symcockpit scope` (`symscope`) | Inventar: Ports, Container, MCP-Server, Health | Swift 6 |
+| [`tune/`](tune/) | `symcockpit tune` | Thermik, Power, Display, Helligkeit, Token-Kosten | Swift 6 (AppKit/IOKit) |
+| [`operate/`](operate/) | `symcockpit operate` | GUI-Automation: Screenshots, AX-Tree, Input, Apps/Windows | Swift 6 (AppKit/AX/SCK) |
+| [`scope/`](scope/) | `symcockpit scope` | Inventar: Ports, Container, MCP-Server, Health | Swift 6 |
 
 Jedes Package ist ein eigenständiges SPM-Modul mit eigenem `Package.swift`
 (Standalone-First); die CLI-Logik liegt jeweils in einem Library-Target
-(`SymTuneCLI`, `SymOperateCLI`, `SymScopeCLI`), das sowohl das Legacy-Binary
-als auch den Root-Dispatcher konsumiert. Das Root-`Package.swift` definiert
-das `symcockpit`-Dispatcher-Binary über lokale Pfad-Dependencies.
+(`SymTuneCLI`, `SymOperateCLI`, `SymScopeCLI`), das sowohl das
+package-eigene Executable-Target als auch den Root-Dispatcher konsumiert.
+Das Root-`Package.swift` definiert `symcockpit` als einziges Produkt und
+zieht die drei Packages über lokale Pfad-Dependencies ein.
 
 ## Build & Test
 
@@ -78,8 +79,10 @@ swift build && .build/debug/symcockpit help
 
 ## Konventionen (Ecosystem)
 
-- Binaries: `symcockpit` (Dispatcher) + Legacy `symtune`, `symoperate`,
-  `symscope`.
+- Ausgeliefertes Binary: `symcockpit` — ein Produkt, drei Family-Subcommands.
+  Die Packages behalten je ein eigenes Executable-Target (`symtune`,
+  `symoperate`, `symscope`) für Standalone-Builds; released und über Homebrew
+  verteilt wird nur `symcockpit`.
 - XDG-Pfade: `~/.config/<tool>/`, `~/.cache/<tool>/`, `~/.local/share/<tool>/`.
 - Env-Präfix: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.
 - Exit-Codes: `0` ok · `1` Fehler · `2` Usage/Config · `3` Permission ·

@@ -1,10 +1,10 @@
-# Agent Instructions — symaira-tune
+# Agent Instructions — tune (the `symcockpit tune` family)
 
 Native macOS tuning tool (Swift 6 toolchain, AppKit/IOKit). CLI **and** MCP
 server: read the Mac's thermal/power/display state, and (incrementally) tune
 brightness, fans, and battery charging. Public repo, Apache-2.0 licensed. Part of the
-Symaira family — see `../AGENTS.md` / `../ECOSYSTEM.md` for cross-repo
-conventions and `docs/commercial-boundary.md` for the public/pro boundary.
+Symaira family — see `../AGENTS.md` for repo-wide conventions and
+`docs/commercial-boundary.md` for why there is no Pro tier.
 
 ## Build & Test
 
@@ -12,7 +12,7 @@ conventions and `docs/commercial-boundary.md` for the public/pro boundary.
 swift build                # all targets
 swift test                 # unit tests (no GUI / no hardware writes required)
 make coverage              # line/region coverage for the library targets
-swift run -q symtune doctor
+swift run -q symtune doctor   # package-local executable; shipped as `symcockpit tune doctor`
 ```
 
 **Coverage scope:** `make coverage` reports `SymTuneCore` and `SymTuneMCP` only.

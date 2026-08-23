@@ -1,14 +1,18 @@
-# symaira-operate
+# operate — the `symcockpit operate` family
 
 > Let an AI agent see and drive your Mac — locally, over MCP.
 
-[![CI](https://github.com/danieljustus/symaira-operate/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-operate/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/danieljustus/symaira-operate/coverage-data/badge.json)](https://github.com/danieljustus/symaira-operate/tree/coverage-data)
-[![Latest Release](https://img.shields.io/github/v/release/danieljustus/symaira-operate?sort=semver)](https://github.com/danieljustus/symaira-operate/releases/latest)
+[![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?sort=semver)](https://github.com/danieljustus/symaira-cockpit/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 
 ![Symaira Operate social preview](docs/assets/social-preview.png)
+
+> This package was the standalone `symaira-operate` repository until
+> 2026-08-23. It now ships as the `operate` family of
+> [`symcockpit`](../README.md); the repo is archived and the `symoperate`
+> cask is deprecated.
 
 `symoperate` is a native macOS desktop-automation **MCP server**. It exposes
 screenshots, the Accessibility tree, mouse/keyboard input, and app/window control
@@ -16,11 +20,12 @@ over stdio, so an agent (Claude Desktop, OpenCode, Cursor, …) can operate the
 GUI: open an app, find a button, click it, type, save. It is a supervised, local
 tool — not a remote-control daemon.
 
-Part of the [Symaira](../ECOSYSTEM.md) family, and the agent-native sibling of
-[`symaira-tune`](../symaira-tune) (hardware tuning): **operate = GUI actions,
-tune = thermals/brightness/power.**
+Part of the [Symaira](../README.md) family, and the sibling family of
+[`tune`](../tune) (hardware tuning): **operate = GUI actions, tune =
+thermals/brightness/power.**
 
-> **Status: v0.6.1.** Working native implementation (rebranded from the author's
+> **Status: shipping** (`symcockpit version` reports this build's component
+> versions). Working native implementation (rebranded from the author's
 > `mac-operator` prototype), covered by unit tests across every target
 > (`swift test`).
 
@@ -42,11 +47,11 @@ tune = thermals/brightness/power.**
 **Homebrew (recommended):**
 
 ```bash
-brew install danieljustus/tap/symoperate
+brew install danieljustus/tap/symcockpit
 ```
 
 **Direct download:** grab the latest `symoperate.dmg` from the
-[Releases page](https://github.com/danieljustus/symaira-operate/releases/latest),
+[Releases page](https://github.com/danieljustus/symaira-cockpit/releases/latest),
 open it, and move `symoperate` to `/usr/local/bin/` (or any directory on your
 `PATH`).
 
