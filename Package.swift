@@ -28,6 +28,12 @@ let package = Package(
                 .product(name: "SymScopeCLI", package: "scope"),
             ]
         ),
+        .testTarget(
+            name: "SymCockpitE2ETests",
+            dependencies: [
+                .product(name: "SymTuneCore", package: "tune"),
+            ]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

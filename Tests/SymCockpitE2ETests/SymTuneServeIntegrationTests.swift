@@ -1,7 +1,8 @@
 import Foundation
 import XCTest
 
-/// Integration tests for the public `symtune serve` run path. The in-process
+/// Integration tests for the public tune `serve` run path, exercised through
+/// the unified dispatcher binary (`symcockpit tune serve`). The in-process
 /// migration tests drive `TuneMCPServer.makeServer()` through pipes, but the
 /// public bridge — the convenience-init default config load and `run()`'s
 /// `MCPStdioTransport` launch, EOF termination, and start-failure propagation —
@@ -9,17 +10,17 @@ import XCTest
 /// that: a bounded subprocess speaking newline-delimited JSON-RPC over stdio
 /// pipes, verifying initialize/ping framing, EOF termination, and the
 /// zero-stdout-pollution contract.
-final class SymTuneServeIntegrationTests: XCTestCase {
+final class SymTuneServeIntegrationE2ETests: XCTestCase {
 
     /// Bounded wait for every framing/termination step (never unbounded).
     private let frameTimeout: TimeInterval = 30
 
-    /// Path to the built symtune binary (SPM places it next to the .xctest bundle).
+    /// Path to the built symcockpit binary (repo root `.build/debug/`).
     var symtuneBinary: String {
-        productsDirectory.appendingPathComponent("symtune").path
+        productsDirectory.appendingPathComponent("symcockpit").path
     }
 
-    /// Returns the products directory (where the test bundle and symtune live).
+    /// The root package's build directory (where this test bundle lives).
     var productsDirectory: URL {
         for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
             return bundle.bundleURL.deletingLastPathComponent()
@@ -89,7 +90,7 @@ final class SymTuneServeIntegrationTests: XCTestCase {
     private func launchServe() throws -> ServeChild {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symtuneBinary)
-        process.arguments = ["serve"]
+        process.arguments = ["tune", "serve"]
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -132,11 +133,11 @@ final class SymTuneServeIntegrationTests: XCTestCase {
     }
 }
 
-/// Bounded subprocess harness for `symtune serve`. Uses the
+/// Bounded subprocess harness for `symcockpit tune serve`. Uses the
 /// terminationHandler + semaphore pattern with a timeout — never
 /// `waitUntilExit()`. On timeout the child is SIGTERM'd, then SIGKILL'd after
 /// a short grace period so a hung server can never block the test run.
-private final class ServeChild: @unchecked Sendable {
+final class ServeChild: @unchecked Sendable {
     private let process: Process
     private let stdin: FileHandle
     private let stdoutReader: LineAccumulator
@@ -222,7 +223,7 @@ private final class ServeChild: @unchecked Sendable {
 
 /// Thread-safe accumulator of newline-delimited output, fed by a background
 /// reader thread so the test never blocks on a pipe the child keeps open.
-private final class LineAccumulator: @unchecked Sendable {
+final class LineAccumulator: @unchecked Sendable {
     private let handle: FileHandle
     private let lock = NSLock()
     private var buffer = Data()
@@ -302,7 +303,7 @@ private final class LineAccumulator: @unchecked Sendable {
     }
 }
 
-private enum ServeTestError: Error, CustomStringConvertible {
+enum ServeTestError: Error, CustomStringConvertible {
     case timeoutWaitingForFrame
     case unparseableFrame(String)
 

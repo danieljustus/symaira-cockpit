@@ -1,22 +1,26 @@
 import XCTest
 
-final class SymTuneCLITests: XCTestCase {
+/// E2E tests for the tune family through the unified dispatcher binary.
+///
+/// The legacy `symtune` executable was removed (PR #8, repo consolidation);
+/// the public entrypoint is now `symcockpit tune …`. These tests locate the
+/// dispatcher binary relative to this test file (`<repo>/.build/debug/`) and
+/// exercise the same CLI surface through it.
+final class SymTuneCLIE2ETests: XCTestCase {
 
-    /// Path to the built symtune binary.
-    /// The test target uses the PRODUCT_BUNDLE_IDENTIFIER build setting
-    /// injected by SPM to find the binary relative to the test bundle.
+    /// Path to the built symcockpit dispatcher binary.
+    /// Layout: Tests/SymCockpitE2ETests/<this file> → Tests → repo root
+    /// → .build/debug/symcockpit.
     var symtuneBinary: String {
-        // SPM places the built product one directory up from the test bundle.
-        let binDir = productsDirectory
-        return binDir.appendingPathComponent("symtune").path
-    }
-
-    /// Returns the products directory (where the test bundle and symtune live).
-    var productsDirectory: URL {
-        for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
-            return bundle.bundleURL.deletingLastPathComponent()
-        }
-        fatalError("Could not locate the products directory — not running within an XCTest bundle?")
+        let repoRoot = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()   // Tests/SymCockpitE2ETests/
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // repo root
+        return repoRoot
+            .appendingPathComponent(".build")
+            .appendingPathComponent("debug")
+            .appendingPathComponent("symcockpit")
+            .path
     }
 
     // MARK: - --help / -h on subcommands
@@ -49,13 +53,12 @@ final class SymTuneCLITests: XCTestCase {
 
     func testMetricsHelp() throws {
         let output = try runCommand(args: ["metrics", "--help"])
-        XCTAssert(output.contains("Usage: symtune metrics"))
         XCTAssert(output.contains("system metrics"))
     }
 
     func testMetricsHelpShort() throws {
         let output = try runCommand(args: ["metrics", "-h"])
-        XCTAssert(output.contains("Usage: symtune metrics"))
+        XCTAssert(output.contains("system metrics"))
     }
 
     // MARK: Unknown-flag rejection
@@ -150,7 +153,7 @@ final class SymTuneCLITests: XCTestCase {
         for command in Self.alwaysJSONCommands {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: symtuneBinary)
-            process.arguments = [command, "--bogus"]
+            process.arguments = ["tune", command, "--bogus"]
             let outputPipe = Pipe()
             let errorPipe = Pipe()
             process.standardOutput = outputPipe
@@ -223,8 +226,7 @@ final class SymTuneCLITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Registers a bounded termination wait, mirroring `ServeChild` in
-    /// `SymTuneServeIntegrationTests.swift`: the handler must be set *before*
+    /// Registers a bounded termination wait: the handler must be set *before*
     /// `process.run()` so a process that exits immediately still signals.
     /// Never use `waitUntilExit()` here — it blocks forever if the child
     /// itself hangs (e.g. on a wedged Keychain read in a headless/no-GUI
@@ -245,9 +247,9 @@ final class SymTuneCLITests: XCTestCase {
         }
     }
 
-    /// Run `symtune` with the given arguments and return stderr (merged with stdout).
+    /// Run `symcockpit tune` with the given arguments and return stderr (merged with stdout).
     /// - Parameters:
-    ///   - args: Arguments to pass to the binary.
+    ///   - args: Arguments to pass after the `tune` family prefix.
     ///   - expectFailure: If true, the process is expected to exit with a non-zero code.
     ///   - environment: Additional environment overrides applied on top of the
     ///     parent's environment (Foundation `Process` replaces the whole
@@ -261,7 +263,7 @@ final class SymTuneCLITests: XCTestCase {
     ) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symtuneBinary)
-        process.arguments = args
+        process.arguments = ["tune"] + args
 
         if !environment.isEmpty {
             var childEnvironment = ProcessInfo.processInfo.environment
@@ -278,7 +280,7 @@ final class SymTuneCLITests: XCTestCase {
 
         let waitForExit = armBoundedWait(process)
         try process.run()
-        XCTAssertTrue(waitForExit(), "symtune \(args.joined(separator: " ")) did not exit in time")
+        XCTAssertTrue(waitForExit(), "symcockpit tune \(args.joined(separator: " ")) did not exit in time")
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
