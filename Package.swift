@@ -26,6 +26,7 @@ let package = Package(
                 .product(name: "SymTuneCLI", package: "tune"),
                 .product(name: "SymOperateCLI", package: "operate"),
                 .product(name: "SymScopeCLI", package: "scope"),
+                .product(name: "SymScopeCore", package: "scope"),
             ]
         ),
         .testTarget(

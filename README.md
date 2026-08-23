@@ -17,8 +17,31 @@ symcockpit operate serve         # GUI-Automation als MCP-Server
 symcockpit version               # alle drei Komponenten-Versionen
 ```
 
-Die Legacy-Binaries (`symscope`, `symtune`, `symoperate`) bleiben als
-dünne Wrapper erhalten und werden in einem zukünftigen Release entfernt.
+Die Legacy-Binaries `symscope`, `symtune` und `symoperate` sind entfernt
+(2026-08-23); ihre Kommandos sind die Family-Subcommands oben. Die
+Homebrew-Formeln/Casks der drei Vorgänger sind deprecated und zeigen auf
+`symcockpit`.
+
+## Installation
+
+```bash
+brew install danieljustus/tap/symcockpit
+```
+
+Oder direkt: das Universal-Binary (`arm64` + `x86_64`) aus den
+[Releases](https://github.com/danieljustus/symaira-cockpit/releases) laden
+und nach `/usr/local/bin` legen. Die Binaries sind **nicht signiert und
+nicht notarisiert** — über Homebrew installiert greift Gatekeepers
+Quarantäne nicht, beim manuellen Download schon.
+
+`symcockpit` selbst hat eine eigene Produktversion; `tune`, `operate` und
+`scope` behalten ihre jeweilige Versionshistorie aus der Zeit als
+eigenständige Tools:
+
+```bash
+$ symcockpit version
+symcockpit 0.1.0 — tune 0.9.3, operate 0.6.1, scope 0.4.1
+```
 
 | Package | Familie | These | Sprache |
 | :--- | :--- | :--- | :--- |
