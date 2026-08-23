@@ -56,7 +56,6 @@ jobs:
         run: swift build
 
       - name: Test
-        # The dispatcher package has no test target of its own — the family
-        # packages carry the suites. Skip `swift test` for it.
-        if: matrix.pkg != 'root'
+        # The dispatcher package (root) carries the E2E suites that spawn the
+        # built `symcockpit` binary — `swift test` there runs them.
         run: swift test
