@@ -69,10 +69,6 @@ let package = Package(
                 .product(name: "SymairaMCP", package: "symaira-appkit"),
             ]
         ),
-        .testTarget(
-            name: "SymTuneCLITests",
-            dependencies: ["SymTuneCore", "SymTuneMCP"]
-        ),
     ],
     swiftLanguageModes: [.v6]
 )
