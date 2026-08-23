@@ -189,9 +189,25 @@ enum ClaudeOAuthCredentials {
         if policy == .always || policy == .onlyOnUserAction {
             query[kSecUseOperationPrompt as String] = "symtune reads Claude usage"
         }
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data,
+        // Bounded wait, same contract as `KeychainCredentials.read`: this runs
+        // on every CLI invocation from the TuneController constructor (before
+        // command dispatch), so a wedged securityd round-trip must degrade to
+        // "no credential" instead of freezing the process. Direct
+        // SecItemCopyMatching on the calling thread blocked indefinitely in
+        // mach_msg when the keychain item needed a securityd decrypt with no
+        // GUI session to service it (issue #7 — `symcockpit tune doctor
+        // --help` hung).
+        let outcome = KeychainCredentials.LockedOutcome()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+            outcome.set(status: status, item: item)
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + 3) == .success,
+              let result = outcome.get(),
+              result.status == errSecSuccess, let data = result.item as? Data,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
 

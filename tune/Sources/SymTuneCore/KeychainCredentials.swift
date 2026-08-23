@@ -64,7 +64,7 @@ public enum KeychainCredentials {
     /// been observed by `done.wait(timeout:)`, so the semaphore itself
     /// provides the happens-before edge — the lock only guards against the
     /// (never-exercised) case of a spurious concurrent access.
-    private final class LockedOutcome: @unchecked Sendable {
+    final class LockedOutcome: @unchecked Sendable {
         private let lock = NSLock()
         private var value: (status: OSStatus, item: CFTypeRef?)?
 

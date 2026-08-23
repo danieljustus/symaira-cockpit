@@ -9,14 +9,13 @@ final class OperateCLIE2ETests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        let repoRoot = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent()   // Tests/SymCockpitE2ETests/
-            .deletingLastPathComponent()   // Tests/
-            .deletingLastPathComponent()   // repo root
-        binary = repoRoot
-            .appendingPathComponent(".build")
-            .appendingPathComponent("debug")
-            .appendingPathComponent("symcockpit")
+        // The test bundle sits next to the symcockpit binary in .build/debug/.
+        for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
+            binary = bundle.bundleURL.deletingLastPathComponent()
+                .appendingPathComponent("symcockpit")
+            return
+        }
+        fatalError("Could not locate the products directory — not running within an XCTest bundle?")
     }
 
     // MARK: - Helpers

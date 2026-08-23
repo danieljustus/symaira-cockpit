@@ -8,19 +8,19 @@ import XCTest
 /// exercise the same CLI surface through it.
 final class SymTuneCLIE2ETests: XCTestCase {
 
-    /// Path to the built symcockpit dispatcher binary.
-    /// Layout: Tests/SymCockpitE2ETests/<this file> → Tests → repo root
-    /// → .build/debug/symcockpit.
+    /// Path to the built symcockpit dispatcher binary. The test bundle sits
+    /// next to it in `.build/debug/` (SPM layout), so the bundle path is the
+    /// reliable anchor — `#file` points into SPM's copied sources, not here.
     var symtuneBinary: String {
-        let repoRoot = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent()   // Tests/SymCockpitE2ETests/
-            .deletingLastPathComponent()   // Tests/
-            .deletingLastPathComponent()   // repo root
-        return repoRoot
-            .appendingPathComponent(".build")
-            .appendingPathComponent("debug")
-            .appendingPathComponent("symcockpit")
-            .path
+        productsDirectory.appendingPathComponent("symcockpit").path
+    }
+
+    /// The directory containing this test bundle and the symcockpit binary.
+    var productsDirectory: URL {
+        for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
+            return bundle.bundleURL.deletingLastPathComponent()
+        }
+        fatalError("Could not locate the products directory — not running within an XCTest bundle?")
     }
 
     // MARK: - --help / -h on subcommands

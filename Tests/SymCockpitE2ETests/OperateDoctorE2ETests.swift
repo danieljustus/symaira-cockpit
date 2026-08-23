@@ -4,14 +4,16 @@ import XCTest
 final class OperateDoctorE2ETests: XCTestCase {
 
     func testDoctorOutputsContainCapabilities() throws {
-        let repoRoot = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent()   // Tests/SymCockpitE2ETests/
-            .deletingLastPathComponent()   // Tests/
-            .deletingLastPathComponent()   // repo root
-        let binary = repoRoot
-            .appendingPathComponent(".build")
-            .appendingPathComponent("debug")
-            .appendingPathComponent("symcockpit")
+        // The test bundle sits next to the symcockpit binary in .build/debug/.
+        var binary: URL?
+        for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
+            binary = bundle.bundleURL.deletingLastPathComponent()
+                .appendingPathComponent("symcockpit")
+            break
+        }
+        guard let binary else {
+            fatalError("Could not locate the products directory — not running within an XCTest bundle?")
+        }
         let process = Process()
         process.executableURL = binary
         process.arguments = ["operate", "doctor"]
