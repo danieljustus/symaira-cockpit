@@ -12,6 +12,7 @@ import Foundation
 import SymOperateCore
 import SymOperateCLI
 import SymScopeCLI
+import SymScopeCore
 import SymTuneCore
 import SymTuneCLI
 
@@ -26,7 +27,7 @@ Families:
   operate    GUI automation: MCP server, doctor, permissions (symoperate)
   scope      Ports, containers, MCP inventory (symscope)
 
-  version [--json]    Component versions of tune/operate/scope
+  version [--json]    symcockpit version plus the component versions
   help                This text
 
 Examples:
@@ -34,50 +35,61 @@ Examples:
   symcockpit tune doctor
   symcockpit operate serve
 
-Legacy binaries (symtune, symoperate, symscope) remain available as thin
-wrappers and will be removed in a future release.
+symcockpit replaces the former symtune, symoperate and symscope binaries;
+their commands are now the family subcommands above.
 """
 
+/// The product version of symcockpit itself, as opposed to the versions of
+/// the three families it dispatches to. Those keep their own numbering: they
+/// were separately released tools before the repo consolidation, and their
+/// version history stays meaningful to anyone migrating from them.
+enum CockpitVersion {
+    static let current = "0.1.0"
+}
+
+/// The version report, in the ecosystem's `version --json` shape: a `tool`,
+/// its `version`, and the component families underneath.
 func cockpitVersionJSON() throws -> String {
-    struct FamilyVersion: Codable {
+    struct FamilyVersion: Encodable {
         let family: String
         let version: String
         let schemaVersion: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case family
+            case version
+            case schemaVersion = "schema_version"
+        }
     }
-    struct Report: Codable {
+    struct Report: Encodable {
         let tool: String
+        let version: String
         let schemaVersion: Int
         let families: [FamilyVersion]
+
+        enum CodingKeys: String, CodingKey {
+            case tool
+            case version
+            case schemaVersion = "schema_version"
+            case families
+        }
     }
-    // Encode with snake_case keys manually to match the ecosystem contract.
+
+    let report = Report(
+        tool: "symcockpit",
+        version: CockpitVersion.current,
+        schemaVersion: 1,
+        families: [
+            FamilyVersion(family: "tune", version: TuneVersion.current, schemaVersion: nil),
+            FamilyVersion(family: "operate", version: SymOperateVersion.current, schemaVersion: nil),
+            FamilyVersion(family: "scope", version: Version.version, schemaVersion: 1),
+        ]
+    )
+
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-    let families: [[String: Any?]] = [
-        ["family": "tune", "version": TuneVersion.current, "schema_version": nil],
-        ["family": "operate", "version": SymOperateVersion.current, "schema_version": nil],
-        ["family": "scope", "version": ScopeVersionString.version, "schema_version": 1],
-    ]
-    var lines = families.map { f -> String in
-        let v = f["version"] as? String ?? "unknown"
-        let name = f["family"] as? String ?? "?"
-        return #"{"family": "\#(name)", "version": "\#(v)"}"#
-    }
-    _ = lines.count
-    let body = lines.joined(separator: ",\n")
-    return """
-    {
-      "tool": "symcockpit",
-      "families": [
-    \(body)
-      ]
-    }
-    """
-}
-
-// Version strings from the three libraries.
-enum ScopeVersionString {
-    static let version = "0.1.0"
+    let data = try encoder.encode(report)
+    return String(decoding: data, as: UTF8.self)
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -99,7 +111,7 @@ case "version":
     if args.contains("--json") {
         print(try cockpitVersionJSON())
     } else {
-        print("symcockpit — tune \(TuneVersion.current), operate \(SymOperateVersion.current), scope \(ScopeVersionString.version)")
+        print("symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current), operate \(SymOperateVersion.current), scope \(Version.version)")
     }
     code = 0
 case "help", "--help", "-h":

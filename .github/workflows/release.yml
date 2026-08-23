@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    # macOS-only by construction: the cockpit families drive AppKit, IOKit,
+    # Accessibility and ScreenCaptureKit. macos-latest rather than a pinned
+    # runner because tune targets Swift 6.4, matching the CI workflow.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the tag matches CockpitVersion
+        # A tag that disagrees with the compiled-in version would ship a
+        # binary that misreports itself, and Homebrew's `test do` block would
+        # fail after the release is already public.
+        run: |
+          declared=$(grep -o 'static let current = "[^"]*"' Sources/symcockpit/main.swift | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [ "$declared" != "${{ steps.version.outputs.version }}" ]; then
+            echo "tag ${{ steps.version.outputs.version }} != CockpitVersion.current $declared" >&2
+            exit 1
+          fi
+
+      - name: Test every package
+        run: make test
+
+      - name: Test the dispatcher package
+        run: swift test
+
+      - name: Build universal binary
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Package
+        id: package
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          archive="symcockpit_${version}_darwin_universal.tar.gz"
+          binary="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/symcockpit"
+          lipo -info "$binary"
+          mkdir -p dist/stage
+          cp "$binary" dist/stage/symcockpit
+          cp LICENSE README.md dist/stage/
+          tar -czf "dist/${archive}" -C dist/stage .
+          ( cd dist && shasum -a 256 "${archive}" > checksums.txt )
+          echo "archive=dist/${archive}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The binary is unsigned and un-notarized: no Developer ID is
+        # available to CI. Homebrew installs it from the tarball, which
+        # Gatekeeper does not quarantine, so the CLI runs without a
+        # right-click-open dance. A signed .app bundle would need the
+        # certificate first.
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            "${{ steps.package.outputs.archive }}" \
+            dist/checksums.txt
