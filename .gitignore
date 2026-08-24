@@ -9,6 +9,11 @@ xcuserdata/
 *.xcuserstate
 .swiftpm/
 Package.resolved
+*.profraw
+*.profdata
+
+# Local agent reports / session state
+.github/coverage/
 
 # Assembled app bundle (make build-app)
 build/
