@@ -52,7 +52,12 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
         return strategies
     }
 
-    private let cookieHeader: String?
+    /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private let cookieHeaderCache: CredentialCache<String?>
+
+    private var cookieHeader: String? { cookieHeaderCache.value }
+
+    public func resetCredentialCache() { cookieHeaderCache.invalidate() }
     private let workspaceOverride: String?
     private let localStore: OpenCodeGoLocalStore
     private let network: any NetworkServiceProtocol
@@ -72,9 +77,16 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
         let env = ProcessInfo.processInfo.environment
-        self.cookieHeader = cookieHeader
-            ?? env["OPENCODE_COOKIE"]
-            ?? KeychainCredentials.read(service: "com.symaira.symtune", account: "opencode-cookie")
+        self.cookieHeaderCache = CredentialCache {
+            if let cookieHeader { return cookieHeader }
+            if let envCookie = ProcessInfo.processInfo.environment["OPENCODE_COOKIE"] {
+                return envCookie
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "opencode-cookie"
+            )
+        }
         self.workspaceOverride = workspaceOverride
             ?? env["OPENCODE_WORKSPACE_ID"]
         self.localStore = OpenCodeGoLocalStore(

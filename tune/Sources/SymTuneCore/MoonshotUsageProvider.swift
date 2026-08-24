@@ -39,7 +39,12 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
         [MoonshotAPIStrategy(apiKey: apiKey, region: region, network: network)]
     }
 
-    private let apiKey: String
+    /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private let apiKeyCache: CredentialCache<String>
+
+    private var apiKey: String { apiKeyCache.value }
+
+    public func resetCredentialCache() { apiKeyCache.invalidate() }
     private let region: Region
     private let network: any NetworkServiceProtocol
 
@@ -54,12 +59,17 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
         region: Region? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
-        let envKey = ProcessInfo.processInfo.environment["MOONSHOT_API_KEY"]
-            ?? ProcessInfo.processInfo.environment["MOONSHOT_KEY"]
-        self.apiKey = apiKey ?? envKey ?? KeychainCredentials.read(
-            service: "com.symaira.symtune",
-            account: "moonshot-api-key"
-        ) ?? ""
+        self.apiKeyCache = CredentialCache {
+            if let apiKey { return apiKey }
+            let env = ProcessInfo.processInfo.environment
+            if let envKey = env["MOONSHOT_API_KEY"] ?? env["MOONSHOT_KEY"] {
+                return envKey
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "moonshot-api-key"
+            ) ?? ""
+        }
         let envRegion = ProcessInfo.processInfo.environment["MOONSHOT_REGION"]
             .flatMap(Region.init(rawValue:))
         self.region = region ?? envRegion ?? .international

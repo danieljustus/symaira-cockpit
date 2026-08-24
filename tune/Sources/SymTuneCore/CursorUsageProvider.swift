@@ -44,7 +44,12 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
         return strategies
     }
 
-    private let cookieHeader: String?
+    /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private let cookieHeaderCache: CredentialCache<String?>
+
+    private var cookieHeader: String? { cookieHeaderCache.value }
+
+    public func resetCredentialCache() { cookieHeaderCache.invalidate() }
     private let appAuthStore: CursorAppAuthStore
     private let network: any NetworkServiceProtocol
 
@@ -59,9 +64,16 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
         vscdbPath: String? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
-        self.cookieHeader = cookieHeader
-            ?? ProcessInfo.processInfo.environment["CURSOR_COOKIE"]
-            ?? KeychainCredentials.read(service: "com.symaira.symtune", account: "cursor-cookie")
+        self.cookieHeaderCache = CredentialCache {
+            if let cookieHeader { return cookieHeader }
+            if let envCookie = ProcessInfo.processInfo.environment["CURSOR_COOKIE"] {
+                return envCookie
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "cursor-cookie"
+            )
+        }
         self.appAuthStore = CursorAppAuthStore(dbPath: vscdbPath)
         self.network = network
     }

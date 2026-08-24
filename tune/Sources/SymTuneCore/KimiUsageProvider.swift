@@ -53,10 +53,20 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
         return strategies
     }
 
-    private let apiKey: String?
+    /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private let apiKeyCache: CredentialCache<String?>
+
+    private var apiKey: String? { apiKeyCache.value }
     private let cliAccessToken: String?
     private let cliDeviceID: String?
-    private let authToken: String?
+    private let authTokenCache: CredentialCache<String?>
+
+    private var authToken: String? { authTokenCache.value }
+
+    public func resetCredentialCache() {
+        apiKeyCache.invalidate()
+        authTokenCache.invalidate()
+    }
     private let baseURL: URL
     private let network: any NetworkServiceProtocol
 
@@ -77,11 +87,16 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
         baseURL: URL? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
-        let envAPIKey = ProcessInfo.processInfo.environment["KIMI_CODE_API_KEY"]
-        self.apiKey = apiKey ?? envAPIKey ?? KeychainCredentials.read(
-            service: "com.symaira.symtune",
-            account: "kimi-api-key"
-        )
+        self.apiKeyCache = CredentialCache {
+            if let apiKey { return apiKey }
+            if let envAPIKey = ProcessInfo.processInfo.environment["KIMI_CODE_API_KEY"] {
+                return envAPIKey
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "kimi-api-key"
+            )
+        }
 
         let resolvedHome = cliHome
             ?? ProcessInfo.processInfo.environment["KIMI_CODE_HOME"]
@@ -90,11 +105,16 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
         self.cliAccessToken = cliStore.readAccessToken()
         self.cliDeviceID = cliStore.readDeviceID()
 
-        let envAuthToken = ProcessInfo.processInfo.environment["KIMI_AUTH_TOKEN"]
-        self.authToken = authToken ?? envAuthToken ?? KeychainCredentials.read(
-            service: "com.symaira.symtune",
-            account: "kimi-auth-token"
-        )
+        self.authTokenCache = CredentialCache {
+            if let authToken { return authToken }
+            if let envAuthToken = ProcessInfo.processInfo.environment["KIMI_AUTH_TOKEN"] {
+                return envAuthToken
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "kimi-auth-token"
+            )
+        }
 
         if let baseURL {
             self.baseURL = baseURL

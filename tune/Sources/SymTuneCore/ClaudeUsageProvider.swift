@@ -58,9 +58,21 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
         return result
     }
 
-    private let adminKey: String
-    private let oauthToken: String?
+    /// Both credentials resolve on first use, not at construction — see
+    /// ``CredentialCache`` for why that matters.
+    private let adminKeyCache: CredentialCache<String>
+    private let oauthTokenCache: CredentialCache<String?>
     private let network: any NetworkServiceProtocol
+
+    private var adminKey: String { adminKeyCache.value }
+    private var oauthToken: String? { oauthTokenCache.value }
+
+    /// Drop the memoized credentials so a key the user just saved (or cleared)
+    /// takes effect immediately.
+    public func resetCredentialCache() {
+        adminKeyCache.invalidate()
+        oauthTokenCache.invalidate()
+    }
 
     /// - Parameters:
     ///   - adminAPIKey: explicit admin key; defaults to Keychain lookup with
@@ -79,22 +91,27 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
         network: any NetworkServiceProtocol = URLSessionNetworkService(),
         oauthTokenReader: (@Sendable (KeychainPromptPolicy) -> String?)? = nil
     ) {
-        let envKey = ProcessInfo.processInfo.environment["ANTHROPIC_ADMIN_KEY"]
-        let keychainKey = KeychainCredentials.read(
-            service: "com.symaira.symtune",
-            account: "anthropic-admin-key"
-        )
-        self.adminKey = adminAPIKey ?? envKey ?? keychainKey ?? ""
-
-        if let explicit = oauthToken {
-            self.oauthToken = explicit.isEmpty ? nil : explicit
-        } else if let reader = oauthTokenReader {
-            self.oauthToken = reader(keychainPromptPolicy)
-        } else {
-            self.oauthToken = ClaudeOAuthCredentials.read(
-                keychainPromptPolicy: keychainPromptPolicy
-            )
+        self.adminKeyCache = CredentialCache {
+            if let adminAPIKey { return adminAPIKey }
+            if let envKey = ProcessInfo.processInfo.environment["ANTHROPIC_ADMIN_KEY"] {
+                return envKey
+            }
+            return KeychainCredentials.read(
+                service: "com.symaira.symtune",
+                account: "anthropic-admin-key"
+            ) ?? ""
         }
+
+        self.oauthTokenCache = CredentialCache {
+            if let oauthToken {
+                return oauthToken.isEmpty ? nil : oauthToken
+            }
+            if let reader = oauthTokenReader {
+                return reader(keychainPromptPolicy)
+            }
+            return ClaudeOAuthCredentials.read(keychainPromptPolicy: keychainPromptPolicy)
+        }
+
         self.network = network
     }
 

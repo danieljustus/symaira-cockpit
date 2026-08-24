@@ -144,10 +144,18 @@ public final class AIUsageService: @unchecked Sendable {
     }
 
     /// Clear all cached snapshots (e.g. after credentials change).
+    ///
+    /// Providers memoize their credential so that listing the catalog does not
+    /// re-read the Keychain; a credential the user just changed must therefore
+    /// invalidate that memo too, or the dropped snapshot would simply be
+    /// refetched with the old key.
     public func resetCache() {
         lock.withLock {
             cache.removeAll()
             inFlight.removeAll()
+        }
+        for provider in providers {
+            provider.resetCredentialCache()
         }
     }
 
