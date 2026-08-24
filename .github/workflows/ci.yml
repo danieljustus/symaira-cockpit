@@ -59,3 +59,45 @@ jobs:
         # The dispatcher package (root) carries the E2E suites that spawn the
         # built `symcockpit` binary — `swift test` there runs them.
         run: swift test
+
+  # Coverage tracking only — main-branch pushes, not a PR check. Keeps PR
+  # checks fast (see the `swift` job above) while still recording coverage
+  # figures for tune/operate/scope over time.
+  coverage:
+    if: github.event_name == 'push'
+    name: coverage (${{ matrix.pkg }})
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ${{ matrix.pkg }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [tune, operate, scope]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select toolchain
+        run: |
+          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+
+      - name: Test with coverage
+        run: swift test --enable-code-coverage
+
+      - name: Coverage report
+        run: |
+          bundle=$(find .build -maxdepth 4 -iname "*.xctest" -path "*/Products/Debug/*" | tr '\n' ' ')
+          profdata=$(find .build -iname "default.profdata" | head -1)
+          binaries=""
+          for b in $bundle; do
+            name=$(basename "$b" .xctest)
+            binaries="$binaries $b/Contents/MacOS/$name"
+          done
+          {
+            echo "### Coverage — ${{ matrix.pkg }}"
+            echo '```'
+            xcrun llvm-cov report $binaries -instr-profile "$profdata" Sources/
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
