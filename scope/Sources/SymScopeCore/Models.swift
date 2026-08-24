@@ -69,6 +69,10 @@ public struct MCPServer: Codable, Equatable, Sendable {
     public var env: [String: String]
     public var secretBacked: Bool
     public var credentialWarnings: [String]
+    /// Which inventory produced this entry: "builtin" (cockpit's own JSONC
+    /// config parse, full detail) or "symbrain" (symbrain's harness
+    /// inventory, name-only — command/args/url are unknown). See issue #19.
+    public var source: String
 
     public init(
         name: String,
@@ -80,7 +84,8 @@ public struct MCPServer: Codable, Equatable, Sendable {
         configPath: String,
         env: [String: String] = [:],
         secretBacked: Bool = false,
-        credentialWarnings: [String] = []
+        credentialWarnings: [String] = [],
+        source: String = "builtin"
     ) {
         self.name = name
         self.client = client
@@ -92,6 +97,7 @@ public struct MCPServer: Codable, Equatable, Sendable {
         self.env = env
         self.secretBacked = secretBacked
         self.credentialWarnings = credentialWarnings
+        self.source = source
     }
 
     public enum CodingKeys: String, CodingKey {
@@ -105,6 +111,7 @@ public struct MCPServer: Codable, Equatable, Sendable {
         case env
         case secretBacked = "secret_backed"
         case credentialWarnings = "credential_warnings"
+        case source
     }
 }
 
