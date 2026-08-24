@@ -95,9 +95,12 @@ jobs:
             name=$(basename "$b" .xctest)
             binaries="$binaries $b/Contents/MacOS/$name"
           done
+          # Pass explicit source files, not the directory: some llvm-cov
+          # versions reject a directory as the source-file filter.
+          sources=$(find Sources -name "*.swift" | tr '\n' ' ')
           {
             echo "### Coverage — ${{ matrix.pkg }}"
             echo '```'
-            xcrun llvm-cov report $binaries -instr-profile "$profdata" Sources/
+            xcrun llvm-cov report $binaries -instr-profile "$profdata" $sources
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
