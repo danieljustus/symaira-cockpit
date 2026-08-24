@@ -15,7 +15,7 @@ import SymairaUpdateCheck
 /// attributed title forces a menu-bar re-layout, so doing it on every tick was
 /// pure overhead.
 @MainActor
-final class StatusBarController: NSObject, NSPopoverDelegate {
+public final class StatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
     private let controller: TuneController
@@ -60,7 +60,16 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         autoPrefs: autoPrefs
     )
 
-    override init() {
+    /// Invoked when the user picks "Open Cockpit" from the status item's
+    /// context menu. Left `nil` by the standalone Tune app, which has no
+    /// cockpit window; `SymCockpitApp` sets it to surface its main window.
+    public var onOpenCockpit: (() -> Void)?
+
+    /// Title of the status item's first context-menu entry, when
+    /// ``onOpenCockpit`` is set.
+    public var openCockpitTitle: String = "Open Cockpit"
+
+    public override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Load persisted configuration from config.toml so saved preferences
         // survive a relaunch (issue #357). The CLI uses the same loader
@@ -241,8 +250,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             button.title = "ST"
         }
         showingIconFallback = true
-        button.action = #selector(togglePopover)
+        button.action = #selector(handleButtonClick)
         button.target = self
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     /// Vertical space the popover may occupy on `screen`: the menu-bar-free
@@ -255,7 +265,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     private var popoverHosting: NSHostingController<MainStatusView>?
 
-    private func makeStatusView(maxHeight: CGFloat) -> MainStatusView {
+    private func makeStatusView(
+        maxHeight: CGFloat,
+        chrome: TunePanelChrome = .popover
+    ) -> MainStatusView {
         MainStatusView(
             controller: controller,
             model: model,
@@ -264,7 +277,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             updateChecker: updateChecker,
             preferencesManager: preferencesManager,
             openPreferences: { [weak self] in self?.openPreferences() },
-            maxHeight: maxHeight
+            maxHeight: maxHeight,
+            chrome: chrome
         )
     }
 
@@ -288,6 +302,48 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // MARK: - Actions
 
+    /// Left click opens the popover; right click (or ctrl-click) opens the
+    /// context menu, which is where the cockpit window and Quit live.
+    @objc private func handleButtonClick() {
+        let event = NSApp.currentEvent
+        let isSecondary = event.map { $0.type == .rightMouseUp || $0.modifierFlags.contains(.control) } ?? false
+        if isSecondary {
+            showContextMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func showContextMenu() {
+        let menu = NSMenu()
+        if onOpenCockpit != nil {
+            let item = NSMenuItem(title: openCockpitTitle, action: #selector(openCockpit), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+            menu.addItem(NSMenuItem.separator())
+        }
+        let prefs = NSMenuItem(title: "Preferences…", action: #selector(openPreferencesAction), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // `popUpMenu(_:)` is deprecated; assigning the menu and re-clicking is
+        // the supported way to show a status-item menu on demand without
+        // stealing the button's primary action.
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func openCockpit() {
+        onOpenCockpit?()
+    }
+
+    @objc private func openPreferencesAction() {
+        openPreferences()
+    }
+
     @objc private func togglePopover() {
         guard let button = statusItem.button else { return }
         if popover.isShown {
@@ -310,7 +366,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     /// Open the Preferences window.
-    func openPreferences() {
+    public func openPreferences() {
         if let window = preferencesWindow, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -346,7 +402,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // MARK: - NSPopoverDelegate
 
-    func popoverDidClose(_ notification: Notification) {
+    public func popoverDidClose(_ notification: Notification) {
         // Drop back to the idle tier: metrics only, at a glanceable cadence.
         model.setDetailVisible(false)
         // The process card's `onDisappear` is not guaranteed for a popover that
@@ -374,5 +430,28 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // macOS also resets the display's gamma table across sleep, which drops
         // an active brightness boost or warmth shift without telling anyone.
         controller.reassertDisplayOverrides()
+    }
+
+    // MARK: - Embedding
+
+    /// The very same cards the popover shows, dressed for another window.
+    ///
+    /// `SymCockpitApp` puts this into its Tune section, so the cockpit window
+    /// and the menu-bar popover render identical cards off one shared
+    /// ``TuneViewModel`` — no second polling pipeline, no divergent UI. The
+    /// ``TunePanelChrome/embedded`` chrome drops the popover's fixed width,
+    /// header and footer, which the host window provides itself.
+    public func tunePanel(
+        chrome: TunePanelChrome = .embedded,
+        maxHeight: CGFloat = 900
+    ) -> AnyView {
+        AnyView(makeStatusView(maxHeight: maxHeight, chrome: chrome))
+    }
+
+    /// Switch the shared model to the interactive cadence while an embedded
+    /// panel is on screen (the popover does this on open/close itself).
+    public func setEmbeddedPanelVisible(_ visible: Bool) {
+        model.setDetailVisible(visible)
+        processesModel.setVisible(visible)
     }
 }

@@ -12,6 +12,9 @@ let package = Package(
         .library(name: "SymTuneCLI", targets: ["SymTuneCLI"]),
         .executable(name: "symtune", targets: ["symtune"]),
         .executable(name: "SymTuneApp", targets: ["SymTuneApp"]),
+        // The menu-bar UI as a library so symcockpit's GUI can embed the very
+        // same status item, popover and preferences instead of reimplementing them.
+        .library(name: "SymTuneUI", targets: ["SymTuneUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.10.0"),
@@ -46,13 +49,21 @@ let package = Package(
                 "SymTuneCLI"
             ]
         ),
-        .executableTarget(
-            name: "SymTuneApp",
+        .target(
+            name: "SymTuneUI",
             dependencies: [
                 "SymTuneCore",
                 .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
                 .product(name: "SymairaTheme", package: "symaira-appkit"),
             ],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+            ]
+        ),
+        .executableTarget(
+            name: "SymTuneApp",
+            dependencies: ["SymTuneUI"],
+            exclude: ["Info.plist"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
             ]

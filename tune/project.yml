@@ -27,12 +27,35 @@ targets:
           - "-framework"
           - "IOKit"
 
+  # The menu-bar UI, as its own module — symcockpit's GUI embeds the same
+  # library through SPM, so the Xcode project mirrors that split instead of
+  # compiling the views straight into the app target.
+  SymTuneUI:
+    type: library.static
+    platform: macOS
+    sources:
+      - Sources/SymTuneUI
+    dependencies:
+      - target: SymTuneCore
+      - package: symaira-appkit
+        product: SymairaUpdateCheck
+      - package: symaira-appkit
+        product: SymairaTheme
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "AppKit"
+
   SymairaTune:
     type: application
     platform: macOS
     sources:
       - Sources/SymTuneApp
     dependencies:
+      - target: SymTuneUI
       - target: SymTuneCore
       - package: symaira-appkit
         product: SymairaUpdateCheck
