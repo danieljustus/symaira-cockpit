@@ -17,3 +17,6 @@ Package.resolved
 
 # Assembled app bundle (make build-app)
 build/
+
+# Agent reports
+.github/prerelease/

@@ -8,5 +8,5 @@ import Foundation
 /// duplicated rather than shared because the dispatcher is an executable
 /// target, which SwiftPM cannot depend on.
 enum CockpitAppVersion {
-    static let current = "0.1.0"
+    static let current = "0.2.0"
 }
