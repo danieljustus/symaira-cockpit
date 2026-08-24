@@ -84,6 +84,12 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
             sourceLabel: "API key (env MOONSHOT_API_KEY or Keychain)"
         )
     }
+
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Moonshot"
+    }
 }
 
 // MARK: - Strategy

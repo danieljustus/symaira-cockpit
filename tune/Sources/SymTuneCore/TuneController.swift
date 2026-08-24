@@ -749,8 +749,15 @@ extension TuneController {
             architecture: Self.architecture,
             capabilities: caps,
             permissions: permissions(),
-            recommendations: recommendations
+            recommendations: recommendations,
+            credentialSources: aiUsageService.credentialSources()
         )
+    }
+
+    /// Returns the credential-resolution report for each provider.
+    /// Consumed by the `doctor` command's diagnostics section.
+    public func credentialSources() -> [CredentialSourceReport] {
+        aiUsageService.credentialSources()
     }
 
     // MARK: - AI usage providers

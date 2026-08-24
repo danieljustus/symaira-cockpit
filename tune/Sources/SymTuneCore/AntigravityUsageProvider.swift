@@ -54,6 +54,12 @@ public struct AntigravityUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "agy"
+    }
+
     /// Reads the Antigravity auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let probe = ShellProcessProbe()

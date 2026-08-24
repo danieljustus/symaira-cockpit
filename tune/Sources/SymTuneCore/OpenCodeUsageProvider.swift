@@ -104,6 +104,12 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "OpenCode"
+    }
+
     /// Reads the OpenCode Go auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let env = ProcessInfo.processInfo.environment

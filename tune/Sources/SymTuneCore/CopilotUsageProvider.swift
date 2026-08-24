@@ -57,6 +57,12 @@ public struct CopilotUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Copilot"
+    }
+
     /// Reads the Copilot OAuth auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let token = CopilotTokenStore().readToken()

@@ -87,6 +87,12 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Cursor"
+    }
+
     /// Reads the Cursor auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let store = CursorAppAuthStore()

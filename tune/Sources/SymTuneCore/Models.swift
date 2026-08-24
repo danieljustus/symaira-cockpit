@@ -188,6 +188,16 @@ public struct CapabilityReport: Codable, Sendable {
     public let capabilities: [Capability]
     public let permissions: PermissionStatus
     public let recommendations: [String]
+    public let credentialSources: [CredentialSourceReport]
+}
+
+/// Report of which resolution path produced a provider credential (issue #18).
+public struct CredentialSourceReport: Codable, Sendable {
+    public let provider: String
+    public let source: String
+    public let opReference: String?
+    public let envKey: String?
+    public let keychainAccount: String?
 }
 
 // MARK: - Active Overrides

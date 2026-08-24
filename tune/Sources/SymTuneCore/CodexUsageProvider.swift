@@ -64,6 +64,12 @@ public struct CodexUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Codex"
+    }
+
     /// Reads the Codex OAuth auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let resolvedHome = ProcessInfo.processInfo.environment["CODEX_HOME"]

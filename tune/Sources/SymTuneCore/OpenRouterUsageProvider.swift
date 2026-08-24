@@ -90,6 +90,12 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
             sourceLabel: "API key (env OPENROUTER_API_KEY or Keychain)"
         )
     }
+
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "OpenRouter"
+    }
 }
 
 // MARK: - Strategy

@@ -131,6 +131,9 @@ public protocol AIUsageProvider: Sendable {
     /// (issue #360). A `nil` value means the provider manages its own auth
     /// state externally and the UI renders no input field.
     var credentialDescriptor: AIUsageCredentialDescriptor? { get }
+
+    /// Human-readable report of how this provider's credential is resolved.
+    var credentialSource: String { get }
     /// Drop any memoized credential so the next read hits the Keychain (or
     /// environment) again. Called after the user saves or clears a key.
     func resetCredentialCache()
@@ -139,6 +142,9 @@ public protocol AIUsageProvider: Sendable {
 public extension AIUsageProvider {
     /// Providers that hold no memoized credential need do nothing.
     func resetCredentialCache() {}
+
+    /// Default: providers that hold no memoized credential report "none".
+    public var credentialSource: String { "none" }
 }
 
 /// Describes how a provider's credentials are sourced, for the preferences UI.

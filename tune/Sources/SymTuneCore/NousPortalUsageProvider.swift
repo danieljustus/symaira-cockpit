@@ -59,6 +59,12 @@ public struct NousPortalUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Nous"
+    }
+
     /// Reads the Nous Portal auth state for the preferences UI.
     static func readExternalAuthState() -> ExternalAuthState {
         let store = NousAuthStore()

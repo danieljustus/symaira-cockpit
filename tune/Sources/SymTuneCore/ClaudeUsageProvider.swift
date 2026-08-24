@@ -127,6 +127,12 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
         )
     }
 
+    // MARK: - Credential source (issue #18)
+
+    public var credentialSource: String {
+        return "Claude"
+    }
+
     /// Reads the Claude auth state for the preferences UI — side-effect-free.
     static func readExternalAuthState() -> ExternalAuthState {
         let token = ClaudeOAuthCredentials.read(keychainPromptPolicy: .never)

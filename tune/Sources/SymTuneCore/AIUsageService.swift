@@ -159,6 +159,20 @@ public final class AIUsageService: @unchecked Sendable {
         }
     }
 
+    /// Reports the credential-resolution source for each registered provider.
+    /// Used by the `doctor` command to help users debug auth issues.
+    public func credentialSources() -> [CredentialSourceReport] {
+        providers.map { provider in
+            CredentialSourceReport(
+                provider: provider.id,
+                source: provider.credentialSource,
+                opReference: nil,
+                envKey: nil,
+                keychainAccount: nil
+            )
+        }
+    }
+
     // MARK: - Refresh
 
     private func refresh(_ provider: any AIUsageProvider) async throws -> AIUsageSnapshot {
