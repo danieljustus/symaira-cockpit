@@ -1,92 +1,220 @@
-# Symaira Cockpit (`symcockpit`)
+<div align="center">
 
-> Diese Maschine: Observability und Steuerung des lokalen Macs.
+# Symaira Cockpit
 
-`symaira-cockpit` ist das Repo der **Cockpit-Produktfamilie** — die drei
-macOS-lokalen, permission-behafteten Tools für die Maschine, auf der du
-arbeitest (Repo-Konsolidierung 2026-08-21, `repo-konsolidierung.md` §3.3).
+**One command for your Mac: see what's running — and control what it does.**
 
-## Ein Binary, drei Familien
+`symcockpit` is a native macOS CLI that tunes your Mac's thermals, power and
+display, inventories local ports, containers and MCP servers, and automates the
+graphical interface. Everything speaks JSON — and everything doubles as an MCP
+server, so AI agents get the exact same capabilities you have in the shell.
 
-Seit dem CLI-Umbau (2026-08-22) ist `symcockpit` der einheitliche Entrypoint:
+[![Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?label=release)](https://github.com/danieljustus/symaira-cockpit/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg)](#requirements)
+[![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
 
-```bash
-symcockpit scope scan            # Ports, Container, MCP-Inventar
-symcockpit tune doctor           # Thermik/Power/Display-Status
-symcockpit operate serve         # GUI-Automation als MCP-Server
-symcockpit version               # alle drei Komponenten-Versionen
+</div>
+
+---
+
+```console
+$ symcockpit scope ports list
+[
+  { "port": 3722, "pid": 631, "process": "node", "protocol": "tcp", "address": "*" },
+  ...
+]
+
+$ symcockpit scope ports suggest 3
+[ 49153, 49154, 49155 ]
+
+$ symcockpit tune sensors
+{ "thermal_pressure": "nominal", "fans": [ { "rpm": 1980 } ], "smc_supported": true }
+
+$ symcockpit operate doctor
+{ "ok": true, "capabilities": { "screenshot": true, "ocr": true, "accessibility": true } }
 ```
 
-Die früher eigenständig verteilten Binaries `symscope`, `symtune` und
-`symoperate` werden nicht mehr ausgeliefert (2026-08-23); ihre Kommandos sind
-die Family-Subcommands oben. Die Homebrew-Formeln/Casks der drei Vorgänger
-sind deprecated und zeigen auf `symcockpit`.
+## Why Cockpit
 
-## Installation
+The facts you constantly need while developing on a Mac are scattered across a
+dozen places: Activity Monitor, `lsof`, Docker Desktop, System Settings,
+`pmset`, and a handful of MCP config files nobody remembers the path to.
+Symaira Cockpit pulls them into **one binary** with **one output format**:
+
+- **Structured, not scrapeable.** Every command answers in JSON with stable
+  field names. No parsing human-readable output, no `awk`.
+- **Local, not cloud.** No telemetry, no account, no network access beyond the
+  optional update check. What your Mac knows stays on your Mac.
+- **Built for agents.** Every area runs as an MCP server over stdio on demand —
+  the capabilities you have on the shell become tools for your AI assistant.
+- **Native and fast.** Swift 6, straight against IOKit, Accessibility and
+  ScreenCaptureKit. One universal binary, no runtime, no dependencies.
+
+## Install
 
 ```bash
 brew install danieljustus/tap/symcockpit
 ```
 
-Oder direkt: das Universal-Binary (`arm64` + `x86_64`) aus den
-[Releases](https://github.com/danieljustus/symaira-cockpit/releases) laden
-und nach `/usr/local/bin` legen. Die Binaries sind **nicht signiert und
-nicht notarisiert** — über Homebrew installiert greift Gatekeepers
-Quarantäne nicht, beim manuellen Download schon.
+Or grab the universal binary (`arm64` + `x86_64`) from
+[Releases](https://github.com/danieljustus/symaira-cockpit/releases) and drop it
+into `/usr/local/bin`.
 
-`symcockpit` selbst hat eine eigene Produktversion; `tune`, `operate` und
-`scope` behalten ihre jeweilige Versionshistorie aus der Zeit als
-eigenständige Tools:
+> The binaries are neither signed nor notarized. Installed via Homebrew,
+> Gatekeeper's quarantine does not apply; after a manual download you need to
+> clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
 
-```bash
-$ symcockpit version
-symcockpit 0.1.0 — tune 0.9.3, operate 0.6.1, scope 0.4.1
-```
+## The three areas
 
-| Package | Familie | These | Sprache |
-| :--- | :--- | :--- | :--- |
-| [`tune/`](tune/) | `symcockpit tune` | Thermik, Power, Display, Helligkeit, Token-Kosten | Swift 6 (AppKit/IOKit) |
-| [`operate/`](operate/) | `symcockpit operate` | GUI-Automation: Screenshots, AX-Tree, Input, Apps/Windows | Swift 6 (AppKit/AX/SCK) |
-| [`scope/`](scope/) | `symcockpit scope` | Inventar: Ports, Container, MCP-Server, Health | Swift 6 |
+`symcockpit <area> <command>` — three problem domains behind one entrypoint.
 
-Jedes Package ist ein eigenständiges SPM-Modul mit eigenem `Package.swift`
-(Standalone-First); die CLI-Logik liegt jeweils in einem Library-Target
-(`SymTuneCLI`, `SymOperateCLI`, `SymScopeCLI`), das sowohl das
-package-eigene Executable-Target als auch den Root-Dispatcher konsumiert.
-Das Root-`Package.swift` definiert `symcockpit` als einziges Produkt und
-zieht die drei Packages über lokale Pfad-Dependencies ein.
+### `scope` — what is running on this machine
 
-## Build & Test
+An inventory of your local development environment: which process is holding
+port 3000, which containers are up, which MCP servers are configured in which
+AI client — and whether they actually respond.
 
 ```bash
-# Alles (Root-Makefile)
-make build
-make test
-
-# Einzelnes Package
-cd tune && swift build && swift test
-cd operate && swift build && swift test
-cd scope && swift build && swift test
-
-# Dispatcher
-swift build && .build/debug/symcockpit help
+symcockpit scope scan                  # Full snapshot: ports, MCP, containers
+symcockpit scope ports list            # Listening ports mapped to processes
+symcockpit scope ports suggest 3       # Suggest free TCP ports
+symcockpit scope conflicts             # Ports claimed by more than one process
+symcockpit scope mcp list              # MCP servers across every AI client
+symcockpit scope mcp health            # Probe each server: does it answer, how fast
+symcockpit scope containers            # Running Docker containers
+symcockpit scope explain port 5432     # What owns this port — and why
+symcockpit scope watch --interval 5    # Changes as an NDJSON event stream
 ```
 
-> **Toolchain-Hinweis:** Die App-Targets (`SymTuneApp`) und Tests brauchen die
-> Xcode-Toolchain. Falls CommandLineTools `swift` Fehler beim App-Build
-> meldet (`actool`), mit Xcode(-beta) bauen:
+### `tune` — thermals, power, display
+
+Read sensors and actively change system state: brightness well past the usual
+ceiling, a dimming overlay and color temperature, fan speed, charge limit, sleep
+prevention — plus battery health, top processes and system metrics.
+
+```bash
+symcockpit tune status                 # Health score, sensors, battery, overrides
+symcockpit tune sensors                # Thermal pressure, temperatures, fan RPM
+symcockpit tune battery                # Charge, cycles, capacity, condition
+symcockpit tune processes --sort cpu   # The hungriest processes
+symcockpit tune brightness set 0.8     # Built-in display brightness
+symcockpit tune extbright set 1.4      # EDR / extended brightness beyond 100%
+symcockpit tune warmth set 0.3         # Shift color temperature warmer
+symcockpit tune awake --for 2h         # Stay awake for two hours
+symcockpit tune profile save night     # Store the current settings as a profile
+sudo symcockpit tune fan set 0.5       # Fan speed (SMC write)
+sudo symcockpit tune battery-limit set 80
+```
+
+The SMC writes (fans, charge limit) require `root`. Values are clamped to safe
+ranges and restored automatically on normal exit or `Ctrl-C`.
+
+### `operate` — drive the interface
+
+Full macOS GUI automation: screenshots, Accessibility tree queries, finding
+elements via OCR, clicking, typing, scrolling, managing windows and apps. Built
+for agents and end-to-end tests — with an action policy that defines what is
+allowed.
+
+```bash
+symcockpit operate doctor              # Check permissions and environment
+symcockpit operate permissions status
+symcockpit operate permissions grant accessibility
+symcockpit operate serve               # Expose it as an MCP server
+symcockpit operate history --json      # Log of every action performed
+```
+
+`operate` is deliberately agent-shaped, and its full surface is exposed over
+MCP: `snapshot`, `query_ui`, `find_ui`, `query_ui_ocr`, `click`, `type_text`,
+`press_keys`, `scroll`, `drag`, `launch_app`, `focus_window`, `menu_action`,
+`wait_for`, `list_apps`, `list_windows`, `list_displays`, `get_policy` /
+`set_policy`.
+
+## For AI agents (MCP)
+
+Every area speaks the Model Context Protocol over stdio. Add it to your AI
+client's configuration:
+
+```json
+{
+  "mcpServers": {
+    "cockpit-scope": { "command": "symcockpit", "args": ["scope", "serve"] },
+    "cockpit-tune": { "command": "symcockpit", "args": ["tune", "serve"] },
+    "cockpit-operate": { "command": "symcockpit", "args": ["operate", "serve"] }
+  }
+}
+```
+
+Now an assistant can look up which process is blocking the port it needs, keep
+the Mac awake through a long build, or drive an app through its interface —
+without you playing middleman.
+
+In every `serve` mode `stdout` carries JSON-RPC and nothing else; logs and
+diagnostics go to `stderr`. No broken frames, not even on failure.
+
+## Permissions and safety
+
+Cockpit asks only for what the area you use actually needs, and `doctor` tells
+you exactly what is missing:
+
+| Capability | Requires |
+| :--- | :--- |
+| Ports, containers, MCP inventory | nothing |
+| Sensors, battery, metrics, brightness | nothing |
+| Fans, charge limit | `sudo` (SMC write) |
+| Screenshots, OCR | Screen Recording |
+| Clicking, typing, UI queries | Accessibility |
+
+Every write action is recorded in a local history you can read back at any time
+(`history`).
+
+## Output contract
+
+- **JSON everywhere.** Snake-case fields, stable keys, `--json` wherever a
+  human-readable variant exists. Streams (`watch`) emit NDJSON.
+- **Exit codes:** `0` success · `1` error · `2` usage/config · `3` missing
+  permission · `4` unsupported on this system.
+- **XDG paths:** config under `~/.config/`, cache under `~/.cache/`, data under
+  `~/.local/share/`.
+
+```bash
+symcockpit version --json
+```
+
+## Requirements
+
+- macOS 15 or newer, Apple Silicon or Intel
+- Container inventory: a running Docker engine (optional)
+- Fan and charge-limit control: access to the Apple SMC — not every model and
+  not every macOS build permits it, and `tune sensors` will tell you
+
+Unsupported capabilities report exit code `4` cleanly instead of guessing.
+
+## Build from source
+
+```bash
+git clone https://github.com/danieljustus/symaira-cockpit.git
+cd symaira-cockpit
+make build      # Debug build of every component
+make test       # Test suite
+swift build -c release --arch arm64 --arch x86_64
+```
+
+The repository is an SPM workspace: `Sources/symcockpit/` is the dispatcher,
+and [`tune/`](tune/), [`operate/`](operate/) and [`scope/`](scope/) are
+standalone packages with their own test suites. Contributor details live in
+[AGENTS.md](AGENTS.md).
+
+> The app targets and the tests need the Xcode toolchain:
 > `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build`
 
-## Konventionen (Ecosystem)
+## Contributing
 
-- Ausgeliefertes Binary: `symcockpit` — ein Produkt, drei Family-Subcommands.
-  Die Packages behalten je ein eigenes Executable-Target (`symtune`,
-  `symoperate`, `symscope`) für Standalone-Builds; released und über Homebrew
-  verteilt wird nur `symcockpit`.
-- XDG-Pfade: `~/.config/<tool>/`, `~/.cache/<tool>/`, `~/.local/share/<tool>/`.
-- Env-Präfix: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.
-- Exit-Codes: `0` ok · `1` Fehler · `2` Usage/Config · `3` Permission ·
-  `4` Unsupported/Not-Implemented (Swift-Tools).
-- Zero-Stdio-Pollution in allen MCP-Servern (`serve`): stdout = JSON-RPC nur.
-- Public Apache-2.0 — kein Billing/Tenant/Cloud-Code hier.
+Issues and pull requests are welcome. For anything larger than a fix, please
+open an issue first so we can agree on the direction. Every contribution should
+pass `make build` and `make test`.
 
+## License
+
+[Apache License 2.0](LICENSE) — © Daniel Justus
