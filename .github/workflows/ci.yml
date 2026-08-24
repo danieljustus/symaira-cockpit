@@ -90,10 +90,20 @@ jobs:
         run: |
           bundle=$(find .build -maxdepth 4 -iname "*.xctest" -path "*/Products/Debug/*" | tr '\n' ' ')
           profdata=$(find .build -iname "default.profdata" | head -1)
-          binaries=""
+          # Only the first binary is a bare positional arg; every additional
+          # one needs -object, or older llvm-cov builds misparse it (and
+          # everything after it, including the source list) as objects too.
+          binary_args=""
+          first=true
           for b in $bundle; do
             name=$(basename "$b" .xctest)
-            binaries="$binaries $b/Contents/MacOS/$name"
+            bin="$b/Contents/MacOS/$name"
+            if [ "$first" = true ]; then
+              binary_args="$bin"
+              first=false
+            else
+              binary_args="$binary_args -object $bin"
+            fi
           done
           # Pass explicit source files, not the directory: some llvm-cov
           # versions reject a directory as the source-file filter.
@@ -101,6 +111,6 @@ jobs:
           {
             echo "### Coverage — ${{ matrix.pkg }}"
             echo '```'
-            xcrun llvm-cov report $binaries -instr-profile "$profdata" $sources
+            xcrun llvm-cov report $binary_args -instr-profile "$profdata" $sources
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
