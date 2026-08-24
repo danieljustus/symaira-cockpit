@@ -285,7 +285,7 @@ jobs:
           class Symcockpit < Formula
             desc "This machine: thermals, power, GUI automation and port/MCP inventory"
             homepage "https://github.com/danieljustus/symaira-cockpit"
-            version "\${VERSION}"
+            version "${VERSION}"
             license "Apache-2.0"
 
             # One universal binary rather than per-arch archives: symcockpit is
@@ -295,7 +295,7 @@ jobs:
             depends_on macos: :sonoma
 
             url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/symcockpit_\#{version}_darwin_universal.tar.gz"
-            sha256 "\${TAR_SHA256}"
+            sha256 "${TAR_SHA256}"
 
             def install
               bin.install "symcockpit"
@@ -327,8 +327,8 @@ jobs:
           mkdir -p homebrew-tap/Casks
           cat > homebrew-tap/Casks/symcockpit.rb <<EOF
           cask "symcockpit" do
-            version "\${VERSION}"
-            sha256 "\${DMG_SHA256}"
+            version "${VERSION}"
+            sha256 "${DMG_SHA256}"
 
             url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/Symaira-Cockpit-\#{version}.dmg"
             name "Symaira Cockpit"
