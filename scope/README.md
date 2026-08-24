@@ -43,9 +43,11 @@ symscope serve                 # stdio MCP-Server (JSON-RPC)
 symscope (executable) → SymScopeMCP → SymScopeCore
 ```
 
-- `SymScopeCore` — PortService (lsof), MCPDiscovery (JSONC), ContainerService
-  (docker), MCPHealthService, ConflictDetector, SnapshotService, Models.
-  Keine externen Dependencies (Foundation + Darwin only).
+- `SymScopeCore` — PortService (lsof), MCPDiscovery (symbrain's harness
+  inventory when installed, own JSONC config parse as standalone fallback),
+  ContainerService (docker), MCPHealthService, ConflictDetector,
+  SnapshotService, Models. Keine externen Dependencies (Foundation + Darwin
+  only).
 - `SymScopeMCP` — stdio JSON-RPC/MCP über `SymairaMCP` (appkit, exact-pinned).
   6 Tools: `scan`, `ports_list`, `ports_suggest`, `mcp_list`, `conflicts`,
   `mcp_health`.

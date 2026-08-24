@@ -58,7 +58,15 @@ public enum JSONC {
 
 /// MCP server config discovery across AI client applications.
 ///
-/// Sources (mirrors the Go original):
+/// Primary source: symbrain's harness inventory (`symbrain harness list
+/// --output json`), the SSOT for which AI harnesses exist and where their
+/// config files live (issue #19, symaira-brain#275). symbrain reports server
+/// *names* only (JSON and TOML configs alike), not per-server command/args/
+/// url — health probing of a symbrain-sourced server therefore reports
+/// "unknown" (`MCPHealthService` already handles that transport gracefully).
+///
+/// Fallback source, used only when symbrain is absent (mirrors the Go
+/// original, standalone-first like every other runtime integration):
 /// - Claude Desktop / Claude Code: `~/Library/Application Support/Claude/claude_desktop_config.json`
 /// - Cursor: `~/.cursor/mcp.json`
 /// - VS Code: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json` (Roo) — simplified to VS Code's own MCP config where present
@@ -84,10 +92,50 @@ public enum MCPDiscovery: Sendable {
     }
 
     /// Returns (servers, notes). Notes carry non-fatal context (missing files,
-    /// parse errors) just like the Go original.
-    public static func discover(_ sources: [Source] = defaultSources()) -> ([MCPServer], [String]) {
+    /// parse errors, and which inventory source was used).
+    ///
+    /// When symbrain is available, its harness inventory is authoritative and
+    /// the built-in JSONC parse of `sources` is skipped entirely — reparsing
+    /// configs symbrain already parsed (including codex's TOML, which this
+    /// client cannot parse) would only reintroduce the two-list divergence
+    /// this issue exists to remove.
+    public static func discover(
+        _ sources: [Source] = defaultSources(),
+        harnessService: any HarnessInventoryProviding = SymBrainHarnessService()
+    ) -> ([MCPServer], [String]) {
+        if harnessService.isAvailable, let inventory = harnessService.list(projectDir: nil) {
+            return discoverViaSymbrain(inventory)
+        }
+        return discoverBuiltin(sources)
+    }
+
+    private static func discoverViaSymbrain(_ inventory: HarnessInventory) -> ([MCPServer], [String]) {
         var servers: [MCPServer] = []
-        var notes: [String] = []
+        var notes: [String] = ["mcp: source=symbrain (\(inventory.harnesses.count) harnesses)"]
+        for harness in inventory.harnesses {
+            for config in [harness.global, harness.project].compactMap({ $0 }) {
+                if let error = config.error, !error.isEmpty {
+                    notes.append("\(harness.name): \(error) in \(config.path)")
+                    continue
+                }
+                guard config.parsed else { continue }
+                for name in config.servers {
+                    servers.append(MCPServer(
+                        name: name,
+                        client: harness.name,
+                        transport: "unknown",
+                        configPath: config.path,
+                        source: "symbrain"
+                    ))
+                }
+            }
+        }
+        return (servers, notes)
+    }
+
+    private static func discoverBuiltin(_ sources: [Source]) -> ([MCPServer], [String]) {
+        var servers: [MCPServer] = []
+        var notes: [String] = ["mcp: source=builtin (symbrain not installed)"]
         for source in sources {
             guard FileManager.default.fileExists(atPath: source.path) else {
                 continue
