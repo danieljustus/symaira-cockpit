@@ -70,3 +70,298 @@ jobs:
             --generate-notes \
             "${{ steps.package.outputs.archive }}" \
             dist/checksums.txt
+
+  # ---------------------------------------------------------------------------
+  # GUI release path. Symaira Cockpit.app is assembled by scripts/build-app.sh
+  # straight from the SwiftPM product (no Xcode project on purpose), deep-signed
+  # with the Developer ID certificate, notarized via App Store Connect API key,
+  # packaged into a branded DMG and uploaded to the same release as the CLI.
+  # Fail-closed: a stable release never ships an unsigned app.
+  # ---------------------------------------------------------------------------
+  release-macos-app:
+    name: Signed and notarized Symaira Cockpit.app
+    runs-on: macos-latest
+    environment: release
+    needs: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select toolchain
+        run: |
+          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+
+      - name: Resolve version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for secret in CERTIFICATE_P12 CERTIFICATE_PASSWORD KEYCHAIN_PASSWORD; do
+            if [ -z "${!secret:-}" ]; then
+              echo "::error::$secret must be configured in the release environment."
+              exit 1
+            fi
+          done
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          echo -n "$CERTIFICATE_P12" | base64 --decode -o "$CERTIFICATE_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity found in the configured certificate."
+            exit 1
+          fi
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Build universal app bundle
+        env:
+          CODE_SIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          ./scripts/build-app.sh
+          test -d "build/app/Symaira Cockpit.app"
+
+      - name: Verify app reports the release version
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          APP_PATH="build/app/Symaira Cockpit.app"
+          PLIST_VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Contents/Info.plist")
+          echo "CFBundleShortVersionString: $PLIST_VERSION"
+          if [ "$PLIST_VERSION" != "$VERSION" ]; then
+            echo "::error::App bundle version mismatch: expected '$VERSION', got '$PLIST_VERSION'."
+            exit 1
+          fi
+          OUTPUT=$("$APP_PATH/Contents/MacOS/SymCockpitApp" version | head -1)
+          echo "$OUTPUT"
+          case "$OUTPUT" in
+            symcockpit\ "$VERSION"\ *) ;;
+            *) echo "::error::App executable version mismatch: expected 'symcockpit $VERSION …', got '$OUTPUT'."; exit 1 ;;
+          esac
+
+      - name: Sign and verify app bundle
+        run: |
+          set -euo pipefail
+          APP_PATH="build/app/Symaira Cockpit.app"
+          while IFS= read -r -d '' item; do
+            if file "$item" | grep -q "Mach-O"; then
+              codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$item"
+            fi
+          done < <(find "$APP_PATH/Contents" -type f -print0)
+          codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Notarize and staple app
+        env:
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          for secret in NOTARY_API_KEY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID; do
+            if [ -z "${!secret:-}" ]; then
+              echo "::error::$secret must be configured in the release environment."
+              exit 1
+            fi
+          done
+
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo -n "$NOTARY_API_KEY" | base64 --decode -o "$API_KEY_PATH"
+
+          APP_PATH="build/app/Symaira Cockpit.app"
+          SUBMISSION_ARCHIVE="$RUNNER_TEMP/app-notarization.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$SUBMISSION_ARCHIVE"
+          xcrun notarytool submit "$SUBMISSION_ARCHIVE" \
+            -d "$NOTARY_API_KEY_ID" \
+            -i "$NOTARY_API_ISSUER_ID" \
+            -k "$API_KEY_PATH" \
+            --wait
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+
+      - name: Package release assets
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          APP_PATH="build/app/Symaira Cockpit.app"
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/Symaira-Cockpit-${VERSION}.zip"
+          ./scripts/create-symaira-dmg.sh \
+            "$APP_PATH" \
+            "dist/Symaira-Cockpit-${VERSION}.dmg" \
+            "Symaira Cockpit"
+
+      - name: Notarize and staple DMG
+        env:
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_PATH="dist/Symaira-Cockpit-${VERSION}.dmg"
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo -n "$NOTARY_API_KEY" | base64 --decode -o "$API_KEY_PATH"
+          xcrun notarytool submit "$DMG_PATH" \
+            -d "$NOTARY_API_KEY_ID" \
+            -i "$NOTARY_API_ISSUER_ID" \
+            -k "$API_KEY_PATH" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+
+      - name: Upload app artifacts to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/Symaira-Cockpit-*.zip \
+            dist/Symaira-Cockpit-*.dmg \
+            --clobber
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Homebrew distribution. Updates Formula (CLI tarball) and Cask (GUI DMG) in
+  # danieljustus/homebrew-tap once every artifact exists on the release, so the
+  # tap can never point at a partial release.
+  # ---------------------------------------------------------------------------
+  bump-homebrew:
+    name: Bump Homebrew formula and cask
+    runs-on: ubuntu-latest
+    environment: release
+    needs: release-macos-app
+    steps:
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: danieljustus/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download release artifacts and compute checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo danieljustus/symaira-cockpit \
+            --pattern "symcockpit_${VERSION}_darwin_universal.tar.gz" \
+            --pattern "Symaira-Cockpit-${VERSION}.dmg" \
+            --dir artifacts
+          TAR_SHA256=$(shasum -a 256 "artifacts/symcockpit_${VERSION}_darwin_universal.tar.gz" | awk '{print $1}')
+          DMG_SHA256=$(shasum -a 256 "artifacts/Symaira-Cockpit-${VERSION}.dmg" | awk '{print $1}')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAR_SHA256=$TAR_SHA256" >> "$GITHUB_ENV"
+          echo "DMG_SHA256=$DMG_SHA256" >> "$GITHUB_ENV"
+
+      - name: Write formula
+        run: |
+          set -euo pipefail
+          cat > homebrew-tap/Formula/symcockpit.rb <<EOF
+          # typed: false
+          # frozen_string_literal: true
+
+          class Symcockpit < Formula
+            desc "This machine: thermals, power, GUI automation and port/MCP inventory"
+            homepage "https://github.com/danieljustus/symaira-cockpit"
+            version "\${VERSION}"
+            license "Apache-2.0"
+
+            # One universal binary rather than per-arch archives: symcockpit is
+            # macOS-only (AppKit/IOKit/Accessibility/ScreenCaptureKit), so there is no
+            # Linux leg to split on, and \`swift build --arch arm64 --arch x86_64\`
+            # produces a single artifact for both Macs.
+            depends_on macos: :sonoma
+
+            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/symcockpit_\#{version}_darwin_universal.tar.gz"
+            sha256 "\${TAR_SHA256}"
+
+            def install
+              bin.install "symcockpit"
+            end
+
+            def caveats
+              <<~EOS
+                symcockpit replaces symtune, symoperate and symscope:
+
+                  symcockpit tune <command>       (was: symtune)
+                  symcockpit operate <command>    (was: symoperate)
+                  symcockpit scope <command>      (was: symscope)
+
+                operate needs Accessibility and Screen Recording permissions; grant them
+                in System Settings > Privacy & Security on first use. The menu bar app
+                is distributed separately: brew install --cask danieljustus/tap/symcockpit
+              EOS
+            end
+
+            test do
+              assert_match "symcockpit \#{version}", shell_output("\#{bin}/symcockpit version")
+            end
+          end
+          EOF
+
+      - name: Write cask
+        run: |
+          set -euo pipefail
+          mkdir -p homebrew-tap/Casks
+          cat > homebrew-tap/Casks/symcockpit.rb <<EOF
+          cask "symcockpit" do
+            version "\${VERSION}"
+            sha256 "\${DMG_SHA256}"
+
+            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/Symaira-Cockpit-\#{version}.dmg"
+            name "Symaira Cockpit"
+            desc "This machine: thermals, power, GUI automation and port/MCP inventory"
+            homepage "https://github.com/danieljustus/symaira-cockpit"
+
+            livecheck do
+              url "https://github.com/danieljustus/symaira-cockpit/releases/latest"
+              strategy :header_match
+              regex(/Symaira-Cockpit-(\d+(?:\.\d+)*)\.dmg/i)
+            end
+
+            depends_on macos: :sonoma
+
+            app "Symaira Cockpit.app"
+
+            zap trash: [
+              "~/Library/Caches/com.symaira.cockpit",
+              "~/Library/WebKit/com.symaira.cockpit",
+            ]
+          end
+          EOF
+
+      - name: Commit and push formula and cask
+        run: |
+          set -euo pipefail
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/symcockpit.rb Casks/symcockpit.rb
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Bump symcockpit to v${VERSION}"
+          git push

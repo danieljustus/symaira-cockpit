@@ -61,13 +61,21 @@ Or grab the universal binary (`arm64` + `x86_64`) from
 [Releases](https://github.com/danieljustus/symaira-cockpit/releases) and drop it
 into `/usr/local/bin`.
 
-> The binaries are neither signed nor notarized. Installed via Homebrew,
+> The CLI binary is neither signed nor notarized. Installed via Homebrew,
 > Gatekeeper's quarantine does not apply; after a manual download you need to
 > clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
 
 ## The GUI
 
 The same three areas, in a window — for the moments a glance beats a command.
+
+```bash
+brew install --cask danieljustus/tap/symcockpit
+```
+
+installs the signed and notarized menu bar app from the releases page — or grab
+the `Symaira-Cockpit-*.dmg` directly from
+[Releases](https://github.com/danieljustus/symaira-cockpit/releases).
 
 ```bash
 make build-app                       # builds build/app/Symaira Cockpit.app
