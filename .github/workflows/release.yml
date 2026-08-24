@@ -146,12 +146,12 @@ jobs:
             echo "::error::App bundle version mismatch: expected '$VERSION', got '$PLIST_VERSION'."
             exit 1
           fi
-          OUTPUT=$("$APP_PATH/Contents/MacOS/SymCockpitApp" version | head -1)
+          OUTPUT=$("$APP_PATH/Contents/MacOS/SymCockpitApp" --version)
           echo "$OUTPUT"
-          case "$OUTPUT" in
-            symcockpit\ "$VERSION"\ *) ;;
-            *) echo "::error::App executable version mismatch: expected 'symcockpit $VERSION …', got '$OUTPUT'."; exit 1 ;;
-          esac
+          if [ "$OUTPUT" != "Symaira Cockpit $VERSION" ]; then
+            echo "::error::App executable version mismatch: expected 'Symaira Cockpit $VERSION', got '$OUTPUT'."
+            exit 1
+          fi
 
       - name: Sign and verify app bundle
         run: |

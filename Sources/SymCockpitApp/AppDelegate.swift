@@ -19,7 +19,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `NSApplicationMain` only wires the delegate up from a nib, and this app
     /// has none — set it explicitly before running (same reason as SymTuneApp).
+    ///
+    /// `--version` prints the bundle's cockpit version and exits before AppKit
+    /// starts. The GUI binary has no dispatcher CLI; release tooling uses this
+    /// to check that an assembled bundle reports the tagged version without
+    /// launching the event loop.
     static func main() {
+        let arguments = ProcessInfo.processInfo.arguments.dropFirst()
+        if arguments.contains("--version") {
+            print("Symaira Cockpit \(CockpitAppVersion.current)")
+            return
+        }
+
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
