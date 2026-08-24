@@ -12,6 +12,9 @@ let package = Package(
     ],
     products: [
         .executable(name: "symcockpit", targets: ["symcockpit"]),
+        // The GUI: one menu-bar item plus a cockpit window over all three
+        // families. Ships alongside the CLI, not instead of it.
+        .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.10.0"),
@@ -27,6 +30,20 @@ let package = Package(
                 .product(name: "SymOperateCLI", package: "operate"),
                 .product(name: "SymScopeCLI", package: "scope"),
                 .product(name: "SymScopeCore", package: "scope"),
+            ]
+        ),
+        .executableTarget(
+            name: "SymCockpitApp",
+            dependencies: [
+                .product(name: "SymTuneUI", package: "tune"),
+                .product(name: "SymTuneCore", package: "tune"),
+                .product(name: "SymScopeCore", package: "scope"),
+                .product(name: "SymOperateCore", package: "operate"),
+                .product(name: "SymairaTheme", package: "symaira-appkit"),
+            ],
+            exclude: ["Info.plist"],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
             ]
         ),
         .testTarget(

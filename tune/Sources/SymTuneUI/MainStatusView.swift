@@ -20,6 +20,22 @@ import SymairaUpdateCheck
 /// ## Layout
 /// Two groups with a label each — controls the user acts on, then read-only
 /// insight — so the panel scans as two short lists rather than one long stack.
+/// Where the panel is being rendered.
+///
+/// The popover is a 320pt window hanging off the menu bar; the cockpit is a
+/// resizable window with its own title, sidebar and footer. The cards are the
+/// same in both — what differs is the chrome around them, and a panel that
+/// carries its popover chrome into a window reads as an embedded popover
+/// rather than as part of the window.
+public enum TunePanelChrome: Sendable {
+    /// Fixed-width column with the app header and the preferences footer.
+    case popover
+    /// Fills its container; the host window supplies title, footer and
+    /// scrolling. Adds the menu-bar visibility card, which the popover leaves
+    /// to the Preferences window for want of vertical space.
+    case embedded
+}
+
 @MainActor
 struct MainStatusView: View {
     let controller: TuneController
@@ -36,18 +52,31 @@ struct MainStatusView: View {
     /// positions the window so the overflow (header first) falls off-screen.
     let maxHeight: CGFloat
 
+    /// Popover or embedded — see ``TunePanelChrome``.
+    var chrome: TunePanelChrome = .popover
+
     var body: some View {
-        ScrollView(.vertical) {
+        switch chrome {
+        case .popover:
+            ScrollView(.vertical) {
+                cards
+            }
+            .frame(width: 320)
+            .frame(maxHeight: maxHeight)
+            .background(SymairaTheme.bgDark)
+        case .embedded:
+            // No scroll view and no background: the cockpit window owns both,
+            // and nesting a second scroll view inside its own would trap the
+            // wheel over half the page.
             cards
         }
-        .frame(width: 320)
-        .frame(maxHeight: maxHeight)
-        .background(SymairaTheme.bgDark)
     }
 
     private var cards: some View {
         VStack(spacing: SymairaSpacing.medium) {
-            StatusHeaderView()
+            if chrome == .popover {
+                StatusHeaderView()
+            }
             LiveSummaryStrip(model: model)
 
             // Never hidden: an available update is the one thing the user has
@@ -94,10 +123,23 @@ struct MainStatusView: View {
                 DisplaysSection(model: model)
             }
 
-            StatusFooterView(openPreferences: openPreferences)
+            if chrome == .embedded {
+                // No GroupLabel here: the card carries its own "MENU BAR"
+                // heading, and the two together read as a stutter.
+                MenuBarVisibilityCard(
+                    preferences: preferencesManager,
+                    aiUsage: aiUsageModel.preferences,
+                    model: model,
+                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty
+                )
+            }
+
+            if chrome == .popover {
+                StatusFooterView(openPreferences: openPreferences)
+            }
         }
-        .padding(SymairaSpacing.medium)
-        .frame(width: 320)
+        .padding(chrome == .popover ? SymairaSpacing.medium : 0)
+        .frame(maxWidth: chrome == .popover ? 320 : .infinity)
     }
 
     // MARK: - Card visibility

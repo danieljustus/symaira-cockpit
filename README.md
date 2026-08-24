@@ -65,6 +65,47 @@ into `/usr/local/bin`.
 > Gatekeeper's quarantine does not apply; after a manual download you need to
 > clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
 
+## The GUI
+
+The same three areas, in a window — for the moments a glance beats a command.
+
+```bash
+make build-app                       # builds build/app/Symaira Cockpit.app
+make run-app                         # …and launches it
+```
+
+Symaira Cockpit lives in the menu bar. The status item is Tune's: the live
+readout you configure in Preferences, with the full control panel one click
+away. Right-click it for the cockpit window, which adds
+
+- **Overview** — ports, conflicts, containers, MCP servers and automation
+  readiness as one row of numbers each,
+- **Tune** — the same control panel the menu bar shows, off the same model,
+  plus per-metric switches for what the status item displays,
+- **Scope** — listening ports with conflicts flagged, running containers, and
+  every configured MCP server, with an on-demand health probe,
+- **Operate** — the Accessibility and Screen Recording grants automation needs,
+  plus the apps, windows and displays currently on screen.
+
+The Tune section's **Menu bar** card is the quick way to change the status
+item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
+(show it), with a live preview of the result. Changes hit the menu bar
+immediately and are written to `config.toml`, so they survive a relaunch.
+
+`⌘1`–`⌘4` switch sections, `⌘R` refreshes the one you are looking at, `⌘,`
+opens preferences. Scope and Operate filter their lists from a single search
+box, cards fold away and remember it, and long lists scroll inside their card
+so one busy category never buries the rest.
+
+Nothing in the window has its own logic: every number comes from the same core
+services the CLI calls, so the window and the shell cannot disagree. The GUI
+reads and configures — clicking and typing stay in `symcockpit operate` and the
+MCP server, where the action policy applies.
+
+> macOS keys permissions and Keychain access to the binary, so the app asks for
+> its own grants the first time you use those features — separately from the
+> CLI, even on the same Mac.
+
 ## The three areas
 
 `symcockpit <area> <command>` — three problem domains behind one entrypoint.
@@ -198,10 +239,12 @@ git clone https://github.com/danieljustus/symaira-cockpit.git
 cd symaira-cockpit
 make build      # Debug build of every component
 make test       # Test suite
+make build-app  # The GUI bundle (build/app/Symaira Cockpit.app)
 swift build -c release --arch arm64 --arch x86_64
 ```
 
 The repository is an SPM workspace: `Sources/symcockpit/` is the dispatcher,
+`Sources/SymCockpitApp/` the GUI,
 and [`tune/`](tune/), [`operate/`](operate/) and [`scope/`](scope/) are
 standalone packages with their own test suites. Contributor details live in
 [AGENTS.md](AGENTS.md).

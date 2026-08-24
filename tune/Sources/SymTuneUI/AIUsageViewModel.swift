@@ -44,7 +44,9 @@ final class AIUsageViewModel {
     // MARK: - Dependencies
 
     private let controller: TuneController
-    private let preferences: AIUsagePreferences
+    /// Exposed so an embedding host can offer the menu-bar readout switch
+    /// next to the metric switches instead of only in Preferences.
+    let preferences: AIUsagePreferences
 
     private var historyBuffers: [String: MetricsRingBuffer] = [:]
     private var lastSuccessAt: [String: Date] = [:]

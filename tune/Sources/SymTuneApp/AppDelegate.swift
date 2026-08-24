@@ -1,4 +1,5 @@
 @preconcurrency import AppKit
+import SymTuneUI
 
 /// Application delegate for the SymairaTune menu-bar app.
 ///
