@@ -88,13 +88,21 @@ jobs:
 
       - name: Coverage report
         run: |
-          bundle=$(find .build -maxdepth 4 -iname "*.xctest" -path "*/Products/Debug/*" | tr '\n' ' ')
-          profdata=$(find .build -iname "default.profdata" | head -1)
+          # No fixed path assumption: the Xcode build system (used when
+          # Xcode-beta is selected) writes to .build/out/Products/Debug/ with
+          # one bundle per test target, while plain `swift build` writes to
+          # .build/<triple>/debug/ with one combined <Package>PackageTests
+          # bundle — this must work under either.
           binaries=""
-          for b in $bundle; do
+          while IFS= read -r b; do
             name=$(basename "$b" .xctest)
-            binaries="$binaries $b/Contents/MacOS/$name"
-          done
+            if [ -x "$b/Contents/MacOS/$name" ]; then
+              binaries="$binaries $b/Contents/MacOS/$name"
+            else
+              binaries="$binaries $b"
+            fi
+          done < <(find .build -iname "*.xctest" -type d)
+          profdata=$(find .build -iname "default.profdata" | head -1)
           # No source-path filter: passing one reliably confuses this
           # runner's llvm-cov (rejects directories outright, and rejects
           # individual file paths as "not a valid object file" once more
