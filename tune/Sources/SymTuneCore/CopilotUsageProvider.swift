@@ -26,7 +26,9 @@ public struct CopilotUsageProvider: AIUsageProvider, Sendable {
         )]
     }
 
-    private let accessToken: String
+    private var opReference: String?
+    private var credentialResolver: CredentialResolver
+    private var accessToken: String
     private let network: any NetworkServiceProtocol
 
     /// - Parameters:
@@ -38,12 +40,23 @@ public struct CopilotUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         accessToken: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         enterpriseHost: String? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
-        self.accessToken = accessToken
-            ?? CopilotTokenStore().readToken()
-            ?? ""
+        self.opReference = opReference
+        self.credentialResolver = credentialResolver
+        self.accessToken = opReference != nil
+            ? (credentialResolver.resolve(
+                opReference: opReference,
+                envKey: "COPILOT_ACCESS_TOKEN",
+                keychainService: nil,
+                keychainAccount: nil
+            ) ?? "")
+            : (accessToken
+                ?? CopilotTokenStore().readToken()
+                ?? "")
         self.enterpriseHost = enterpriseHost
         self.network = network
     }
@@ -53,14 +66,14 @@ public struct CopilotUsageProvider: AIUsageProvider, Sendable {
     public var credentialDescriptor: AIUsageCredentialDescriptor? {
         AIUsageCredentialDescriptor(
             authKind: .externalToken(resolver: .init(read: { Self.readExternalAuthState() })),
-            sourceLabel: "GitHub Copilot OAuth token (~/.config/github-copilot)"
+            sourceLabel: "GitHub Copilot OAuth token (symvault op:// ref, ~/.config/github-copilot)"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "Copilot"
+        return "copilot"
     }
 
     /// Reads the Copilot OAuth auth state for the preferences UI.

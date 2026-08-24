@@ -45,6 +45,9 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
     }
 
     /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private var credentialResolver: CredentialResolver
+    private var opReference: String?
+
     private let cookieHeaderCache: CredentialCache<String?>
 
     private var cookieHeader: String? { cookieHeaderCache.value }
@@ -61,17 +64,20 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         cookieHeader: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         vscdbPath: String? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
+        self.credentialResolver = credentialResolver
+        self.opReference = opReference
         self.cookieHeaderCache = CredentialCache {
             if let cookieHeader { return cookieHeader }
-            if let envCookie = ProcessInfo.processInfo.environment["CURSOR_COOKIE"] {
-                return envCookie
-            }
-            return KeychainCredentials.read(
-                service: "com.symaira.symtune",
-                account: "cursor-cookie"
+            return credentialResolver.resolve(
+                opReference: opReference,
+                envKey: "CURSOR_COOKIE",
+                keychainService: "com.symaira.symtune",
+                keychainAccount: "cursor-cookie"
             )
         }
         self.appAuthStore = CursorAppAuthStore(dbPath: vscdbPath)
@@ -83,14 +89,14 @@ public struct CursorUsageProvider: AIUsageProvider, Sendable {
     public var credentialDescriptor: AIUsageCredentialDescriptor? {
         AIUsageCredentialDescriptor(
             authKind: .externalToken(resolver: .init(read: { Self.readExternalAuthState() })),
-            sourceLabel: "Cursor cookie (CURSOR_COOKIE) or Cursor.app auth"
+            sourceLabel: "Cursor cookie (symvault op:// ref, env CURSOR_COOKIE, or Keychain)"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "Cursor"
+        return "cursor"
     }
 
     /// Reads the Cursor auth state for the preferences UI.

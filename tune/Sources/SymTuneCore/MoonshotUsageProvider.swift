@@ -40,6 +40,9 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
     }
 
     /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private var credentialResolver: CredentialResolver
+    private var opReference: String?
+
     private let apiKeyCache: CredentialCache<String>
 
     private var apiKey: String { apiKeyCache.value }
@@ -56,18 +59,21 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         apiKey: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         region: Region? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
+        self.credentialResolver = credentialResolver
+        self.opReference = opReference
         self.apiKeyCache = CredentialCache {
             if let apiKey { return apiKey }
             let env = ProcessInfo.processInfo.environment
-            if let envKey = env["MOONSHOT_API_KEY"] ?? env["MOONSHOT_KEY"] {
-                return envKey
-            }
-            return KeychainCredentials.read(
-                service: "com.symaira.symtune",
-                account: "moonshot-api-key"
+            return credentialResolver.resolve(
+                opReference: opReference,
+                envKey: "MOONSHOT_API_KEY",
+                keychainService: "com.symaira.symtune",
+                keychainAccount: "moonshot-api-key"
             ) ?? ""
         }
         let envRegion = ProcessInfo.processInfo.environment["MOONSHOT_REGION"]
@@ -81,7 +87,7 @@ public struct MoonshotUsageProvider: AIUsageProvider, Sendable {
     public var credentialDescriptor: AIUsageCredentialDescriptor? {
         AIUsageCredentialDescriptor(
             authKind: .apiKey(account: "moonshot-api-key"),
-            sourceLabel: "API key (env MOONSHOT_API_KEY or Keychain)"
+            sourceLabel: "API key (symvault op:// ref, env MOONSHOT_API_KEY, or Keychain)"
         )
     }
 

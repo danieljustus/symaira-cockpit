@@ -60,6 +60,9 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
 
     /// Both credentials resolve on first use, not at construction — see
     /// ``CredentialCache`` for why that matters.
+    private var credentialResolver: CredentialResolver
+    private var adminKeyOpReference: String?
+
     private let adminKeyCache: CredentialCache<String>
     private let oauthTokenCache: CredentialCache<String?>
     private let network: any NetworkServiceProtocol
@@ -86,19 +89,22 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
     ///     default reads the real Keychain/file sources.
     public init(
         adminAPIKey: String? = nil,
+        adminKeyOpReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         oauthToken: String? = nil,
         keychainPromptPolicy: KeychainPromptPolicy = .never,
         network: any NetworkServiceProtocol = URLSessionNetworkService(),
         oauthTokenReader: (@Sendable (KeychainPromptPolicy) -> String?)? = nil
     ) {
+        self.credentialResolver = credentialResolver
+        self.adminKeyOpReference = adminKeyOpReference
         self.adminKeyCache = CredentialCache {
             if let adminAPIKey { return adminAPIKey }
-            if let envKey = ProcessInfo.processInfo.environment["ANTHROPIC_ADMIN_KEY"] {
-                return envKey
-            }
-            return KeychainCredentials.read(
-                service: "com.symaira.symtune",
-                account: "anthropic-admin-key"
+            return credentialResolver.resolve(
+                opReference: adminKeyOpReference,
+                envKey: "ANTHROPIC_ADMIN_KEY",
+                keychainService: "com.symaira.symtune",
+                keychainAccount: "anthropic-admin-key"
             ) ?? ""
         }
 
@@ -123,14 +129,14 @@ public struct ClaudeUsageProvider: AIUsageProvider, Sendable {
                 .apiKey(account: "anthropic-admin-key"),
                 .externalToken(resolver: .init(read: { Self.readExternalAuthState() })),
             ]),
-            sourceLabel: "Admin API key (ANTHROPIC_ADMIN_KEY) or Claude Code OAuth"
+            sourceLabel: "Admin API key (symvault op:// ref, env ANTHROPIC_ADMIN_KEY, or Keychain) or Claude Code OAuth"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "Claude"
+        return "claude"
     }
 
     /// Reads the Claude auth state for the preferences UI — side-effect-free.

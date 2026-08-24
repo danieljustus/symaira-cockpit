@@ -31,6 +31,8 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
     /// reads `OPENROUTER_API_KEY` (env) then the Keychain on each call, so a
     /// credential change is honoured without rebuilding the provider.
     private let keyResolver: @Sendable () -> String
+    private var credentialResolver: CredentialResolver
+    private var opReference: String?
     private let baseURL: URL
     private let network: any NetworkServiceProtocol
 
@@ -43,6 +45,8 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         apiKey: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         baseURL: URL? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
@@ -53,16 +57,15 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
             resolver = { apiKey }
         } else {
             resolver = {
-                if let envKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] {
-                    return envKey
-                }
-                return KeychainCredentials.read(
-                    service: "com.symaira.symtune",
-                    account: "openrouter-api-key"
+                credentialResolver.resolve(
+                    opReference: opReference,
+                    envKey: "OPENROUTER_API_KEY",
+                    keychainService: "com.symaira.symtune",
+                    keychainAccount: "openrouter-api-key"
                 ) ?? ""
             }
         }
-        self.init(keyResolver: resolver, baseURL: baseURL, network: network)
+        self.init(keyResolver: resolver, opReference: opReference, credentialResolver: credentialResolver, baseURL: baseURL, network: network)
     }
 
     /// Internal test seam (issue #324): inject a resolver whose value can
@@ -70,10 +73,14 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
     /// strategies without rebuilding the provider.
     init(
         keyResolver: @escaping @Sendable () -> String,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         baseURL: URL? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
         self.keyResolver = keyResolver
+        self.opReference = opReference
+        self.credentialResolver = credentialResolver
         let envURL = ProcessInfo.processInfo.environment["OPENROUTER_API_URL"]
             .flatMap(URL.init(string:))
         self.baseURL = baseURL ?? envURL ?? URL(string: "https://openrouter.ai/api/v1")!
@@ -87,14 +94,14 @@ public struct OpenRouterUsageProvider: AIUsageProvider, Sendable {
     public var credentialDescriptor: AIUsageCredentialDescriptor? {
         AIUsageCredentialDescriptor(
             authKind: .apiKey(account: "openrouter-api-key"),
-            sourceLabel: "API key (env OPENROUTER_API_KEY or Keychain)"
+            sourceLabel: "API key (symvault op:// ref, env OPENROUTER_API_KEY, or Keychain)"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "OpenRouter"
+        return "openrouter"
     }
 }
 

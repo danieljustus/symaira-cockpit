@@ -53,6 +53,9 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
     }
 
     /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private var credentialResolver: CredentialResolver
+    private var opReference: String?
+
     private let cookieHeaderCache: CredentialCache<String?>
 
     private var cookieHeader: String? { cookieHeaderCache.value }
@@ -72,19 +75,22 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         cookieHeader: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         workspaceOverride: String? = nil,
         homeDirectory: URL? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
+        self.credentialResolver = credentialResolver
+        self.opReference = opReference
         let env = ProcessInfo.processInfo.environment
         self.cookieHeaderCache = CredentialCache {
             if let cookieHeader { return cookieHeader }
-            if let envCookie = ProcessInfo.processInfo.environment["OPENCODE_COOKIE"] {
-                return envCookie
-            }
-            return KeychainCredentials.read(
-                service: "com.symaira.symtune",
-                account: "opencode-cookie"
+            return credentialResolver.resolve(
+                opReference: opReference,
+                envKey: "OPENCODE_COOKIE",
+                keychainService: "com.symaira.symtune",
+                keychainAccount: "opencode-cookie"
             )
         }
         self.workspaceOverride = workspaceOverride
@@ -100,14 +106,14 @@ public struct OpenCodeUsageProvider: AIUsageProvider, Sendable {
     public var credentialDescriptor: AIUsageCredentialDescriptor? {
         AIUsageCredentialDescriptor(
             authKind: .externalToken(resolver: .init(read: { Self.readExternalAuthState() })),
-            sourceLabel: "OpenCode Go local history or opencode.ai cookie"
+            sourceLabel: "opencode.ai cookie (symvault op:// ref, env OPENCODE_COOKIE, or Keychain)"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "OpenCode"
+        return "opencode"
     }
 
     /// Reads the OpenCode Go auth state for the preferences UI.

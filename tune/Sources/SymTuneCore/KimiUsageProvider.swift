@@ -54,6 +54,9 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
     }
 
     /// Resolved on first use, not at construction — see ``CredentialCache``.
+    private var credentialResolver: CredentialResolver
+    private var opReference: String?
+
     private let apiKeyCache: CredentialCache<String?>
 
     private var apiKey: String? { apiKeyCache.value }
@@ -82,19 +85,22 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
     ///   - network: injectable network seam for tests.
     public init(
         apiKey: String? = nil,
+        opReference: String? = nil,
+        credentialResolver: CredentialResolver = DefaultCredentialResolver(),
         cliHome: String? = nil,
         authToken: String? = nil,
         baseURL: URL? = nil,
         network: any NetworkServiceProtocol = URLSessionNetworkService()
     ) {
+        self.credentialResolver = credentialResolver
+        self.opReference = opReference
         self.apiKeyCache = CredentialCache {
             if let apiKey { return apiKey }
-            if let envAPIKey = ProcessInfo.processInfo.environment["KIMI_CODE_API_KEY"] {
-                return envAPIKey
-            }
-            return KeychainCredentials.read(
-                service: "com.symaira.symtune",
-                account: "kimi-api-key"
+            return credentialResolver.resolve(
+                opReference: opReference,
+                envKey: "KIMI_CODE_API_KEY",
+                keychainService: "com.symaira.symtune",
+                keychainAccount: "kimi-api-key"
             )
         }
 
@@ -135,14 +141,14 @@ public struct KimiUsageProvider: AIUsageProvider, Sendable {
                 .apiKey(account: "kimi-api-key"),
                 .externalToken(resolver: .init(read: { Self.readExternalAuthState() })),
             ]),
-            sourceLabel: "API key (KIMI_CODE_API_KEY) or Kimi Code CLI token"
+            sourceLabel: "API key (symvault op:// ref, env KIMI_CODE_API_KEY, or Keychain) or Kimi Code CLI token"
         )
     }
 
     // MARK: - Credential source (issue #18)
 
     public var credentialSource: String {
-        return "Kimi"
+        return "kimi"
     }
 
     /// Reads the Kimi Code CLI auth state for the preferences UI.
