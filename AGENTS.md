@@ -56,6 +56,12 @@ publishes the release. A guard fails the run when the tag and
 `CockpitVersion.current` disagree — bump the version in the same commit that
 carries the tag.
 
+Two more jobs follow the CLI one: `release-macos-app` deep-signs, notarizes
+(fail-closed) and uploads `Symaira-Cockpit-*.dmg`/`.zip` of the GUI;
+`bump-homebrew` updates `Formula/symcockpit.rb` and `Casks/symcockpit.rb` in
+danieljustus/homebrew-tap once every artifact is on the release. Their secrets
+live in the repo environment `release`.
+
 `symcockpit version` prints the dispatcher version plus each family's version.
 
 ## Conventions
