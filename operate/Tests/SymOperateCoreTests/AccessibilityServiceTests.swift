@@ -185,4 +185,65 @@ final class AccessibilityServiceTests: XCTestCase {
         let result = service.frontmostContainsTextPolling("test")
         XCTAssertFalse(result)
     }
+
+    // MARK: - cache accessors (not gated by AX trust — deterministic in every environment)
+
+    func testHasCachedNodesReflectsStoredState() {
+        let service = AccessibilityService()
+        XCTAssertFalse(service.hasCachedNodes(for: "missing"))
+
+        service.nodesCache["present"] = []
+        XCTAssertTrue(service.hasCachedNodes(for: "present"))
+    }
+
+    func testCachedNodesReturnsStoredNodesOrNil() {
+        let service = AccessibilityService()
+        XCTAssertNil(service.cachedNodes(for: "missing"))
+
+        let node = UINode(id: "1", role: "AXButton", subrole: nil, title: "Go", label: nil, value: nil, nodeDescription: nil, frame: nil, actions: [], children: [])
+        service.nodesCache["present"] = [node]
+        XCTAssertEqual(service.cachedNodes(for: "present")?.first?.id, "1")
+    }
+
+    func testCachedSnapshotReturnsStoredSnapshotOrNil() {
+        let service = AccessibilityService()
+        XCTAssertNil(service.cachedSnapshot(for: "missing"))
+
+        let snapshot = Snapshot(
+            id: "present",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            imageBase64PNG: "iVBORw0KGgo=",
+            imageSize: SizeValue(width: 10, height: 10),
+            displayBounds: RectValue(x: 0, y: 0, width: 10, height: 10),
+            displayID: 1,
+            transform: SnapshotTransform(displayID: 1, displayBounds: RectValue(x: 0, y: 0, width: 10, height: 10), imageSize: SizeValue(width: 10, height: 10))
+        )
+        service.storeSnapshot(snapshot, for: "present")
+        XCTAssertEqual(service.cachedSnapshot(for: "present")?.id, "present")
+    }
+
+    // MARK: - frontmostContainsText (environment-agnostic: a random needle is never present)
+
+    func testFrontmostContainsTextReturnsFalseForImpossibleNeedle() {
+        let service = AccessibilityService()
+        let impossibleNeedle = "symaira-test-needle-\(UUID().uuidString)"
+        XCTAssertFalse(service.frontmostContainsText(impossibleNeedle))
+    }
+
+    // MARK: - performMenuAction (always refused: either not AX-trusted, or an empty path)
+
+    func testPerformMenuActionRejectsEmptyPathRegardlessOfTrustState() {
+        let service = AccessibilityService()
+        XCTAssertThrowsError(try service.performMenuAction(path: [])) { error in
+            guard let automationError = error as? AutomationError else {
+                return XCTFail("expected AutomationError, got \(error)")
+            }
+            switch automationError {
+            case .permissionDenied, .invalidArgument:
+                break // either gate correctly refused an empty/untrusted call
+            default:
+                XCTFail("unexpected error case: \(automationError)")
+            }
+        }
+    }
 }
