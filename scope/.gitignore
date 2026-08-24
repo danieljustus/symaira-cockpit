@@ -9,3 +9,5 @@ xcuserdata/
 *.xcuserstate
 .swiftpm/
 Package.resolved
+*.profraw
+*.profdata

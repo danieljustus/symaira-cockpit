@@ -129,6 +129,40 @@ final class ContainerPortParseTests: XCTestCase {
         XCTAssertEqual(ContainerService.parsePublishedPorts(""), [])
         XCTAssertEqual(ContainerService.parsePublishedPorts("80/tcp"), [])
     }
+
+    func testParseDeduplicatesAndSorts() {
+        let ports = ContainerService.parsePublishedPorts("0.0.0.0:9090->90/tcp, 0.0.0.0:8080->80/tcp, [::]:8080->80/tcp")
+        XCTAssertEqual(ports, [8080, 9090])
+    }
+}
+
+final class ContainerServiceListTests: XCTestCase {
+    /// `list()` shells out to the local `docker` CLI. Whether or not docker
+    /// is installed on the machine running this test, the contract is fixed:
+    /// either a well-formed container inventory, or an explanatory note —
+    /// never a crash or a silently-swallowed failure.
+    func testListReturnsInventoryOrExplanatoryNote() async {
+        let (containers, notes) = await ContainerService.list()
+
+        if containers.isEmpty {
+            for note in notes {
+                XCTAssertTrue(
+                    note == "docker CLI not found; container inventory unavailable"
+                        || note == "docker ps failed; container inventory unavailable"
+                        || notes.isEmpty,
+                    "unexpected note: \(note)"
+                )
+            }
+        } else {
+            XCTAssertTrue(notes.isEmpty)
+            for container in containers {
+                XCTAssertFalse(container.id.isEmpty)
+                XCTAssertFalse(container.name.isEmpty)
+                XCTAssertFalse(container.image.isEmpty)
+                XCTAssertTrue(container.ports.allSatisfy { $0 > 0 && $0 < 65536 })
+            }
+        }
+    }
 }
 
 final class ConflictDetectorTests: XCTestCase {
