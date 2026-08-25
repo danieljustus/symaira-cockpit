@@ -29,6 +29,8 @@ All notable changes to this project are documented here. The format is based on
   table and silently drops an active boost or warmth shift.
 
 ### Added
+- **AI usage now runs through the published `symbrain usage --output json` contract.** The cockpit decodes the canonical report once, uses symbrain's configured/auth status in Preferences, and keeps API-key entry/storage in the macOS Keychain. A missing `symbrain` binary, failed command, or malformed report is rendered as unavailable without a UI error dialog.
+- `symtune ai-usage` and the read-only MCP `get_ai_usage` tool remain available through their existing normalized per-provider result shape. Unavailable runtime data is returned as secret-free unavailable rows, preserving callers while the provider-specific HTTP clients are removed.
 - **Top Processes**: which processes are using the most CPU or memory, one click
   away in the popover (expand, switch CPU/Memory, click a row for PID, threads
   and the other resource). Samples only while visible.

@@ -1,21 +1,11 @@
 import Foundation
 
-/// Aggregator over all AI usage providers.
-///
-/// - stale-while-revalidate: fresh snapshots are served from cache, stale ones
-///   are served immediately while a background refresh runs;
-/// - network errors degrade to "stale with timestamp" instead of an empty
-///   display;
-/// - rate limits are respected with backoff (429 → no refetch until expiry);
-/// - providers run concurrently and one hanging provider cannot block the
-///   others (per-provider timeout);
-/// - everything that leaves this service is secret-redacted.
-public final class AIUsageService: @unchecked Sendable {
-    /// Result of one provider in an aggregate read: snapshot or redacted error.
+/// One provider row returned to the existing CLI/MCP compatibility surface.
+public struct AIUsageService: @unchecked Sendable {
     public struct ProviderResult: Sendable, Equatable, Codable {
         public let providerID: String
         public let snapshot: AIUsageSnapshot?
-        /// Redacted error description; `nil` on success.
+        /// A generic, secret-free error. The subprocess output is never exposed.
         public let error: String?
 
         public init(providerID: String, snapshot: AIUsageSnapshot?, error: String?) {
@@ -25,147 +15,56 @@ public final class AIUsageService: @unchecked Sendable {
         }
     }
 
-    private final class CacheEntry: @unchecked Sendable {
-        var snapshot: AIUsageSnapshot?
-        var rateLimitedUntil: Date?
+    public let providers: [any AIUsageProvider]
+    private let client: any SymBrainUsageClientProtocol
+
+    /// The compatibility layer keeps the old provider catalog and result shape,
+    /// while the only usage fetch is `symbrain usage --output json`.
+    public init(
+        providers: [any AIUsageProvider] = SymBrainUsageProvider.catalog(),
+        client: any SymBrainUsageClientProtocol = SymBrainUsageClient()
+    ) {
+        self.providers = providers
+        self.client = client
     }
 
-    /// All registered providers — exposed so the preferences UI can render
-    /// per-provider credential inputs/state (issue #360).
-    public let providers: [any AIUsageProvider]
-
-    /// Known providers as (id, displayName) pairs — the catalog the UI uses
-    /// to render per-provider toggles and labels without hardcoding names.
     public var providerCatalog: [(id: String, displayName: String)] {
         providers.map { ($0.id, $0.displayName) }
     }
-    private let refreshInterval: TimeInterval
-    private let providerTimeout: TimeInterval
-    private let lock = NSLock()
-    private var cache: [String: CacheEntry] = [:]
-    private var inFlight: [String: Task<AIUsageSnapshot, Error>] = [:]
 
-    /// - Parameters:
-    ///   - providers: all providers to aggregate.
-    ///   - refreshInterval: default 300s (5 min).
-    ///   - providerTimeout: per-provider fetch timeout, default 10s.
-    public init(
-        providers: [any AIUsageProvider],
-        refreshInterval: TimeInterval = 300,
-        providerTimeout: TimeInterval = 10
-    ) {
-        self.providers = providers
-        self.refreshInterval = refreshInterval
-        self.providerTimeout = providerTimeout
-    }
-
-    private func provider(for id: String) throws -> any AIUsageProvider {
-        guard let provider = providers.first(where: { $0.id == id }) else {
-            throw AIUsageError.unknownProvider(id)
-        }
-        return provider
-    }
-
-    /// Snapshot for one provider with stale-while-revalidate semantics.
-    /// Unconfigured providers throw ``AIUsageError/notConfigured(_:)``
-    /// without touching credentials or the network.
-    public func usage(for providerID: String) async throws -> AIUsageSnapshot {
-        let provider = try provider(for: providerID)
-        guard provider.isConfigured else {
-            throw AIUsageError.notConfigured(providerID)
-        }
-
-        var cached: AIUsageSnapshot?
-        var rateLimitedUntil: Date?
-        lock.withLock {
-            let entry = cache[providerID] ?? {
-                let entry = CacheEntry()
-                cache[providerID] = entry
-                return entry
-            }()
-            cached = entry.snapshot
-            rateLimitedUntil = entry.rateLimitedUntil
-        }
-
-        // Rate-limit backoff: serve stale without touching the provider.
-        if let rateLimitedUntil, rateLimitedUntil > Date() {
-            if let cached { return cached }
-            throw AIUsageError.rateLimited(providerID, retryAfter: rateLimitedUntil.timeIntervalSinceNow)
-        }
-
-        if let cached {
-            if Date().timeIntervalSince(cached.fetchedAt) < refreshInterval {
-                // Fresh: serve from cache without refetching.
-                return cached
-            }
-            // Stale: serve immediately, refresh in the background. A failed
-            // background refresh degrades to the stale snapshot instead of an
-            // empty display.
-            Task { try? await refresh(provider) }
-            return cached
-        }
-
-        do {
-            return try await refresh(provider)
-        } catch {
-            // Nothing leaves this service unredacted — a provider that leaks a
-            // token in its error message must not reach logs, history, or the UI.
-            throw AIUsageError.redacted(SecretRedactor.redact(error.localizedDescription))
-        }
-    }
-
-    /// Snapshots for all providers, run concurrently. One failing or hanging
-    /// provider is isolated in its own result and cannot block the others.
+    /// Execute one symbrain report and adapt it to the legacy CLI/MCP result
+    /// shape. A missing binary, non-zero exit, or malformed report is an
+    /// unavailable result for every catalog entry, not a thrown UI error.
     public func usageAll() async -> [ProviderResult] {
-        await withTaskGroup(of: ProviderResult.self) { group in
-            for provider in providers {
-                group.addTask { [weak self] in
-                    guard let self else {
-                        return ProviderResult(providerID: provider.id, snapshot: nil, error: "service unavailable")
-                    }
-                    do {
-                        let snapshot = try await self.usage(for: provider.id)
-                        return ProviderResult(providerID: provider.id, snapshot: snapshot, error: nil)
-                    } catch {
-                        return ProviderResult(
-                            providerID: provider.id,
-                            snapshot: nil,
-                            error: SecretRedactor.redact(error.localizedDescription)
-                        )
-                    }
-                }
-            }
-            var results: [ProviderResult] = []
-            for await result in group {
-                results.append(result)
-            }
-            return results
+        do {
+            let report = try client.fetchReport()
+            return reportResults(report)
+        } catch {
+            let message = "AI usage unavailable."
+            return providers.map { ProviderResult(providerID: $0.id, snapshot: nil, error: message) }
         }
     }
 
-    /// Clear all cached snapshots (e.g. after credentials change).
-    ///
-    /// Providers memoize their credential so that listing the catalog does not
-    /// re-read the Keychain; a credential the user just changed must therefore
-    /// invalidate that memo too, or the dropped snapshot would simply be
-    /// refetched with the old key.
-    public func resetCache() {
-        lock.withLock {
-            cache.removeAll()
-            inFlight.removeAll()
+    /// Compatibility helper for callers that previously asked for one provider.
+    public func usage(for providerID: String) async throws -> AIUsageSnapshot {
+        guard providers.contains(where: { $0.id == providerID }) else {
+            throw AIUsageError.unknownProvider(providerID)
         }
-        for provider in providers {
-            provider.resetCredentialCache()
-        }
+        let result = await usageAll().first { $0.providerID == providerID }
+        guard let snapshot = result?.snapshot else { throw AIUsageError.unavailable }
+        return snapshot
     }
 
-    /// Reports the credential-resolution source for each registered provider.
-    /// Used by the `doctor` command to help users debug auth issues.
+    /// The runtime command is deliberately uncached. The UI controls refresh
+    /// cadence, and every CLI/MCP invocation should reflect the latest report.
+    public func resetCache() {}
+
+    /// Doctor now reports the same auth source/status used by the usage screen.
     public func credentialSources() -> [CredentialSourceReport] {
-        providers.map { provider in
+        providers.map {
             CredentialSourceReport(
-                provider: provider.id,
-                source: provider.credentialSource,
+                provider: $0.id,
+                source: $0.credentialSource,
                 opReference: nil,
                 envKey: nil,
                 keychainAccount: nil
@@ -173,86 +72,58 @@ public final class AIUsageService: @unchecked Sendable {
         }
     }
 
-    // MARK: - Refresh
+    private func reportResults(_ report: SymBrainUsageReport) -> [ProviderResult] {
+        var results: [ProviderResult] = []
+        results.reserveCapacity(providers.count)
 
-    private func refresh(_ provider: any AIUsageProvider) async throws -> AIUsageSnapshot {
-        // Single-flight: check + register the in-flight task under one lock
-        // hold so concurrent callers share the same fetch instead of
-        // double-fetching (the old check-then-register had a TOCTOU window
-        // that made the rate-limit backoff test flaky on slow runners).
-        // The rate limit is re-checked under the same hold: a refresh that
-        // was queued just before a 429 landed must not fetch afterwards.
-        enum Decision {
-            case shared(Task<AIUsageSnapshot, Error>)
-            case fresh(Task<AIUsageSnapshot, Error>)
-            case rateLimited(Date)
-        }
-        let decision = lock.withLock { () -> Decision in
-            if let existing = inFlight[provider.id] {
-                return .shared(existing)
+        for provider in providers {
+            guard let row = report.providers.first(where: { $0.id == provider.id }) else {
+                results.append(ProviderResult(providerID: provider.id, snapshot: nil, error: "AI usage unavailable."))
+                continue
             }
-            if let rateLimitedUntil = cache[provider.id]?.rateLimitedUntil,
-               rateLimitedUntil > Date() {
-                return .rateLimited(rateLimitedUntil)
-            }
-            let newTask = Task {
-                try await Self.withTimeout(seconds: providerTimeout) {
-                    try await provider.fetch()
-                }
-            }
-            inFlight[provider.id] = newTask
-            return .fresh(newTask)
-        }
 
-        let task: Task<AIUsageSnapshot, Error>
-        switch decision {
-        case .shared(let existing):
-            task = existing
-        case .fresh(let newTask):
-            task = newTask
-        case .rateLimited(let until):
-            throw AIUsageError.rateLimited(provider.id, retryAfter: until.timeIntervalSinceNow)
-        }
+            if let provider = provider as? SymBrainUsageProvider {
+                provider.update(from: row)
+            }
 
-        defer {
-            lock.withLock { inFlight[provider.id] = nil }
+            guard row.configured else {
+                results.append(ProviderResult(
+                    providerID: row.id,
+                    snapshot: nil,
+                    error: "not configured"
+                ))
+                continue
+            }
+            if !row.error.isEmpty {
+                results.append(ProviderResult(
+                    providerID: row.id,
+                    snapshot: nil,
+                    error: SecretRedactor.redact(row.error)
+                ))
+                continue
+            }
+            guard let rawSnapshot = row.snapshot else {
+                results.append(ProviderResult(
+                    providerID: row.id,
+                    snapshot: nil,
+                    error: "AI usage unavailable."
+                ))
+                continue
+            }
+            do {
+                results.append(ProviderResult(
+                    providerID: row.id,
+                    snapshot: try rawSnapshot.aiUsageSnapshot(),
+                    error: nil
+                ))
+            } catch {
+                results.append(ProviderResult(
+                    providerID: row.id,
+                    snapshot: nil,
+                    error: "AI usage unavailable."
+                ))
+            }
         }
-        do {
-            let snapshot = try await task.value
-            lock.withLock {
-                cache[provider.id]?.snapshot = snapshot
-                cache[provider.id]?.rateLimitedUntil = nil
-            }
-            return snapshot
-        } catch let error as AIUsageError {
-            if case .rateLimited(_, let retryAfter) = error {
-                lock.withLock {
-                    cache[provider.id]?.rateLimitedUntil = Date().addingTimeInterval(retryAfter ?? 60)
-                }
-            }
-            throw error
-        }
-    }
-
-    /// Bound an operation with a timeout; the winner (result or timeout) is
-    /// returned and the loser is cancelled.
-    private static func withTimeout<T: Sendable>(
-        seconds: TimeInterval,
-        operation: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(seconds))
-                throw AIUsageError.timedOut("exceeded \(Int(seconds.rounded()))s")
-            }
-            guard let result = try await group.next() else {
-                throw AIUsageError.timedOut("no result")
-            }
-            group.cancelAll()
-            return result
-        }
+        return results
     }
 }

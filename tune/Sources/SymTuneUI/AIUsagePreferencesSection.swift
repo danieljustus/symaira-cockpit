@@ -28,16 +28,21 @@ struct AIUsagePreferencesSection: View {
                 .symairaText(.subheading)
                 .foregroundStyle(SymairaTheme.textPrimary)
 
-            Text("Track AI subscription usage per provider. Disabled providers make no network calls; credentials live in the Keychain, never in config.toml.")
+            Text("Track AI subscription usage per provider. Symbrain owns provider discovery and auth status; credentials entered here remain in the Keychain, never in config.toml.")
                 .symairaText(.caption)
                 .foregroundStyle(SymairaTheme.textSecondary)
 
             ForEach(providers, id: \.id) { provider in
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle(isOn: binding(for: provider.id)) {
-                        Text(provider.displayName)
-                            .symairaText(.body)
-                            .foregroundStyle(SymairaTheme.textPrimary)
+                        HStack(spacing: 6) {
+                            Text(provider.displayName)
+                                .symairaText(.body)
+                                .foregroundStyle(SymairaTheme.textPrimary)
+                            Text(provider.isConfigured ? "Configured" : "Not configured")
+                                .symairaText(.caption)
+                                .foregroundStyle(SymairaTheme.textSecondary)
+                        }
                     }
                     .tint(SymairaTheme.goldPrimary)
 
