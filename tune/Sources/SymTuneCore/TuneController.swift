@@ -47,7 +47,7 @@ public final class TuneController: Sendable {
         dataDir: URL? = nil,
         keepAwakeSource: (any PowerAssertionSource)? = nil,
         metricsSource: (any SystemMetricsSource)? = nil,
-        aiUsageProviders: [any AIUsageProvider]? = nil,
+        aiUsageClient: (any SymBrainUsageClientProtocol)? = nil,
         processSource: (any ProcessSampleSource)? = nil
     ) {
         self.config = config
@@ -89,7 +89,7 @@ public final class TuneController: Sendable {
         // Sync enabled metrics from config into the history buffers
         metricsHistory.ensureBuffers(for: config.enabledMetrics)
         self.aiUsageService = AIUsageService(
-            providers: aiUsageProviders ?? Self.defaultAIUsageProviders()
+            client: aiUsageClient ?? SymBrainUsageClient()
         )
         self.restoreTracker = OverrideTracker(
             displayService: displays,
@@ -762,26 +762,9 @@ extension TuneController {
 
     // MARK: - AI usage providers
 
-    /// All implemented AI-usage providers (issue #359). Used as the default
-    /// when no explicit providers are injected, so the app, CLI, and MCP
-    /// server can all report every provider — not just OpenRouter.
-    ///
-    /// Provider toggles default to off, so registering the full catalog adds
-    /// no network calls for users who enable nothing. Each provider resolves
-    /// its credentials lazily on access (see the provider doc comments), so
-    /// construction cost is bounded.
+    /// The stable symbrain-backed provider catalog shared by the app, CLI, and
+    /// MCP server. Fetching is performed once by `SymBrainUsageClient`.
     public static func defaultAIUsageProviders() -> [any AIUsageProvider] {
-        [
-            ClaudeUsageProvider(),
-            CodexUsageProvider(),
-            NousPortalUsageProvider(),
-            OpenCodeUsageProvider(),
-            CopilotUsageProvider(),
-            CursorUsageProvider(),
-            KimiUsageProvider(),
-            MoonshotUsageProvider(),
-            AntigravityUsageProvider(),
-            OpenRouterUsageProvider(),
-        ]
+        SymBrainUsageProvider.catalog()
     }
 }
