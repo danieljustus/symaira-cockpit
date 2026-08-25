@@ -181,6 +181,7 @@ final class TuneConfigTests: XCTestCase {
         XCTAssertEqual(config.chargeLimitMin, SafetyPolicy.chargeLimitMin)
         XCTAssertEqual(config.chargeLimitMax, SafetyPolicy.chargeLimitMax)
         XCTAssertEqual(config.defaultProfile, "default")
+        XCTAssertFalse(config.showCalendarWeek)
     }
 
     // MARK: Custom values
@@ -221,6 +222,9 @@ final class TuneConfigTests: XCTestCase {
 
         [general]
         default_profile = "work"
+
+        [metrics]
+        show_calendar_week = true
         """
 
         // Create a home dir structure so ConfigPaths finds our config.toml
@@ -238,6 +242,7 @@ final class TuneConfigTests: XCTestCase {
         XCTAssertEqual(config.fanFractionMax, 0.8, accuracy: 0.001)
         XCTAssertEqual(config.chargeLimitMin, 60)
         XCTAssertEqual(config.defaultProfile, "work")
+        XCTAssertTrue(config.showCalendarWeek)
         // Unset values keep defaults
         XCTAssertEqual(config.extendedBrightnessMin, SafetyPolicy.extendedBrightnessMin)
     }
