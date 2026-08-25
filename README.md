@@ -1,5 +1,3 @@
-<div align="center">
-
 # Symaira Cockpit
 
 **One command for your Mac: see what's running — and control what it does.**
@@ -9,31 +7,16 @@ display, inventories local ports, containers and MCP servers, and automates the
 graphical interface. Everything speaks JSON — and everything doubles as an MCP
 server, so AI agents get the exact same capabilities you have in the shell.
 
+[![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?label=release)](https://github.com/danieljustus/symaira-cockpit/releases)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-CI%20tracked-informational)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/danieljustus/symaira-cockpit)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
 
-</div>
+![Symaira Cockpit](docs/assets/social-preview.png)
 
----
-
-```console
-$ symcockpit scope ports list
-[
-  { "port": 3722, "pid": 631, "process": "node", "protocol": "tcp", "address": "*" },
-  ...
-]
-
-$ symcockpit scope ports suggest 3
-[ 49153, 49154, 49155 ]
-
-$ symcockpit tune sensors
-{ "thermal_pressure": "nominal", "fans": [ { "rpm": 1980 } ], "smc_supported": true }
-
-$ symcockpit operate doctor
-{ "ok": true, "capabilities": { "screenshot": true, "ocr": true, "accessibility": true } }
-```
+**Status:** Active development — v0.2.1 released; see [CHANGELOG.md](CHANGELOG.md).
 
 ## Why Cockpit
 
@@ -64,6 +47,25 @@ into `/usr/local/bin`.
 > The CLI binary is neither signed nor notarized. Installed via Homebrew,
 > Gatekeeper's quarantine does not apply; after a manual download you need to
 > clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
+
+## Quick start
+
+```console
+$ symcockpit scope ports list
+[
+  { "port": 3722, "pid": 631, "process": "node", "protocol": "tcp", "address": "*" },
+  ...
+]
+
+$ symcockpit scope ports suggest 3
+[ 49153, 49154, 49155 ]
+
+$ symcockpit tune sensors
+{ "thermal_pressure": "nominal", "fans": [ { "rpm": 1980 } ], "smc_supported": true }
+
+$ symcockpit operate doctor
+{ "ok": true, "capabilities": { "screenshot": true, "ocr": true, "accessibility": true } }
+```
 
 ## The GUI
 
@@ -180,7 +182,7 @@ MCP: `snapshot`, `query_ui`, `find_ui`, `query_ui_ocr`, `click`, `type_text`,
 `wait_for`, `list_apps`, `list_windows`, `list_displays`, `get_policy` /
 `set_policy`.
 
-## For AI agents (MCP)
+## MCP / Agent integration
 
 Every area speaks the Model Context Protocol over stdio. Add it to your AI
 client's configuration:
