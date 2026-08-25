@@ -9,6 +9,7 @@ PROJECT="${PROJECT:-SymairaTune.xcodeproj}"
 SCHEME="${SCHEME:-SymairaTune}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-.build/xcode}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
+APP_BUNDLE_NAME="Symaira Tune.app"
 
 command -v xcodegen >/dev/null 2>&1 || {
   printf '%s\n' 'xcodegen is required (brew install xcodegen)' >&2
@@ -32,12 +33,12 @@ xcodebuild \
   CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}" \
   build
 
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/SymairaTune.app"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_BUNDLE_NAME"
 if [[ ! -d "$APP_PATH" ]]; then
   printf 'Expected app bundle was not produced: %s\n' "$APP_PATH" >&2
   exit 1
 fi
 
 mkdir -p "$(dirname "$OUTPUT_DIR")"
-ditto "$APP_PATH" "$OUTPUT_DIR/SymairaTune.app"
-printf 'Built %s\n' "$OUTPUT_DIR/SymairaTune.app"
+ditto "$APP_PATH" "$OUTPUT_DIR/$APP_BUNDLE_NAME"
+printf 'Built %s\n' "$OUTPUT_DIR/$APP_BUNDLE_NAME"
