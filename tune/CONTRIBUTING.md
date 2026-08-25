@@ -93,7 +93,7 @@ any privileged code path:
 ```bash
 brew install xcodegen
 make build-app
-open build/app/SymairaTune.app
+open "build/app/Symaira Tune.app"
 make smoke-app
 ```
 
