@@ -61,11 +61,11 @@ Xcode and XcodeGen installed:
 ```bash
 brew install xcodegen
 make build-app
-open build/app/SymairaTune.app
+open "build/app/Symaira Tune.app"
 make smoke-app
 ```
 
-The release DMG contains `SymairaTune.app` and the CLI binary. The app uses the
+The release DMG contains `Symaira Tune.app` and the CLI binary. The app uses the
 same `TuneController` and `SafetyPolicy` as the CLI and MCP surfaces. See
 [`docs/manual-app-verification.md`](docs/manual-app-verification.md) for the
 real-host control and restore-on-exit checklist.
