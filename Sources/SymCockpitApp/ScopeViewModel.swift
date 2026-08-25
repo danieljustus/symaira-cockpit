@@ -14,6 +14,8 @@ final class ScopeViewModel: ObservableObject {
     @Published private(set) var conflicts: [Conflict] = []
     @Published private(set) var containers: [Container] = []
     @Published private(set) var mcpServers: [MCPServer] = []
+    @Published private(set) var daemons: [Daemon] = []
+    @Published private(set) var daemonNotes: [String] = []
     @Published private(set) var mcpNotes: [String] = []
     @Published private(set) var containerNotes: [String] = []
     @Published private(set) var health: [String: MCPHealthResult] = [:]
@@ -51,11 +53,11 @@ final class ScopeViewModel: ObservableObject {
         }
     }
 
-    func refreshNow() {
-        Task { await refresh() }
+    func refreshNow(includeApple: Bool = false) {
+        Task { await refresh(includeApple: includeApple) }
     }
 
-    func refresh() async {
+    func refresh(includeApple: Bool = false) async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
@@ -64,17 +66,21 @@ final class ScopeViewModel: ObservableObject {
         // shell out, so they run concurrently rather than back to back.
         async let portsResult: [SymScopeCore.Port] = (try? await PortService.listListening()) ?? []
         async let containersResult = ContainerService.list()
+        async let daemonsResult = DaemonService.list(all: includeApple)
 
         let (discovered, notes) = MCPDiscovery.discover()
         let listening = await portsResult
         let (containerList, cNotes) = await containersResult
+        let (daemonList, dNotes) = await daemonsResult
 
         ports = listening.sorted { $0.port < $1.port }
-        conflicts = ConflictDetector.detect(listening)
+        daemons = DaemonService.annotatePorts(daemonList, ports: listening)
+        conflicts = ConflictDetector.detect(listening, daemons: daemons)
         containers = containerList
         containerNotes = cNotes
         mcpServers = discovered.sorted { ($0.client, $0.name) < ($1.client, $1.name) }
         mcpNotes = notes
+        daemonNotes = dNotes
         errorMessage = nil
         lastUpdated = Date()
     }

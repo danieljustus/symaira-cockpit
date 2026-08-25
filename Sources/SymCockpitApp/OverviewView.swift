@@ -52,6 +52,11 @@ struct OverviewView: View {
                         caption: "MCP servers",
                         isPlaceholder: scope.lastUpdated == nil
                     )
+                    CockpitStat(
+                        value: String(scope.daemons.count),
+                        caption: "daemons",
+                        isPlaceholder: scope.lastUpdated == nil
+                    )
                 }
             }
 
