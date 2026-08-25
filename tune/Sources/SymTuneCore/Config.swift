@@ -148,6 +148,10 @@ public struct TuneConfig: Equatable, Sendable {
     /// ``MetricStyle/default``, so an untouched config behaves as before.
     public let metricStyles: [MetricIdentifier: MetricStyle]
 
+    /// Whether the status item appends the current ISO-8601 calendar week.
+    /// Off by default so existing installs keep their current title.
+    public let showCalendarWeek: Bool
+
     /// Which cards the status popover shows.
     public let visibleCards: Set<PopoverCard>
 
@@ -183,6 +187,7 @@ public struct TuneConfig: Equatable, Sendable {
         networkUnit: NetworkUnit = .bytesPerSecond,
         temperatureUnit: TemperatureUnit = .celsius,
         metricStyles: [MetricIdentifier: MetricStyle] = [:],
+        showCalendarWeek: Bool = false,
         visibleCards: Set<PopoverCard> = Set(PopoverCard.allCases)
     ) {
         self.extendedBrightnessMin = extendedBrightnessMin
@@ -205,6 +210,7 @@ public struct TuneConfig: Equatable, Sendable {
         self.networkUnit = networkUnit
         self.temperatureUnit = temperatureUnit
         self.metricStyles = metricStyles
+        self.showCalendarWeek = showCalendarWeek
         self.visibleCards = visibleCards
     }
 
@@ -312,6 +318,7 @@ public struct TuneConfig: Equatable, Sendable {
             networkUnit: networkUnitVal("metrics", "network_unit", .bytesPerSecond),
             temperatureUnit: temperatureUnitVal("metrics", "temperature_unit", .celsius),
             metricStyles: Self.parseMetricStyles(table: table, section: "metrics"),
+            showCalendarWeek: table["metrics", "show_calendar_week"]?.boolValue ?? false,
             visibleCards: Self.parseCardSet(table: table)
         )
 
@@ -337,6 +344,7 @@ public struct TuneConfig: Equatable, Sendable {
             networkUnit: config.networkUnit,
             temperatureUnit: config.temperatureUnit,
             metricStyles: config.metricStyles,
+            showCalendarWeek: config.showCalendarWeek,
             visibleCards: config.visibleCards
         )
 
