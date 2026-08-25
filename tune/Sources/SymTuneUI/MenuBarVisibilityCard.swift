@@ -34,6 +34,7 @@ struct MenuBarVisibilityCard: View {
                 ForEach(preferences.metricOrder, id: \.self) { metric in
                     metricRow(metric)
                 }
+                calendarWeekRow
             }
 
             Divider().overlay(SymairaTheme.borderGlass)
@@ -154,6 +155,37 @@ struct MenuBarVisibilityCard: View {
                 } else {
                     preferences.visibleMetrics.remove(metric)
                 }
+                applyChange()
+            }
+        }
+    }
+
+    private var calendarWeekRow: some View {
+        HStack(spacing: SymairaSpacing.medium) {
+            Image(systemName: "calendar")
+                .symairaText(.caption)
+                .frame(width: 18)
+                .foregroundStyle(
+                    preferences.showCalendarWeek
+                        ? SymairaTheme.goldPrimary
+                        : SymairaTheme.textMuted
+                )
+
+            Text("Calendar week")
+                .symairaText(.body)
+                .foregroundStyle(SymairaTheme.textPrimary)
+
+            Spacer(minLength: SymairaSpacing.small)
+
+            // Calendar week is a display-only segment, so it has no monitor
+            // switch; keep the toggle aligned with the other menu-bar switches.
+            Color.clear.frame(width: 64, height: 1)
+
+            switchCell(
+                isOn: preferences.showCalendarWeek,
+                help: "Show the current ISO-8601 calendar week in the menu bar"
+            ) { newValue in
+                preferences.showCalendarWeek = newValue
                 applyChange()
             }
         }

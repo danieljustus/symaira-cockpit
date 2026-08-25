@@ -1,4 +1,5 @@
 import XCTest
+import Foundation
 @testable import SymTuneCore
 
 final class MetricStyleTests: XCTestCase {
@@ -262,6 +263,41 @@ final class MetricStyleTests: XCTestCase {
         """)
         let styles = TuneConfig.parseMetricStyles(table: table, section: "metrics")
         XCTAssertNil(styles[.cpu], "no recognised axis means no style entry at all")
+    }
+    // MARK: - Calendar week
+
+    private func date(year: Int, month: Int, day: Int) -> Date {
+        let calendar = CalendarWeekFormatting.iso8601Calendar(timeZone: TimeZone(secondsFromGMT: 0)!)
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    func testCalendarWeekUsesISOWeekBoundaries() {
+        // 2020-12-28 is Monday in ISO week 53; 2021-01-01 remains in that
+        // week because ISO week 1 is the week containing the first Thursday.
+        XCTAssertEqual(
+            CalendarWeekFormatting.text(for: date(year: 2020, month: 12, day: 28), timeZone: TimeZone(secondsFromGMT: 0)!),
+            "KW 53"
+        )
+        XCTAssertEqual(
+            CalendarWeekFormatting.text(for: date(year: 2021, month: 1, day: 1), timeZone: TimeZone(secondsFromGMT: 0)!),
+            "KW 53"
+        )
+        XCTAssertEqual(
+            CalendarWeekFormatting.text(for: date(year: 2021, month: 1, day: 4), timeZone: TimeZone(secondsFromGMT: 0)!),
+            "KW 1"
+        )
+    }
+
+    func testCalendarWeekStartsOnMondayAndHasNoLeadingZero() {
+        let utc = TimeZone(secondsFromGMT: 0)!
+        XCTAssertEqual(
+            CalendarWeekFormatting.text(for: date(year: 2022, month: 1, day: 2), timeZone: utc),
+            "KW 52"
+        )
+        XCTAssertEqual(
+            CalendarWeekFormatting.segment(for: date(year: 2022, month: 1, day: 3), timeZone: utc),
+            .text("KW 1")
+        )
     }
 }
 
