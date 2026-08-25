@@ -75,7 +75,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // survive a relaunch (issue #357). The CLI uses the same loader
         // (main.swift:457); the app must too.
         let config = ConfigPaths().loadConfig()
-        self.controller = TuneController(config: config, aiUsageProviders: TuneController.defaultAIUsageProviders())
+        self.controller = TuneController(config: config)
         let preferences = PreferencesManager(config: config)
         self.preferencesManager = preferences
         self.model = TuneViewModel(controller: controller, preferences: preferences)

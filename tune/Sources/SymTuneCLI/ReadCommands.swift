@@ -111,9 +111,9 @@ func runAIUsage(_ args: [String], controller: TuneController) throws {
     if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
         emit("Usage: symtune ai-usage [--json]")
         emit("")
-        emit("AI subscription/token usage per provider (OpenRouter, …). Read-only;")
+        emit("AI subscription/token usage via symbrain. Read-only;")
         emit("no credentials are ever printed. --json emits the machine-readable")
-        emit("form (same schema as the MCP get_ai_usage tool).")
+        emit("legacy per-provider result form shared with MCP get_ai_usage.")
         return
     }
     let wantsJSON = args.contains("--json")
