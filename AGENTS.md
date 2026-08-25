@@ -57,7 +57,7 @@ publishes the release. A guard fails the run when the tag and
 carries the tag.
 
 Two more jobs follow the CLI one: `release-macos-app` deep-signs, notarizes
-(fail-closed) and uploads `Symaira-Cockpit-*.dmg`/`.zip` of the GUI;
+(fail-closed) and uploads `Symaira-Cockpit-*-macos.dmg` plus the GUI `.zip`;
 `bump-homebrew` updates `Formula/symcockpit.rb` and `Casks/symcockpit.rb` in
 danieljustus/homebrew-tap once every artifact is on the release. Their secrets
 live in the repo environment `release`.
@@ -65,6 +65,11 @@ live in the repo environment `release`.
 `symcockpit version` prints the dispatcher version plus each family's version.
 
 ## Conventions
+
+### Naming and compatibility
+
+- The Tune app is displayed and shipped as `Symaira Tune.app`; the Xcode target and scheme remain `SymairaTune` for project continuity.
+- `com.symaira.symtune` (Keychain service/UserDefaults namespace) and `com.symaira.symtune-helper` (privileged helper identity) are grandfathered identifiers. Do not rename them: doing so would orphan stored credentials and preferences or break helper authorization.
 
 - **One shipped CLI binary.** `symcockpit` is the only command-line product.
   Do not reintroduce standalone distribution for `symtune`/`symoperate`/

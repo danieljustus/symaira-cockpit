@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_PATH="${1:-build/app/SymairaTune.app}"
+APP_BUNDLE_NAME="Symaira Tune.app"
+APP_PATH="${1:-build/app/$APP_BUNDLE_NAME}"
+
+if [[ "$(basename "$APP_PATH")" != "$APP_BUNDLE_NAME" ]]; then
+  printf 'Unexpected app bundle filename: %s (expected %s)\n' "$APP_PATH" "$APP_BUNDLE_NAME" >&2
+  exit 1
+fi
 
 if [[ ! -d "$APP_PATH" ]]; then
   printf 'App bundle not found: %s\n' "$APP_PATH" >&2

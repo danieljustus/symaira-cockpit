@@ -19,6 +19,8 @@ final class PreferencesManager: ObservableObject {
     @Published var temperatureUnit: TemperatureUnit
     /// Per-metric menu-bar rendering. Metrics absent here use ``MetricStyle/default``.
     @Published var metricStyles: [MetricIdentifier: MetricStyle]
+    /// Whether the status item appends the current ISO-8601 calendar week.
+    @Published var showCalendarWeek: Bool
     /// Which cards the popover shows.
     @Published var visibleCards: Set<PopoverCard>
 
@@ -34,6 +36,7 @@ final class PreferencesManager: ObservableObject {
         self.networkUnit = config.networkUnit
         self.temperatureUnit = config.temperatureUnit
         self.metricStyles = config.metricStyles
+        self.showCalendarWeek = config.showCalendarWeek
         self.visibleCards = config.visibleCards
     }
 
@@ -79,6 +82,7 @@ final class PreferencesManager: ObservableObject {
             networkUnit: networkUnit,
             temperatureUnit: temperatureUnit,
             metricStyles: metricStyles,
+            showCalendarWeek: showCalendarWeek,
             visibleCards: visibleCards
         )
     }
@@ -220,6 +224,7 @@ final class PreferencesManager: ObservableObject {
 
         lines.append("network_unit = \"\(networkUnit.rawValue)\"")
         lines.append("temperature_unit = \"\(temperatureUnit.rawValue)\"")
+        lines.append("show_calendar_week = \(showCalendarWeek)")
 
         // Per-metric style, flat keys so the whole section stays one block.
         // Only non-default metrics are written — an untouched config keeps a

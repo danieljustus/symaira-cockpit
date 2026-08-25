@@ -92,7 +92,7 @@ public final class SymScopeMCPServer: @unchecked Sendable {
         [
             [
                 "name": "scan",
-                "description": "Aggregate snapshot: listening ports, MCP servers, containers",
+                "description": "Aggregate snapshot: listening ports, MCP servers, containers, background services",
                 "inputSchema": ["type": "object", "properties": [:]],
             ],
             [
@@ -122,6 +122,14 @@ public final class SymScopeMCPServer: @unchecked Sendable {
                 "name": "mcp_health",
                 "description": "Health-probe configured MCP servers",
                 "inputSchema": ["type": "object", "properties": [:]],
+            ],
+            [
+                "name": "daemons_list",
+                "description": "List launchd agents and Homebrew services",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": ["all": ["type": "boolean", "description": "include com.apple.* services"]],
+                ],
             ],
         ]
     }
@@ -157,6 +165,11 @@ public final class SymScopeMCPServer: @unchecked Sendable {
             let (servers, _) = MCPDiscovery.discover()
             let results = await MCPHealthService.checkAll(servers)
             return toolResult(try encoder.encode(results))
+
+        case "daemons_list":
+            let includeApple = arguments["all"] as? Bool ?? false
+            let (daemons, _) = await DaemonService.list(all: includeApple)
+            return toolResult(try encoder.encode(daemons))
 
         default:
             throw MCPServerError.invalidParams("Unknown tool: \(name)")

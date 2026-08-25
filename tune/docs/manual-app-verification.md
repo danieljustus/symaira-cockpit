@@ -1,13 +1,18 @@
 # Standalone app verification
 
-`SymairaTune.app` is shipped as a standalone macOS menu-bar app. The release
+`Symaira Tune.app` is shipped as a standalone macOS menu-bar app. The release
 DMG contains the app bundle and the `symtune` CLI binary; Homebrew installs the
 app and links the CLI into `PATH`.
 
-The standalone target is intentionally not App Sandbox-entitled. Display
-brightness, gamma overlays, battery state, and AppleSMC reads use the same
-system frameworks as the CLI; the app must not claim sandboxed capabilities it
-cannot actually provide.
+The standalone target is intentionally not App Sandbox-entitled. The
+user-facing bundle name is `Symaira Tune.app`; the Xcode target and scheme
+remain `SymairaTune`. The security-sensitive `com.symaira.symtune` and
+`com.symaira.symtune-helper` identifiers remain unchanged for
+Keychain/UserDefaults continuity and helper authorization.
+
+Display brightness, gamma overlays, battery state, and AppleSMC reads use the
+same system frameworks as the CLI; the app must not claim sandboxed
+capabilities it cannot actually provide.
 
 ## Automated checks
 
@@ -29,7 +34,7 @@ Run this on a macOS host with the release DMG mounted or with a locally built
 bundle:
 
 ```bash
-open /Applications/SymairaTune.app
+open "/Applications/Symaira Tune.app"
 ```
 
 Verify:

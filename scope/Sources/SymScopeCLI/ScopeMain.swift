@@ -75,6 +75,23 @@ public enum ScopeMain {
                 return 2
             }
 
+        case "daemons":
+            guard args.count >= 2 else { printUsage(); return 2 }
+            let includeApple = args.dropFirst(2).contains("--all")
+            switch args[1] {
+            case "list":
+                let (daemons, _) = await DaemonService.list(all: includeApple)
+                try printJSON(daemons)
+                return 0
+            case "health":
+                let (daemons, _) = await DaemonService.list(all: includeApple)
+                try printJSON(DaemonService.health(daemons))
+                return 0
+            default:
+                printUsage()
+                return 2
+            }
+
         case "containers":
             let (containers, _) = await ContainerService.list()
             try printJSON(containers)
@@ -142,7 +159,8 @@ public enum ScopeMain {
 
         case "conflicts":
             let ports = try await PortService.listListening()
-            let conflicts = ConflictDetector.detect(ports)
+            let (daemons, _) = await DaemonService.list()
+            let conflicts = ConflictDetector.detect(ports, daemons: daemons)
             try printJSON(conflicts)
             return 0
 
@@ -183,7 +201,7 @@ public enum ScopeMain {
 
     public static func printUsage() {
         let text = """
-        symscope — inventory local ports, containers, and MCP servers
+        symscope — inventory local ports, containers, background services, and MCP servers
 
         Usage:
           symcockpit scope version               print version info (--json)
@@ -192,6 +210,8 @@ public enum ScopeMain {
           symcockpit scope ports suggest [n]     suggest free TCP ports (default 3)
           symcockpit scope mcp list              MCP servers across AI clients (JSON)
           symcockpit scope mcp health            health-probe configured MCP servers
+          symcockpit scope daemons list [--all]  launchd agents and Homebrew services
+          symcockpit scope daemons health [--all] daemon health summary
           symcockpit scope containers            running Docker containers (JSON)
           symcockpit scope conflicts             ports held by multiple processes
           symcockpit scope watch --interval <s>  watch for changes (NDJSON events)

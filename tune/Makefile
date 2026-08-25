@@ -9,7 +9,7 @@ build-app:
 	./scripts/build-app.sh
 
 smoke-app: build-app
-	./scripts/smoke-app.sh build/app/SymairaTune.app
+	./scripts/smoke-app.sh "build/app/Symaira Tune.app"
 
 release:
 	swift build -c release

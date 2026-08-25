@@ -75,7 +75,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // survive a relaunch (issue #357). The CLI uses the same loader
         // (main.swift:457); the app must too.
         let config = ConfigPaths().loadConfig()
-        self.controller = TuneController(config: config, aiUsageProviders: TuneController.defaultAIUsageProviders())
+        self.controller = TuneController(config: config)
         let preferences = PreferencesManager(config: config)
         self.preferencesManager = preferences
         self.model = TuneViewModel(controller: controller, preferences: preferences)
@@ -127,6 +127,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             }
             .store(in: &cancellables)
 
+        preferencesManager.$showCalendarWeek
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
+                }
+            }
+            .store(in: &cancellables)
+
         // AI usage: provider toggles and the refresh interval apply live;
         // a toggle change triggers an immediate refresh so the popover does
         // not wait for the next scheduled tick.
@@ -156,9 +166,17 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         guard let button = statusItem.button else { return }
         let updateAvailable = { if case .available = updateChecker.status { return true } else { return false } }()
 
-        // The AI usage readout is appended to whatever the metrics pipeline
-        // rendered, when enabled and data is available.
+        // The AI usage readout is appended after the calendar-week segment
+        // when enabled and data is available.
         var combined = segments
+        if preferencesManager.showCalendarWeek {
+            if !combined.isEmpty {
+                combined.append(.text("  "))
+            }
+            // Fixed position: calendar week follows all configured metrics and
+            // precedes the optional AI-usage readout.
+            combined.append(CalendarWeekFormatting.segment(for: Date()))
+        }
         if !aiUsageModel.statusItemText.isEmpty {
             if !combined.isEmpty {
                 combined.append(.text("  "))
@@ -180,7 +198,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         }
 
         let attributed = NSMutableAttributedString()
-        for segment in segments {
+        for segment in combined {
             switch segment {
             case .text(let text):
                 attributed.append(NSAttributedString(string: text, attributes: Self.titleAttributes))
@@ -196,7 +214,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             ))
         }
         button.attributedTitle = attributed
-        button.toolTip = MetricStyleFormatting.plainText(segments)
+        button.toolTip = MetricStyleFormatting.plainText(combined)
     }
 
     /// An SF Symbol drawn inline in the status-item title.
