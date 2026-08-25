@@ -127,6 +127,31 @@ public enum StatusItemSegment: Equatable, Sendable {
     case symbol(String)
 }
 
+/// ISO-8601 calendar-week formatting shared by the menu-bar pipeline and tests.
+///
+/// ISO weeks begin on Monday and week 1 is the week containing the first
+/// Thursday. The menu-bar form intentionally has no zero padding: `KW 1`, not
+/// `KW 01`.
+public enum CalendarWeekFormatting {
+    /// Return an ISO-8601 calendar configured for the requested local timezone.
+    public static func iso8601Calendar(timeZone: TimeZone = .current) -> Calendar {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    /// Format the week containing `date` as `KW <n>`.
+    public static func text(for date: Date, timeZone: TimeZone = .current) -> String {
+        let week = iso8601Calendar(timeZone: timeZone).component(.weekOfYear, from: date)
+        return "KW \(week)"
+    }
+
+    /// Build the text segment used by the existing status-item pipeline.
+    public static func segment(for date: Date, timeZone: TimeZone = .current) -> StatusItemSegment {
+        .text(text(for: date, timeZone: timeZone))
+    }
+}
+
 // MARK: - Formatting
 
 /// Turns a metrics report into styled status-item segments.
