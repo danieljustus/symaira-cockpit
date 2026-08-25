@@ -20,3 +20,18 @@ build/
 
 # Agent reports
 .github/prerelease/
+
+# --- Symaira internal working artifacts (never published; see root AGENTS.md) ---
+.github/review/
+.github/audit/
+.github/app-test/
+.github/admin/
+.github/branch-protection/
+**/docs/adopt/
+**/docs/teardown/
+**/docs/planned/
+**/docs/intern/
+**/docs/roadmap.md
+PLANUNG.md
+ARCHITEKTUR.md
+.claude/
