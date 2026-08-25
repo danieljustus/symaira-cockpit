@@ -237,7 +237,7 @@ enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return ""
         case .tune: return "Thermals, power, display — the same panel as the menu bar"
-        case .scope: return "Ports, containers, MCP servers"
+        case .scope: return "Ports, containers, background services, MCP servers"
         case .operate: return "GUI automation readiness"
         }
     }

@@ -9,6 +9,7 @@ public struct Snapshot: Codable, Sendable {
     public var ports: [Port]
     public var mcpServers: [MCPServer]
     public var containers: [Container]
+    public var daemons: [Daemon]
     public var notes: [String]
 
     public init(
@@ -16,12 +17,14 @@ public struct Snapshot: Codable, Sendable {
         ports: [Port] = [],
         mcpServers: [MCPServer] = [],
         containers: [Container] = [],
+        daemons: [Daemon] = [],
         notes: [String] = []
     ) {
         self.generatedAt = generatedAt
         self.ports = ports
         self.mcpServers = mcpServers
         self.containers = containers
+        self.daemons = daemons
         self.notes = notes
     }
 
@@ -30,6 +33,7 @@ public struct Snapshot: Codable, Sendable {
         case ports
         case mcpServers = "mcp_servers"
         case containers
+        case daemons
         case notes
     }
 }

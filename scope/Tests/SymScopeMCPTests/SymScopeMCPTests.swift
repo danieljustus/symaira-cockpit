@@ -8,7 +8,7 @@ final class SymScopeMCPTests: XCTestCase {
         let tools = result["tools"] as? [[String: Any]]
         XCTAssertNotNil(tools)
         let names = tools?.compactMap { $0["name"] as? String } ?? []
-        XCTAssertEqual(names, ["scan", "ports_list", "ports_suggest", "mcp_list", "conflicts", "mcp_health"])
+        XCTAssertEqual(names, ["scan", "ports_list", "ports_suggest", "mcp_list", "conflicts", "mcp_health", "daemons_list"])
     }
 
     func testPing() async throws {

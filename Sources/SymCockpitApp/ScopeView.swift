@@ -14,6 +14,7 @@ struct ScopeView: View {
     @ObservedObject var model: ScopeViewModel
 
     @State private var query = ""
+    @State private var showAllDaemons = false
 
     var body: some View {
         CockpitSectionScroll(
@@ -21,14 +22,18 @@ struct ScopeView: View {
             command: CockpitSection.scope.command,
             status: status
         ) {
-            CockpitSearchField(placeholder: "Filter ports, containers and servers", text: $query)
+            CockpitSearchField(placeholder: "Filter ports, containers, services and servers", text: $query)
 
             conflictsCard
             portsCard
             containersCard
+            daemonsCard
             mcpCard
         }
-        .onAppear { model.refreshNow() }
+        .onAppear { model.refreshNow(includeApple: showAllDaemons) }
+        .onChange(of: showAllDaemons) { _, includeApple in
+            model.refreshNow(includeApple: includeApple)
+        }
     }
 
     private var status: String? {
@@ -179,6 +184,81 @@ struct ScopeView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Background services
+
+    private var filteredDaemons: [Daemon] {
+        model.daemons.filter { daemon in
+            matches(
+                daemon.label,
+                daemon.state,
+                daemon.domain,
+                daemon.origin,
+                daemon.pid.map(String.init) ?? "",
+                daemon.ports.map(String.init).joined(separator: " "),
+                daemon.notes.joined(separator: " ")
+            )
+        }
+    }
+
+    private var daemonsCard: some View {
+        CockpitDisclosureCard(
+            title: "Background services",
+            subtitle: subtitle(shown: filteredDaemons.count, total: model.daemons.count),
+            count: model.daemons.count,
+            trailing: AnyView(
+                Toggle("Apple", isOn: $showAllDaemons)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .help("Include com.apple.* launchd services")
+            ),
+            storageKey: "scope.daemons"
+        ) {
+            if filteredDaemons.isEmpty {
+                emptyRow(
+                    total: model.daemons.count,
+                    empty: "No background services found.",
+                    symbol: "gearshape.2"
+                )
+            } else {
+                CockpitList(items: filteredDaemons) { daemon, _ in
+                    CockpitRow {
+                        CockpitRowLabel(
+                            title: daemon.label,
+                            detail: "\(daemon.state) · \(daemon.domain) · \(daemon.origin)"
+                        )
+                    } trailing: {
+                        HStack(spacing: SymairaSpacing.small) {
+                            if !daemon.ports.isEmpty {
+                                Text(daemon.ports.map(String.init).joined(separator: ", "))
+                                    .font(SymairaTypography.monoSmall)
+                                    .foregroundStyle(SymairaTheme.textSecondary)
+                                    .textSelection(.enabled)
+                                    .help("Ports held by this PID")
+                            }
+                            if let status = daemon.lastExitStatus, status != 0 {
+                                CockpitBadge(text: "exit \(status)", tint: SymairaTheme.critical)
+                            }
+                            if let pid = daemon.pid {
+                                Text("pid \(pid)")
+                                    .font(SymairaTypography.monoSmall)
+                                    .foregroundStyle(SymairaTheme.textMuted)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+
+            ForEach(model.daemonNotes, id: \.self) { note in
+                Text(note)
+                    .font(SymairaTypography.caption)
+                    .foregroundStyle(SymairaTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

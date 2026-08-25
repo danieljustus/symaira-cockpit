@@ -6,7 +6,7 @@ Port-Inventar & MCP-Discovery. Swift-Port des Go-Originals `symaira-scope`
 `symscope`-Formula deprecated.
 
 > Inventar der Maschine: **Ports** (lsof), **Container** (docker CLI),
-> **MCP-Server** (AI-Client-Configs) — als CLI und MCP-Server.
+> **Hintergrunddienste** (launchd/Homebrew), **MCP-Server** (AI-Client-Configs) — als CLI und MCP-Server.
 
 ## Build & Test
 
@@ -28,6 +28,9 @@ symscope ports list            # lauschende TCP/UDP-Ports mit Prozess
 symscope ports suggest [n]     # n freie TCP-Ports vorschlagen (Default 3)
 symscope mcp list              # MCP-Server über AI-Client-Configs
 symscope mcp health            # Health-Probe aller konfigurierten Server
+symscope daemons list           # launchd Agents/Daemons und Homebrew-Services
+symscope daemons list --all     # inklusive com.apple.* launchd-Services
+symscope daemons health         # Zustands-/Exit-Status-Zusammenfassung
 symscope containers            # laufende Docker-Container (docker ps)
 symscope conflicts             # Ports, die von mehreren Prozessen gehalten werden
 symscope watch --interval 5    # Änderungen beobachten (NDJSON-Events: port_bound, …)
@@ -45,12 +48,12 @@ symscope (executable) → SymScopeMCP → SymScopeCore
 
 - `SymScopeCore` — PortService (lsof), MCPDiscovery (symbrain's harness
   inventory when installed, own JSONC config parse as standalone fallback),
-  ContainerService (docker), MCPHealthService, ConflictDetector,
-  SnapshotService, Models. Keine externen Dependencies (Foundation + Darwin
+  ContainerService (docker), DaemonService (launchctl/plists/Homebrew),
+  MCPHealthService, ConflictDetector, SnapshotService, Models. Keine externen Dependencies (Foundation + Darwin
   only).
 - `SymScopeMCP` — stdio JSON-RPC/MCP über `SymairaMCP` (appkit, exact-pinned).
-  6 Tools: `scan`, `ports_list`, `ports_suggest`, `mcp_list`, `conflicts`,
-  `mcp_health`.
+  7 Tools: `scan`, `ports_list`, `ports_suggest`, `mcp_list`, `conflicts`,
+  `mcp_health`, `daemons_list`.
 - `symscope` — dünne CLI, Argument-Routing von Hand (kein Cobra-Äquivalent
   nötig).
 
