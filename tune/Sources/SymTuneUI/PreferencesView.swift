@@ -117,8 +117,56 @@ struct PreferencesView: View {
                 ForEach(manager.metricOrder, id: \.self) { metric in
                     metricRow(metric)
                 }
+                calendarWeekRow
             }
         }
+    }
+
+    /// The calendar week is a display-only menu-bar segment: nothing samples
+    /// it and nothing orders it, so it gets the "Show" switch alone and sits
+    /// below the metrics rather than among them.
+    private var calendarWeekRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar")
+                .symairaText(.caption)
+                .frame(width: 20)
+                .foregroundStyle(
+                    manager.showCalendarWeek
+                        ? SymairaTheme.goldPrimary
+                        : SymairaTheme.textMuted
+                )
+
+            Text("Calendar week")
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTheme.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 60, alignment: .leading)
+
+            Spacer()
+
+            // Keeps the switch under the metric rows' "Show" column.
+            Color.clear.frame(width: 100, height: 1)
+
+            Toggle(isOn: $manager.showCalendarWeek) {
+                Text("Show")
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .toggleStyle(.switch)
+            .frame(width: 80)
+            .help("Show the current ISO-8601 calendar week in the menu bar")
+        }
+        .padding(.horizontal, SymairaSpacing.medium)
+        .padding(.vertical, SymairaSpacing.small)
+        .background(SymairaTheme.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: SymairaRadius.card)
+                .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+        )
     }
 
     private func metricRow(_ metric: MetricIdentifier) -> some View {
