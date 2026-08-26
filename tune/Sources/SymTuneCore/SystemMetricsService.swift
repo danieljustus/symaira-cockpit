@@ -72,7 +72,10 @@ public final class SystemMetricsService: @unchecked Sendable {
     }
     private func rate(_ current: UInt64, _ old: UInt64?, _ interval: TimeInterval?) -> Double? {
         guard let old, let interval, interval > 0 else { return nil }
-        return Double(current &- old) / interval
+        // A decreasing counter means the interface was reset (or re-merged):
+        // skipping the sample beats wrapping into an absurd multi-terabyte rate.
+        guard current >= old else { return nil }
+        return Double(current - old) / interval
     }
 }
 private extension Array { subscript(safe index: Index) -> Element? { indices.contains(index) ? self[index] : nil } }

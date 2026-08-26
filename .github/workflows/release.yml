@@ -294,7 +294,7 @@ jobs:
             # produces a single artifact for both Macs.
             depends_on macos: :sonoma
 
-            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/symcockpit_\#{version}_darwin_universal.tar.gz"
+            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/symcockpit_#{version}_darwin_universal.tar.gz"
             sha256 "${TAR_SHA256}"
 
             def install
@@ -316,7 +316,7 @@ jobs:
             end
 
             test do
-              assert_match "symcockpit \#{version}", shell_output("\#{bin}/symcockpit version")
+              assert_match "symcockpit #{version}", shell_output("#{bin}/symcockpit version")
             end
           end
           EOF
@@ -330,7 +330,7 @@ jobs:
             version "${VERSION}"
             sha256 "${DMG_SHA256}"
 
-            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v\#{version}/Symaira-Cockpit-\#{version}-macos.dmg"
+            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/Symaira-Cockpit-#{version}-macos.dmg"
             name "Symaira Cockpit"
             desc "This machine: thermals, power, GUI automation and port/MCP inventory"
             homepage "https://github.com/danieljustus/symaira-cockpit"

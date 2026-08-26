@@ -6,7 +6,7 @@ import SymairaTheme
 ///
 /// One block per enabled provider: meter bars with remaining amount and
 /// reset countdown, a sparkline of the usage history, and — crucially — a
-/// distinct **unavailable** state ("Quelle nicht verfügbar" + timestamp of
+/// distinct **unavailable** state ("Source unavailable" + timestamp of
 /// the last success) so a failed fetch never masquerades as "0 % used".
 @MainActor
 struct AIUsageCardView: View {
@@ -59,7 +59,7 @@ private struct ProviderRow: View {
                 }
                 Spacer()
                 if row.isUnavailable {
-                    Text("Quelle nicht verfügbar")
+                    Text("Source unavailable")
                         .font(.caption2)
                         .foregroundStyle(SymairaTheme.critical)
                 }
@@ -121,11 +121,11 @@ private struct ProviderRow: View {
                 .foregroundStyle(SymairaTheme.textSecondary)
                 .lineLimit(2)
             if let lastSuccessAt = row.lastSuccessAt {
-                Text("Letzter Erfolg: \(lastSuccessAt.formatted(date: .abbreviated, time: .shortened))")
+                Text("Last success: \(lastSuccessAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption2)
                     .foregroundStyle(SymairaTheme.textMuted)
             } else {
-                Text("Noch kein erfolgreicher Abruf")
+                Text("No successful fetch yet")
                     .font(.caption2)
                     .foregroundStyle(SymairaTheme.textMuted)
             }

@@ -35,14 +35,18 @@ final class SystemMetricsServiceTests: XCTestCase {
         XCTAssertEqual(report.network.interfaces[0].bytesInPerSecond!, 30, accuracy: 0.0001)
     }
 
-    func testCounterWraparound() {
+    func testDecreasingCounterSkipsSampleInsteadOfWrapping() {
+        // An interface reset drops the cumulative byte counter between polls;
+        // the derived rate must be skipped rather than wrapped into an
+        // astronomically large value.
         let source = FakeSystemMetricsSource(snapshots: [
             sample(1, cpu: [0, 0, 0, 0], network: UInt64.max - 9),
             sample(2, cpu: [0, 0, 0, 0], network: 10)
         ])
         let service = SystemMetricsService(source: source)
         _ = service.read()
-        XCTAssertEqual(service.read().network.interfaces[0].bytesInPerSecond!, 20, accuracy: 0.0001)
+        XCTAssertNil(service.read().network.interfaces[0].bytesInPerSecond)
+        XCTAssertNil(service.read().network.interfaces[0].bytesOutPerSecond)
     }
 
     func testNonPositiveTimeDoesNotDeriveRate() {

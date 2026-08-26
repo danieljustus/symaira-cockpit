@@ -1,4 +1,5 @@
 import ApplicationServices
+import AppKit
 import CoreGraphics
 import Darwin
 import Foundation
@@ -25,15 +26,33 @@ public struct PermissionService: PermissionServiceProtocol {
         )
     }
 
+    /// Opens System Settings on a given privacy pane as an observable fallback
+    /// when the OS prompt has already fired once (macOS shows it only one time).
+    private func openSystemSettingsPrivacyPane(_ path: String) {
+        let url = URL(string: "x-apple.systempreferences:\(path)")
+        if let url, NSWorkspace.shared.open(url) { return }
+        // Pane-specific deep links can be rejected by newer macOS builds; the
+        // generic Privacy pane always opens.
+        if let fallback = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
+            NSWorkspace.shared.open(fallback)
+        }
+    }
+
     @discardableResult
     public func requestAccessibilityPermission() -> Bool {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        if AXIsProcessTrustedWithOptions(options) { return true }
+        // The prompt fires only once per app identity; afterwards this call is
+        // silent and the user needs to reach the pane themselves.
+        openSystemSettingsPrivacyPane("com.apple.preference.security?Privacy_Accessibility")
+        return AXIsProcessTrusted()
     }
 
     @discardableResult
     public func requestScreenRecordingPermission() -> Bool {
-        CGRequestScreenCaptureAccess()
+        if CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() { return true }
+        openSystemSettingsPrivacyPane("com.apple.preference.security?Privacy_ScreenCapture")
+        return CGPreflightScreenCaptureAccess()
     }
 
     // MARK: - Process info helpers
