@@ -302,6 +302,8 @@ struct CockpitBadge: View {
         Text(text)
             .font(SymairaTypography.micro)
             .foregroundStyle(tint)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, SymairaSpacing.small)
             .padding(.vertical, 2)
             .background(Capsule().fill(tint.opacity(0.14)))
