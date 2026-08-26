@@ -69,6 +69,19 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// ``onOpenCockpit`` is set.
     public var openCockpitTitle: String = "Open Cockpit"
 
+    /// Accessibility description of the menu bar icon (VoiceOver).
+    public var statusItemAccessibilityLabel: String = "SymairaTune"
+
+    /// Text of the fallback icon used when the SF Symbol is unavailable.
+    public var fallbackIconTitle: String = "ST"
+
+    /// Title of the preferences window.
+    public var preferencesWindowTitle: String = "SymairaTune Preferences"
+
+    /// Reason string attached to the Keep Awake power assertion
+    /// (`pmset -g assertions`).
+    public var keepAwakeAssertionReason: String = "SymairaTune menu bar"
+
     public override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Load persisted configuration from config.toml so saved preferences
@@ -241,12 +254,12 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         if !showingIconFallback {
             if let image = NSImage(
                 systemSymbolName: "slider.horizontal.3",
-                accessibilityDescription: "SymairaTune"
+                accessibilityDescription: statusItemAccessibilityLabel
             ) {
                 image.isTemplate = true
                 button.image = image
             } else {
-                button.title = "ST"
+                button.title = fallbackIconTitle
             }
             showingIconFallback = true
         }
@@ -261,11 +274,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private func configureButton() {
         guard let button = statusItem.button else { return }
         // Use a nice control sliders symbol to match the tuning nature of the app
-        if let image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: "SymairaTune") {
+        if let image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: statusItemAccessibilityLabel) {
             image.isTemplate = true
             button.image = image
         } else {
-            button.title = "ST"
+            button.title = fallbackIconTitle
         }
         showingIconFallback = true
         button.action = #selector(handleButtonClick)
@@ -295,6 +308,9 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             updateChecker: updateChecker,
             preferencesManager: preferencesManager,
             openPreferences: { [weak self] in self?.openPreferences() },
+            onOpenCockpit: onOpenCockpit,
+            openCockpitTitle: openCockpitTitle,
+            keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome
         )
@@ -407,7 +423,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         let hosting = NSHostingController(rootView: prefsView)
 
         let window = NSWindow(contentViewController: hosting)
-        window.title = "SymairaTune Preferences"
+        window.title = preferencesWindowTitle
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.setContentSize(NSSize(width: 420, height: 480))
         window.isReleasedWhenClosed = false

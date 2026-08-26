@@ -46,6 +46,17 @@ struct MainStatusView: View {
     @ObservedObject var preferencesManager: PreferencesManager
     let openPreferences: () -> Void
 
+    /// When set (cockpit host), the left-click popover shows a visible
+    /// "Open Cockpit…" row so the window is reachable without knowing about
+    /// the right-click context menu. Nil in the standalone Tune app.
+    var onOpenCockpit: (() -> Void)? = nil
+
+    /// Title of the ``onOpenCockpit`` row inside the popover.
+    var openCockpitTitle: String = "Open Cockpit…"
+
+    /// Reason string for the Keep Awake power assertion (branding override).
+    var keepAwakeAssertionReason: String = "SymairaTune menu bar"
+
     /// Height budget for the popover, from the screen the menu bar is on.
     /// The panel grows with its content up to this cap and scrolls beyond it —
     /// `NSPopover` neither reflows nor scrolls oversized content, it just
@@ -76,6 +87,9 @@ struct MainStatusView: View {
         VStack(spacing: SymairaSpacing.medium) {
             if chrome == .popover {
                 StatusHeaderView()
+                if let onOpenCockpit {
+                    openCockpitRow(onOpenCockpit)
+                }
             }
             LiveSummaryStrip(model: model)
 
@@ -92,7 +106,7 @@ struct MainStatusView: View {
             }
 
             if shows(.keepAwake) {
-                KeepAwakeSection(controller: controller, model: model)
+                KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
             }
 
             if shows(.fanControl, hardwareAvailable: hasFans) {
@@ -143,6 +157,36 @@ struct MainStatusView: View {
     }
 
     // MARK: - Card visibility
+
+    /// Visible "Open Cockpit…" row for the left-click popover: the cockpit
+    /// window must be reachable from the status item's primary interaction,
+    /// not only from a right-click context menu most users never try.
+    private func openCockpitRow(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "macwindow")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SymairaTheme.goldPrimary)
+                Text(openCockpitTitle)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textPrimary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SymairaTheme.textMuted)
+            }
+            .padding(.horizontal, SymairaSpacing.medium)
+            .padding(.vertical, SymairaSpacing.small)
+            .background(SymairaTheme.bgCard)
+            .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
+            .overlay(
+                RoundedRectangle(cornerRadius: SymairaRadius.card)
+                    .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, SymairaSpacing.xSmall)
+    }
 
     private func shows(_ card: PopoverCard, hardwareAvailable: Bool = true) -> Bool {
         preferencesManager.showsCard(card, hardwareAvailable: hardwareAvailable)
@@ -220,6 +264,7 @@ private struct DisplaysSection: View {
 private struct KeepAwakeSection: View {
     let controller: TuneController
     let model: TuneViewModel
+    let assertionReason: String
 
     /// Duration presets: indefinite + 15m, 30m, 1h, 2h, 4h, 8h
     private static let presets: [(label: String, seconds: TimeInterval?)] = [
@@ -265,7 +310,7 @@ private struct KeepAwakeSection: View {
             _ = try? controller.beginKeepAwakeSession(
                 duration: Self.presets[durationIndex].seconds,
                 preventDisplaySleep: preventDisplaySleep,
-                reason: "SymairaTune menu bar"
+                reason: assertionReason
             )
         }
         model.refreshNow()
