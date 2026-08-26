@@ -2,7 +2,16 @@
 # Builds and tests all nested SPM packages (tune, operate, scope).
 
 PACKAGES := tune operate scope
-TOOLCHAIN := $(DEVELOPER_DIR:/Applications/Xcode-beta.app/Contents/Developer=/Applications/Xcode-beta.app/Contents/Developer)
+
+# Resolve a full Xcode toolchain: CommandLineTools alone fails on actool.
+# If xcode-select points at CommandLineTools, fall back to an installed Xcode.
+XCODE_SELECT := $(shell xcode-select -p 2>/dev/null)
+ifeq ($(findstring CommandLineTools,$(XCODE_SELECT)),CommandLineTools)
+TOOLCHAIN := $(firstword $(foreach d,/Applications/Xcode-beta.app/Contents/Developer /Applications/Xcode.app/Contents/Developer,$(if $(wildcard $d),$d)))
+else
+TOOLCHAIN := $(XCODE_SELECT)
+endif
+export DEVELOPER_DIR = $(TOOLCHAIN)
 
 .PHONY: build test build-%% test-%% build-app smoke-app run-app clean
 
