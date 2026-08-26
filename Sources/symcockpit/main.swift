@@ -44,7 +44,7 @@ their commands are now the family subcommands above.
 /// were separately released tools before the repo consolidation, and their
 /// version history stays meaningful to anyone migrating from them.
 enum CockpitVersion {
-    static let current = "0.3.0"
+    static let current = "0.4.0"
 }
 
 /// The version report, in the ecosystem's `version --json` shape: a `tool`,

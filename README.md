@@ -16,7 +16,7 @@ server, so AI agents get the exact same capabilities you have in the shell.
 
 ![Symaira Cockpit](docs/assets/social-preview.png)
 
-**Status:** Active development — v0.3.0 released; see [CHANGELOG.md](CHANGELOG.md).
+**Status:** Active development — v0.4.0 released; see [CHANGELOG.md](CHANGELOG.md).
 
 ## Why Cockpit
 
