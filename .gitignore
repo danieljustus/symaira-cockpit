@@ -28,6 +28,7 @@ build/
 .github/admin/
 .github/branch-protection/
 **/docs/adopt/
+**/docs/app-test/
 **/docs/teardown/
 **/docs/planned/
 **/docs/intern/
