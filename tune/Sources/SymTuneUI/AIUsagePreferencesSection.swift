@@ -1,4 +1,6 @@
 import SwiftUI
+import SymairaKeychain
+import SymairaProviderKit
 import SymairaTheme
 import SymTuneCore
 
@@ -117,17 +119,21 @@ struct ProviderCredentialView: View {
     var body: some View {
         if let descriptor = provider.credentialDescriptor {
             switch descriptor.authKind {
-            case .apiKey(let account):
+            case .apiKey:
+                // The shared credential field stores under
+                            // "<providerID>-api-key" in the given keychain service —
+                            // the same slot convention the previous local field used,
+                            // so existing stored keys keep working (issue #42).
                 let field = Self.apiKeyField(for: provider.id)
-                let label = field?.label ?? "\(provider.displayName) API key"
-                let placeholder = field?.placeholder ?? "sk-…"
-                APIKeyField(
-                    providerID: provider.id,
-                    accountId: account,
-                    label: label,
-                    placeholder: placeholder,
-                    onCredentialChange: onCredentialChange
-                )
+                let store = SymairaProviderCredentialStore(
+                                keychain: SymairaKeychain(service: "com.symaira.symtune")
+                            )
+                SymairaProviderCredentialField(
+                                providerID: provider.id,
+                                store: store,
+                                title: field?.label ?? "\\(provider.displayName) API key",
+                                onCredentialChange: onCredentialChange
+                            )
 
             case .externalToken(let resolver):
                 ExternalAuthStateRow(
