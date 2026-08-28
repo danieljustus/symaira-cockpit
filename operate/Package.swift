@@ -14,11 +14,13 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.0"),
+        .package(path: "../history"),
     ],
     targets: [
         .target(
             name: "SymOperateCore",
             dependencies: [
+                .product(name: "SymCockpitHistory", package: "history"),
                 .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
             ],
             linkerSettings: [
