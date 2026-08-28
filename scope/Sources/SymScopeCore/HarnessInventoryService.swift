@@ -1,23 +1,80 @@
 import Foundation
 
-/// One global or project-local harness config, as reported by
-/// `symbrain harness list --output json`. Mirrors symbrain's
-/// `internal/harness.ConfigInventory` (schema_version 1).
+/// One configured MCP server inside a symbrain harness inventory (schema 2).
+public struct HarnessServerInventory: Codable, Equatable, Sendable {
+    public let name: String
+    public let transport: String
+    public let command: String?
+    public let args: [String]
+    public let url: String?
+    public let envNames: [String]
+
+    public init(
+        name: String,
+        transport: String,
+        command: String? = nil,
+        args: [String] = [],
+        url: String? = nil,
+        envNames: [String] = []
+    ) {
+        self.name = name
+        self.transport = transport
+        self.command = command
+        self.args = args
+        self.url = url
+        self.envNames = envNames
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case transport
+        case command
+        case args
+        case url
+        case envNames = "env_names"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        transport = try container.decode(String.self, forKey: .transport)
+        command = try container.decodeIfPresent(String.self, forKey: .command)
+        args = try container.decodeIfPresent([String].self, forKey: .args) ?? []
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        envNames = try container.decodeIfPresent([String].self, forKey: .envNames) ?? []
+    }
+}
+
+/// One global or project-local harness config, as reported by symbrain.
 public struct HarnessConfigInventory: Codable, Equatable, Sendable {
     public let path: String
     public let exists: Bool
     public let parsed: Bool
     public let error: String?
-    public let servers: [String]
+    public let servers: [HarnessServerInventory]
+
+    public init(path: String, exists: Bool, parsed: Bool, error: String?, servers: [HarnessServerInventory]) {
+        self.path = path
+        self.exists = exists
+        self.parsed = parsed
+        self.error = error
+        self.servers = servers
+    }
 }
 
 /// One harness (e.g. "claude", "cursor", "codex") as reported by symbrain.
-/// Mirrors `internal/harness.HarnessInventory`.
 public struct HarnessInventoryEntry: Codable, Equatable, Sendable {
     public let name: String
     public let displayName: String
     public let global: HarnessConfigInventory
     public let project: HarnessConfigInventory?
+
+    public init(name: String, displayName: String, global: HarnessConfigInventory, project: HarnessConfigInventory? = nil) {
+        self.name = name
+        self.displayName = displayName
+        self.global = global
+        self.project = project
+    }
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -27,12 +84,17 @@ public struct HarnessInventoryEntry: Codable, Equatable, Sendable {
     }
 }
 
-/// The full inventory returned by `symbrain harness list --output json`.
-/// Mirrors `internal/harness.Inventory`.
+/// The full schema-2 inventory returned by `symbrain harness list --output json`.
 public struct HarnessInventory: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let projectDir: String?
     public let harnesses: [HarnessInventoryEntry]
+
+    public init(schemaVersion: Int, projectDir: String?, harnesses: [HarnessInventoryEntry]) {
+        self.schemaVersion = schemaVersion
+        self.projectDir = projectDir
+        self.harnesses = harnesses
+    }
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -41,19 +103,41 @@ public struct HarnessInventory: Codable, Equatable, Sendable {
     }
 }
 
-/// symbrain's harness inventory is the SSOT for which AI harnesses exist and
-/// where their configs live (issue #19, symaira-brain#275). Cockpit's own
-/// `MCPDiscovery` client list is kept only as a standalone fallback.
+public struct HarnessHealthEntry: Codable, Equatable, Sendable {
+    public let harness: String
+    public let config: String
+    public let server: String
+    public let transport: String
+    public let healthy: Bool
+    public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case harness
+        case config
+        case server
+        case transport
+        case healthy
+        case error
+    }
+}
+
+public struct HarnessHealthReport: Codable, Equatable, Sendable {
+    public let servers: [HarnessHealthEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case servers
+    }
+}
+
+/// symbrain's harness inventory is the SSOT for MCP servers. Cockpit only
+/// presents this data and never reparses harness configuration files.
 public protocol HarnessInventoryProviding: Sendable {
-    /// Whether `symbrain` is installed and callable on PATH.
     var isAvailable: Bool { get }
-    /// Fetch the inventory, or `nil` on any failure (absent, timeout,
-    /// non-zero exit, malformed JSON).
     func list(projectDir: String?) -> HarnessInventory?
 }
 
-/// Production `symbrain` subprocess wrapper. Standalone-first: absence of
-/// `symbrain` is never an error, only a signal to use the built-in fallback.
+/// Production `symbrain` subprocess wrapper. Missing or failed symbrain is
+/// surfaced to callers so they can report an actionable requirement.
 public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked Sendable {
     public init() {}
 
@@ -63,33 +147,41 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
 
     public func list(projectDir: String?) -> HarnessInventory? {
         guard let path = resolveSymbrain() else { return nil }
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: path)
         var arguments = ["harness", "list", "--output", "json"]
         if let projectDir {
             arguments += ["--project", projectDir]
         }
-        task.arguments = arguments
-        let outPipe = Pipe()
-        task.standardOutput = outPipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-        } catch {
+        guard let result = try? BoundedProcessRunner.run(executable: path, arguments: arguments),
+              !result.timedOut,
+              result.terminationStatus == 0 else {
             return nil
         }
-        // Bounded wait — a wedged symbrain must not block MCP discovery.
-        let deadline = DispatchTime.now() + .seconds(3)
-        while task.isRunning && DispatchTime.now() < deadline {
-            usleep(10_000) // 10ms
-        }
-        if task.isRunning {
-            task.terminate()
+        return try? JSONDecoder().decode(HarnessInventory.self, from: result.standardOutput)
+    }
+
+    /// Returns the health states produced by symbrain's bounded, concurrent
+    /// harness probes, converted to Cockpit's stable MCP health shape.
+    public func health() -> [MCPHealthResult]? {
+        guard let path = resolveSymbrain(),
+              let result = try? BoundedProcessRunner.run(
+                  executable: path,
+                  arguments: ["harness", "health", "--json"],
+                  timeoutSeconds: 30
+              ),
+              !result.timedOut,
+              result.terminationStatus == 0,
+              let report = try? JSONDecoder().decode(HarnessHealthReport.self, from: result.standardOutput) else {
             return nil
         }
-        guard task.terminationStatus == 0 else { return nil }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        return try? JSONDecoder().decode(HarnessInventory.self, from: data)
+        return report.servers.map {
+            MCPHealthResult(
+                name: $0.server,
+                client: $0.harness,
+                status: $0.healthy ? "healthy" : "unhealthy",
+                latencyMs: 0,
+                error: $0.error
+            )
+        }
     }
 
     private func resolveSymbrain() -> String? {

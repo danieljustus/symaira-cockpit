@@ -62,12 +62,23 @@ public enum ScopeMain {
             guard args.count >= 2 else { printUsage(); return 2 }
             switch args[1] {
             case "list":
-                let (servers, _) = MCPDiscovery.discover()
+                let (servers, notes) = MCPDiscovery.discover()
+                if let note = notes.first(where: { $0.contains("requires symbrain") }) {
+                    fputs("symscope: \(note)\n", stderr)
+                    return 1
+                }
                 try printJSON(servers)
                 return 0
             case "health":
-                let (servers, _) = MCPDiscovery.discover()
-                let results = await MCPHealthService.checkAll(servers)
+                let service = SymBrainHarnessService()
+                guard service.isAvailable else {
+                    fputs("symscope: \(MCPDiscovery.requiresSymbrainNote)\n", stderr)
+                    return 1
+                }
+                guard let results = service.health() else {
+                    fputs("symscope: mcp: symbrain harness health failed\n", stderr)
+                    return 1
+                }
                 try printJSON(results)
                 return 0
             default:

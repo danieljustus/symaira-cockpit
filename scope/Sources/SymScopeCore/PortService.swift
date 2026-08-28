@@ -10,18 +10,36 @@ public enum PortService: Sendable {
 
     /// Listening TCP + bound UDP sockets with owning process where available.
     public static func listListening() async throws -> [Port] {
-        // TCP LISTEN
-        let tcpOutput = try await runLsof(args: ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcnP"])
-        var ports = parseLsofOutput(tcpOutput, protocol_: "tcp")
+        await listListeningReport().ports
+    }
 
-        // UDP (bound sockets). `lsof -iUDP` lists UDP sockets; we keep those
-        // with a listening/bound address.
-        let udpOutput = try await runLsof(args: ["-nP", "-iUDP", "-F", "pcnP"])
-        ports += parseLsofOutput(udpOutput, protocol_: "udp")
+    /// Collects listeners while preserving non-fatal subprocess degradation
+    /// notes for aggregate callers such as `scope scan`.
+    public static func listListeningReport() async -> (ports: [Port], notes: [String]) {
+        var notes: [String] = []
+        guard let tcpOutput = try? await runLsof(args: ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcnP"]) else {
+            return ([], ["ports: lsof unavailable"])
+        }
+        var ports = tcpOutput.timedOut ? [] : parseLsofOutput(tcpOutput.output, protocol_: "tcp")
+        if tcpOutput.timedOut {
+            notes.append("ports: lsof TCP pass timed out; listener inventory is partial")
+        }
+
+        // UDP (bound sockets). `lsof -iUDP` also reports connected sockets;
+        // parseLsofOutput rejects those before they can look like listeners.
+        guard let udpOutput = try? await runLsof(args: ["-nP", "-iUDP", "-F", "pcnP"]) else {
+            notes.append("ports: lsof UDP pass unavailable; listener inventory is partial")
+            return (collapse(ports), notes)
+        }
+        if udpOutput.timedOut {
+            notes.append("ports: lsof UDP pass timed out; listener inventory is partial")
+        } else {
+            ports += parseLsofOutput(udpOutput.output, protocol_: "udp")
+        }
 
         // Collapse duplicate (port, proto, pid) pairs — lsof reports one line
         // per file descriptor and IPv4/IPv6 duplicates happen.
-        return collapse(ports)
+        return (collapse(ports), notes)
     }
 
     /// Suggest `count` free TCP ports in [rangeStart, rangeEnd], checking
@@ -41,17 +59,8 @@ public enum PortService: Sendable {
 
     // MARK: - Internals
 
-    private static func runLsof(args: [String]) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: lsofPath)
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return String(data: data, encoding: .utf8) ?? ""
+    private static func runLsof(args: [String]) async throws -> BoundedProcessResult {
+        try BoundedProcessRunner.run(executable: lsofPath, arguments: args, timeoutSeconds: 3)
     }
 
     /// Parses `lsof -F` output. Fields are prefixed: p=PID, c=command,
@@ -102,6 +111,10 @@ public enum PortService: Sendable {
 
     /// "127.0.0.1:8080" or "[::1]:8080" or "*:8080" → (port, address).
     static func parseAddress(_ value: String) -> (port: Int, address: String)? {
+        // Connected UDP records contain a local and remote endpoint. They are
+        // not listeners, and splitting them on the last colon would report the
+        // remote port as if it were bound locally.
+        guard !value.contains("->") else { return nil }
         if value.hasPrefix("[") {
             // IPv6 [addr]:port
             if let close = value.firstIndex(of: "]") {

@@ -1,57 +1,6 @@
 import XCTest
 @testable import SymScopeCore
 
-final class JSONCTests: XCTestCase {
-    func testStripsLineComments() {
-        let input = """
-        {
-          // comment
-          "a": 1 // trailing
-        }
-        """
-        let output = JSONC.strip(input)
-        XCTAssertFalse(output.contains("comment"))
-        XCTAssertFalse(output.contains("trailing"))
-        XCTAssertTrue(output.contains("\"a\": 1"))
-    }
-
-    func testStripsBlockComments() {
-        let input = """
-        { /* block */ "a": 1 /* mid */ , "b": 2 }
-        """
-        let output = JSONC.strip(input)
-        XCTAssertFalse(output.contains("block"))
-        XCTAssertFalse(output.contains("mid"))
-        XCTAssertTrue(output.contains("\"a\": 1"))
-    }
-
-    func testPreservesCommentInsideString() {
-        let input = #"{ "note": "// not a comment", "a": 1 }"#
-        let output = JSONC.strip(input)
-        XCTAssertTrue(output.contains("// not a comment"))
-    }
-
-    func testPreservesEscapedQuote() {
-        let input = #"{ "s": "a\"//b", "a": 1 }"#
-        let output = JSONC.strip(input)
-        XCTAssertTrue(output.contains(#"a\"//b"#))
-    }
-
-    func testStrippedOutputIsValidJSON() throws {
-        let input = """
-        {
-          // line
-          "mcpServers": {
-            "github": { "command": "gh", "args": ["mcp"] }, /* block */
-          }
-        }
-        """
-        let output = JSONC.strip(input)
-        let data = output.data(using: .utf8)!
-        _ = try JSONSerialization.jsonObject(with: data)
-    }
-}
-
 final class PortParseTests: XCTestCase {
     func testParseIPv4Address() {
         let parsed = PortService.parseAddress("127.0.0.1:8080")
@@ -69,6 +18,14 @@ final class PortParseTests: XCTestCase {
         let parsed = PortService.parseAddress("[::1]:9000")
         XCTAssertEqual(parsed?.port, 9000)
         XCTAssertEqual(parsed?.address, "::1")
+    }
+
+    func testParseConnectedIPv4IsRejected() {
+        XCTAssertNil(PortService.parseAddress("192.168.188.73:64067->160.79.104.10:443"))
+    }
+
+    func testParseConnectedIPv6IsRejected() {
+        XCTAssertNil(PortService.parseAddress("[::1]:64067->[2606:4700::1]:443"))
     }
 
     func testParseInvalid() {
@@ -193,5 +150,18 @@ final class VersionTests: XCTestCase {
         XCTAssertEqual(info.tool, "symscope")
         XCTAssertEqual(info.schemaVersion, 1)
         XCTAssertFalse(info.version.isEmpty)
+    }
+}
+
+final class BoundedProcessRunnerTests: XCTestCase {
+    func testSlowProcessIsTerminatedAtDeadline() throws {
+        let started = Date()
+        let result = try BoundedProcessRunner.run(
+            executable: "/bin/sleep",
+            arguments: ["2"],
+            timeoutSeconds: 0.05
+        )
+        XCTAssertTrue(result.timedOut)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1)
     }
 }

@@ -94,16 +94,14 @@ final class ScopeViewModel: ObservableObject {
         }
     }
 
-    /// Probe every discovered MCP server. This actually launches stdio servers,
-    /// so it stays an explicit user action rather than part of the poll.
+    /// Ask symbrain for the health of every registered MCP server. Probing is
+    /// delegated to symbrain so this view cannot diverge from the harness CLI.
     func checkHealth() {
         guard !isCheckingHealth else { return }
         isCheckingHealth = true
-        let servers = mcpServers
-        Task {
-            let results = await MCPHealthService.checkAll(servers)
-            // Every result carries the name/client pair it was probed for, so
-            // the map keys off the result itself rather than off input order.
+        let service = SymBrainHarnessService()
+        Task { @MainActor in
+            let results = await Task.detached { service.health() ?? [] }.value
             health = Dictionary(
                 results.map { ("\($0.client)/\($0.name)", $0) },
                 uniquingKeysWith: { _, latest in latest }

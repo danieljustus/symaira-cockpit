@@ -5,13 +5,7 @@ import Foundation
 /// non-fatal degradations).
 public struct SnapshotService: Sendable {
     public static func build() async -> Snapshot {
-        async let portsTask: (ports: [Port], notes: [String]) = {
-            do {
-                return (try await PortService.listListening(), [])
-            } catch {
-                return ([], ["ports: \(error.localizedDescription)"])
-            }
-        }()
+        async let portsTask = PortService.listListeningReport()
 
         async let daemonsTask = DaemonService.list()
         let (servers, serverNotes) = MCPDiscovery.discover()

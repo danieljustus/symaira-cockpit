@@ -11,6 +11,14 @@ final class SymScopeMCPTests: XCTestCase {
         XCTAssertEqual(names, ["scan", "ports_list", "ports_suggest", "mcp_list", "conflicts", "mcp_health", "daemons_list"])
     }
 
+    func testInitializeIncludesCapabilities() async throws {
+        let server = SymScopeMCPServer()
+        let result = try await server.dispatch(method: "initialize")
+        let capabilities = result["capabilities"] as? [String: Any]
+        XCTAssertNotNil(capabilities)
+        XCTAssertNotNil(capabilities?["tools"] as? [String: Any])
+    }
+
     func testPing() async throws {
         let server = SymScopeMCPServer()
         let result = try await server.dispatch(method: "ping")
