@@ -213,4 +213,77 @@ final class AutomationControllerWindowTargetTests: XCTestCase {
         XCTAssertEqual(accessibility.frontmostQueryCount, 0)
         XCTAssertEqual(screen.capturedWindowIDs, [42])
     }
+
+    func testExplicitDisplayAndSpaceScopeSelectsMatchingWindow() throws {
+        let windows = [
+            WindowInfo(
+                windowID: 42,
+                ownerName: backgroundApp.localizedName,
+                ownerPID: backgroundApp.processIdentifier,
+                title: "Document",
+                bounds: RectValue(x: 10, y: 20, width: 800, height: 600),
+                layer: 0,
+                displayID: 1,
+                spaceID: 1
+            ),
+            WindowInfo(
+                windowID: 43,
+                ownerName: backgroundApp.localizedName,
+                ownerPID: backgroundApp.processIdentifier,
+                title: "Document",
+                bounds: RectValue(x: 1920, y: 20, width: 800, height: 600),
+                layer: 0,
+                displayID: 2,
+                spaceID: 3
+            ),
+        ]
+        let resolved = try TargetResolver.resolve(
+            TargetIdentity(processID: backgroundApp.processIdentifier, displayID: 2, spaceID: 3),
+            apps: [backgroundApp],
+            windows: windows,
+            frontmostWindow: { _, _ in nil }
+        )
+
+        XCTAssertEqual(resolved.app.processIdentifier, backgroundApp.processIdentifier)
+        XCTAssertEqual(resolved.window?.windowID, 43)
+        XCTAssertEqual(resolved.window?.displayID, 2)
+        XCTAssertEqual(resolved.window?.spaceID, 3)
+    }
+
+    func testExplicitDisplayAndSpaceScopeRejectsAmbiguousWindows() {
+        let windows = [
+            WindowInfo(
+                windowID: 42,
+                ownerName: backgroundApp.localizedName,
+                ownerPID: backgroundApp.processIdentifier,
+                title: "Document",
+                bounds: RectValue(x: 10, y: 20, width: 800, height: 600),
+                layer: 0,
+                displayID: 2,
+                spaceID: 3
+            ),
+            WindowInfo(
+                windowID: 43,
+                ownerName: backgroundApp.localizedName,
+                ownerPID: backgroundApp.processIdentifier,
+                title: "Other document",
+                bounds: RectValue(x: 820, y: 20, width: 800, height: 600),
+                layer: 0,
+                displayID: 2,
+                spaceID: 3
+            ),
+        ]
+
+        XCTAssertThrowsError(try TargetResolver.resolve(
+            TargetIdentity(processID: backgroundApp.processIdentifier, displayID: 2, spaceID: 3),
+            apps: [backgroundApp],
+            windows: windows,
+            frontmostWindow: { _, _ in nil }
+        )) { error in
+            guard let automationError = error as? AutomationError else {
+                return XCTFail("Expected AutomationError, got \(error)")
+            }
+            XCTAssertEqual(automationError.code, "ambiguous_target")
+        }
+    }
 }

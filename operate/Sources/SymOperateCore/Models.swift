@@ -216,14 +216,29 @@ public struct WindowInfo: Codable, Sendable {
     public let title: String?
     public let bounds: RectValue
     public let layer: Int
+    /// Display containing the window, when the platform can determine it.
+    public let displayID: UInt32?
+    /// macOS Space/workspace identifier, when the platform exposes it.
+    public let spaceID: Int?
 
-    public init(windowID: Int, ownerName: String, ownerPID: Int32, title: String?, bounds: RectValue, layer: Int) {
+    public init(
+        windowID: Int,
+        ownerName: String,
+        ownerPID: Int32,
+        title: String?,
+        bounds: RectValue,
+        layer: Int,
+        displayID: UInt32? = nil,
+        spaceID: Int? = nil
+    ) {
         self.windowID = windowID
         self.ownerName = ownerName
         self.ownerPID = ownerPID
         self.title = title
         self.bounds = bounds
         self.layer = layer
+        self.displayID = displayID
+        self.spaceID = spaceID
     }
 }
 

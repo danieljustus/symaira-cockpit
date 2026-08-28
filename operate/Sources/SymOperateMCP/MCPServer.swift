@@ -701,7 +701,9 @@ private extension MCPServer {
             bundleID: string(arguments["bundle_id"]),
             appName: string(arguments["app_name"]),
             windowID: intOptional(arguments["window_id"]),
-            windowTitle: string(arguments["window_title"]) ?? string(arguments["title"])
+            windowTitle: string(arguments["window_title"]) ?? string(arguments["title"]),
+            displayID: uint32(arguments["display_id"]),
+            spaceID: intOptional(arguments["space_id"])
         )
         return target.isExplicit ? target : nil
     }

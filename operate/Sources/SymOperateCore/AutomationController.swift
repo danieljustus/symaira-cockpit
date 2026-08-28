@@ -207,7 +207,9 @@ public final class AutomationController {
                 bundleID: requested.bundleID,
                 appName: requested.appName,
                 windowID: windowID,
-                windowTitle: requested.windowTitle
+                windowTitle: requested.windowTitle,
+                displayID: requested.displayID,
+                spaceID: requested.spaceID
             )
         }
         guard requested.isExplicit else { return nil }
@@ -240,7 +242,9 @@ public final class AutomationController {
             requestedBundleID: resolved.identity.bundleID,
             requestedAppName: resolved.identity.appName,
             requestedWindowID: resolved.identity.windowID,
-            requestedWindowTitle: resolved.identity.windowTitle
+            requestedWindowTitle: resolved.identity.windowTitle,
+            requestedDisplayID: resolved.identity.displayID,
+            requestedSpaceID: resolved.identity.spaceID
         )
     }
 

@@ -26,6 +26,45 @@ public struct PermissionFlags: OptionSet, Codable, Sendable {
     ]
 }
 
+/// Identity dimensions used to select a least-privilege policy grant.
+public struct PolicyScope: Codable, Equatable, Hashable, Sendable {
+    public let agent: String?
+    public let application: String?
+    public let workflow: String?
+
+    public init(agent: String? = nil, application: String? = nil, workflow: String? = nil) {
+        self.agent = agent
+        self.application = application
+        self.workflow = workflow
+    }
+
+    public init(agentID: String? = nil, applicationID: String? = nil, workflowID: String? = nil) {
+        self.init(agent: agentID, application: applicationID, workflow: workflowID)
+    }
+
+    public var agentID: String? { agent }
+    public var applicationID: String? { application }
+    public var workflowID: String? { workflow }
+
+    public var isEmpty: Bool {
+        agent == nil && application == nil && workflow == nil
+    }
+}
+
+/// A permission ceiling for one or more caller scope dimensions.
+public struct ScopedPermissionGrant: Codable, Equatable, Sendable {
+    public let scope: PolicyScope
+    public let permissions: PermissionFlags
+
+    public init(scope: PolicyScope, permissions: PermissionFlags) {
+        self.scope = scope
+        self.permissions = permissions
+    }
+}
+
+/// Compatibility spelling for callers that refer to a scoped grant directly.
+public typealias ScopedGrant = ScopedPermissionGrant
+
 public struct ActionPolicy: Codable, Sendable {
     public var extraDenyKeywords: Set<String>
     public var allowedKeywords: Set<String>
@@ -35,13 +74,17 @@ public struct ActionPolicy: Codable, Sendable {
     public private(set) var grantedPermissions: PermissionFlags
     /// The immutable ceiling established when the process started.
     public let startupGrantedPermissions: PermissionFlags
+    /// Optional least-privilege ceilings selected by caller, application and workflow.
+    /// Every applicable grant is intersected with the startup ceiling.
+    public var scopedGrants: [ScopedPermissionGrant]
 
     public init(
         extraDenyKeywords: Set<String> = [],
         allowedKeywords: Set<String> = [],
         allowedBundleIDs: Set<String> = [],
         grantedPermissions: PermissionFlags = .all,
-        startupGrantedPermissions: PermissionFlags? = nil
+        startupGrantedPermissions: PermissionFlags? = nil,
+        scopedGrants: [ScopedPermissionGrant] = []
     ) {
         self.extraDenyKeywords = extraDenyKeywords
         self.allowedKeywords = allowedKeywords
@@ -49,6 +92,59 @@ public struct ActionPolicy: Codable, Sendable {
         let startup = startupGrantedPermissions ?? grantedPermissions
         self.startupGrantedPermissions = startup
         self.grantedPermissions = grantedPermissions.intersection(startup)
+        self.scopedGrants = scopedGrants
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case extraDenyKeywords
+        case allowedKeywords
+        case allowedBundleIDs
+        case grantedPermissions
+        case startupGrantedPermissions
+        case scopedGrants
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let granted = try container.decodeIfPresent(PermissionFlags.self, forKey: .grantedPermissions) ?? .all
+        let startup = try container.decodeIfPresent(PermissionFlags.self, forKey: .startupGrantedPermissions) ?? granted
+        self.extraDenyKeywords = try container.decodeIfPresent(Set<String>.self, forKey: .extraDenyKeywords) ?? []
+        self.allowedKeywords = try container.decodeIfPresent(Set<String>.self, forKey: .allowedKeywords) ?? []
+        self.allowedBundleIDs = try container.decodeIfPresent(Set<String>.self, forKey: .allowedBundleIDs) ?? []
+        self.startupGrantedPermissions = startup
+        self.grantedPermissions = granted.intersection(startup)
+        self.scopedGrants = try container.decodeIfPresent([ScopedPermissionGrant].self, forKey: .scopedGrants) ?? []
+    }
+
+    /// Resolves the effective grant using strict intersection semantics.
+    ///
+    /// A configured dimension must be present in the request and match at least
+    /// one grant. This makes omitted or unknown caller identity fail closed.
+    public func effectivePermissions(for scope: PolicyScope? = nil) -> PermissionFlags {
+        var effective = grantedPermissions.intersection(startupGrantedPermissions)
+        guard !scopedGrants.isEmpty else { return effective }
+        let requested = scope ?? PolicyScope(agent: nil, application: nil, workflow: nil)
+        let configuredAgents = scopedGrants.contains { $0.scope.agent != nil }
+        let configuredApplications = scopedGrants.contains { $0.scope.application != nil }
+        let configuredWorkflows = scopedGrants.contains { $0.scope.workflow != nil }
+
+        if configuredAgents {
+            guard let agent = requested.agent,
+                  scopedGrants.contains(where: { $0.scope.agent == agent }) else { return [] }
+        }
+        if configuredApplications {
+            guard let application = requested.application,
+                  scopedGrants.contains(where: { $0.scope.application == application }) else { return [] }
+        }
+        if configuredWorkflows {
+            guard let workflow = requested.workflow,
+                  scopedGrants.contains(where: { $0.scope.workflow == workflow }) else { return [] }
+        }
+
+        for grant in scopedGrants where grant.scope.matches(requested) {
+            effective.formIntersection(grant.permissions)
+        }
+        return effective
     }
 
     /// Replaces the effective grant only when it is a subset of the startup grant.
@@ -71,13 +167,9 @@ public struct ActionPolicy: Codable, Sendable {
     /// then checks the granted permissions for the relevant operation category.
     public func firstViolation(
         role: String? = nil, title: String? = nil, label: String? = nil, value: String? = nil,
-        bundleID: String? = nil, requiredPermission: PermissionFlags? = nil
+        bundleID: String? = nil, requiredPermission: PermissionFlags? = nil,
+        scope: PolicyScope? = nil
     ) -> PermissionFlags? {
-        // Bundle allowlist bypasses everything.
-        if let bundleID, allowedBundleIDs.contains(bundleID) {
-            return nil
-        }
-
         let allDenyKeywords = Self.defaultDenyKeywords.union(extraDenyKeywords)
         let inputs = [role, title, label, value].compactMap { $0?.lowercased() }
         for input in inputs {
@@ -93,7 +185,7 @@ public struct ActionPolicy: Codable, Sendable {
         }
 
         // Check specific permission if requested.
-        if let requiredPermission, !grantedPermissions.contains(requiredPermission) {
+        if let requiredPermission, !effectivePermissions(for: scope).contains(requiredPermission) {
             return requiredPermission
         }
 
@@ -116,6 +208,14 @@ public struct ActionPolicy: Codable, Sendable {
 
     public mutating func allowBundleID(_ bundleID: String) {
         allowedBundleIDs.insert(bundleID)
+    }
+}
+
+private extension PolicyScope {
+    func matches(_ requested: PolicyScope) -> Bool {
+        (agent == nil || agent == requested.agent)
+            && (application == nil || application == requested.application)
+            && (workflow == nil || workflow == requested.workflow)
     }
 }
 
