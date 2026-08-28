@@ -90,7 +90,45 @@ final class SymBrainUsageClientTests: XCTestCase {
         XCTAssertEqual(snapshot.meters.first?.used, Decimal(string: "12.50"))
     }
 
-    func testInvokesExactPublishedCommandAndBridgesKeychainValuesToEnvironment() throws {
+    func testDecodesNullMetersAsAnEmptyMeterList() throws {
+        let payload = #"""
+        {
+          "schema_version": 1,
+          "providers": [{
+            "id": "codex",
+            "display_name": "Codex",
+            "configured": true,
+            "auth_status": {"status": "available", "detail": "ready"},
+            "snapshot": {
+              "provider_id": "codex",
+              "meters": null,
+              "balance": null,
+              "currency": null,
+              "fetched_at": "2026-08-25T12:00:00Z",
+              "source": "oauth"
+            }
+          }]
+        }
+        """#
+        let client = SymBrainUsageClient(
+            runner: RecordingRunner(
+                output: SymBrainCommandResult(
+                    standardOutput: Data(payload.utf8),
+                    standardError: Data(),
+                    terminationStatus: 0
+                ),
+                recorder: Recorder()
+            ),
+            environment: ["PATH": "/usr/bin"],
+            credentialReference: { _ in nil }
+        )
+
+        let report = try client.fetchReport()
+        let snapshot = try XCTUnwrap(report.providers.first?.snapshot)
+        XCTAssertEqual(try snapshot.aiUsageSnapshot().meters, [])
+    }
+
+    func testInvokesExactPublishedCommandAndPassesSymVaultReferenceToEnvironment() throws {
         let recorder = Recorder()
         let client = SymBrainUsageClient(
             runner: RecordingRunner(
@@ -102,26 +140,25 @@ final class SymBrainUsageClientTests: XCTestCase {
                 recorder: recorder
             ),
             environment: ["PATH": "/usr/bin"],
-            keychainReader: { service, account in
-                XCTAssertEqual(service, "com.symaira.symtune")
-                return account == "openrouter-api-key" ? "symvault://vault/openrouter" : nil
+            credentialReference: { providerID in
+                providerID == "openrouter" ? "symvault://symtune/openrouter" : nil
             }
         )
 
         _ = try client.fetchReport()
         XCTAssertEqual(recorder.arguments, ["usage", "--output", "json"])
-        XCTAssertEqual(recorder.environment["OPENROUTER_API_KEY"], "symvault://vault/openrouter")
+        XCTAssertEqual(recorder.environment["OPENROUTER_API_KEY"], "symvault://symtune/openrouter")
     }
 
     func testMissingBinaryIsAnExplicitRuntimeFailure() {
-        let client = SymBrainUsageClient(runner: MissingRunner(), environment: [:], keychainReader: { _, _ in nil })
+        let client = SymBrainUsageClient(runner: MissingRunner(), environment: [:], credentialReference: { _ in nil })
         XCTAssertThrowsError(try client.fetchReport()) { error in
             XCTAssertEqual(error as? SymBrainUsageError, .binaryUnavailable)
         }
     }
 
     func testNonZeroExitIsAnExplicitRuntimeFailureWithoutSurfacingStderr() {
-        let client = SymBrainUsageClient(runner: FailingRunner(), environment: [:], keychainReader: { _, _ in nil })
+        let client = SymBrainUsageClient(runner: FailingRunner(), environment: [:], credentialReference: { _ in nil })
         XCTAssertThrowsError(try client.fetchReport()) { error in
             XCTAssertEqual(error as? SymBrainUsageError, .commandFailed(17))
             XCTAssertFalse(String(describing: error).contains("provider token"))
@@ -139,7 +176,7 @@ final class SymBrainUsageClientTests: XCTestCase {
                 recorder: Recorder()
             ),
             environment: ["PATH": "/usr/bin"],
-            keychainReader: { _, _ in nil }
+            credentialReference: { _ in nil }
         )
         let openrouter = try XCTUnwrap(SymBrainUsageProvider.catalog().first { $0.id == "openrouter" })
         let service = AIUsageService(providers: [openrouter], client: client)
@@ -156,7 +193,7 @@ final class SymBrainUsageClientTests: XCTestCase {
 
     func testMissingBinaryBecomesUnavailableRowsInsteadOfAThrownUIError() async throws {
         let service = AIUsageService(client: SymBrainUsageClient(
-            runner: MissingRunner(), environment: [:], keychainReader: { _, _ in nil }
+            runner: MissingRunner(), environment: [:], credentialReference: { _ in nil }
         ))
 
         let results = await service.usageAll()

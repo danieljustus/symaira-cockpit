@@ -88,6 +88,11 @@ private final class MockOCRServiceForFindUI: OCRServiceProtocol {
     func isAXTreeWeak(nodeCount: Int, threshold: Int) -> Bool { nodeCount <= threshold }
 }
 
+private func testHistoryService() -> HistoryService {
+    HistoryService(fileURL: FileManager.default.temporaryDirectory
+        .appendingPathComponent("symoperate-find-ui-\(UUID().uuidString).jsonl"))
+}
+
 private final class MockUIQueryServiceForFindUI: UIQueryServiceProtocol {
     var stubbedNodes: [UINode]?
 
@@ -131,7 +136,8 @@ final class SymOperateTests: XCTestCase {
             accessibility: mockAccessibility,
             input: MockInputServiceForFindUI(),
             ocr: MockOCRServiceForFindUI(),
-            queryService: mockQueryService
+            queryService: mockQueryService,
+            history: testHistoryService()
         )
 
         let snapshotID = "test-snapshot-id"
@@ -172,7 +178,8 @@ final class SymOperateTests: XCTestCase {
             accessibility: mockAccessibility,
             input: MockInputServiceForFindUI(),
             ocr: MockOCRServiceForFindUI(),
-            queryService: mockQueryService
+            queryService: mockQueryService,
+            history: testHistoryService()
         )
 
         let testNode = UINode(id: "node-1", role: "AXButton", subrole: nil, title: "Test Button", label: nil, value: nil, nodeDescription: nil, frame: nil, actions: [], children: [])
@@ -208,7 +215,8 @@ final class SymOperateTests: XCTestCase {
             accessibility: mockAccessibility,
             input: MockInputServiceForFindUI(),
             ocr: MockOCRServiceForFindUI(),
-            queryService: mockQueryService
+            queryService: mockQueryService,
+            history: testHistoryService()
         )
 
         let testNode = UINode(id: "node-1", role: "AXButton", subrole: nil, title: "Test Button", label: nil, value: nil, nodeDescription: nil, frame: nil, actions: [], children: [])

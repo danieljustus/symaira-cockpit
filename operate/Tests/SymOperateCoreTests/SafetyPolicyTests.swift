@@ -8,6 +8,11 @@ final class SafetyPolicyTests: XCTestCase {
     private var controller: AutomationController!
     private var mockAX: MockAccessibilityService!
 
+    private func testHistory() -> HistoryService {
+        HistoryService(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("symoperate-safety-\(UUID().uuidString).jsonl"))
+    }
+
     override func setUp() {
         super.setUp()
         mockAX = MockAccessibilityService()
@@ -18,7 +23,8 @@ final class SafetyPolicyTests: XCTestCase {
             accessibility: mockAX,
             input: MockInputService(),
             ocr: MockOCRService(),
-            queryService: MockUIQueryService()
+            queryService: MockUIQueryService(),
+            history: testHistory()
         )
     }
 
@@ -605,7 +611,8 @@ extension SafetyPolicyTests {
             input: MockInputService(),
             ocr: MockOCRService(),
             queryService: MockUIQueryService(),
-            actionPolicy: ActionPolicy(grantedPermissions: granted)
+            actionPolicy: ActionPolicy(grantedPermissions: granted),
+            history: testHistory()
         )
     }
 
@@ -733,7 +740,8 @@ extension SafetyPolicyTests {
             input: MockInputService(),
             ocr: MockOCRService(),
             queryService: MockUIQueryService(),
-            actionPolicy: ActionPolicy(grantedPermissions: .all)
+            actionPolicy: ActionPolicy(grantedPermissions: .all),
+            history: testHistory()
         )
         let frame = RectValue(x: 100, y: 100, width: 50, height: 30)
         ax.prepopulate(
