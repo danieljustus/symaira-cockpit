@@ -4,6 +4,17 @@ public enum SymOperateVersion {
     public static let current = "0.6.1"
 }
 
+/// Selects how input events are delivered to macOS.
+///
+/// `automatic` preserves the legacy system-wide event behavior. `background`
+/// is fail-closed and requires a verified target process. `foreground` always
+/// uses the legacy HID event path.
+public enum DeliveryMode: String, Codable, Sendable, CaseIterable {
+    case automatic
+    case background
+    case foreground
+}
+
 public struct PointValue: Codable, Sendable, Equatable {
     public let x: Double
     public let y: Double
@@ -287,10 +298,14 @@ public struct UIQueryResultWithOCR: Codable, Sendable {
 public enum AutomationError: LocalizedError {
     case permissionDenied(String)
     case unavailable(String)
+    case unsupported(String)
+    case unverifiable(String)
     case invalidArgument(String)
     case notFound(String)
     case operationFailed(String)
     case staleReference(String)
+    case targetAmbiguous(String)
+    case targetMismatch(String)
     case preconditionFailed(PredicateEvaluation)
 
     /// A stable, closed-vocabulary machine-readable code for this error case.
@@ -300,10 +315,14 @@ public enum AutomationError: LocalizedError {
         switch self {
         case .permissionDenied:    return "destructive_control_refused"
         case .unavailable:         return "element_not_resolvable"
+        case .unsupported:         return "unsupported_delivery_mode"
+        case .unverifiable:        return "unverifiable_delivery"
         case .invalidArgument:     return "invalid_argument"
         case .notFound:            return "not_found"
         case .operationFailed:     return "operation_failed"
         case .staleReference:      return "stale_snapshot"
+        case .targetAmbiguous:     return "ambiguous_target"
+        case .targetMismatch:      return "target_mismatch"
         case .preconditionFailed:  return "precondition_failed"
         }
     }
@@ -312,10 +331,14 @@ public enum AutomationError: LocalizedError {
         switch self {
         case let .permissionDenied(message),
              let .unavailable(message),
+             let .unsupported(message),
+             let .unverifiable(message),
              let .invalidArgument(message),
              let .notFound(message),
              let .operationFailed(message),
-             let .staleReference(message):
+             let .staleReference(message),
+             let .targetAmbiguous(message),
+             let .targetMismatch(message):
             return message
         case let .preconditionFailed(evaluation):
             return "Action precondition failed (\(evaluation.status.rawValue))."

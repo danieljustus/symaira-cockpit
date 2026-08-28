@@ -6,32 +6,47 @@ public struct InputService: InputServiceProtocol {
     public init() {}
 
     public func click(at point: PointValue, button: String = "left", doubleClick: Bool = false) throws {
+        try click(at: point, button: button, doubleClick: doubleClick, deliveryMode: .automatic, targetProcessID: nil)
+    }
+
+    public func click(at point: PointValue, button: String, doubleClick: Bool, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
         let mouseButton = try parseMouseButton(button)
         let downType: CGEventType = (mouseButton == .left) ? .leftMouseDown : .rightMouseDown
         let upType: CGEventType = (mouseButton == .left) ? .leftMouseUp : .rightMouseUp
 
-        try postMouseEvent(type: .mouseMoved, point: point, button: mouseButton)
+        try postMouseEvent(type: .mouseMoved, point: point, button: mouseButton, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
         for index in 0..<(doubleClick ? 2 : 1) {
-            try postMouseEvent(type: downType, point: point, button: mouseButton, clickState: Int64(index + 1))
-            try postMouseEvent(type: upType, point: point, button: mouseButton, clickState: Int64(index + 1))
+            try postMouseEvent(type: downType, point: point, button: mouseButton, clickState: Int64(index + 1), deliveryMode: deliveryMode, targetProcessID: targetProcessID)
+            try postMouseEvent(type: upType, point: point, button: mouseButton, clickState: Int64(index + 1), deliveryMode: deliveryMode, targetProcessID: targetProcessID)
             Thread.sleep(forTimeInterval: 0.05)
         }
     }
 
     public func drag(from start: PointValue, to end: PointValue, steps: Int = 24) throws {
-        try postMouseEvent(type: .leftMouseDown, point: start, button: .left)
+        try drag(from: start, to: end, steps: steps, deliveryMode: .automatic, targetProcessID: nil)
+    }
+
+    public func drag(from start: PointValue, to end: PointValue, steps: Int, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        try postMouseEvent(type: .leftMouseDown, point: start, button: .left, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
         let stepCount = max(steps, 2)
         for step in 1...stepCount {
             let t = Double(step) / Double(stepCount)
             let x = start.x + ((end.x - start.x) * t)
             let y = start.y + ((end.y - start.y) * t)
-            try postMouseEvent(type: .leftMouseDragged, point: PointValue(x: x, y: y), button: .left)
+            try postMouseEvent(type: .leftMouseDragged, point: PointValue(x: x, y: y), button: .left, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
             Thread.sleep(forTimeInterval: 0.01)
         }
-        try postMouseEvent(type: .leftMouseUp, point: end, button: .left)
+        try postMouseEvent(type: .leftMouseUp, point: end, button: .left, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
     }
 
     public func scroll(deltaX: Double = 0, deltaY: Double) throws {
+        try scroll(deltaX: deltaX, deltaY: deltaY, deliveryMode: .automatic, targetProcessID: nil)
+    }
+
+    public func scroll(deltaX: Double, deltaY: Double, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for scroll is unsupported without a verified target process.")
+        }
         // MCP clients can supply arbitrary JSON numbers. Validate both deltas
         // before converting so malformed input cannot trap the server process.
         let wheel1 = try validatedScrollDelta(deltaY, name: "delta_y")
@@ -47,7 +62,7 @@ public struct InputService: InputServiceProtocol {
         ) else {
             throw AutomationError.operationFailed("Failed to create a scroll event.")
         }
-        event.post(tap: .cghidEventTap)
+        try post(event, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
     }
 
     private func validatedScrollDelta(_ value: Double, name: String) throws -> Int32 {
@@ -67,6 +82,13 @@ public struct InputService: InputServiceProtocol {
     }
 
     public func typeText(_ text: String) throws {
+        try typeText(text, deliveryMode: .automatic, targetProcessID: nil)
+    }
+
+    public func typeText(_ text: String, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        if deliveryMode == .background && (targetProcessID == nil || targetProcessID! <= 0) {
+            throw AutomationError.unsupported("Background delivery for type_text requires a verified target process.")
+        }
         for scalar in text.unicodeScalars {
             guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
                   let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
@@ -76,27 +98,41 @@ public struct InputService: InputServiceProtocol {
             var utf16 = Array(String(scalar).utf16)
             down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
             up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
+            try postKeyboardEvent(down, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
+            try postKeyboardEvent(up, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
         }
     }
 
     public func pressKeys(_ keys: [String]) throws {
+        try pressKeys(keys, deliveryMode: .automatic, targetProcessID: nil)
+    }
+
+    public func pressKeys(_ keys: [String], deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        if deliveryMode == .background && (targetProcessID == nil || targetProcessID! <= 0) {
+            throw AutomationError.unsupported("Background delivery for press_keys requires a verified target process.")
+        }
         guard !keys.isEmpty else {
             throw AutomationError.invalidArgument("press_keys requires at least one key.")
         }
 
         let parsed = KeyboardShortcut.parse(keys)
         if let keyCode = parsed.keyCode {
-            try postKeyCode(keyCode, flags: parsed.flags)
+            try postKeyCode(keyCode, flags: parsed.flags, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
         } else if let text = parsed.fallbackText {
-            try typeText(text)
+            try typeText(text, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
         } else {
             throw AutomationError.invalidArgument("Unable to resolve the requested key sequence \(keys).")
         }
     }
 
-    private func postMouseEvent(type: CGEventType, point: PointValue, button: CGMouseButton, clickState: Int64 = 1) throws {
+    private func postMouseEvent(
+        type: CGEventType,
+        point: PointValue,
+        button: CGMouseButton,
+        clickState: Int64 = 1,
+        deliveryMode: DeliveryMode,
+        targetProcessID: Int32?
+    ) throws {
         guard let event = CGEvent(
             mouseEventSource: nil,
             mouseType: type,
@@ -106,10 +142,10 @@ public struct InputService: InputServiceProtocol {
             throw AutomationError.operationFailed("Failed to create a mouse event.")
         }
         event.setIntegerValueField(.mouseEventClickState, value: clickState)
-        event.post(tap: .cghidEventTap)
+        try post(event, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
     }
 
-    private func postKeyCode(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
+    private func postKeyCode(_ keyCode: CGKeyCode, flags: CGEventFlags, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
         guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
               let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
             throw AutomationError.operationFailed("Failed to create keycode events.")
@@ -117,8 +153,24 @@ public struct InputService: InputServiceProtocol {
 
         down.flags = flags
         up.flags = flags
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+        try postKeyboardEvent(down, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
+        try postKeyboardEvent(up, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
+    }
+
+    private func postKeyboardEvent(_ event: CGEvent, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        try post(event, deliveryMode: deliveryMode, targetProcessID: targetProcessID)
+    }
+
+    private func post(_ event: CGEvent, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        switch deliveryMode {
+        case .automatic, .foreground:
+            event.post(tap: .cghidEventTap)
+        case .background:
+            guard let targetProcessID, targetProcessID > 0 else {
+                throw AutomationError.unsupported("Background delivery requires a verified target process.")
+            }
+            event.postToPid(pid_t(targetProcessID))
+        }
     }
 
     private func parseMouseButton(_ value: String) throws -> CGMouseButton {

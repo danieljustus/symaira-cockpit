@@ -128,6 +128,10 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
                     "window_id": ["type": "integer", "description": "Window ID to capture. When provided, display_id is ignored."],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_title": ["type": "string"],
                 ],
             ]),
             tool("query_ui", description: "Capture a screenshot and accessible UI tree. With no window_id, query the frontmost app; with window_id, query that window in its owning process without falling back to the frontmost app.", input: [
@@ -137,6 +141,10 @@ public final class MCPServer: @unchecked Sendable {
                     "max_nodes": ["type": "integer", "default": 200],
                     "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
                     "window_id": ["type": "integer", "description": "Window ID to capture. When provided, display_id is ignored."],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_title": ["type": "string"],
                 ],
             ]),
             tool("query_ui_ocr", description: "Like query_ui but falls back to Vision OCR when the Accessibility tree is weak. Returns OCR text regions with coordinates.", input: [
@@ -146,6 +154,10 @@ public final class MCPServer: @unchecked Sendable {
                     "max_nodes": ["type": "integer", "default": 200],
                     "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
                     "window_id": ["type": "integer", "description": "Window ID to capture. When provided, display_id is ignored."],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_title": ["type": "string"],
                 ],
             ]),
             tool("find_ui", description: "Search the UI tree by role, title, label, value, subrole, or actions. Supports regex patterns (wrap in /slashes/). When snapshot_id is provided and the snapshot is still cached, reuses the existing snapshot instead of taking a fresh one.", input: [
@@ -161,6 +173,10 @@ public final class MCPServer: @unchecked Sendable {
                     "max_nodes": ["type": "integer", "default": 200],
                     "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
                     "window_id": ["type": "integer", "description": "Window ID to query in its owning process. Omit to query the frontmost app."],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_title": ["type": "string"],
                     "snapshot_id": ["type": "string", "description": "Reuse an existing snapshot only when its target scope matches the request."],
                 ],
             ]),
@@ -173,6 +189,11 @@ public final class MCPServer: @unchecked Sendable {
                     "y": ["type": "number"],
                     "button": ["type": "string", "enum": ["left", "right"]],
                     "double_click": ["type": "boolean"],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                     "precondition": predicateSchema(),
                     "postcondition": predicateSchema(),
                 ],
@@ -183,12 +204,12 @@ public final class MCPServer: @unchecked Sendable {
             ]),
             tool("type_text", description: "Type raw unicode text into the current focused control.", input: [
                 "type": "object",
-                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema()],
+                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema(), "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["text"],
             ]),
             tool("press_keys", description: "Press a keyboard shortcut like [\"cmd\", \"s\"] or [\"return\"].", input: [
                 "type": "object",
-                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema()],
+                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema(), "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["keys"],
             ]),
             tool("scroll", description: "Scroll by pixel deltas.", input: [
@@ -196,6 +217,11 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "delta_x": ["type": "number", "default": 0],
                     "delta_y": ["type": "number"],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                     "precondition": predicateSchema(),
                     "postcondition": predicateSchema(),
                 ],
@@ -211,6 +237,11 @@ public final class MCPServer: @unchecked Sendable {
                     "from_y": ["type": "number"],
                     "to_x": ["type": "number"],
                     "to_y": ["type": "number"],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                     "precondition": predicateSchema(),
                     "postcondition": predicateSchema(),
                 ],
@@ -237,6 +268,9 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
+                    "process_id": ["type": "integer"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                     "title": ["type": "string"],
                     "precondition": predicateSchema(),
                     "postcondition": predicateSchema(),
@@ -250,6 +284,11 @@ public final class MCPServer: @unchecked Sendable {
                 "type": "object",
                 "properties": [
                     "path": ["type": "array", "items": ["type": "string"]],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                     "precondition": predicateSchema(),
                     "postcondition": predicateSchema(),
                 ],
@@ -261,6 +300,11 @@ public final class MCPServer: @unchecked Sendable {
                     "text": ["type": "string"],
                     "app": ["type": "string"],
                     "timeout_seconds": ["type": "number", "default": 10],
+                    "process_id": ["type": "integer"],
+                    "bundle_id": ["type": "string"],
+                    "app_name": ["type": "string"],
+                    "window_id": ["type": "integer"],
+                    "window_title": ["type": "string"],
                 ],
             ]),
             tool("permissions_status", description: "Report screen recording and accessibility permission status.", input: [:]),
@@ -351,7 +395,8 @@ public final class MCPServer: @unchecked Sendable {
         case "snapshot":
             payload = try controller.snapshot(
                 displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"])
+                windowID: intOptional(arguments["window_id"]),
+                target: targetIdentity(arguments)
             )
         case "list_apps":
             payload = controller.listApps()
@@ -364,14 +409,16 @@ public final class MCPServer: @unchecked Sendable {
                 maxDepth: int(arguments["max_depth"], default: 4),
                 maxNodes: int(arguments["max_nodes"], default: 200),
                 displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"])
+                windowID: intOptional(arguments["window_id"]),
+                target: targetIdentity(arguments)
             )
         case "query_ui_ocr":
             payload = try controller.queryUIWithOCR(
                 maxDepth: int(arguments["max_depth"], default: 4),
                 maxNodes: int(arguments["max_nodes"], default: 200),
                 displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"])
+                windowID: intOptional(arguments["window_id"]),
+                target: targetIdentity(arguments)
             )
         case "click":
             payload = try controller.click(
@@ -381,23 +428,27 @@ public final class MCPServer: @unchecked Sendable {
                 y: double(arguments["y"]),
                 button: string(arguments["button"]) ?? "left",
                 doubleClick: bool(arguments["double_click"], default: false),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "type_text":
             payload = try controller.typeText(
                 requireString(arguments["text"], name: "text"),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "press_keys":
             payload = try controller.pressKeys(
                 requireStringArray(arguments["keys"], name: "keys"),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "scroll":
             payload = try controller.scroll(
                 deltaX: double(arguments["delta_x"]) ?? 0,
                 deltaY: requireDouble(arguments["delta_y"], name: "delta_y"),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "drag":
             payload = try controller.drag(
@@ -408,7 +459,8 @@ public final class MCPServer: @unchecked Sendable {
                 fromY: double(arguments["from_y"]),
                 toX: double(arguments["to_x"]),
                 toY: double(arguments["to_y"]),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "launch_app":
             payload = try controller.launchApp(
@@ -421,18 +473,21 @@ public final class MCPServer: @unchecked Sendable {
                 bundleID: string(arguments["bundle_id"]),
                 appName: string(arguments["app_name"]),
                 title: string(arguments["title"]),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "menu_action":
             payload = try controller.menuAction(
                 path: requireStringArray(arguments["path"], name: "path"),
-                conditions: try actionConditions(arguments)
+                conditions: try actionConditions(arguments),
+                target: targetIdentity(arguments)
             )
         case "wait_for":
             payload = try await controller.waitFor(
                 text: string(arguments["text"]),
                 app: string(arguments["app"]),
-                timeoutSeconds: double(arguments["timeout_seconds"]) ?? 10
+                timeoutSeconds: double(arguments["timeout_seconds"]) ?? 10,
+                target: targetIdentity(arguments)
             )
         case "permissions_status":
             payload = controller.permissionsStatus()
@@ -489,7 +544,8 @@ public final class MCPServer: @unchecked Sendable {
                 maxDepth: int(arguments["max_depth"], default: 4),
                 maxNodes: int(arguments["max_nodes"], default: 200),
                 displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"])
+                windowID: intOptional(arguments["window_id"]),
+                target: targetIdentity(arguments)
             )
         case "version":
             let checker = UpdateChecker()
@@ -619,6 +675,17 @@ public final class MCPServer: @unchecked Sendable {
 }
 
 private extension MCPServer {
+    func targetIdentity(_ arguments: [String: Any]) -> TargetIdentity? {
+        let target = TargetIdentity(
+            processID: int32(arguments["process_id"]),
+            bundleID: string(arguments["bundle_id"]),
+            appName: string(arguments["app_name"]),
+            windowID: intOptional(arguments["window_id"]),
+            windowTitle: string(arguments["window_title"]) ?? string(arguments["title"])
+        )
+        return target.isExplicit ? target : nil
+    }
+
     func actionConditions(_ arguments: [String: Any]) throws -> ActionConditions? {
         guard arguments["precondition"] != nil || arguments["postcondition"] != nil else { return nil }
         return ActionConditions(
@@ -699,6 +766,11 @@ private extension MCPServer {
     func intOptional(_ value: Any?) -> Int? {
         if let n = value as? NSNumber { return n.intValue }
         return (value as? String).flatMap(Int.init)
+    }
+
+    func int32(_ value: Any?) -> Int32? {
+        if let n = value as? NSNumber { return n.int32Value }
+        return (value as? String).flatMap(Int32.init)
     }
 
     func int(_ value: Any?, default defaultValue: Int) -> Int {

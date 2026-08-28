@@ -61,11 +61,10 @@ public final class AutomationController {
         screen.listDisplays()
     }
 
-    public func snapshot(displayID: UInt32? = nil, windowID: Int? = nil) throws -> Snapshot {
+    public func snapshot(displayID: UInt32? = nil, windowID: Int? = nil, target: TargetIdentity? = nil) throws -> Snapshot {
         try requirePermission(.capture, for: "snapshot")
-        if let windowID {
-            _ = try windowInfo(for: windowID)
-            return try screen.captureWindow(windowID: windowID)
+        if let resolved = try resolveWindowTarget(target, windowID: windowID) {
+            return try screen.captureWindow(windowID: resolved.window!.windowID)
         }
         if let displayID {
             return try screen.captureDisplay(displayID: displayID)
@@ -73,22 +72,22 @@ public final class AutomationController {
         return try screen.captureMainDisplay()
     }
 
-    public func queryUI(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil) throws -> UIQueryResult {
-        let target = try windowID.map { try windowInfo(for: $0) }
-        let snapshot = try self.snapshot(displayID: displayID, windowID: windowID)
+    public func queryUI(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil, target: TargetIdentity? = nil) throws -> UIQueryResult {
+        let resolved = try resolveWindowTarget(target, windowID: windowID)
+        let snapshot = try self.snapshot(displayID: displayID, windowID: resolved?.window?.windowID)
         accessibility.storeSnapshot(snapshot, for: snapshot.id)
         let nodes: [UINode]
         let app: AppInfo?
-        if let target {
+        if let resolved, let window = resolved.window {
             nodes = try accessibility.queryUI(
                 snapshotID: snapshot.id,
-                processID: target.ownerPID,
-                windowID: target.windowID,
-                windowBounds: target.bounds,
+                processID: resolved.app.processIdentifier,
+                windowID: window.windowID,
+                windowBounds: window.bounds,
                 maxDepth: maxDepth,
                 maxNodes: maxNodes
             )
-            app = appInfo(for: target)
+            app = resolved.app
         } else {
             nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
             app = apps.frontmostApp()
@@ -96,22 +95,22 @@ public final class AutomationController {
         return UIQueryResult(snapshot: snapshot, app: app, nodes: nodes)
     }
 
-    public func queryUIWithOCR(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil) throws -> UIQueryResultWithOCR {
-        let target = try windowID.map { try windowInfo(for: $0) }
-        let snapshot = try self.snapshot(displayID: displayID, windowID: windowID)
+    public func queryUIWithOCR(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil, target: TargetIdentity? = nil) throws -> UIQueryResultWithOCR {
+        let resolved = try resolveWindowTarget(target, windowID: windowID)
+        let snapshot = try self.snapshot(displayID: displayID, windowID: resolved?.window?.windowID)
         accessibility.storeSnapshot(snapshot, for: snapshot.id)
         let nodes: [UINode]
         let app: AppInfo?
-        if let target {
+        if let resolved, let window = resolved.window {
             nodes = try accessibility.queryUI(
                 snapshotID: snapshot.id,
-                processID: target.ownerPID,
-                windowID: target.windowID,
-                windowBounds: target.bounds,
+                processID: resolved.app.processIdentifier,
+                windowID: window.windowID,
+                windowBounds: window.bounds,
                 maxDepth: maxDepth,
                 maxNodes: maxNodes
             )
-            app = appInfo(for: target)
+            app = resolved.app
         } else {
             nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
             app = apps.frontmostApp()
@@ -152,10 +151,12 @@ public final class AutomationController {
         maxDepth: Int = 4,
         maxNodes: Int = 200,
         displayID: UInt32? = nil,
-        windowID: Int? = nil
+        windowID: Int? = nil,
+        target: TargetIdentity? = nil
     ) throws -> UIQueryResult {
         try requirePermission(.capture, for: "find_ui")
-        let target = try windowID.map { try windowInfo(for: $0) }
+        let resolvedTarget = try resolveWindowTarget(target, windowID: windowID)
+        let target = resolvedTarget?.window
         let queryResult: UIQueryResult
         if let snapshotID, accessibility.hasCachedNodes(for: snapshotID),
            let cachedNodes = accessibility.cachedNodes(for: snapshotID),
@@ -165,13 +166,13 @@ public final class AutomationController {
             // target window snapshot must carry both its window and owner PID;
             // an unscoped/frontmost snapshot is never valid for a window query.
             let matched = queryService.findNodes(in: cachedNodes, predicate: predicate)
-            return UIQueryResult(snapshot: cachedSnapshot, app: target.map(appInfo(for:)), nodes: matched)
+            return UIQueryResult(snapshot: cachedSnapshot, app: resolvedTarget?.app ?? target.map(appInfo(for:)), nodes: matched)
         } else {
             queryResult = try queryUI(
                 maxDepth: maxDepth,
                 maxNodes: maxNodes,
                 displayID: displayID,
-                windowID: windowID
+                windowID: resolvedTarget?.window?.windowID
             )
         }
         let matched = queryService.findNodes(in: queryResult.nodes, predicate: predicate)
@@ -193,6 +194,54 @@ public final class AutomationController {
             throw AutomationError.unavailable("Window \(windowID) has no resolvable owning process.")
         }
         return window
+    }
+
+    private func resolveWindowTarget(_ target: TargetIdentity?, windowID: Int?) throws -> ResolvedTarget? {
+        var requested = target ?? TargetIdentity()
+        if let windowID {
+            if let requestedWindowID = requested.windowID, requestedWindowID != windowID {
+                throw AutomationError.targetMismatch("Conflicting window identities were provided (\(requestedWindowID) and \(windowID)).")
+            }
+            requested = TargetIdentity(
+                processID: requested.processID,
+                bundleID: requested.bundleID,
+                appName: requested.appName,
+                windowID: windowID,
+                windowTitle: requested.windowTitle
+            )
+        }
+        guard requested.isExplicit else { return nil }
+        let resolved = try apps.resolveTarget(requested)
+        guard resolved.window != nil else {
+            throw AutomationError.notFound("The requested target has no resolvable window.")
+        }
+        return resolved
+    }
+
+    private func resolveActionTarget(_ target: TargetIdentity?, snapshotID: String? = nil) throws -> ResolvedTarget? {
+        guard let target, target.isExplicit else { return nil }
+        let resolved = try apps.resolveTarget(target)
+        if let snapshotID {
+            guard let snapshot = accessibility.cachedSnapshot(for: snapshotID) else {
+                throw AutomationError.staleReference("The referenced snapshot has expired or is unavailable for the requested target.")
+            }
+            if let window = resolved.window,
+               (snapshot.windowID != window.windowID || snapshot.windowOwnerPID != resolved.app.processIdentifier) {
+                throw AutomationError.targetMismatch("The requested target does not match snapshot '\(snapshotID)'.")
+            }
+        }
+        return resolved
+    }
+
+    private func actionTarget(for resolved: ResolvedTarget?) -> ActionTarget? {
+        guard let resolved else { return nil }
+        return ActionTarget(
+            requestedPID: resolved.identity.processID,
+            requestedBundleID: resolved.identity.bundleID,
+            requestedAppName: resolved.identity.appName,
+            requestedWindowID: resolved.identity.windowID,
+            requestedWindowTitle: resolved.identity.windowTitle
+        )
     }
 
     private func appInfo(for window: WindowInfo) -> AppInfo {
@@ -237,6 +286,7 @@ public final class AutomationController {
         conditions: ActionConditions? = nil,
         snapshotID: String? = nil,
         windowID: Int? = nil,
+        deliveryMode: DeliveryMode = .automatic,
         action: () throws -> String
     ) throws -> ActionResult {
         var preconditionEvaluation: PredicateEvaluation?
@@ -316,6 +366,7 @@ public final class AutomationController {
                 effect: decision.effect,
                 verification: decision.verification,
                 executionPath: executionPath,
+                deliveryMode: deliveryMode,
                 target: decision.target ?? target,
                 conditions: conditionResult
             )
@@ -391,7 +442,9 @@ public final class AutomationController {
         y: Double? = nil,
         button: String = "left",
         doubleClick: Bool = false,
-        conditions: ActionConditions? = nil
+        conditions: ActionConditions? = nil,
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
     ) throws -> ActionResult {
         try requirePermission(.input, for: "click")
         var targets: [String: String] = ["button": button, "doubleClick": String(doubleClick)]
@@ -399,40 +452,47 @@ public final class AutomationController {
         if let elementID { targets["elementID"] = elementID }
         if let x { targets["x"] = String(x) }
         if let y { targets["y"] = String(y) }
+        let resolvedTarget = try resolveActionTarget(target, snapshotID: snapshotID)
 
-        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", conditions: conditions, snapshotID: snapshotID) {
+        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             let target = try resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
-            try input.click(at: target, button: button, doubleClick: doubleClick)
+            try input.click(at: target, button: button, doubleClick: doubleClick, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Click event posted at (\(Int(target.x)), \(Int(target.y)))."
         }
     }
 
-    public func typeText(_ text: String, conditions: ActionConditions? = nil) throws -> ActionResult {
+    public func typeText(_ text: String, conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "type_text")
         let redacted = "<redacted: \(text.count) chars>"
-        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event", conditions: conditions) {
+        let resolvedTarget = try resolveActionTarget(target)
+        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
+            if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
             guard !text.isEmpty else {
                 throw AutomationError.invalidArgument("type_text requires a non-empty text argument.")
             }
             try guardAgainstSecureField()
-            try input.typeText(text)
+            try input.typeText(text, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "\(text.count) keystroke events posted."
         }
     }
 
-    public func pressKeys(_ keys: [String], conditions: ActionConditions? = nil) throws -> ActionResult {
+    public func pressKeys(_ keys: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "press_keys")
-        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event", conditions: conditions) {
+        let resolvedTarget = try resolveActionTarget(target)
+        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
+            if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
             try guardAgainstSecureField()
-            try input.pressKeys(keys)
+            try input.pressKeys(keys, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Key events posted: \(keys.joined(separator: "+"))."
         }
     }
 
-    public func scroll(deltaX: Double = 0, deltaY: Double, conditions: ActionConditions? = nil) throws -> ActionResult {
+    public func scroll(deltaX: Double = 0, deltaY: Double, conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "scroll")
-        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event", conditions: conditions) {
-            try input.scroll(deltaX: deltaX, deltaY: deltaY)
+        let resolvedTarget = try resolveActionTarget(target)
+        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
+            if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
+            try input.scroll(deltaX: deltaX, deltaY: deltaY, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Scroll event posted with delta (\(deltaX), \(deltaY))."
         }
     }
@@ -445,7 +505,9 @@ public final class AutomationController {
         fromY: Double? = nil,
         toX: Double? = nil,
         toY: Double? = nil,
-        conditions: ActionConditions? = nil
+        conditions: ActionConditions? = nil,
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
     ) throws -> ActionResult {
         try requirePermission(.input, for: "drag")
         var targets: [String: String] = [:]
@@ -456,11 +518,12 @@ public final class AutomationController {
         if let fromY { targets["fromY"] = String(fromY) }
         if let toX { targets["toX"] = String(toX) }
         if let toY { targets["toY"] = String(toY) }
+        let resolvedTarget = try resolveActionTarget(target, snapshotID: snapshotID)
 
-        return try executeAction(name: "drag", targets: targets, conditions: conditions, snapshotID: snapshotID) {
+        return try executeAction(name: "drag", targets: targets, target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             let start = try resolvePoint(snapshotID: snapshotID, elementID: fromElementID, x: fromX, y: fromY)
             let end = try resolvePoint(snapshotID: snapshotID, elementID: toElementID, x: toX, y: toY)
-            try input.drag(from: start, to: end, steps: 24)
+            try input.drag(from: start, to: end, steps: 24, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Drag event posted from (\(Int(start.x)), \(Int(start.y))) to (\(Int(end.x)), \(Int(end.y)))."
         }
     }
@@ -477,28 +540,32 @@ public final class AutomationController {
         }
     }
 
-    public func focusWindow(bundleID: String? = nil, appName: String? = nil, title: String? = nil, conditions: ActionConditions? = nil) throws -> ActionResult {
+    public func focusWindow(
+        bundleID: String? = nil,
+        appName: String? = nil,
+        title: String? = nil,
+        conditions: ActionConditions? = nil,
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
+    ) throws -> ActionResult {
         try requirePermission(.appControl, for: "focus_window")
-        var targets: [String: String] = [:]
-        if let bundleID { targets["bundleID"] = bundleID }
-        if let appName { targets["appName"] = appName }
-        if let title { targets["title"] = title }
-
-        let requestedApp = apps.listApps().first { app in
-            if let bundleID, !bundleID.isEmpty { return app.bundleIdentifier == bundleID }
-            if let appName, !appName.isEmpty { return app.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame }
-            return false
-        }
-        let requestedTarget = ActionTarget(
-            requestedPID: requestedApp?.processIdentifier,
+        let requested = target ?? TargetIdentity(bundleID: bundleID, appName: appName, windowTitle: title)
+        let resolved = try requested.isExplicit ? apps.resolveTarget(requested) : nil
+        let requestedTarget = actionTarget(for: resolved) ?? ActionTarget(
             requestedBundleID: bundleID,
             requestedAppName: appName,
             requestedWindowTitle: title
         )
-
+        let requestedBundleID = resolved?.app.bundleIdentifier ?? bundleID
+        let requestedAppName = resolved?.app.localizedName ?? appName
+        let requestedTitle = resolved?.window?.title ?? title
         return try executeAction(
             name: "focus_window",
-            targets: targets,
+            targets: [
+                "bundleID": requestedBundleID ?? "",
+                "appName": requestedAppName ?? "",
+                "title": requestedTitle ?? ""
+            ],
             executionPath: "nsworkspace_ax",
             target: requestedTarget,
             verification: {
@@ -510,17 +577,18 @@ public final class AutomationController {
                         target: requestedTarget
                     )
                 }
-                let appMatches: Bool
-                if let bundleID, !bundleID.isEmpty { appMatches = frontmost.bundleIdentifier == bundleID }
-                else if let appName, !appName.isEmpty { appMatches = frontmost.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame }
-                else { appMatches = true }
-                let observedWindow = self.apps.frontmostWindow(ownerPID: frontmost.processIdentifier, title: title)
-                let windowMatches = title?.isEmpty != false || observedWindow != nil
+                let appMatches = (requestedBundleID == nil || frontmost.bundleIdentifier == requestedBundleID)
+                    && (requestedAppName == nil || frontmost.localizedName.localizedCaseInsensitiveCompare(requestedAppName!) == .orderedSame)
+                let observedWindow = self.apps.frontmostWindow(ownerPID: frontmost.processIdentifier, title: requestedTitle)
+                let windowMatches = requested.windowID == nil
+                    ? (requestedTitle?.isEmpty != false || observedWindow != nil)
+                    : observedWindow?.windowID == requested.windowID
                 let observedTarget = ActionTarget(
-                    requestedPID: requestedApp?.processIdentifier,
-                    requestedBundleID: bundleID,
-                    requestedAppName: appName,
-                    requestedWindowTitle: title,
+                    requestedPID: requested.processID ?? resolved?.app.processIdentifier,
+                    requestedBundleID: requested.bundleID ?? requestedBundleID,
+                    requestedAppName: requested.appName ?? requestedAppName,
+                    requestedWindowID: requested.windowID,
+                    requestedWindowTitle: requested.windowTitle ?? requestedTitle,
                     frontmostPID: frontmost.processIdentifier,
                     frontmostWindowID: observedWindow?.windowID
                 )
@@ -539,22 +607,36 @@ public final class AutomationController {
                     target: observedTarget
                 )
             },
-            conditions: conditions
+            conditions: conditions,
+            windowID: resolved?.window?.windowID
         ) {
-            try self.apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
+            if requested.isExplicit {
+                _ = try self.apps.focusTarget(requested)
+            } else {
+                try self.apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
+            }
             return "Window-focus request submitted."
         }
     }
 
-    public func menuAction(path: [String], conditions: ActionConditions? = nil) throws -> ActionResult {
+    public func menuAction(path: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.menuAction, for: "menu_action")
-        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "cg_event", conditions: conditions) {
-            try accessibility.performMenuAction(path: path)
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for menu_action is unsupported because menu actions are scoped to the frontmost application.")
+        }
+        let resolvedTarget = try resolveActionTarget(target)
+        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
+            if let processID = resolvedTarget?.app.processIdentifier {
+                try self.accessibility.performMenuAction(path: path, processID: processID)
+            } else {
+                try self.accessibility.performMenuAction(path: path)
+            }
             return "Menu action posted: \(path.joined(separator: " > "))."
         }
     }
 
-    public func waitFor(text: String?, app: String?, timeoutSeconds: Double = 10) async throws -> ActionResult {
+    public func waitFor(text: String?, app: String?, timeoutSeconds: Double = 10, target: TargetIdentity? = nil) async throws -> ActionResult {
+        let resolvedTarget = try target.flatMap { $0.isExplicit ? try apps.resolveTarget($0) : nil }
         accessibility.invalidatePollingCache()
 
         let observer = NSWorkspace.shared.notificationCenter.addObserver(
@@ -569,16 +651,26 @@ public final class AutomationController {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         while Date() < deadline {
             if let app, !app.isEmpty {
-                let exists = apps.listApps().contains {
-                    $0.localizedName.localizedCaseInsensitiveContains(app) || ($0.bundleIdentifier?.localizedCaseInsensitiveContains(app) ?? false)
+                let exists: Bool
+                if let resolvedTarget {
+                    exists = resolvedTarget.app.localizedName.localizedCaseInsensitiveContains(app)
+                        || (resolvedTarget.app.bundleIdentifier?.localizedCaseInsensitiveContains(app) ?? false)
+                } else {
+                    exists = apps.listApps().contains {
+                        $0.localizedName.localizedCaseInsensitiveContains(app) || ($0.bundleIdentifier?.localizedCaseInsensitiveContains(app) ?? false)
+                    }
                 }
                 if exists {
                     return ActionResult(ok: true, message: "Observed app '\(app)'.", snapshot: try? screen.captureMainDisplay())
                 }
             }
 
-            if let text, !text.isEmpty, accessibility.frontmostContainsTextPolling(text) {
-                return ActionResult(ok: true, message: "Observed text '\(text)'.", snapshot: try? screen.captureMainDisplay())
+            if let text, !text.isEmpty {
+                let found = resolvedTarget.map { accessibility.containsText(text, processID: $0.app.processIdentifier) }
+                    ?? accessibility.frontmostContainsTextPolling(text)
+                if found {
+                    return ActionResult(ok: true, message: "Observed text '\(text)'.", snapshot: try? screen.captureMainDisplay())
+                }
             }
 
             try await Task.sleep(nanoseconds: 400_000_000) // 0.4 seconds

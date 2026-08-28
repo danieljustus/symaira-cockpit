@@ -166,6 +166,13 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         return searchText(in: axApp, needle: text.lowercased(), remainingDepth: 6, seen: &seen, maxNodes: 300)
     }
 
+    public func containsText(_ text: String, processID: Int32) -> Bool {
+        guard AXIsProcessTrusted(), processID > 0 else { return false }
+        let axApp = AXUIElementCreateApplication(processID)
+        var seen = 0
+        return searchText(in: axApp, needle: text.lowercased(), remainingDepth: 6, seen: &seen, maxNodes: 300)
+    }
+
     public func frontmostContainsTextPolling(_ text: String) -> Bool {
         guard AXIsProcessTrusted(), let app = NSWorkspace.shared.frontmostApplication else { return false }
         let pid = app.processIdentifier
@@ -196,19 +203,32 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
     }
 
     public func performMenuAction(path: [String]) throws {
+        try performMenuAction(path: path, processID: nil)
+    }
+
+    public func performMenuAction(path: [String], processID: Int32) throws {
+        try performMenuAction(path: path, processID: Optional(processID))
+    }
+
+    private func performMenuAction(path: [String], processID: Int32?) throws {
         guard AXIsProcessTrusted() else {
             throw AutomationError.permissionDenied("Accessibility permission is required for menu_action.")
         }
         guard !path.isEmpty else {
             throw AutomationError.invalidArgument("menu_action requires a non-empty path.")
         }
-        guard let app = NSWorkspace.shared.frontmostApplication else {
+        let resolvedPID: Int32
+        if let processID {
+            resolvedPID = processID
+        } else if let app = NSWorkspace.shared.frontmostApplication {
+            resolvedPID = app.processIdentifier
+        } else {
             throw AutomationError.notFound("No frontmost application is available.")
         }
 
-        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        let axApp = AXUIElementCreateApplication(resolvedPID)
         guard let menuBar = axCopyElement(axApp, attribute: kAXMenuBarAttribute) else {
-            throw AutomationError.notFound("The frontmost app does not expose an accessible menu bar.")
+            throw AutomationError.notFound("The target application does not expose an accessible menu bar.")
         }
 
         let destructiveKeywords = ActionPolicy.defaultDenyKeywords

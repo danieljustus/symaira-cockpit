@@ -54,6 +54,8 @@ public protocol AccessibilityServiceProtocol {
     /// Reset the polling cache (e.g. when the frontmost application changes).
     func invalidatePollingCache()
     func performMenuAction(path: [String]) throws
+    func performMenuAction(path: [String], processID: Int32) throws
+    func containsText(_ text: String, processID: Int32) -> Bool
 }
 
 extension AccessibilityServiceProtocol {
@@ -73,6 +75,12 @@ extension AccessibilityServiceProtocol {
     }
 
     public func invalidatePollingCache() {}
+
+    public func performMenuAction(path: [String], processID: Int32) throws {
+        throw AutomationError.unavailable("The accessibility service cannot resolve process \(processID) for a targeted menu action.")
+    }
+
+    public func containsText(_ text: String, processID: Int32) -> Bool { false }
 }
 
 // MARK: - Input Service
@@ -83,6 +91,49 @@ public protocol InputServiceProtocol {
     func pressKeys(_ keys: [String]) throws
     func scroll(deltaX: Double, deltaY: Double) throws
     func drag(from start: PointValue, to end: PointValue, steps: Int) throws
+
+    func click(at point: PointValue, button: String, doubleClick: Bool, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func typeText(_ text: String, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func pressKeys(_ keys: [String], deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func scroll(deltaX: Double, deltaY: Double, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func drag(from start: PointValue, to end: PointValue, steps: Int, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+}
+
+public extension InputServiceProtocol {
+    func click(at point: PointValue, button: String, doubleClick: Bool, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for click requires an input service with a verified target process.")
+        }
+        try click(at: point, button: button, doubleClick: doubleClick)
+    }
+
+    func typeText(_ text: String, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for type_text is unsupported without a verified target process.")
+        }
+        try typeText(text)
+    }
+
+    func pressKeys(_ keys: [String], deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for press_keys is unsupported without a verified target process.")
+        }
+        try pressKeys(keys)
+    }
+
+    func scroll(deltaX: Double, deltaY: Double, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for scroll is unsupported without a verified target process.")
+        }
+        try scroll(deltaX: deltaX, deltaY: deltaY)
+    }
+
+    func drag(from start: PointValue, to end: PointValue, steps: Int, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for drag requires an input service with a verified target process.")
+        }
+        try drag(from: start, to: end, steps: steps)
+    }
 }
 
 // MARK: - App Service
@@ -93,11 +144,31 @@ public protocol AppServiceProtocol {
     func frontmostApp() -> AppInfo?
     /// Returns the topmost matching window when the platform exposes ordering.
     func frontmostWindow(ownerPID: Int32, title: String?) -> WindowInfo?
+    /// Resolves an explicit identity. Implementations must not use frontmost fallback.
+    func resolveTarget(_ target: TargetIdentity) throws -> ResolvedTarget
     func launchApp(bundleID: String?, appName: String?) throws
     func focusWindow(bundleID: String?, appName: String?, title: String?) throws
+    /// Resolves and focuses an explicit identity.
+    func focusTarget(_ target: TargetIdentity) throws -> ResolvedTarget
 }
 
 extension AppServiceProtocol {
+    public func resolveTarget(_ target: TargetIdentity) throws -> ResolvedTarget {
+        try TargetResolver.resolve(target, apps: listApps(), windows: listWindows(), frontmostWindow: { pid, title in
+            frontmostWindow(ownerPID: pid, title: title)
+        })
+    }
+
+    public func focusTarget(_ target: TargetIdentity) throws -> ResolvedTarget {
+        let resolved = try resolveTarget(target)
+        try focusWindow(
+            bundleID: resolved.app.bundleIdentifier,
+            appName: resolved.app.localizedName,
+            title: resolved.window?.title
+        )
+        return resolved
+    }
+
     public func frontmostWindow(ownerPID: Int32, title: String? = nil) -> WindowInfo? {
         listWindows().first { window in
             guard window.ownerPID == ownerPID else { return false }
