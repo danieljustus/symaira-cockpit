@@ -1,83 +1,92 @@
-# Contributing to SymTune
+# Contributing to Symaira Cockpit
 
-Thanks for your interest in contributing to SymTune! This document covers
-Swift package development, testing, and the credential-resolution conventions.
+Thanks for contributing to Symaira Cockpit. This repository ships one native
+macOS command-line binary, `symcockpit`, with `tune`, `operate`, and `scope`
+families, plus the `SymCockpitApp` menu-bar GUI.
 
 ## Prerequisites
 
-- **macOS 14+** or **Linux** with Swift 6.1+ toolchain
-- **Xcode 26.4+** (macOS) — select via:
-  ```bash
-  export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
-  ```
+- macOS 15 or newer
+- Swift 6 and Xcode 26.4 or newer
+- A checkout of this repository
 
-## Quick start
+Select the full Xcode toolchain when needed:
 
 ```bash
-# Build
-swift build --package-path tune
-
-# Test (all platforms)
-swift test --package-path tune
-
-# Test with verbose output
-swift test --package-path tune --verbose
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 ```
 
-## Project structure
+The project is macOS-only because it uses AppKit, IOKit, Accessibility, and
+ScreenCaptureKit APIs.
+
+## Repository layout
 
 ```
-tune/
-  Sources/
-    SymTuneCore/    # Core logic: providers, models, credential resolution
-    SymTuneUI/      # Swift Package plugins (e.g. APIKeyField for Xcode build phases)
-    SymTuneCLI/     # CLI entry point (swift-cli-plugin for `xcodebuild` integration)
-  Tests/
-    SymTuneCoreTests/  # Unit tests (757 tests)
-    SymTuneCoreIntegrationTests/  # Integration tests against live APIs
+Sources/symcockpit/       # unified dispatcher and version reporting
+Sources/SymCockpitApp/    # SwiftUI/AppKit menu-bar and cockpit window
+Tests/                    # dispatcher and GUI integration tests
+tune/                     # thermals, power, display, and Tune UI package
+  Sources/SymTuneCore/    # hardware and configuration logic
+  Sources/SymTuneUI/      # shared menu-bar panel
+  Sources/SymTuneCLI/     # Tune command library
+operate/                  # macOS GUI automation package
+  Sources/SymOperateCore/ # Accessibility, input, app, and permission logic
+  Sources/SymOperateMCP/  # Operate MCP transport
+  Sources/SymOperateCLI/  # Operate command library
+scope/                    # ports, containers, and MCP inventory package
 ```
 
-## Credential resolution (issue #18)
+The nested packages remain independently buildable for package-level
+compatibility, but only `symcockpit` is the shipped CLI binary.
 
-All providers use `DefaultCredentialResolver` for credential resolution with this
-precedence chain:
+## Build and test
 
-1. **symvault op:// reference** — resolved via `symvault get <ref> --print`
-2. **Environment variable** — e.g. `OPENROUTER_API_KEY`
-3. **Keychain** — service `com.symaira.symtune`, account varies by provider
+Run the complete workspace checks with the repository Makefile:
 
-New providers should conform to `AIUsageProvider` and implement:
-- `credentialSource: String` — returns provider ID (e.g. `"openrouter"`)
-- `credentialDescriptor: AIUsageCredentialDescriptor?` — describes what credentials are needed
-- `credentialResolver.resolve(opReference:envKey:keychainService:keychainAccount:)` — delegates to the standard resolver
+```bash
+make build
+make test
+```
 
-## Testing conventions
+To work on one package:
 
-- Every new public API needs unit tests in `SymTuneCoreTests/`
-- Use `@testable import SymTuneCore` with `NewRootCmd` pattern for CLI tests
-- Tests run on Linux CI — `XCTMain` is not used; Swift Testing discovers automatically
-- `CredentialResolverTests` covers all resolution paths (op://, env, keychain, fallback)
-- 8 tests, all passing ✅
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build --package-path tune
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test --package-path tune
+```
 
-## CI / CD
+Use the equivalent `operate` or `scope` path for those packages. For root
+changes, run both commands from the repository root:
 
-- GitHub Actions CI runs on every PR: build + test (757 tests)
-- CodeQL runs on push to main and PRs
-- Releases are triggered by tags (`vx.y.z`) — see `.github/workflows/release.yml`
-- Release workflow signs + notarizes the macOS app bundle
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test
+```
 
-## Style guide
+Build the GUI bundle with `make build-app`; `make smoke-app` performs its
+structural smoke check.
 
-- Swift 6 strict concurrency mode enabled
-- All public types are `Sendable` unless documented as non-Sendable
-- Prefer `private var` for mutable state, `let` for immutable
-- Use `// MARK:` section separators
+## Code and security conventions
 
-## Submitting changes
+- Keep the dispatcher, GUI, and package library layers thin: business logic
+  belongs in the relevant core service, not in CLI argument plumbing or views.
+- Preserve Swift 6 strict concurrency and `Sendable` annotations.
+- Keep JSON output stable and snake_case.
+- Do not add credential reads during object construction. The Tune package's
+  `KeychainCredentials` adapter delegates to the shared keychain module, and
+  `SecretRedactor` must protect error/history output at the boundary.
+- Never weaken Tune safety clamps, Operate action policy, permission checks, or
+  MCP stdout purity.
+- Keep update checks pointed at the released `danieljustus/symaira-cockpit`
+  repository and compare against the unified cockpit version.
 
-1. Fork + branch from `main`
-2. Make changes + write/update tests
-3. Run `swift test` — all tests must pass
-4. Push + open PR
-5. CI must be green before merge
-6. If your change affects credentials, update `credentialSource`/`credentialDescriptor` in all affected providers
+## Pull requests
+
+1. Create a focused branch from `main`.
+2. Make the smallest cohesive change and add regression tests.
+3. Run the affected package's build and test commands, plus root checks when
+   root sources or the GUI are affected.
+4. Describe the behavior change and the commands that passed.
+
+For security vulnerabilities, follow [SECURITY.md](SECURITY.md) rather than
+opening a public issue.

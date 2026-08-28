@@ -13,7 +13,7 @@ public struct UpdateChecker: Sendable {
     public init(
         currentVersion: String = SymOperateVersion.current,
         repoOwner: String = "danieljustus",
-        repoName: String = "symaira-operate",
+        repoName: String = "symaira-cockpit",
         client: UpdateHTTPClient? = nil,
         cacheDirectory: URL? = nil,
         userDefaults: UserDefaults = .standard

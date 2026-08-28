@@ -24,6 +24,7 @@ let package = Package(
             name: "SymTuneCore",
             dependencies: [
                 .product(name: "SymairaKeychain", package: "symaira-appkit"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),

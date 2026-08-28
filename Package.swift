@@ -30,6 +30,7 @@ let package = Package(
                 .product(name: "SymOperateCLI", package: "operate"),
                 .product(name: "SymScopeCLI", package: "scope"),
                 .product(name: "SymScopeCore", package: "scope"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
             ]
         ),
         .executableTarget(
