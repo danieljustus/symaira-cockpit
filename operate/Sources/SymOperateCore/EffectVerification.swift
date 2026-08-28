@@ -90,6 +90,7 @@ public struct ActionResult: Codable, Sendable {
     public let effect: EffectState
     public let verification: ActionVerification
     public let executionPath: String?
+    public let deliveryMode: DeliveryMode
     public let target: ActionTarget?
     /// Optional pre/postcondition evidence from the action-conditions contract.
     public let conditions: ActionConditionsResult?
@@ -106,6 +107,7 @@ public struct ActionResult: Codable, Sendable {
             reason: "No post-action verification was requested."
         ),
         executionPath: String? = nil,
+        deliveryMode: DeliveryMode = .automatic,
         target: ActionTarget? = nil,
         conditions: ActionConditionsResult? = nil
     ) {
@@ -116,12 +118,13 @@ public struct ActionResult: Codable, Sendable {
         self.effect = effect
         self.verification = verification
         self.executionPath = executionPath
+        self.deliveryMode = deliveryMode
         self.target = target
         self.conditions = conditions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case ok, message, snapshot, contractVersion, effect, verification, executionPath, target, conditions
+        case ok, message, snapshot, contractVersion, effect, verification, executionPath, deliveryMode, target, conditions
     }
 
     /// New clients can decode legacy three-field results; legacy results are
@@ -141,6 +144,7 @@ public struct ActionResult: Codable, Sendable {
                 snapshotID: snapshot?.id
             )
         executionPath = try container.decodeIfPresent(String.self, forKey: .executionPath)
+        deliveryMode = try container.decodeIfPresent(DeliveryMode.self, forKey: .deliveryMode) ?? .automatic
         target = try container.decodeIfPresent(ActionTarget.self, forKey: .target)
         conditions = try container.decodeIfPresent(ActionConditionsResult.self, forKey: .conditions)
     }
