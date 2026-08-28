@@ -57,6 +57,8 @@ public struct ActionTarget: Codable, Sendable, Equatable {
     public let requestedAppName: String?
     public let requestedWindowID: Int?
     public let requestedWindowTitle: String?
+    public let requestedDisplayID: UInt32?
+    public let requestedSpaceID: Int?
     public let frontmostPID: Int32?
     public let frontmostWindowID: Int?
 
@@ -66,6 +68,8 @@ public struct ActionTarget: Codable, Sendable, Equatable {
         requestedAppName: String? = nil,
         requestedWindowID: Int? = nil,
         requestedWindowTitle: String? = nil,
+        requestedDisplayID: UInt32? = nil,
+        requestedSpaceID: Int? = nil,
         frontmostPID: Int32? = nil,
         frontmostWindowID: Int? = nil
     ) {
@@ -74,6 +78,8 @@ public struct ActionTarget: Codable, Sendable, Equatable {
         self.requestedAppName = requestedAppName
         self.requestedWindowID = requestedWindowID
         self.requestedWindowTitle = requestedWindowTitle
+        self.requestedDisplayID = requestedDisplayID
+        self.requestedSpaceID = requestedSpaceID
         self.frontmostPID = frontmostPID
         self.frontmostWindowID = frontmostWindowID
     }
