@@ -75,13 +75,15 @@ public final class ScreenService: ScreenServiceProtocol {
     }
 
     public func captureWindow(windowID: Int, maxDimension: CGFloat) throws -> Snapshot {
-        let windowBoundsRect = windowBounds(for: windowID)
-        let displayID = CGMainDisplayID()
+        guard let target = windowInfo(for: windowID) else {
+            throw AutomationError.notFound("Window \(windowID) was not found.")
+        }
         return try capture(
-            displayID: displayID,
-            bounds: windowBoundsRect,
+            displayID: CGMainDisplayID(),
+            bounds: CGRect(x: target.bounds.x, y: target.bounds.y, width: target.bounds.width, height: target.bounds.height),
             maxDimension: maxDimension,
             windowID: windowID,
+            windowOwnerPID: target.ownerPID,
             saveDebugImage: false
         )
     }
@@ -91,6 +93,7 @@ public final class ScreenService: ScreenServiceProtocol {
         bounds: CGRect,
         maxDimension: CGFloat,
         windowID: Int? = nil,
+        windowOwnerPID: Int32? = nil,
         saveDebugImage: Bool = false
     ) throws -> Snapshot {
         let id = UUID().uuidString
@@ -129,6 +132,8 @@ public final class ScreenService: ScreenServiceProtocol {
             imageSize: imageSize,
             displayBounds: rectValue,
             displayID: displayID,
+            windowID: windowID,
+            windowOwnerPID: windowOwnerPID,
             debugImagePath: debugPath,
             transform: transform
         )
@@ -274,23 +279,35 @@ public final class ScreenService: ScreenServiceProtocol {
         return message.contains("denied") || message.contains("abgelehnt")
     }
 
-    private func windowBounds(for windowID: Int) -> CGRect {
+    private func windowInfo(for windowID: Int) -> WindowInfo? {
         guard let rawList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
-            return .zero
+            return nil
         }
 
         for row in rawList {
-            guard let wid = row[kCGWindowNumber as String] as? Int, wid == windowID,
-                  let boundsDict = row[kCGWindowBounds as String] as? [String: CGFloat],
-                  let x = boundsDict["X"],
-                  let y = boundsDict["Y"],
-                  let width = boundsDict["Width"],
-                  let height = boundsDict["Height"]
+            guard
+                let ownerName = row[kCGWindowOwnerName as String] as? String,
+                let wid = row[kCGWindowNumber as String] as? Int, wid == windowID,
+                let ownerPID = row[kCGWindowOwnerPID as String] as? Int32,
+                let layer = row[kCGWindowLayer as String] as? Int,
+                let bounds = row[kCGWindowBounds as String] as? [String: CGFloat],
+                let x = bounds["X"],
+                let y = bounds["Y"],
+                let width = bounds["Width"],
+                let height = bounds["Height"]
             else { continue }
-            return CGRect(x: x, y: y, width: width, height: height)
+
+            return WindowInfo(
+                windowID: wid,
+                ownerName: ownerName,
+                ownerPID: ownerPID,
+                title: row[kCGWindowName as String] as? String,
+                bounds: RectValue(x: x, y: y, width: width, height: height),
+                layer: layer
+            )
         }
 
-        return .zero
+        return nil
     }
 
     private func resizeIfNeeded(image: CGImage, maxDimension: CGFloat) -> CGImage {

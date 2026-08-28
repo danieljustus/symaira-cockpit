@@ -49,6 +49,44 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
 
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         let roots = preferredRoots(for: axApp)
+        return queryNodes(roots: roots, snapshotID: snapshotID, maxDepth: maxDepth, maxNodes: maxNodes)
+    }
+
+    /// Queries only the requested window in its owning process. Unlike the
+    /// frontmost query, this never consults NSWorkspace.frontmostApplication
+    /// or the focused window, so a background target cannot silently resolve
+    /// against an unrelated application.
+    public func queryUI(
+        snapshotID: String,
+        processID: Int32,
+        windowID: Int,
+        windowBounds: RectValue,
+        maxDepth: Int,
+        maxNodes: Int
+    ) throws -> [UINode] {
+        guard AXIsProcessTrusted() else {
+            throw AutomationError.permissionDenied("Accessibility permission is required for query_ui.")
+        }
+        guard processID > 0 else {
+            throw AutomationError.unavailable("The owner process for window \(windowID) is not resolvable.")
+        }
+
+        let axApp = AXUIElementCreateApplication(processID)
+        guard let windows = axCopyElements(axApp, attribute: kAXWindowsAttribute),
+              let targetWindow = windows.first(where: { axFrameMatches($0, target: windowBounds) })
+        else {
+            throw AutomationError.unavailable("Window \(windowID) is no longer accessible in its owning process.")
+        }
+
+        return queryNodes(roots: [targetWindow], snapshotID: snapshotID, maxDepth: maxDepth, maxNodes: maxNodes)
+    }
+
+    private func queryNodes(
+        roots: [AXUIElement],
+        snapshotID: String,
+        maxDepth: Int,
+        maxNodes: Int
+    ) -> [UINode] {
         var remaining = maxNodes
         var cache: [String: ResolvedElement] = [:]
         let nodes = roots.compactMap { buildNode(element: $0, depth: 0, maxDepth: maxDepth, remainingNodes: &remaining, cache: &cache) }
@@ -57,6 +95,15 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         nodesCache[snapshotID] = nodes
         cacheOrder.append(snapshotID)
         return nodes
+    }
+
+    private func axFrameMatches(_ element: AXUIElement, target: RectValue) -> Bool {
+        guard let frame = axCopyFrame(element) else { return false }
+        let tolerance = 2.0
+        return abs(frame.x - target.x) <= tolerance
+            && abs(frame.y - target.y) <= tolerance
+            && abs(frame.width - target.width) <= tolerance
+            && abs(frame.height - target.height) <= tolerance
     }
 
     public func resolveElement(snapshotID: String, elementID: String) -> ResolvedElement? {

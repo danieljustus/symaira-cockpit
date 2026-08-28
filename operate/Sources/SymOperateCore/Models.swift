@@ -120,6 +120,8 @@ public struct Snapshot: Codable, Sendable {
     public let imageSize: SizeValue
     public let displayBounds: RectValue
     public let displayID: UInt32
+    public let windowID: Int?
+    public let windowOwnerPID: Int32?
     public let debugImagePath: String?
     public let transform: SnapshotTransform
 
@@ -130,6 +132,8 @@ public struct Snapshot: Codable, Sendable {
         imageSize: SizeValue,
         displayBounds: RectValue,
         displayID: UInt32,
+        windowID: Int? = nil,
+        windowOwnerPID: Int32? = nil,
         debugImagePath: String? = nil,
         transform: SnapshotTransform
     ) {
@@ -139,6 +143,8 @@ public struct Snapshot: Codable, Sendable {
         self.imageSize = imageSize
         self.displayBounds = displayBounds
         self.displayID = displayID
+        self.windowID = windowID
+        self.windowOwnerPID = windowOwnerPID
         self.debugImagePath = debugImagePath
         self.transform = transform
     }
@@ -146,7 +152,7 @@ public struct Snapshot: Codable, Sendable {
     // MARK: - Codable (encodeIfPresent prevents local path leakage to MCP clients)
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, imageBase64PNG, imageSize, displayBounds, displayID, debugImagePath, transform
+        case id, createdAt, imageBase64PNG, imageSize, displayBounds, displayID, windowID, windowOwnerPID, debugImagePath, transform
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -157,6 +163,8 @@ public struct Snapshot: Codable, Sendable {
         try container.encode(imageSize, forKey: .imageSize)
         try container.encode(displayBounds, forKey: .displayBounds)
         try container.encode(displayID, forKey: .displayID)
+        try container.encodeIfPresent(windowID, forKey: .windowID)
+        try container.encodeIfPresent(windowOwnerPID, forKey: .windowOwnerPID)
         try container.encodeIfPresent(debugImagePath, forKey: .debugImagePath)
         try container.encode(transform, forKey: .transform)
     }
@@ -169,6 +177,8 @@ public struct Snapshot: Codable, Sendable {
         imageSize = try container.decode(SizeValue.self, forKey: .imageSize)
         displayBounds = try container.decode(RectValue.self, forKey: .displayBounds)
         displayID = try container.decode(UInt32.self, forKey: .displayID)
+        windowID = try container.decodeIfPresent(Int.self, forKey: .windowID)
+        windowOwnerPID = try container.decodeIfPresent(Int32.self, forKey: .windowOwnerPID)
         debugImagePath = try container.decodeIfPresent(String.self, forKey: .debugImagePath)
         transform = try container.decode(SnapshotTransform.self, forKey: .transform)
     }
