@@ -9,19 +9,33 @@ public enum OperateMain {
     /// (serve, updates check) — same semantics as the legacy binary.
     @discardableResult
     public static func run(_ args: [String]) -> Int32 {
-        let controller = AutomationController()
         do {
-    guard let first = args.first else {
-        printUsage()
-        exit(ExitCode.ok.rawValue)
-    }
+            guard let first = args.first else {
+                printUsage()
+                exit(ExitCode.ok.rawValue)
+            }
 
-    if first == "--help" || first == "-h" {
-        printUsage()
-        exit(ExitCode.ok.rawValue)
-    }
+            if first == "--help" || first == "-h" {
+                printUsage()
+                exit(ExitCode.ok.rawValue)
+            }
 
-    switch first {
+            let controller: AutomationController
+            switch first {
+            case Command.serve.rawValue:
+                let grantNames = try parseServeGrantArguments(Array(args.dropFirst()))
+                controller = AutomationController(
+                    actionPolicy: try StartupPolicy.load(grantNames: grantNames)
+                )
+            case Command.doctor.rawValue:
+                controller = AutomationController(
+                    actionPolicy: try StartupPolicy.load(grantNames: nil)
+                )
+            default:
+                controller = AutomationController()
+            }
+
+            switch first {
     case Command.serve.rawValue:
         // Non-blocking update check on launch — prints to stderr, never blocks.
         Task { @Sendable in
@@ -32,9 +46,10 @@ public enum OperateMain {
                 FileHandle.standardError.write(Data("   Use `symoperate updates skip \(latest)` to dismiss this version.\n\n".utf8))
             }
         }
+        let server = MCPServer(controller: controller)
         Task { @Sendable in
             do {
-                try await MCPServer(controller: AutomationController()).run()
+                try await server.run()
             } catch {
                 FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
             }
@@ -142,7 +157,8 @@ public enum OperateMain {
             permissions: permissions,
             capabilities: capabilities,
             environment: environment,
-            recommendations: recommendations
+            recommendations: recommendations,
+            effectiveGrant: controller.actionPolicy.grantedPermissions.flagNames
         ))
         exit(ok ? ExitCode.ok.rawValue : ExitCode.permissionDenied.rawValue)
     case Command.history.rawValue:
@@ -235,4 +251,35 @@ public enum OperateMain {
             return ExitCode.generalError.rawValue
         }
     }
+}
+
+/// Parses only the options owned by `serve`; the options are consumed before
+/// the MCP server starts so they never appear on the JSON-RPC stream.
+private func parseServeGrantArguments(_ args: [String]) throws -> [String]? {
+    var names: [String]?
+    var index = 0
+    while index < args.count {
+        let argument = args[index]
+        let value: String
+        if argument == "--grant" {
+            index += 1
+            guard index < args.count else {
+                throw AutomationError.invalidArgument("serve --grant requires at least one permission name.")
+            }
+            value = args[index]
+        } else if argument.hasPrefix("--grant=") {
+            value = String(argument.dropFirst("--grant=".count))
+        } else {
+            throw AutomationError.invalidArgument("Unknown serve option '\(argument)'.")
+        }
+
+        let parsed = value.split(separator: ",", omittingEmptySubsequences: true).map(String.init)
+        guard !parsed.isEmpty else {
+            throw AutomationError.invalidArgument("serve --grant requires at least one permission name.")
+        }
+        if names == nil { names = [] }
+        names?.append(contentsOf: parsed)
+        index += 1
+    }
+    return names
 }

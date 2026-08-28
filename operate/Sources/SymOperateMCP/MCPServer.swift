@@ -265,7 +265,7 @@ public final class MCPServer: @unchecked Sendable {
     /// Schema of the `set_policy` tool. Kept in its own function so `tools()`
     /// stays within SwiftLint's function-body budget.
     private func setPolicyToolSchema() -> [String: Any] {
-        tool("set_policy", description: "Update the action policy. Extends defaults; cannot weaken the built-in safety guard. Requires the policy_modify permission. When granted_permissions is provided it REPLACES the full granted permission set (defaults to .all when absent).", input: [
+        tool("set_policy", description: "Update the action policy. Extends defaults; cannot weaken the built-in safety guard. Requires the policy_modify permission. When granted_permissions is provided it REPLACES the effective grant, but it may only narrow the immutable startup grant from --grant or ~/.config/symoperate/policy.json.", input: [
             "type": "object",
             "properties": [
                 "extra_deny_keywords": ["type": "array", "items": ["type": "string"], "description": "Additional keywords to block."],
@@ -359,12 +359,25 @@ public final class MCPServer: @unchecked Sendable {
         case "get_policy":
             payload = policyPayload()
         case "set_policy":
-            // Gate BEFORE mutating: an agent without policy_modify cannot change
-            // the policy — including restricting its own permission set.
+            // Gate and validate BEFORE mutating: an agent without policy_modify
+            // cannot change policy, and no field may be partially applied when a
+            // requested grant exceeds the immutable startup ceiling.
             if let violation = controller.actionPolicy.firstViolation(requiredPermission: .policyModify) {
                 throw AutomationError.permissionDenied(
                     "Permission denied: the '\(violation.flagNames.joined(separator: ", "))' permission is required for set_policy."
                 )
+            }
+            let requestedPermissions: PermissionFlags?
+            if let granted = arguments["granted_permissions"] as? [String] {
+                let requested = PermissionFlags.parse(names: granted)
+                if !requested.subtracting(controller.actionPolicy.startupGrantedPermissions).isEmpty {
+                    throw AutomationError.permissionDenied(
+                        "Permission denied: set_policy cannot widen the startup grant (startup permissions: \(controller.actionPolicy.startupGrantedPermissions.flagNames.joined(separator: ", ")))."
+                    )
+                }
+                requestedPermissions = requested
+            } else {
+                requestedPermissions = nil
             }
             if let extraDeny = arguments["extra_deny_keywords"] as? [String] {
                 for kw in extraDeny { controller.actionPolicy.addDenyKeyword(kw) }
@@ -375,9 +388,10 @@ public final class MCPServer: @unchecked Sendable {
             if let allowBundle = arguments["allow_bundle_ids"] as? [String] {
                 for bid in allowBundle { controller.actionPolicy.allowBundleID(bid) }
             }
-            if let granted = arguments["granted_permissions"] as? [String] {
-                // REPLACE (not union) the granted set with the parsed flags.
-                controller.actionPolicy.grantedPermissions = PermissionFlags.parse(names: granted)
+            if let requestedPermissions {
+                guard controller.actionPolicy.setGrantedPermissions(requestedPermissions) else {
+                    throw AutomationError.permissionDenied("Permission denied: set_policy cannot widen the startup grant.")
+                }
             }
             payload = policyPayload()
         case "find_ui":
