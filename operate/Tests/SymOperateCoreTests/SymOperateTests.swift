@@ -262,10 +262,11 @@ final class SymOperateTests: XCTestCase {
         XCTAssertNil(shortcut.fallbackText)
     }
 
-    func testKeyboardShortcutFallsBackToText() {
+    func testKeyboardShortcutRejectsUnknownKeyWithoutTextFallback() {
         let shortcut = KeyboardShortcut.parse(["ß"])
         XCTAssertNil(shortcut.keyCode)
-        XCTAssertEqual(shortcut.fallbackText, "ß")
+        XCTAssertNil(shortcut.fallbackText)
+        XCTAssertEqual(shortcut.resolution, .unknownKey("ß"))
     }
 
     // MARK: - ListDisplays tests
