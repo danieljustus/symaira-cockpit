@@ -53,7 +53,7 @@ func exitCode(for error: AutomationError) -> ExitCode {
     case .operationFailed, .preconditionFailed: return .operationFailed
     case .staleReference: return .staleReference
     case .targetAmbiguous, .targetMismatch: return .notFound
-    case .unavailable: return .unavailable
+    case .unavailable, .unsupported, .unverifiable: return .unavailable
     }
 }
 

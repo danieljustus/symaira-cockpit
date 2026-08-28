@@ -91,6 +91,49 @@ public protocol InputServiceProtocol {
     func pressKeys(_ keys: [String]) throws
     func scroll(deltaX: Double, deltaY: Double) throws
     func drag(from start: PointValue, to end: PointValue, steps: Int) throws
+
+    func click(at point: PointValue, button: String, doubleClick: Bool, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func typeText(_ text: String, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func pressKeys(_ keys: [String], deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func scroll(deltaX: Double, deltaY: Double, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+    func drag(from start: PointValue, to end: PointValue, steps: Int, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws
+}
+
+public extension InputServiceProtocol {
+    func click(at point: PointValue, button: String, doubleClick: Bool, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for click requires an input service with a verified target process.")
+        }
+        try click(at: point, button: button, doubleClick: doubleClick)
+    }
+
+    func typeText(_ text: String, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for type_text is unsupported without a verified target process.")
+        }
+        try typeText(text)
+    }
+
+    func pressKeys(_ keys: [String], deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for press_keys is unsupported without a verified target process.")
+        }
+        try pressKeys(keys)
+    }
+
+    func scroll(deltaX: Double, deltaY: Double, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for scroll is unsupported without a verified target process.")
+        }
+        try scroll(deltaX: deltaX, deltaY: deltaY)
+    }
+
+    func drag(from start: PointValue, to end: PointValue, steps: Int, deliveryMode: DeliveryMode, targetProcessID: Int32?) throws {
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for drag requires an input service with a verified target process.")
+        }
+        try drag(from: start, to: end, steps: steps)
+    }
 }
 
 // MARK: - App Service
