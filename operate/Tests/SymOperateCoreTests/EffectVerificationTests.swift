@@ -133,4 +133,31 @@ final class EffectVerificationTests: XCTestCase {
             XCTAssertEqual(decoded.effect, state)
         }
     }
+
+    func testHistoryServiceRoundTripsDiagnosticTrace() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("symoperate-trace-history-\(UUID().uuidString).jsonl")
+        let history = HistoryService(fileURL: url)
+        let trace = DiagnosticTraceRecord(
+            traceID: "trace-test",
+            action: "click",
+            startedAt: "2026-08-28T10:00:00Z",
+            finishedAt: "2026-08-28T10:00:01Z",
+            request: ["label": "Save"],
+            target: ActionTarget(requestedAppName: "TextEdit"),
+            route: ActionRouteDiagnostics(route: .semantic),
+            policy: DiagnosticTracePolicy(decision: "allowed"),
+            outcome: DiagnosticTraceOutcome(
+                success: true,
+                effect: .submitted,
+                verification: ActionVerification(status: .unverifiable, strategy: "test"),
+                message: "submitted"
+            )
+        )
+        try history.record(HistoryEvent(action: "click", success: true, message: "submitted", diagnosticTrace: trace))
+
+        let events = try history.events()
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.diagnosticTrace?.traceID, "trace-test")
+    }
 }
