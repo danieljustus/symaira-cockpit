@@ -296,6 +296,33 @@ public final class AutomationController {
         )
     }
 
+    private func diagnosticTrace(
+        traceID: String,
+        action: String,
+        startedAt: String,
+        request: [String: String],
+        target: ActionTarget?,
+        before: Snapshot?,
+        after: Snapshot?,
+        route: ActionRouteDiagnostics?,
+        policy: String,
+        outcome: DiagnosticTraceOutcome
+    ) -> DiagnosticTraceRecord {
+        DiagnosticTraceRecord(
+            traceID: traceID,
+            action: action,
+            startedAt: startedAt,
+            finishedAt: DateFormats.iso8601String(from: Date()),
+            request: request,
+            target: target,
+            before: before.map { DiagnosticTraceObservation(snapshotID: $0.id) },
+            after: after.map { DiagnosticTraceObservation(snapshotID: $0.id) },
+            route: route,
+            policy: DiagnosticTracePolicy(decision: policy),
+            outcome: outcome
+        )
+    }
+
     private func executeAction(
         name: String,
         targets: [String: String] = [:],
@@ -309,7 +336,11 @@ public final class AutomationController {
         routeDiagnostics: ActionRouteDiagnostics? = nil,
         action: () throws -> String
     ) throws -> ActionResult {
-        var preconditionEvaluation: PredicateEvaluation?
+        let traceID = UUID().uuidString
+        let startedAt = DateFormats.iso8601String(from: Date())
+        let beforeSnapshot = snapshotID.flatMap { accessibility.cachedSnapshot(for: $0) }
+        do {
+            var preconditionEvaluation: PredicateEvaluation?
         if let predicate = conditions?.precondition {
             let evaluation: PredicateEvaluation
             do {
@@ -333,7 +364,6 @@ public final class AutomationController {
             preconditionEvaluation = evaluation
         }
 
-        do {
             let message = try action()
             let actionSnapshot = try? screen.captureMainDisplay()
             let postconditionEvaluation: PredicateEvaluation
@@ -378,6 +408,7 @@ public final class AutomationController {
                 ),
                 target: target
             )
+            let finalRouteDiagnostics = routeDiagnostics ?? defaultRouteDiagnostics(executionPath: executionPath, deliveryMode: deliveryMode)
             let result = ActionResult(
                 ok: decision.ok,
                 message: message,
@@ -388,8 +419,25 @@ public final class AutomationController {
                 executionPath: executionPath,
                 deliveryMode: deliveryMode,
                 target: decision.target ?? target,
-                routeDiagnostics: routeDiagnostics ?? defaultRouteDiagnostics(executionPath: executionPath, deliveryMode: deliveryMode),
+                routeDiagnostics: finalRouteDiagnostics,
                 conditions: conditionResult
+            )
+            let trace = diagnosticTrace(
+                traceID: traceID,
+                action: name,
+                startedAt: startedAt,
+                request: targets,
+                target: decision.target ?? target,
+                before: beforeSnapshot,
+                after: actionSnapshot,
+                route: finalRouteDiagnostics,
+                policy: "allowed",
+                outcome: DiagnosticTraceOutcome(
+                    success: decision.ok,
+                    effect: decision.effect,
+                    verification: decision.verification,
+                    message: message
+                )
             )
             try? history.record(HistoryEvent(
                 action: name,
@@ -400,20 +448,47 @@ public final class AutomationController {
                 effect: decision.effect,
                 verification: decision.verification,
                 executionPath: executionPath,
-                target: decision.target ?? target
+                target: decision.target ?? target,
+                diagnosticTrace: trace
             ))
             return result
         } catch {
+            let message = error.localizedDescription
+            let verification = ActionVerification(
+                status: .notAttempted,
+                strategy: "precondition",
+                reason: message
+            )
+            let finalRouteDiagnostics = routeDiagnostics ?? defaultRouteDiagnostics(executionPath: executionPath, deliveryMode: deliveryMode)
+            let trace = diagnosticTrace(
+                traceID: traceID,
+                action: name,
+                startedAt: startedAt,
+                request: targets,
+                target: target,
+                before: beforeSnapshot,
+                after: nil,
+                route: finalRouteDiagnostics,
+                policy: "refused",
+                outcome: DiagnosticTraceOutcome(
+                    success: false,
+                    effect: .refused,
+                    verification: verification,
+                    message: message,
+                    errorCode: (error as? AutomationError)?.code ?? "operation_failed"
+                )
+            )
             try? history.record(HistoryEvent(
                 action: name,
                 targets: targets,
                 success: false,
-                message: error.localizedDescription,
+                message: message,
                 contractVersion: EffectContract.currentVersion,
                 effect: .refused,
-                verification: ActionVerification(status: .notAttempted, strategy: "precondition", reason: error.localizedDescription),
+                verification: verification,
                 executionPath: executionPath,
-                target: target
+                target: target,
+                diagnosticTrace: trace
             ))
             throw error
         }
