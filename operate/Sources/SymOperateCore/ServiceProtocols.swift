@@ -54,6 +54,8 @@ public protocol AccessibilityServiceProtocol {
     /// Reset the polling cache (e.g. when the frontmost application changes).
     func invalidatePollingCache()
     func performMenuAction(path: [String]) throws
+    func performMenuAction(path: [String], processID: Int32) throws
+    func containsText(_ text: String, processID: Int32) -> Bool
 }
 
 extension AccessibilityServiceProtocol {
@@ -73,6 +75,12 @@ extension AccessibilityServiceProtocol {
     }
 
     public func invalidatePollingCache() {}
+
+    public func performMenuAction(path: [String], processID: Int32) throws {
+        throw AutomationError.unavailable("The accessibility service cannot resolve process \(processID) for a targeted menu action.")
+    }
+
+    public func containsText(_ text: String, processID: Int32) -> Bool { false }
 }
 
 // MARK: - Input Service
@@ -93,11 +101,31 @@ public protocol AppServiceProtocol {
     func frontmostApp() -> AppInfo?
     /// Returns the topmost matching window when the platform exposes ordering.
     func frontmostWindow(ownerPID: Int32, title: String?) -> WindowInfo?
+    /// Resolves an explicit identity. Implementations must not use frontmost fallback.
+    func resolveTarget(_ target: TargetIdentity) throws -> ResolvedTarget
     func launchApp(bundleID: String?, appName: String?) throws
     func focusWindow(bundleID: String?, appName: String?, title: String?) throws
+    /// Resolves and focuses an explicit identity.
+    func focusTarget(_ target: TargetIdentity) throws -> ResolvedTarget
 }
 
 extension AppServiceProtocol {
+    public func resolveTarget(_ target: TargetIdentity) throws -> ResolvedTarget {
+        try TargetResolver.resolve(target, apps: listApps(), windows: listWindows(), frontmostWindow: { pid, title in
+            frontmostWindow(ownerPID: pid, title: title)
+        })
+    }
+
+    public func focusTarget(_ target: TargetIdentity) throws -> ResolvedTarget {
+        let resolved = try resolveTarget(target)
+        try focusWindow(
+            bundleID: resolved.app.bundleIdentifier,
+            appName: resolved.app.localizedName,
+            title: resolved.window?.title
+        )
+        return resolved
+    }
+
     public func frontmostWindow(ownerPID: Int32, title: String? = nil) -> WindowInfo? {
         listWindows().first { window in
             guard window.ownerPID == ownerPID else { return false }

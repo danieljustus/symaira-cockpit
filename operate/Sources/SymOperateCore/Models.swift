@@ -291,6 +291,8 @@ public enum AutomationError: LocalizedError {
     case notFound(String)
     case operationFailed(String)
     case staleReference(String)
+    case targetAmbiguous(String)
+    case targetMismatch(String)
     case preconditionFailed(PredicateEvaluation)
 
     /// A stable, closed-vocabulary machine-readable code for this error case.
@@ -304,6 +306,8 @@ public enum AutomationError: LocalizedError {
         case .notFound:            return "not_found"
         case .operationFailed:     return "operation_failed"
         case .staleReference:      return "stale_snapshot"
+        case .targetAmbiguous:     return "ambiguous_target"
+        case .targetMismatch:      return "target_mismatch"
         case .preconditionFailed:  return "precondition_failed"
         }
     }
@@ -315,7 +319,9 @@ public enum AutomationError: LocalizedError {
              let .invalidArgument(message),
              let .notFound(message),
              let .operationFailed(message),
-             let .staleReference(message):
+             let .staleReference(message),
+             let .targetAmbiguous(message),
+             let .targetMismatch(message):
             return message
         case let .preconditionFailed(evaluation):
             return "Action precondition failed (\(evaluation.status.rawValue))."
