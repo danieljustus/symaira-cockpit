@@ -286,6 +286,7 @@ public final class AutomationController {
         conditions: ActionConditions? = nil,
         snapshotID: String? = nil,
         windowID: Int? = nil,
+        deliveryMode: DeliveryMode = .automatic,
         action: () throws -> String
     ) throws -> ActionResult {
         var preconditionEvaluation: PredicateEvaluation?
@@ -365,6 +366,7 @@ public final class AutomationController {
                 effect: decision.effect,
                 verification: decision.verification,
                 executionPath: executionPath,
+                deliveryMode: deliveryMode,
                 target: decision.target ?? target,
                 conditions: conditionResult
             )
@@ -441,7 +443,8 @@ public final class AutomationController {
         button: String = "left",
         doubleClick: Bool = false,
         conditions: ActionConditions? = nil,
-        target: TargetIdentity? = nil
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
     ) throws -> ActionResult {
         try requirePermission(.input, for: "click")
         var targets: [String: String] = ["button": button, "doubleClick": String(doubleClick)]
@@ -451,45 +454,45 @@ public final class AutomationController {
         if let y { targets["y"] = String(y) }
         let resolvedTarget = try resolveActionTarget(target, snapshotID: snapshotID)
 
-        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             let target = try resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
-            try input.click(at: target, button: button, doubleClick: doubleClick)
+            try input.click(at: target, button: button, doubleClick: doubleClick, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Click event posted at (\(Int(target.x)), \(Int(target.y)))."
         }
     }
 
-    public func typeText(_ text: String, conditions: ActionConditions? = nil, target: TargetIdentity? = nil) throws -> ActionResult {
+    public func typeText(_ text: String, conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "type_text")
         let redacted = "<redacted: \(text.count) chars>"
         let resolvedTarget = try resolveActionTarget(target)
-        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
             guard !text.isEmpty else {
                 throw AutomationError.invalidArgument("type_text requires a non-empty text argument.")
             }
             try guardAgainstSecureField()
-            try input.typeText(text)
+            try input.typeText(text, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "\(text.count) keystroke events posted."
         }
     }
 
-    public func pressKeys(_ keys: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil) throws -> ActionResult {
+    public func pressKeys(_ keys: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "press_keys")
         let resolvedTarget = try resolveActionTarget(target)
-        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
             try guardAgainstSecureField()
-            try input.pressKeys(keys)
+            try input.pressKeys(keys, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Key events posted: \(keys.joined(separator: "+"))."
         }
     }
 
-    public func scroll(deltaX: Double = 0, deltaY: Double, conditions: ActionConditions? = nil, target: TargetIdentity? = nil) throws -> ActionResult {
+    public func scroll(deltaX: Double = 0, deltaY: Double, conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.input, for: "scroll")
         let resolvedTarget = try resolveActionTarget(target)
-        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             if let target = resolvedTarget?.identity { _ = try self.apps.focusTarget(target) }
-            try input.scroll(deltaX: deltaX, deltaY: deltaY)
+            try input.scroll(deltaX: deltaX, deltaY: deltaY, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Scroll event posted with delta (\(deltaX), \(deltaY))."
         }
     }
@@ -503,7 +506,8 @@ public final class AutomationController {
         toX: Double? = nil,
         toY: Double? = nil,
         conditions: ActionConditions? = nil,
-        target: TargetIdentity? = nil
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
     ) throws -> ActionResult {
         try requirePermission(.input, for: "drag")
         var targets: [String: String] = [:]
@@ -516,10 +520,10 @@ public final class AutomationController {
         if let toY { targets["toY"] = String(toY) }
         let resolvedTarget = try resolveActionTarget(target, snapshotID: snapshotID)
 
-        return try executeAction(name: "drag", targets: targets, target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "drag", targets: targets, target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             let start = try resolvePoint(snapshotID: snapshotID, elementID: fromElementID, x: fromX, y: fromY)
             let end = try resolvePoint(snapshotID: snapshotID, elementID: toElementID, x: toX, y: toY)
-            try input.drag(from: start, to: end, steps: 24)
+            try input.drag(from: start, to: end, steps: 24, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Drag event posted from (\(Int(start.x)), \(Int(start.y))) to (\(Int(end.x)), \(Int(end.y)))."
         }
     }
@@ -541,7 +545,8 @@ public final class AutomationController {
         appName: String? = nil,
         title: String? = nil,
         conditions: ActionConditions? = nil,
-        target: TargetIdentity? = nil
+        target: TargetIdentity? = nil,
+        deliveryMode: DeliveryMode = .automatic
     ) throws -> ActionResult {
         try requirePermission(.appControl, for: "focus_window")
         let requested = target ?? TargetIdentity(bundleID: bundleID, appName: appName, windowTitle: title)
@@ -614,10 +619,13 @@ public final class AutomationController {
         }
     }
 
-    public func menuAction(path: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil) throws -> ActionResult {
+    public func menuAction(path: [String], conditions: ActionConditions? = nil, target: TargetIdentity? = nil, deliveryMode: DeliveryMode = .automatic) throws -> ActionResult {
         try requirePermission(.menuAction, for: "menu_action")
+        guard deliveryMode != .background else {
+            throw AutomationError.unsupported("Background delivery for menu_action is unsupported because menu actions are scoped to the frontmost application.")
+        }
         let resolvedTarget = try resolveActionTarget(target)
-        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID) {
+        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
             if let processID = resolvedTarget?.app.processIdentifier {
                 try self.accessibility.performMenuAction(path: path, processID: processID)
             } else {
