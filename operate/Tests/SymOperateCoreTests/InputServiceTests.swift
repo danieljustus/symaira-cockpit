@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import SymOperateCore
 
 final class InputServiceTests: XCTestCase {
@@ -140,16 +141,29 @@ final class InputServiceTests: XCTestCase {
         XCTAssertNoThrow(try service.pressKeys(["cmd", "a"]))
     }
 
-    func testPressKeysFallsBackToTypeTextForUnknownKey() throws {
-        // "hello" has no single-key mapping, so KeyboardShortcut.parse resolves
-        // it as fallback text and pressKeys routes it through typeText.
+    func testPressKeysUnknownKeyThrowsInvalidArgument() {
         let service = InputService()
-        XCTAssertNoThrow(try service.pressKeys(["hello"]))
+        XCTAssertThrowsError(try service.pressKeys(["f5x"])) { error in
+            guard let automationError = error as? AutomationError,
+                  case let .invalidArgument(message) = automationError else {
+                return XCTFail("expected invalidArgument, got \(error)")
+            }
+            XCTAssertTrue(message.contains("f5x"))
+        }
+    }
+
+    func testPressKeysMultipleTerminalKeysThrowsInvalidArgument() {
+        let service = InputService()
+        XCTAssertThrowsError(try service.pressKeys(["a", "b"])) { error in
+            guard let automationError = error as? AutomationError,
+                  case .invalidArgument = automationError else {
+                return XCTFail("expected invalidArgument, got \(error)")
+            }
+        }
     }
 
     func testPressKeysModifierOnlyThrowsUnresolvable() {
-        // A pure modifier list with no terminal key and no fallback text can't
-        // be resolved to a key code or typed text.
+        // A pure modifier list with no terminal key can't be resolved to a key code.
         let service = InputService()
         XCTAssertThrowsError(try service.pressKeys(["cmd", "ctrl", "alt", "shift"])) { error in
             guard let automationError = error as? AutomationError, case .invalidArgument = automationError else {
@@ -167,12 +181,21 @@ final class KeyboardShortcutTests: XCTestCase {
         XCTAssertTrue(parsed.flags.contains(.maskAlternate))
         XCTAssertTrue(parsed.flags.contains(.maskShift))
         XCTAssertEqual(parsed.keyCode, 0)
+        XCTAssertNil(parsed.fallbackText)
     }
 
-    func testParseUnknownKeyFallsBackToText() {
+    func testParseUnknownKeyIsClassifiedWithoutTextFallback() {
         let parsed = KeyboardShortcut.parse(["unknownkey"])
         XCTAssertNil(parsed.keyCode)
-        XCTAssertEqual(parsed.fallbackText, "unknownkey")
+        XCTAssertNil(parsed.fallbackText)
+        XCTAssertEqual(parsed.unsupportedKey, "unknownkey")
+        XCTAssertEqual(parsed.resolution, .unknownKey("unknownkey"))
+    }
+
+    func testParseMultipleTerminalKeysIsRejected() {
+        let parsed = KeyboardShortcut.parse(["cmd", "a", "b"])
+        XCTAssertEqual(parsed.resolution, .multipleKeys(["a", "b"]))
+        XCTAssertNil(parsed.keyCode)
     }
 
     func testParseNamedSpecialKeys() {
@@ -180,5 +203,47 @@ final class KeyboardShortcutTests: XCTestCase {
             let parsed = KeyboardShortcut.parse([name])
             XCTAssertNotNil(parsed.keyCode, "expected a key code mapping for '\(name)'")
         }
+    }
+
+    func testParseAllFunctionKeys() {
+        let expected: [String: CGKeyCode] = [
+            "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96,
+            "f6": 97, "f7": 98, "f8": 100, "f9": 101, "f10": 109,
+            "f11": 103, "f12": 111, "f13": 105, "f14": 107, "f15": 113,
+            "f16": 106, "f17": 64, "f18": 79, "f19": 80, "f20": 90,
+        ]
+        for (name, keyCode) in expected {
+            XCTAssertEqual(KeyboardShortcut.keyCode(for: name), keyCode, "missing mapping for \(name)")
+        }
+    }
+
+    func testParseNavigationAndKeypadKeys() {
+        let expected: [String: CGKeyCode] = [
+            "home": 115, "end": 119, "page_up": 116, "page_down": 121,
+            "forward_delete": 117, "help": 114, "keypad_decimal": 65,
+            "keypad_multiply": 67, "keypad_plus": 69, "keypad_clear": 71,
+            "keypad_divide": 75, "keypad_enter": 76, "keypad_minus": 78,
+            "keypad_equals": 81, "keypad_0": 82, "keypad_1": 83,
+            "keypad_2": 84, "keypad_3": 85, "keypad_4": 86,
+            "keypad_5": 87, "keypad_6": 88, "keypad_7": 89,
+            "keypad_8": 91, "keypad_9": 92,
+        ]
+        for (name, keyCode) in expected {
+            XCTAssertEqual(KeyboardShortcut.keyCode(for: name), keyCode, "missing mapping for \(name)")
+        }
+    }
+}
+
+final class UnicodeInputTests: XCTestCase {
+    func testGraphemeClustersAreOnePayloadPerComposedCharacter() {
+        let text = "e\u{301}👩‍💻🇩🇪x"
+        XCTAssertEqual(
+            UnicodeInput.graphemeClusters(in: text),
+            ["e\u{301}", "👩‍💻", "🇩🇪", "x"]
+        )
+    }
+
+    func testNewlineIsOneGraphemeCluster() {
+        XCTAssertEqual(UnicodeInput.graphemeClusters(in: "first\nsecond").count, 12)
     }
 }
