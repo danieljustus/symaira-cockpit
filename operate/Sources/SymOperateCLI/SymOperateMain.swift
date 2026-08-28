@@ -22,8 +22,9 @@ func printUsage() {
     symoperate
 
     Commands:
-      serve                          Run the MCP server over stdio.
-      doctor                         Print permission status and environment checks (JSON).
+      serve [--grant <permission>[,<permission>...]]
+                                     Run the MCP server over stdio with a startup grant.
+      doctor                         Print permission status, effective grant, and environment checks (JSON).
       version                        Print version and check for updates.
       history --json                 Print the local operation history in JSON format.
       updates check [--force]        Check for updates and print result (JSON).

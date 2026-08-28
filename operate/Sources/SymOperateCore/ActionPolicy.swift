@@ -30,20 +30,33 @@ public struct ActionPolicy: Codable, Sendable {
     public var extraDenyKeywords: Set<String>
     public var allowedKeywords: Set<String>
     public var allowedBundleIDs: Set<String>
-    /// The set of permissions granted to the calling agent.
-    /// Defaults to all current flags; agents may restrict with `set_policy`.
-    public var grantedPermissions: PermissionFlags
+    /// The effective permissions currently granted to the calling agent.
+    /// This can only be narrowed within `startupGrantedPermissions`.
+    public private(set) var grantedPermissions: PermissionFlags
+    /// The immutable ceiling established when the process started.
+    public let startupGrantedPermissions: PermissionFlags
 
     public init(
         extraDenyKeywords: Set<String> = [],
         allowedKeywords: Set<String> = [],
         allowedBundleIDs: Set<String> = [],
-        grantedPermissions: PermissionFlags = .all
+        grantedPermissions: PermissionFlags = .all,
+        startupGrantedPermissions: PermissionFlags? = nil
     ) {
         self.extraDenyKeywords = extraDenyKeywords
         self.allowedKeywords = allowedKeywords
         self.allowedBundleIDs = allowedBundleIDs
-        self.grantedPermissions = grantedPermissions
+        let startup = startupGrantedPermissions ?? grantedPermissions
+        self.startupGrantedPermissions = startup
+        self.grantedPermissions = grantedPermissions.intersection(startup)
+    }
+
+    /// Replaces the effective grant only when it is a subset of the startup grant.
+    @discardableResult
+    public mutating func setGrantedPermissions(_ requested: PermissionFlags) -> Bool {
+        guard requested.subtracting(startupGrantedPermissions).isEmpty else { return false }
+        grantedPermissions = requested
+        return true
     }
 
     static let defaultDenyKeywords: Set<String> = [
