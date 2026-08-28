@@ -31,6 +31,13 @@ public struct DoctorReport: Codable, Sendable {
     public let capabilities: [String: Bool]
     public let environment: EnvironmentReport
     public let recommendations: [String]
+    /// The permission grant effective for this process after startup policy.
+    public let effectiveGrant: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case ok, version, permissions, capabilities, environment, recommendations
+        case effectiveGrant = "effective_grant"
+    }
 
     public init(
         ok: Bool,
@@ -38,7 +45,8 @@ public struct DoctorReport: Codable, Sendable {
         permissions: PermissionSnapshot,
         capabilities: [String: Bool],
         environment: EnvironmentReport,
-        recommendations: [String]
+        recommendations: [String],
+        effectiveGrant: [String]
     ) {
         self.ok = ok
         self.version = version
@@ -46,6 +54,7 @@ public struct DoctorReport: Codable, Sendable {
         self.capabilities = capabilities
         self.environment = environment
         self.recommendations = recommendations
+        self.effectiveGrant = effectiveGrant
     }
 }
 

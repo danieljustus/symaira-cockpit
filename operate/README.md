@@ -79,8 +79,8 @@ swift run -q symoperate doctor
 ## CLI
 
 ```text
-symoperate serve                          Run the MCP server over stdio
-symoperate doctor                         Permission status + environment probes (JSON)
+symoperate serve [--grant <permission>[,<permission>...]]
+symoperate doctor                         Permission status + effective grant + environment probes (JSON)
 symoperate version                        Print version and check for updates (JSON)
 symoperate history --json                 Print the local operation history (JSON)
 symoperate updates check [--force]        Check for updates and print result (JSON)
@@ -90,6 +90,16 @@ symoperate permissions status             Current macOS permissions
 symoperate permissions grant accessibility
 symoperate permissions grant screen
 ```
+
+### Startup grant
+
+`serve` accepts a startup permission ceiling. Repeat `--grant` or separate
+permissions with commas, for example `symoperate serve --grant capture,input`.
+When the flag is absent, `~/.config/symoperate/policy.json` is read; use an
+object such as `{ "granted_permissions": ["capture", "input"] }`. The flag
+wins over the file. When neither source is present, the historical full grant
+is retained. The MCP `set_policy` tool may narrow this startup grant but cannot
+widen it. `doctor` reports the resulting `effective_grant` array.
 
 ### Terminal demo
 
