@@ -2,7 +2,10 @@ import XCTest
 @testable import SymOperateCore
 
 final class SmokeTests: XCTestCase {
-    private let controller = AutomationController()
+    private let controller = AutomationController(
+        history: HistoryService(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("symoperate-smoke-\(UUID().uuidString).jsonl"))
+    )
 
     // MARK: - Snapshot
 

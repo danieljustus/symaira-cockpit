@@ -65,7 +65,7 @@ public struct SymBrainAuthStatus: Codable, Sendable, Equatable {
 
 public struct SymBrainUsageSnapshot: Codable, Sendable, Equatable {
     public let providerID: String
-    public let meters: [SymBrainUsageMeter]
+    public let meters: [SymBrainUsageMeter]?
     public let balance: String?
     public let currency: String?
     public let fetchedAt: Date
@@ -83,7 +83,7 @@ public struct SymBrainUsageSnapshot: Codable, Sendable, Equatable {
     /// Convert only the documented symbrain fields to the legacy normalized
     /// model consumed by the existing card, CLI, and MCP compatibility path.
     public func aiUsageSnapshot() throws -> AIUsageSnapshot {
-        let convertedMeters = try meters.map { try $0.aiUsageMeter() }
+        let convertedMeters = try (meters ?? []).map { try $0.aiUsageMeter() }
         let balanceValue = try decimal(balance, field: "balance")
         return AIUsageSnapshot(
             providerID: providerID,
@@ -246,18 +246,18 @@ public protocol SymBrainUsageClientProtocol: Sendable {
 public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
     private let runner: any SymBrainCommandRunner
     private let environment: [String: String]
-    private let keychainReader: @Sendable (String, String) -> String?
+    private let credentialReference: @Sendable (String) -> String?
 
     public init(
         runner: any SymBrainCommandRunner = ProcessSymBrainCommandRunner(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        keychainReader: @escaping @Sendable (String, String) -> String? = { service, account in
-            KeychainCredentials.read(service: service, account: account)
+        credentialReference: @escaping @Sendable (String) -> String? = { providerID in
+            SymVaultCredentialStore.reference(for: providerID)
         }
     ) {
         self.runner = runner
         self.environment = environment
-        self.keychainReader = keychainReader
+        self.credentialReference = credentialReference
     }
 
     public func fetchReport() throws -> SymBrainUsageReport {
@@ -289,17 +289,17 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
 
     private func childEnvironment() -> [String: String] {
         var result = environment
-        // symbrain's published contract accepts explicit provider env vars.
-        // Values are copied from the cockpit Keychain only at fetch time; the
-        // Preferences section remains the sole write path.
+        // symbrain resolves these references itself. Keeping them opaque here
+        // avoids a second credential store and prevents plaintext values from
+        // entering cockpit's process environment.
         let mappings = [
-            ("OPENROUTER_API_KEY", "openrouter-api-key"),
-            ("MOONSHOT_API_KEY", "moonshot-api-key"),
-            ("KIMI_CODE_API_KEY", "kimi-api-key"),
+            ("OPENROUTER_API_KEY", "openrouter"),
+            ("MOONSHOT_API_KEY", "moonshot"),
+            ("KIMI_CODE_API_KEY", "kimi"),
         ]
-        for (environmentKey, account) in mappings where result[environmentKey]?.isEmpty != false {
-            if let value = keychainReader("com.symaira.symtune", account), !value.isEmpty {
-                result[environmentKey] = value
+        for (environmentKey, providerID) in mappings where result[environmentKey]?.isEmpty != false {
+            if let reference = credentialReference(providerID), !reference.isEmpty {
+                result[environmentKey] = reference
             }
         }
         return result
