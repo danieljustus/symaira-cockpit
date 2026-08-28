@@ -382,6 +382,8 @@ public struct HistoryEvent: Codable, Sendable {
     public let verification: ActionVerification?
     public let executionPath: String?
     public let target: ActionTarget?
+    /// Bounded, redacted evidence for reconstructing the action locally.
+    public let diagnosticTrace: DiagnosticTraceRecord?
 
     public init(
         timestamp: String = DateFormats.iso8601String(from: Date()),
@@ -393,7 +395,8 @@ public struct HistoryEvent: Codable, Sendable {
         effect: EffectState? = nil,
         verification: ActionVerification? = nil,
         executionPath: String? = nil,
-        target: ActionTarget? = nil
+        target: ActionTarget? = nil,
+        diagnosticTrace: DiagnosticTraceRecord? = nil
     ) {
         self.timestamp = timestamp
         self.action = action
@@ -405,6 +408,7 @@ public struct HistoryEvent: Codable, Sendable {
         self.verification = verification
         self.executionPath = executionPath
         self.target = target
+        self.diagnosticTrace = diagnosticTrace
     }
 }
 
