@@ -32,17 +32,38 @@ public struct InputService: InputServiceProtocol {
     }
 
     public func scroll(deltaX: Double = 0, deltaY: Double) throws {
+        // MCP clients can supply arbitrary JSON numbers. Validate both deltas
+        // before converting so malformed input cannot trap the server process.
+        let wheel1 = try validatedScrollDelta(deltaY, name: "delta_y")
+        let wheel2 = try validatedScrollDelta(deltaX, name: "delta_x")
+
         guard let event = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .pixel,
             wheelCount: 2,
-            wheel1: Int32(deltaY),
-            wheel2: Int32(deltaX),
+            wheel1: wheel1,
+            wheel2: wheel2,
             wheel3: 0
         ) else {
             throw AutomationError.operationFailed("Failed to create a scroll event.")
         }
         event.post(tap: .cghidEventTap)
+    }
+
+    private func validatedScrollDelta(_ value: Double, name: String) throws -> Int32 {
+        guard value.isFinite else {
+            throw AutomationError.invalidArgument("Scroll \(name) must be finite.")
+        }
+        guard value >= Double(Int32.min), value <= Double(Int32.max) else {
+            throw AutomationError.invalidArgument("Scroll \(name) must be within the Int32 range.")
+        }
+
+        // Preserve the old truncation-toward-zero behavior for fractional
+        // in-range values while using a failable, non-trapping conversion.
+        guard let converted = Int32(exactly: value.rounded(.towardZero)) else {
+            throw AutomationError.invalidArgument("Scroll \(name) must be within the Int32 range.")
+        }
+        return converted
     }
 
     public func typeText(_ text: String) throws {
