@@ -61,6 +61,14 @@ func axCopyActionNames(_ element: AXUIElement) -> [String] {
     return array
 }
 
+func axBoolify(_ value: AnyObject?) -> Bool? {
+    if let bool = value as? Bool { return bool }
+    if let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() {
+        return number.boolValue
+    }
+    return nil
+}
+
 func axStringify(_ value: AnyObject?) -> String? {
     switch value {
     case let string as String:

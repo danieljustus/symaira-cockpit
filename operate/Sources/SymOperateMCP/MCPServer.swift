@@ -173,6 +173,8 @@ public final class MCPServer: @unchecked Sendable {
                     "y": ["type": "number"],
                     "button": ["type": "string", "enum": ["left", "right"]],
                     "double_click": ["type": "boolean"],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "oneOf": [
                     ["required": ["x", "y"]],
@@ -181,12 +183,12 @@ public final class MCPServer: @unchecked Sendable {
             ]),
             tool("type_text", description: "Type raw unicode text into the current focused control.", input: [
                 "type": "object",
-                "properties": ["text": ["type": "string"]],
+                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema()],
                 "required": ["text"],
             ]),
             tool("press_keys", description: "Press a keyboard shortcut like [\"cmd\", \"s\"] or [\"return\"].", input: [
                 "type": "object",
-                "properties": ["keys": ["type": "array", "items": ["type": "string"]]],
+                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema()],
                 "required": ["keys"],
             ]),
             tool("scroll", description: "Scroll by pixel deltas.", input: [
@@ -194,6 +196,8 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "delta_x": ["type": "number", "default": 0],
                     "delta_y": ["type": "number"],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "required": ["delta_y"],
             ]),
@@ -207,6 +211,8 @@ public final class MCPServer: @unchecked Sendable {
                     "from_y": ["type": "number"],
                     "to_x": ["type": "number"],
                     "to_y": ["type": "number"],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "oneOf": [
                     ["required": ["from_x", "from_y", "to_x", "to_y"]],
@@ -218,6 +224,8 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "anyOf": [
                     ["required": ["bundle_id"]],
@@ -230,6 +238,8 @@ public final class MCPServer: @unchecked Sendable {
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
                     "title": ["type": "string"],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "anyOf": [
                     ["required": ["bundle_id"]],
@@ -240,6 +250,8 @@ public final class MCPServer: @unchecked Sendable {
                 "type": "object",
                 "properties": [
                     "path": ["type": "array", "items": ["type": "string"]],
+                    "precondition": predicateSchema(),
+                    "postcondition": predicateSchema(),
                 ],
                 "required": ["path"],
             ]),
@@ -258,6 +270,25 @@ public final class MCPServer: @unchecked Sendable {
         ]
     }
 
+    private func predicateSchema() -> [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "app": ["type": "string"],
+                "window": ["type": "string"],
+                "text": ["type": "string"],
+                "role": ["type": "string"],
+                "title": ["type": "string"],
+                "label": ["type": "string"],
+                "value": ["type": "string"],
+                "subrole": ["type": "string"],
+                "actions": ["type": "array", "items": ["type": "string"]],
+                "enabled": ["type": "boolean"],
+            ],
+        ]
+    }
+
     private func tool(_ name: String, description: String, input: [String: Any]) -> [String: Any] {
         var result: [String: Any] = [
             "name": name,
@@ -270,15 +301,12 @@ public final class MCPServer: @unchecked Sendable {
         return result
     }
 
-    /// Shared output schema for state-changing tools. The legacy `ok`,
-    /// `message`, and `snapshot` fields remain present alongside the versioned
-    /// effect and verification metadata.
     private func actionResultSchema() -> [String: Any] {
         [
             "type": "object",
             "required": ["ok", "message", "contractVersion", "effect", "verification"],
             "properties": [
-                "ok": ["type": "boolean", "description": "Legacy submission/error flag; do not treat true as confirmed effect."],
+                "ok": ["type": "boolean"],
                 "message": ["type": "string"],
                 "snapshot": ["type": ["object", "null"]],
                 "contractVersion": ["type": "integer", "const": EffectContract.currentVersion],
@@ -287,15 +315,15 @@ public final class MCPServer: @unchecked Sendable {
                     "type": "object",
                     "required": ["status", "strategy"],
                     "properties": [
-                        "status": ["type": "string", "enum": ["confirmed", "unverifiable", "suspected_noop", "not_attempted"]],
+                        "status": ["type": "string"],
                         "strategy": ["type": "string"],
                         "reason": ["type": ["string", "null"]],
                         "snapshotID": ["type": ["string", "null"]],
-                        "checkedAt": ["type": ["string", "null"]],
                     ],
                 ],
                 "executionPath": ["type": ["string", "null"]],
                 "target": ["type": ["object", "null"]],
+                "conditions": ["type": ["object", "null"]],
             ],
         ]
     }
@@ -352,16 +380,24 @@ public final class MCPServer: @unchecked Sendable {
                 x: double(arguments["x"]),
                 y: double(arguments["y"]),
                 button: string(arguments["button"]) ?? "left",
-                doubleClick: bool(arguments["double_click"], default: false)
+                doubleClick: bool(arguments["double_click"], default: false),
+                conditions: try actionConditions(arguments)
             )
         case "type_text":
-            payload = try controller.typeText(requireString(arguments["text"], name: "text"))
+            payload = try controller.typeText(
+                requireString(arguments["text"], name: "text"),
+                conditions: try actionConditions(arguments)
+            )
         case "press_keys":
-            payload = try controller.pressKeys(requireStringArray(arguments["keys"], name: "keys"))
+            payload = try controller.pressKeys(
+                requireStringArray(arguments["keys"], name: "keys"),
+                conditions: try actionConditions(arguments)
+            )
         case "scroll":
             payload = try controller.scroll(
                 deltaX: double(arguments["delta_x"]) ?? 0,
-                deltaY: requireDouble(arguments["delta_y"], name: "delta_y")
+                deltaY: requireDouble(arguments["delta_y"], name: "delta_y"),
+                conditions: try actionConditions(arguments)
             )
         case "drag":
             payload = try controller.drag(
@@ -371,21 +407,27 @@ public final class MCPServer: @unchecked Sendable {
                 fromX: double(arguments["from_x"]),
                 fromY: double(arguments["from_y"]),
                 toX: double(arguments["to_x"]),
-                toY: double(arguments["to_y"])
+                toY: double(arguments["to_y"]),
+                conditions: try actionConditions(arguments)
             )
         case "launch_app":
             payload = try controller.launchApp(
                 bundleID: string(arguments["bundle_id"]),
-                appName: string(arguments["app_name"])
+                appName: string(arguments["app_name"]),
+                conditions: try actionConditions(arguments)
             )
         case "focus_window":
             payload = try controller.focusWindow(
                 bundleID: string(arguments["bundle_id"]),
                 appName: string(arguments["app_name"]),
-                title: string(arguments["title"])
+                title: string(arguments["title"]),
+                conditions: try actionConditions(arguments)
             )
         case "menu_action":
-            payload = try controller.menuAction(path: requireStringArray(arguments["path"], name: "path"))
+            payload = try controller.menuAction(
+                path: requireStringArray(arguments["path"], name: "path"),
+                conditions: try actionConditions(arguments)
+            )
         case "wait_for":
             payload = try await controller.waitFor(
                 text: string(arguments["text"]),
@@ -516,13 +558,6 @@ public final class MCPServer: @unchecked Sendable {
             ],
             "structuredContent": [
                 "status": "refused",
-                "contractVersion": EffectContract.currentVersion,
-                "effect": "refused",
-                "verification": [
-                    "status": "not_attempted",
-                    "strategy": "precondition",
-                    "reason": message,
-                ],
                 "refusal": [
                     "code": code,
                     "message": message,
@@ -584,6 +619,65 @@ public final class MCPServer: @unchecked Sendable {
 }
 
 private extension MCPServer {
+    func actionConditions(_ arguments: [String: Any]) throws -> ActionConditions? {
+        guard arguments["precondition"] != nil || arguments["postcondition"] != nil else { return nil }
+        return ActionConditions(
+            precondition: try predicate(arguments["precondition"], name: "precondition"),
+            postcondition: try predicate(arguments["postcondition"], name: "postcondition")
+        )
+    }
+
+    func predicate(_ value: Any?, name: String) throws -> UIElementPredicate? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let object = value as? [String: Any] else {
+            throw AutomationError.invalidArgument("\(name) must be an object predicate.")
+        }
+        let supported: Set<String> = [
+            "app", "window", "text", "role", "title", "label", "value", "subrole", "actions", "enabled",
+        ]
+        let unsupported = Set(object.keys).subtracting(supported)
+        guard unsupported.isEmpty else {
+            throw AutomationError.invalidArgument("Unsupported \(name) field(s): \(unsupported.sorted().joined(separator: ", ")).")
+        }
+        func stringField(_ key: String) throws -> String? {
+            guard let raw = object[key], !(raw is NSNull) else { return nil }
+            guard let string = raw as? String else {
+                throw AutomationError.invalidArgument("\(name).\(key) must be a string.")
+            }
+            return string
+        }
+        let actions: [String]?
+        if let raw = object["actions"], !(raw is NSNull) {
+            guard let parsed = raw as? [String] else {
+                throw AutomationError.invalidArgument("\(name).actions must be an array of strings.")
+            }
+            actions = parsed
+        } else {
+            actions = nil
+        }
+        let enabled: Bool?
+        if let raw = object["enabled"], !(raw is NSNull) {
+            guard let parsed = raw as? Bool else {
+                throw AutomationError.invalidArgument("\(name).enabled must be a boolean.")
+            }
+            enabled = parsed
+        } else {
+            enabled = nil
+        }
+        return UIElementPredicate(
+            role: try stringField("role"),
+            title: try stringField("title"),
+            label: try stringField("label"),
+            value: try stringField("value"),
+            subrole: try stringField("subrole"),
+            actions: actions,
+            text: try stringField("text"),
+            app: try stringField("app"),
+            window: try stringField("window"),
+            enabled: enabled
+        )
+    }
+
     var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

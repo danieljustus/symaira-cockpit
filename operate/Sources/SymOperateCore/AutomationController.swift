@@ -234,21 +234,90 @@ public final class AutomationController {
         executionPath: String = "unknown",
         target: ActionTarget? = nil,
         verification: (() -> VerificationDecision)? = nil,
+        conditions: ActionConditions? = nil,
+        snapshotID: String? = nil,
+        windowID: Int? = nil,
         action: () throws -> String
     ) throws -> ActionResult {
+        var preconditionEvaluation: PredicateEvaluation?
+        if let predicate = conditions?.precondition {
+            let evaluation: PredicateEvaluation
+            do {
+                evaluation = try evaluate(
+                    predicate: predicate,
+                    snapshotID: snapshotID,
+                    windowID: windowID
+                )
+            } catch {
+                let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                evaluation = PredicateEvaluation(
+                    status: .unverifiable,
+                    predicate: predicate,
+                    observation: nil,
+                    reason: reason
+                )
+            }
+            guard evaluation.status == .satisfied else {
+                throw AutomationError.preconditionFailed(evaluation)
+            }
+            preconditionEvaluation = evaluation
+        }
+
         do {
             let message = try action()
-            let snapshot = try? screen.captureMainDisplay()
-            let decision = verification?() ?? .submitted(snapshot: snapshot, target: target)
-            let resolvedTarget = decision.target ?? target
+            let actionSnapshot = try? screen.captureMainDisplay()
+            let postconditionEvaluation: PredicateEvaluation
+            if let predicate = conditions?.postcondition {
+                do {
+                    postconditionEvaluation = try evaluate(
+                        predicate: predicate,
+                        snapshotID: nil,
+                        windowID: windowID
+                    )
+                } catch {
+                    let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    postconditionEvaluation = PredicateEvaluation(
+                        status: .unverifiable,
+                        predicate: predicate,
+                        observation: nil,
+                        reason: reason
+                    )
+                }
+            } else {
+                postconditionEvaluation = PredicateEvaluation(
+                    status: .unverifiable,
+                    predicate: nil,
+                    observation: nil,
+                    reason: "No postcondition was requested."
+                )
+            }
+            let conditionResult = conditions.map { _ in
+                ActionConditionsResult(
+                    precondition: preconditionEvaluation,
+                    postcondition: postconditionEvaluation
+                )
+            }
+            let decision = verification?() ?? VerificationDecision(
+                ok: true,
+                effect: conditions?.postcondition != nil && postconditionEvaluation.status == .satisfied ? .confirmed : .submitted,
+                verification: ActionVerification(
+                    status: conditions?.postcondition != nil && postconditionEvaluation.status == .satisfied ? .confirmed : .unverifiable,
+                    strategy: conditions?.postcondition != nil ? "postcondition" : "event_submission",
+                    reason: conditions?.postcondition != nil ? postconditionEvaluation.reason : "The event was submitted; its semantic effect was not verified.",
+                    snapshotID: actionSnapshot?.id
+                ),
+                target: target
+            )
             let result = ActionResult(
                 ok: decision.ok,
                 message: message,
-                snapshot: snapshot,
+                snapshot: actionSnapshot,
+                contractVersion: EffectContract.currentVersion,
                 effect: decision.effect,
                 verification: decision.verification,
                 executionPath: executionPath,
-                target: resolvedTarget
+                target: decision.target ?? target,
+                conditions: conditionResult
             )
             try? history.record(HistoryEvent(
                 action: name,
@@ -259,7 +328,7 @@ public final class AutomationController {
                 effect: decision.effect,
                 verification: decision.verification,
                 executionPath: executionPath,
-                target: resolvedTarget
+                target: decision.target ?? target
             ))
             return result
         } catch {
@@ -278,13 +347,51 @@ public final class AutomationController {
         }
     }
 
+    private func evaluate(
+        predicate: UIElementPredicate,
+        snapshotID: String?,
+        windowID: Int?
+    ) throws -> PredicateEvaluation {
+        let observation = try findUI(
+            predicate: predicate,
+            snapshotID: snapshotID,
+            maxDepth: 4,
+            maxNodes: 200,
+            windowID: windowID
+        )
+        let appMatches = predicate.app.map { pattern in
+            guard let app = observation.app else { return false }
+            return predicate.matchField(app.localizedName, pattern: pattern)
+                || predicate.matchField(app.bundleIdentifier, pattern: pattern)
+        } ?? true
+        let windowMatches = predicate.window.map { pattern in
+            let candidate = apps.listWindows().first {
+                $0.windowID == observation.snapshot.windowID
+            } ?? windowID.flatMap { id in apps.listWindows().first { $0.windowID == id } }
+            guard let candidate else { return false }
+            return predicate.matchField(candidate.ownerName, pattern: pattern)
+                || predicate.matchField(candidate.title, pattern: pattern)
+        } ?? true
+        let nodeCriteria = predicate.hasNodeCriteria
+        let nodeMatches = !nodeCriteria || !observation.nodes.isEmpty
+        let status: PredicateEvaluationStatus = appMatches && windowMatches && nodeMatches ? .satisfied : .failed
+        let reason: String?
+        if status == .satisfied {
+            reason = nil
+        } else {
+            reason = "The predicate did not match the current UI observation."
+        }
+        return PredicateEvaluation(status: status, predicate: predicate, observation: observation, reason: reason)
+    }
+
     public func click(
         snapshotID: String? = nil,
         elementID: String? = nil,
         x: Double? = nil,
         y: Double? = nil,
         button: String = "left",
-        doubleClick: Bool = false
+        doubleClick: Bool = false,
+        conditions: ActionConditions? = nil
     ) throws -> ActionResult {
         try requirePermission(.input, for: "click")
         var targets: [String: String] = ["button": button, "doubleClick": String(doubleClick)]
@@ -293,17 +400,17 @@ public final class AutomationController {
         if let x { targets["x"] = String(x) }
         if let y { targets["y"] = String(y) }
 
-        return try executeAction(name: "click", targets: targets, executionPath: "cg_event") {
+        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", conditions: conditions, snapshotID: snapshotID) {
             let target = try resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
             try input.click(at: target, button: button, doubleClick: doubleClick)
             return "Click event posted at (\(Int(target.x)), \(Int(target.y)))."
         }
     }
 
-    public func typeText(_ text: String) throws -> ActionResult {
+    public func typeText(_ text: String, conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.input, for: "type_text")
         let redacted = "<redacted: \(text.count) chars>"
-        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event") {
+        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event", conditions: conditions) {
             guard !text.isEmpty else {
                 throw AutomationError.invalidArgument("type_text requires a non-empty text argument.")
             }
@@ -313,18 +420,18 @@ public final class AutomationController {
         }
     }
 
-    public func pressKeys(_ keys: [String]) throws -> ActionResult {
+    public func pressKeys(_ keys: [String], conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.input, for: "press_keys")
-        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event") {
+        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event", conditions: conditions) {
             try guardAgainstSecureField()
             try input.pressKeys(keys)
             return "Key events posted: \(keys.joined(separator: "+"))."
         }
     }
 
-    public func scroll(deltaX: Double = 0, deltaY: Double) throws -> ActionResult {
+    public func scroll(deltaX: Double = 0, deltaY: Double, conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.input, for: "scroll")
-        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event") {
+        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event", conditions: conditions) {
             try input.scroll(deltaX: deltaX, deltaY: deltaY)
             return "Scroll event posted with delta (\(deltaX), \(deltaY))."
         }
@@ -337,7 +444,8 @@ public final class AutomationController {
         fromX: Double? = nil,
         fromY: Double? = nil,
         toX: Double? = nil,
-        toY: Double? = nil
+        toY: Double? = nil,
+        conditions: ActionConditions? = nil
     ) throws -> ActionResult {
         try requirePermission(.input, for: "drag")
         var targets: [String: String] = [:]
@@ -349,7 +457,7 @@ public final class AutomationController {
         if let toX { targets["toX"] = String(toX) }
         if let toY { targets["toY"] = String(toY) }
 
-        return try executeAction(name: "drag", targets: targets, executionPath: "cg_event") {
+        return try executeAction(name: "drag", targets: targets, conditions: conditions, snapshotID: snapshotID) {
             let start = try resolvePoint(snapshotID: snapshotID, elementID: fromElementID, x: fromX, y: fromY)
             let end = try resolvePoint(snapshotID: snapshotID, elementID: toElementID, x: toX, y: toY)
             try input.drag(from: start, to: end, steps: 24)
@@ -357,19 +465,19 @@ public final class AutomationController {
         }
     }
 
-    public func launchApp(bundleID: String? = nil, appName: String? = nil) throws -> ActionResult {
+    public func launchApp(bundleID: String? = nil, appName: String? = nil, conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.appControl, for: "launch_app")
         var targets: [String: String] = [:]
         if let bundleID { targets["bundleID"] = bundleID }
         if let appName { targets["appName"] = appName }
 
-        return try executeAction(name: "launch_app", targets: targets, executionPath: "nsworkspace") {
+        return try executeAction(name: "launch_app", targets: targets, executionPath: "cg_event", conditions: conditions) {
             try apps.launchApp(bundleID: bundleID, appName: appName)
             return "Application launch requested."
         }
     }
 
-    public func focusWindow(bundleID: String? = nil, appName: String? = nil, title: String? = nil) throws -> ActionResult {
+    public func focusWindow(bundleID: String? = nil, appName: String? = nil, title: String? = nil, conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.appControl, for: "focus_window")
         var targets: [String: String] = [:]
         if let bundleID { targets["bundleID"] = bundleID }
@@ -398,27 +506,15 @@ public final class AutomationController {
                     return VerificationDecision(
                         ok: true,
                         effect: .submitted,
-                        verification: ActionVerification(
-                            status: .unverifiable,
-                            strategy: "focus_readback",
-                            reason: "The focus request was submitted, but macOS exposed no frontmost application."
-                        ),
+                        verification: ActionVerification(status: .unverifiable, strategy: "focus_readback", reason: "The focus request was submitted, but macOS exposed no frontmost application."),
                         target: requestedTarget
                     )
                 }
-
                 let appMatches: Bool
-                if let bundleID, !bundleID.isEmpty {
-                    appMatches = frontmost.bundleIdentifier == bundleID
-                } else if let appName, !appName.isEmpty {
-                    appMatches = frontmost.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame
-                } else {
-                    appMatches = true
-                }
-                let observedWindow = self.apps.frontmostWindow(
-                    ownerPID: frontmost.processIdentifier,
-                    title: title
-                )
+                if let bundleID, !bundleID.isEmpty { appMatches = frontmost.bundleIdentifier == bundleID }
+                else if let appName, !appName.isEmpty { appMatches = frontmost.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame }
+                else { appMatches = true }
+                let observedWindow = self.apps.frontmostWindow(ownerPID: frontmost.processIdentifier, title: title)
                 let windowMatches = title?.isEmpty != false || observedWindow != nil
                 let observedTarget = ActionTarget(
                     requestedPID: requestedApp?.processIdentifier,
@@ -428,42 +524,31 @@ public final class AutomationController {
                     frontmostPID: frontmost.processIdentifier,
                     frontmostWindowID: observedWindow?.windowID
                 )
-
                 if appMatches && windowMatches {
                     return VerificationDecision(
                         ok: true,
                         effect: .confirmed,
-                        verification: ActionVerification(
-                            status: .confirmed,
-                            strategy: "focus_readback",
-                            reason: "The requested application and window matched the frontmost read-back.",
-                            snapshotID: nil
-                        ),
+                        verification: ActionVerification(status: .confirmed, strategy: "focus_readback", reason: "The requested application and window matched the frontmost read-back."),
                         target: observedTarget
                     )
                 }
-
                 return VerificationDecision(
                     ok: false,
                     effect: .suspectedNoop,
-                    verification: ActionVerification(
-                        status: .suspectedNoop,
-                        strategy: "focus_readback",
-                        reason: "The frontmost application or requested window did not match after focus was submitted."
-                    ),
+                    verification: ActionVerification(status: .suspectedNoop, strategy: "focus_readback", reason: "The frontmost application or requested window did not match after focus was submitted."),
                     target: observedTarget
                 )
             },
-            action: {
-                try self.apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
-                return "Window-focus request submitted."
-            }
-        )
+            conditions: conditions
+        ) {
+            try self.apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
+            return "Window-focus request submitted."
+        }
     }
 
-    public func menuAction(path: [String]) throws -> ActionResult {
+    public func menuAction(path: [String], conditions: ActionConditions? = nil) throws -> ActionResult {
         try requirePermission(.menuAction, for: "menu_action")
-        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "accessibility_api") {
+        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "cg_event", conditions: conditions) {
             try accessibility.performMenuAction(path: path)
             return "Menu action posted: \(path.joined(separator: " > "))."
         }

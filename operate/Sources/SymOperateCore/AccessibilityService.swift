@@ -265,6 +265,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         let nodeDescription = axCopyString(element, attribute: kAXHelpAttribute)
         let frame = axCopyFrame(element)
         let actions = axCopyActionNames(element)
+        let enabled = axBoolify(axCopyAttribute(element, attribute: kAXEnabledAttribute))
 
         cache[id] = ResolvedElement(element: element, frame: frame, role: role, title: title, label: label, value: value)
 
@@ -287,6 +288,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
             nodeDescription: nodeDescription,
             frame: frame,
             actions: actions,
+            enabled: enabled,
             children: children
         )
     }

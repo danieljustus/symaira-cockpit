@@ -50,7 +50,7 @@ func exitCode(for error: AutomationError) -> ExitCode {
     case .permissionDenied: return .permissionDenied
     case .notFound: return .notFound
     case .invalidArgument: return .invalidArgument
-    case .operationFailed: return .operationFailed
+    case .operationFailed, .preconditionFailed: return .operationFailed
     case .staleReference: return .staleReference
     case .unavailable: return .unavailable
     }

@@ -226,6 +226,7 @@ public struct UINode: Codable, Sendable {
     public let nodeDescription: String?
     public let frame: RectValue?
     public let actions: [String]
+    public let enabled: Bool?
     public let children: [UINode]
 
     public init(
@@ -238,6 +239,7 @@ public struct UINode: Codable, Sendable {
         nodeDescription: String?,
         frame: RectValue?,
         actions: [String],
+        enabled: Bool? = nil,
         children: [UINode]
     ) {
         self.id = id
@@ -249,6 +251,7 @@ public struct UINode: Codable, Sendable {
         self.nodeDescription = nodeDescription
         self.frame = frame
         self.actions = actions
+        self.enabled = enabled
         self.children = children
     }
 }
@@ -288,6 +291,7 @@ public enum AutomationError: LocalizedError {
     case notFound(String)
     case operationFailed(String)
     case staleReference(String)
+    case preconditionFailed(PredicateEvaluation)
 
     /// A stable, closed-vocabulary machine-readable code for this error case.
     /// Each case maps to one code; codes are additive-only and breaking changes
@@ -300,6 +304,7 @@ public enum AutomationError: LocalizedError {
         case .notFound:            return "not_found"
         case .operationFailed:     return "operation_failed"
         case .staleReference:      return "stale_snapshot"
+        case .preconditionFailed:  return "precondition_failed"
         }
     }
 
@@ -312,6 +317,9 @@ public enum AutomationError: LocalizedError {
              let .operationFailed(message),
              let .staleReference(message):
             return message
+        case let .preconditionFailed(evaluation):
+            return "Action precondition failed (\(evaluation.status.rawValue))."
+                + (evaluation.reason.map { " \($0)" } ?? "")
         }
     }
 }
