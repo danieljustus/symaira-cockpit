@@ -1,12 +1,16 @@
 import Foundation
 
-public struct UIElementPredicate: Codable, Sendable {
+public struct UIElementPredicate: Codable, Sendable, Equatable {
     public let role: String?
     public let title: String?
     public let label: String?
     public let value: String?
     public let subrole: String?
     public let actions: [String]?
+    public let text: String?
+    public let app: String?
+    public let window: String?
+    public let enabled: Bool?
 
     public init(
         role: String? = nil,
@@ -14,7 +18,11 @@ public struct UIElementPredicate: Codable, Sendable {
         label: String? = nil,
         value: String? = nil,
         subrole: String? = nil,
-        actions: [String]? = nil
+        actions: [String]? = nil,
+        text: String? = nil,
+        app: String? = nil,
+        window: String? = nil,
+        enabled: Bool? = nil
     ) {
         self.role = role
         self.title = title
@@ -22,8 +30,15 @@ public struct UIElementPredicate: Codable, Sendable {
         self.value = value
         self.subrole = subrole
         self.actions = actions
+        self.text = text
+        self.app = app
+        self.window = window
+        self.enabled = enabled
     }
 
+    /// Matches the node-scoped portion of a predicate. `app` and `window`
+    /// are evaluated by `ActionConditionEvaluator` against the observation's
+    /// app/window metadata, not against individual nodes.
     public func matches(node: UINode) -> Bool {
         if let role, !matchField(node.role, pattern: role) { return false }
         if let title, !matchField(node.title, pattern: title) { return false }
@@ -34,13 +49,20 @@ public struct UIElementPredicate: Codable, Sendable {
             let nodeActions = Set(node.actions)
             for action in actions where !nodeActions.contains(action) { return false }
         }
+        if let text {
+            let fields = [node.title, node.label, node.value, node.nodeDescription]
+            guard fields.compactMap({ $0 }).contains(where: { matchField($0, pattern: text) }) else {
+                return false
+            }
+        }
+        if let enabled, node.enabled != enabled { return false }
         return true
     }
 
     /// Maximum regex pattern length to prevent catastrophic backtracking (ReDoS).
     private static let maxRegexPatternLength = 200
 
-    private func matchField(_ field: String?, pattern: String) -> Bool {
+    func matchField(_ field: String?, pattern: String) -> Bool {
         guard let field else { return false }
         if pattern.hasPrefix("/") && pattern.hasSuffix("/") {
             let regex = String(pattern.dropFirst().dropLast())
