@@ -62,6 +62,56 @@ final class InputServiceTests: XCTestCase {
         XCTAssertNoThrow(try service.scroll(deltaY: -5))
     }
 
+    func testScrollAcceptsInRangeFractionalDeltas() throws {
+        let service = InputService()
+        XCTAssertNoThrow(try service.scroll(deltaX: 12.75, deltaY: -34.5))
+    }
+
+    func testScrollRejectsOutOfInt32RangeDeltas() {
+        let service = InputService()
+        let values = [
+            Double(Int32.max) + 1,
+            Double(Int32.min) - 1,
+            1e100,
+            -1e100,
+        ]
+
+        for value in values {
+            XCTAssertThrowsError(try service.scroll(deltaY: value), "deltaY \(value) should be rejected") { error in
+                guard let automationError = error as? AutomationError,
+                      case .invalidArgument = automationError else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+            }
+            XCTAssertThrowsError(try service.scroll(deltaX: value, deltaY: 0), "deltaX \(value) should be rejected") { error in
+                guard let automationError = error as? AutomationError,
+                      case .invalidArgument = automationError else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testScrollRejectsNonFiniteDeltas() {
+        let service = InputService()
+        let values = [Double.nan, Double.infinity, -Double.infinity]
+
+        for value in values {
+            XCTAssertThrowsError(try service.scroll(deltaY: value), "deltaY \(value) should be rejected") { error in
+                guard let automationError = error as? AutomationError,
+                      case .invalidArgument = automationError else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+            }
+            XCTAssertThrowsError(try service.scroll(deltaX: value, deltaY: 0), "deltaX \(value) should be rejected") { error in
+                guard let automationError = error as? AutomationError,
+                      case .invalidArgument = automationError else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+            }
+        }
+    }
+
     // MARK: - typeText
 
     func testTypeTextSucceeds() throws {

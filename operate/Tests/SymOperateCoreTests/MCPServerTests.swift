@@ -413,4 +413,18 @@ extension MCPServerTests {
         XCTAssertEqual(error?["code"] as? Int, -32601)
         XCTAssertTrue((error?["message"] as? String)?.contains("invalid/method") ?? false)
     }
+
+    func testWireScrollInvalidDeltaIsClassifiedAndServerContinues() async throws {
+        let responses = try await runWire(server: server, requests: [
+            #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"scroll","arguments":{"delta_y":1e100}}}"#,
+            #"{"jsonrpc":"2.0","id":2,"method":"ping"}"#,
+        ])
+
+        XCTAssertEqual(responses.count, 2, "An invalid scroll must not terminate the MCP server")
+        let error = responses[0]["error"] as? [String: Any]
+        XCTAssertEqual(error?["code"] as? Int, -32603)
+        let data = error?["data"] as? [String: Any]
+        XCTAssertEqual(data?["code"] as? String, "invalid_argument")
+        XCTAssertEqual((responses[1]["result"] as? [String: Any])?.isEmpty, true)
+    }
 }
