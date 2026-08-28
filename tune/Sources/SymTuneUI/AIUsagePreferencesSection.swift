@@ -1,5 +1,4 @@
 import SwiftUI
-import SymairaKeychain
 import SymairaProviderKit
 import SymairaTheme
 import SymTuneCore
@@ -30,7 +29,7 @@ struct AIUsagePreferencesSection: View {
                 .symairaText(.subheading)
                 .foregroundStyle(SymairaTheme.textPrimary)
 
-            Text("Track AI subscription usage per provider. Symbrain owns provider discovery and auth status; credentials entered here remain in the Keychain, never in config.toml.")
+            Text("Track AI subscription usage per provider. Symbrain owns provider discovery, auth status, and credential resolution; API keys entered here are stored in SymVault, never in config.toml or cockpit's Keychain.")
                 .symairaText(.caption)
                 .foregroundStyle(SymairaTheme.textSecondary)
 
@@ -125,15 +124,12 @@ struct ProviderCredentialView: View {
                             // the same slot convention the previous local field used,
                             // so existing stored keys keep working (issue #42).
                 let field = Self.apiKeyField(for: provider.id)
-                let store = SymairaProviderCredentialStore(
-                                keychain: SymairaKeychain(service: "com.symaira.symtune")
-                            )
-                SymairaProviderCredentialField(
-                                providerID: provider.id,
-                                store: store,
-                                title: field?.label ?? "\\(provider.displayName) API key",
-                                onCredentialChange: onCredentialChange
-                            )
+                SymVaultCredentialField(
+                    providerID: provider.id,
+                    store: SymVaultCredentialStore(),
+                    title: field?.label ?? "\(provider.displayName) API key",
+                    onCredentialChange: onCredentialChange
+                )
 
             case .externalToken(let resolver):
                 ExternalAuthStateRow(
