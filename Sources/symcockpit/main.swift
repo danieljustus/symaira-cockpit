@@ -15,6 +15,7 @@ import SymScopeCLI
 import SymScopeCore
 import SymTuneCore
 import SymTuneCLI
+import SymairaUpdateCheck
 
 let usage = """
 symcockpit — this machine: observability and control
@@ -49,7 +50,7 @@ enum CockpitVersion {
 
 /// The version report, in the ecosystem's `version --json` shape: a `tool`,
 /// its `version`, and the component families underneath.
-func cockpitVersionJSON() throws -> String {
+func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> String {
     struct FamilyVersion: Encodable {
         let family: String
         let version: String
@@ -66,13 +67,22 @@ func cockpitVersionJSON() throws -> String {
         let version: String
         let schemaVersion: Int
         let families: [FamilyVersion]
+        let update: CockpitUpdateReport
 
         enum CodingKeys: String, CodingKey {
             case tool
             case version
             case schemaVersion = "schema_version"
             case families
+            case update
         }
+    }
+
+    let resolvedUpdate: CockpitUpdateReport
+    if let update {
+        resolvedUpdate = update
+    } else {
+        resolvedUpdate = await checkForCockpitUpdate()
     }
 
     let report = Report(
@@ -83,7 +93,8 @@ func cockpitVersionJSON() throws -> String {
             FamilyVersion(family: "tune", version: TuneVersion.current, schemaVersion: nil),
             FamilyVersion(family: "operate", version: SymOperateVersion.current, schemaVersion: nil),
             FamilyVersion(family: "scope", version: Version.version, schemaVersion: 1),
-        ]
+        ],
+        update: resolvedUpdate
     )
 
     let encoder = JSONEncoder()
@@ -108,10 +119,20 @@ case "operate":
 case "scope":
     code = await ScopeMain.run(Array(args.dropFirst()))
 case "version":
+    let update = await checkForCockpitUpdate()
     if args.contains("--json") {
-        print(try cockpitVersionJSON())
+        print(try await cockpitVersionJSON(update: update))
     } else {
-        print("symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current), operate \(SymOperateVersion.current), scope \(Version.version)")
+        var line = "symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current), operate \(SymOperateVersion.current), scope \(Version.version)"
+        switch update.status {
+        case "available":
+            if let latest = update.latestVersion { line += " — update available: \(latest)" }
+        case "unavailable":
+            line += " — update check unavailable"
+        default:
+            line += " — up to date"
+        }
+        print(line)
     }
     code = 0
 case "help", "--help", "-h":

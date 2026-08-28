@@ -100,6 +100,20 @@ struct UpdateNotificationView: View {
                 RoundedRectangle(cornerRadius: SymairaRadius.card)
                     .stroke(SymairaTheme.borderGlassHover, lineWidth: 1)
             )
+        } else if case .error(let message) = updateChecker.status {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Update check unavailable")
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textSecondary)
+                Text(message)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textMuted)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(SymairaSpacing.medium)
+            .background(SymairaTheme.bgCard)
+            .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
         }
     }
 

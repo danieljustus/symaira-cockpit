@@ -1,12 +1,16 @@
 import Foundation
+import SymairaUpdateCheck
 
-/// Lightweight update checker that compares the current version against the
-/// latest GitHub release. Non-blocking and silent when up-to-date or offline.
-/// No third-party dependencies — uses URLSession only.
-public enum UpdateChecker {
-
-    // MARK: - Public types
-
+/// Compatibility adapter for Tune's historical update-check API.
+///
+/// Release discovery, semver parsing, HTTP handling and disk caching all live
+/// in `SymairaUpdateCheck`. The adapter remains so package-local callers keep
+/// their source compatibility while the shipped cockpit uses the same shared
+/// primitive everywhere.
+public struct UpdateChecker: Sendable {
+    /// Legacy source-compatible semantic version value. Release discovery and
+    /// comparison now live in appkit; this nested type remains for package
+    /// clients that still parse or compare versions directly.
     public struct SemVer: Comparable, CustomStringConvertible, Sendable {
         public let major: Int
         public let minor: Int
@@ -20,12 +24,10 @@ public enum UpdateChecker {
             self.prerelease = prerelease
         }
 
-        /// Parse a tag like `v0.1.0` or `v0.2.0-beta.1`. Returns `nil` on invalid input.
         public static func parse(_ tag: String) -> SemVer? {
             let trimmed = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             let parts = trimmed.split(separator: "-", maxSplits: 1)
             guard let versionPart = parts.first else { return nil }
-
             let numbers = versionPart.split(separator: ".")
             guard numbers.count == 3,
                   let major = Int(numbers[0]),
@@ -34,18 +36,19 @@ public enum UpdateChecker {
                   major >= 0, minor >= 0, patch >= 0
             else { return nil }
 
-            let prerelease = parts.count > 1 ? String(parts[1]) : nil
-            return SemVer(major: major, minor: minor, patch: patch, prerelease: prerelease)
+            return SemVer(
+                major: major,
+                minor: minor,
+                patch: patch,
+                prerelease: parts.count > 1 ? String(parts[1]) : nil
+            )
         }
 
         public var description: String {
             let base = "\(major).\(minor).\(patch)"
-            if let pre = prerelease { return "\(base)-\(pre)" }
-            return base
+            return prerelease.map { "\(base)-\($0)" } ?? base
         }
 
-        // Pre-release sorts before release (0.2.0-beta.1 < 0.2.0).
-        // Pre-release tags compare lexicographically when numeric parts match.
         public static func < (lhs: SemVer, rhs: SemVer) -> Bool {
             if lhs.major != rhs.major { return lhs.major < rhs.major }
             if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
@@ -54,15 +57,8 @@ public enum UpdateChecker {
             case (nil, nil): return false
             case (_, nil): return true
             case (nil, _): return false
-            case (let l?, let r?): return l < r
+            case (let left?, let right?): return left < right
             }
-        }
-
-        public static func == (lhs: SemVer, rhs: SemVer) -> Bool {
-            lhs.major == rhs.major
-                && lhs.minor == rhs.minor
-                && lhs.patch == rhs.patch
-                && lhs.prerelease == rhs.prerelease
         }
     }
 
@@ -70,50 +66,49 @@ public enum UpdateChecker {
         public let updateAvailable: Bool
         public let latestVersion: String
         public let downloadURL: String?
+        /// Non-nil when the release lookup could not be completed. A failed
+        /// check must never look like a successful up-to-date check.
+        public let error: String?
+
+        public init(
+            updateAvailable: Bool,
+            latestVersion: String,
+            downloadURL: String?,
+            error: String? = nil
+        ) {
+            self.updateAvailable = updateAvailable
+            self.latestVersion = latestVersion
+            self.downloadURL = downloadURL
+            self.error = error
+        }
     }
 
-    // MARK: - Configuration
-
-    private static let repoOwner = "danieljustus"
-    private static let repoName = "symaira-tune"
-    private static let releaseURL = "https://api.github.com/repos/\(repoOwner)/\(repoName)/releases/latest"
-    private static let timeoutInterval: TimeInterval = 1
+    public static let repoOwner = "danieljustus"
+    public static let repoName = "symaira-cockpit"
     private static let envOptOutKey = "SYMTUNE_CHECK_UPDATES"
     private static let configKey = "check_updates"
 
-    // MARK: - Session cache
+    private let currentVersion: String
+    private let underlying: SymairaUpdateCheck.UpdateChecker
 
-    /// Thread-safe cache for the most recent update check result.
-    /// Isolating the cache on an actor removes the need for `nonisolated(unsafe)`
-    /// statics and satisfies Swift 6 strict-concurrency checking.
-    private actor Cache {
-        private var result: UpdateInfo?
-        private var fetched = false
-
-        func get() -> UpdateInfo? {
-            fetched ? result : nil
-        }
-
-        func set(_ value: UpdateInfo) {
-            result = value
-            fetched = true
-        }
-
-        func reset() {
-            result = nil
-            fetched = false
-        }
+    public init(
+        currentVersion: String = TuneVersion.current,
+        repoOwner: String = Self.repoOwner,
+        repoName: String = Self.repoName,
+        client: UpdateHTTPClient? = nil,
+        cacheDirectory: URL? = nil
+    ) {
+        self.currentVersion = currentVersion
+        self.underlying = SymairaUpdateCheck.UpdateChecker(
+            owner: repoOwner,
+            repo: repoName,
+            client: client ?? URLSession.shared,
+            cacheTTL: 24 * 60 * 60,
+            cacheDirectory: cacheDirectory
+        )
     }
 
-    private static let cache = Cache()
-
-    static func resetCache() async {
-        await cache.reset()
-    }
-
-    // MARK: - Public API
-
-    /// Returns `false` if opted out via env or config, `true` otherwise.
+    /// Returns false when the existing Tune opt-out setting disables checks.
     public static func isUpdateCheckEnabled(
         env: [String: String] = ProcessInfo.processInfo.environment,
         configPaths: ConfigPaths = ConfigPaths()
@@ -122,81 +117,67 @@ public enum UpdateChecker {
             return value == "1" || value == "true"
         }
 
-        let configFile = configPaths.configFile
-        guard let content = try? String(contentsOf: configFile, encoding: .utf8) else {
+        guard let content = try? String(contentsOf: configPaths.configFile, encoding: .utf8) else {
             return true
         }
-
         let table = TOMLParser().parse(content)
-        if let val = table["general", configKey]?.boolValue { return val }
-        if let val = table["general", configKey]?.intValue { return val == 1 }
-        if let val = table["general", configKey]?.stringValue {
-            return val.lowercased() == "true" || val == "1"
+        if let value = table["general", configKey]?.boolValue { return value }
+        if let value = table["general", configKey]?.intValue { return value == 1 }
+        if let value = table["general", configKey]?.stringValue {
+            return value.lowercased() == "true" || value == "1"
         }
-
         return true
     }
 
-    private enum UpdateCheckError: Error {
-        case skipped
-        case badResponse
-        case invalidPayload
-        case invalidCurrentVersion(latestTag: String)
+    /// Check for a newer release using the shared appkit implementation.
+    public func checkForUpdate(force: Bool = false) async -> UpdateInfo {
+        guard Self.isUpdateCheckEnabled() else {
+            return UpdateInfo(updateAvailable: false, latestVersion: currentVersion, downloadURL: nil)
+        }
+
+        do {
+            guard let release = try await underlying.check(currentVersion: currentVersion, force: force) else {
+                return UpdateInfo(updateAvailable: false, latestVersion: currentVersion, downloadURL: nil)
+            }
+            return UpdateInfo(
+                updateAvailable: true,
+                latestVersion: release.tagName,
+                downloadURL: release.htmlURL
+            )
+        } catch {
+            return UpdateInfo(
+                updateAvailable: false,
+                latestVersion: currentVersion,
+                downloadURL: nil,
+                error: error.localizedDescription
+            )
+        }
     }
 
-    /// Fetch latest release info. Returns `nil` when opted out. Cached per process.
+    /// Source-compatible bridge for Tune tests and older package-local users.
+    /// The injected transport is routed through appkit; no GitHub request is
+    /// made by this compatibility layer itself.
     public static func checkForUpdate(
         currentVersion: String = TuneVersion.current,
         networkService: NetworkServiceProtocol = URLSessionNetworkService()
     ) async -> UpdateInfo? {
         guard isUpdateCheckEnabled() else { return nil }
+        let checker = UpdateChecker(
+            currentVersion: currentVersion,
+            client: NetworkClientAdapter(networkService: networkService)
+        )
+        return await checker.checkForUpdate(force: true)
+    }
 
-        if let cached = await cache.get() { return cached }
+    /// Retained for callers that used to clear Tune's process cache. Appkit's
+    /// cache is disk-backed and TTL-bound, so there is no process cache here.
+    public static func resetCache() async {}
+}
 
-        let result: UpdateInfo
-        do {
-            guard let url = URL(string: releaseURL) else {
-                throw UpdateCheckError.skipped
-            }
+private struct NetworkClientAdapter: UpdateHTTPClient {
+    let networkService: NetworkServiceProtocol
 
-            let (data, response) = try await networkService.fetchData(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200
-            else {
-                throw UpdateCheckError.badResponse
-            }
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tagName = json["tag_name"] as? String,
-                  let latestVersion = SemVer.parse(tagName)
-            else {
-                throw UpdateCheckError.invalidPayload
-            }
-
-            guard let currentSemVer = SemVer.parse("v\(currentVersion)") else {
-                throw UpdateCheckError.invalidCurrentVersion(latestTag: tagName)
-            }
-
-            let downloadURL = (json["html_url"] as? String)
-            let updateAvailable = latestVersion > currentSemVer
-
-            result = UpdateInfo(
-                updateAvailable: updateAvailable,
-                latestVersion: tagName,
-                downloadURL: downloadURL
-            )
-        } catch let error as UpdateCheckError {
-            switch error {
-            case .invalidCurrentVersion(let latestTag):
-                result = UpdateInfo(updateAvailable: false, latestVersion: latestTag, downloadURL: nil)
-            default:
-                result = UpdateInfo(updateAvailable: false, latestVersion: currentVersion, downloadURL: nil)
-            }
-        } catch {
-            result = UpdateInfo(updateAvailable: false, latestVersion: currentVersion, downloadURL: nil)
-        }
-
-        await cache.set(result)
-        return result
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await networkService.fetchData(from: request.url ?? URL(string: "https://invalid.local")!)
     }
 }

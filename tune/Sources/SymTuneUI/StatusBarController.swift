@@ -54,9 +54,9 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     let autoPrefs = UserDefaultsAutoUpdatePreferenceStore(keyPrefix: "com.symaira.symtune")
 
     lazy var updateChecker = AppUpdateChecker(
-        checker: UpdateChecker(owner: "danieljustus", repo: "symaira-tune"),
+        checker: UpdateChecker(owner: "danieljustus", repo: "symaira-cockpit"),
         store: UserDefaultsSkippedVersionStore(key: "com.symaira.tune.updateSkippedTag"),
-        currentVersion: { TuneVersion.current },
+        currentVersion: { self.updateVersionProvider() },
         autoPrefs: autoPrefs
     )
 
@@ -82,7 +82,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// (`pmset -g assertions`).
     public var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
-    public override init() {
+    private let updateVersionProvider: () -> String
+
+    /// The status item uses the family version in the standalone Tune app and
+    /// the unified cockpit version in the shipped GUI.
+    public override convenience init() {
+        self.init(updateVersionProvider: { TuneVersion.current })
+    }
+
+    public init(updateVersionProvider: @escaping () -> String) {
+        self.updateVersionProvider = updateVersionProvider
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Load persisted configuration from config.toml so saved preferences
         // survive a relaunch (issue #357). The CLI uses the same loader
