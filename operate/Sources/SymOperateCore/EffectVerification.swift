@@ -92,6 +92,8 @@ public struct ActionResult: Codable, Sendable {
     public let executionPath: String?
     public let deliveryMode: DeliveryMode
     public let target: ActionTarget?
+    /// Bounded route selection and escalation evidence for this action.
+    public let routeDiagnostics: ActionRouteDiagnostics?
     /// Optional pre/postcondition evidence from the action-conditions contract.
     public let conditions: ActionConditionsResult?
 
@@ -109,6 +111,7 @@ public struct ActionResult: Codable, Sendable {
         executionPath: String? = nil,
         deliveryMode: DeliveryMode = .automatic,
         target: ActionTarget? = nil,
+        routeDiagnostics: ActionRouteDiagnostics? = nil,
         conditions: ActionConditionsResult? = nil
     ) {
         self.ok = ok
@@ -120,11 +123,12 @@ public struct ActionResult: Codable, Sendable {
         self.executionPath = executionPath
         self.deliveryMode = deliveryMode
         self.target = target
+        self.routeDiagnostics = routeDiagnostics
         self.conditions = conditions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case ok, message, snapshot, contractVersion, effect, verification, executionPath, deliveryMode, target, conditions
+        case ok, message, snapshot, contractVersion, effect, verification, executionPath, deliveryMode, target, routeDiagnostics, conditions
     }
 
     /// New clients can decode legacy three-field results; legacy results are
@@ -146,6 +150,7 @@ public struct ActionResult: Codable, Sendable {
         executionPath = try container.decodeIfPresent(String.self, forKey: .executionPath)
         deliveryMode = try container.decodeIfPresent(DeliveryMode.self, forKey: .deliveryMode) ?? .automatic
         target = try container.decodeIfPresent(ActionTarget.self, forKey: .target)
+        routeDiagnostics = try container.decodeIfPresent(ActionRouteDiagnostics.self, forKey: .routeDiagnostics)
         conditions = try container.decodeIfPresent(ActionConditionsResult.self, forKey: .conditions)
     }
 }
