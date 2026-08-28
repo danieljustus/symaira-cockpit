@@ -130,7 +130,7 @@ public final class MCPServer: @unchecked Sendable {
                     "window_id": ["type": "integer", "description": "Window ID to capture. When provided, display_id is ignored."],
                 ],
             ]),
-            tool("query_ui", description: "Capture a screenshot and accessible UI tree for the frontmost app.", input: [
+            tool("query_ui", description: "Capture a screenshot and accessible UI tree. With no window_id, query the frontmost app; with window_id, query that window in its owning process without falling back to the frontmost app.", input: [
                 "type": "object",
                 "properties": [
                     "max_depth": ["type": "integer", "default": 4],
@@ -157,7 +157,11 @@ public final class MCPServer: @unchecked Sendable {
                     "value": ["type": "string"],
                     "subrole": ["type": "string"],
                     "actions": ["type": "array", "items": ["type": "string"]],
-                    "snapshot_id": ["type": "string", "description": "Reuse an existing snapshot. If omitted, takes a fresh one."],
+                    "max_depth": ["type": "integer", "default": 4],
+                    "max_nodes": ["type": "integer", "default": 200],
+                    "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
+                    "window_id": ["type": "integer", "description": "Window ID to query in its owning process. Omit to query the frontmost app."],
+                    "snapshot_id": ["type": "string", "description": "Reuse an existing snapshot only when its target scope matches the request."],
                 ],
             ]),
             tool("click", description: "Click by x/y coordinates or by snapshot_id + element_id. Requires exactly one of two groups: (x, y) for coordinate-based clicking, or (snapshot_id, element_id) for element-based clicking. Raw coordinates require a prior query_ui snapshot so the target element can be identified and safety-checked; destructive controls and secure text fields are always blocked. Optional: button (default \"left\"), double_click.", input: [

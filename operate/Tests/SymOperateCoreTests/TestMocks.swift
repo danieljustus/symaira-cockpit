@@ -10,6 +10,11 @@ final class MockAccessibilityService: AccessibilityServiceProtocol {
     private var nodesCache: [String: [UINode]] = [:]
     private var snapshotCache: [String: Snapshot] = [:]
     var focusedRoleOverride: String?
+    var frontmostQueryCount = 0
+    var targetQueryCount = 0
+    var targetProcessID: Int32?
+    var targetWindowID: Int?
+    var targetNodes: [UINode] = []
 
     func prepopulate(snapshotID: String, elementID: String, role: String?, title: String?, label: String?, value: String?, frame: RectValue?) {
         let element = AXUIElementCreateApplication(0)
@@ -23,7 +28,17 @@ final class MockAccessibilityService: AccessibilityServiceProtocol {
         }
     }
 
-    func queryFrontmostUI(snapshotID: String, maxDepth: Int, maxNodes: Int) throws -> [UINode] { [] }
+    func queryFrontmostUI(snapshotID: String, maxDepth: Int, maxNodes: Int) throws -> [UINode] {
+        frontmostQueryCount += 1
+        return []
+    }
+
+    func queryUI(snapshotID: String, processID: Int32, windowID: Int, windowBounds: RectValue, maxDepth: Int, maxNodes: Int) throws -> [UINode] {
+        targetQueryCount += 1
+        targetProcessID = processID
+        targetWindowID = windowID
+        return targetNodes
+    }
 
     func resolveElement(snapshotID: String, elementID: String) -> AccessibilityService.ResolvedElement? {
         elements[snapshotID]?[elementID]
@@ -81,7 +96,9 @@ final class MockAccessibilityService: AccessibilityServiceProtocol {
 
 final class MockScreenService: ScreenServiceProtocol {
     var stubbedSnapshot: Snapshot?
+    var stubbedWindowSnapshot: Snapshot?
     var captureMainDisplayCalled = false
+    var capturedWindowIDs: [Int] = []
 
     func listDisplays() -> [DisplayInfo] { [] }
     func captureMainDisplay(maxDimension: CoreGraphics.CGFloat) throws -> Snapshot {
@@ -92,7 +109,13 @@ final class MockScreenService: ScreenServiceProtocol {
         throw AutomationError.unavailable("mock")
     }
     func captureDisplay(displayID: UInt32, maxDimension: CoreGraphics.CGFloat) throws -> Snapshot { throw AutomationError.unavailable("mock") }
-    func captureWindow(windowID: Int, maxDimension: CoreGraphics.CGFloat) throws -> Snapshot { throw AutomationError.unavailable("mock") }
+    func captureWindow(windowID: Int, maxDimension: CoreGraphics.CGFloat) throws -> Snapshot {
+        capturedWindowIDs.append(windowID)
+        if let snapshot = stubbedWindowSnapshot ?? stubbedSnapshot {
+            return snapshot
+        }
+        throw AutomationError.unavailable("mock")
+    }
 }
 
 final class MockInputService: InputServiceProtocol {
@@ -104,9 +127,12 @@ final class MockInputService: InputServiceProtocol {
 }
 
 final class MockAppService: AppServiceProtocol {
-    func listApps() -> [AppInfo] { [] }
-    func listWindows() -> [WindowInfo] { [] }
-    func frontmostApp() -> AppInfo? { nil }
+    var apps: [AppInfo] = []
+    var windows: [WindowInfo] = []
+
+    func listApps() -> [AppInfo] { apps }
+    func listWindows() -> [WindowInfo] { windows }
+    func frontmostApp() -> AppInfo? { apps.first(where: \.isActive) ?? apps.first }
     func launchApp(bundleID: String?, appName: String?) throws {}
     func focusWindow(bundleID: String?, appName: String?, title: String?) throws {}
 }

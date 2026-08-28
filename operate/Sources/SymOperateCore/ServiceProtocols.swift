@@ -32,6 +32,14 @@ extension ScreenServiceProtocol {
 
 public protocol AccessibilityServiceProtocol {
     func queryFrontmostUI(snapshotID: String, maxDepth: Int, maxNodes: Int) throws -> [UINode]
+    func queryUI(
+        snapshotID: String,
+        processID: Int32,
+        windowID: Int,
+        windowBounds: RectValue,
+        maxDepth: Int,
+        maxNodes: Int
+    ) throws -> [UINode]
     func resolveElement(snapshotID: String, elementID: String) -> AccessibilityService.ResolvedElement?
     func resolveElementAtPoint(x: Double, y: Double) -> AccessibilityService.ResolvedElement?
     func hasCachedNodes(for snapshotID: String) -> Bool
@@ -49,6 +57,17 @@ public protocol AccessibilityServiceProtocol {
 }
 
 extension AccessibilityServiceProtocol {
+    public func queryUI(
+        snapshotID: String,
+        processID: Int32,
+        windowID: Int,
+        windowBounds: RectValue,
+        maxDepth: Int,
+        maxNodes: Int
+    ) throws -> [UINode] {
+        throw AutomationError.unavailable("The accessibility service cannot resolve window \(windowID) for process \(processID).")
+    }
+
     public func frontmostContainsTextPolling(_ text: String) -> Bool {
         frontmostContainsText(text)
     }

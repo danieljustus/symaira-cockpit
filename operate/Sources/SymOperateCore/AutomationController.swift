@@ -64,6 +64,7 @@ public final class AutomationController {
     public func snapshot(displayID: UInt32? = nil, windowID: Int? = nil) throws -> Snapshot {
         try requirePermission(.capture, for: "snapshot")
         if let windowID {
+            _ = try windowInfo(for: windowID)
             return try screen.captureWindow(windowID: windowID)
         }
         if let displayID {
@@ -73,16 +74,48 @@ public final class AutomationController {
     }
 
     public func queryUI(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil) throws -> UIQueryResult {
+        let target = try windowID.map { try windowInfo(for: $0) }
         let snapshot = try self.snapshot(displayID: displayID, windowID: windowID)
         accessibility.storeSnapshot(snapshot, for: snapshot.id)
-        let nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
-        return UIQueryResult(snapshot: snapshot, app: apps.frontmostApp(), nodes: nodes)
+        let nodes: [UINode]
+        let app: AppInfo?
+        if let target {
+            nodes = try accessibility.queryUI(
+                snapshotID: snapshot.id,
+                processID: target.ownerPID,
+                windowID: target.windowID,
+                windowBounds: target.bounds,
+                maxDepth: maxDepth,
+                maxNodes: maxNodes
+            )
+            app = appInfo(for: target)
+        } else {
+            nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
+            app = apps.frontmostApp()
+        }
+        return UIQueryResult(snapshot: snapshot, app: app, nodes: nodes)
     }
 
     public func queryUIWithOCR(maxDepth: Int = 4, maxNodes: Int = 200, displayID: UInt32? = nil, windowID: Int? = nil) throws -> UIQueryResultWithOCR {
+        let target = try windowID.map { try windowInfo(for: $0) }
         let snapshot = try self.snapshot(displayID: displayID, windowID: windowID)
         accessibility.storeSnapshot(snapshot, for: snapshot.id)
-        let nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
+        let nodes: [UINode]
+        let app: AppInfo?
+        if let target {
+            nodes = try accessibility.queryUI(
+                snapshotID: snapshot.id,
+                processID: target.ownerPID,
+                windowID: target.windowID,
+                windowBounds: target.bounds,
+                maxDepth: maxDepth,
+                maxNodes: maxNodes
+            )
+            app = appInfo(for: target)
+        } else {
+            nodes = try accessibility.queryFrontmostUI(snapshotID: snapshot.id, maxDepth: maxDepth, maxNodes: maxNodes)
+            app = apps.frontmostApp()
+        }
         let isWeak = ocr.isAXTreeWeak(nodeCount: countNodes(nodes))
 
         var ocrResult: OCRResult?
@@ -95,7 +128,7 @@ public final class AutomationController {
 
         return UIQueryResultWithOCR(
             snapshot: snapshot,
-            app: apps.frontmostApp(),
+            app: app,
             nodes: nodes,
             ocrResult: ocrResult,
             axTreeWeak: isWeak
@@ -122,18 +155,54 @@ public final class AutomationController {
         windowID: Int? = nil
     ) throws -> UIQueryResult {
         try requirePermission(.capture, for: "find_ui")
+        let target = try windowID.map { try windowInfo(for: $0) }
         let queryResult: UIQueryResult
         if let snapshotID, accessibility.hasCachedNodes(for: snapshotID),
            let cachedNodes = accessibility.cachedNodes(for: snapshotID),
-           let cachedSnapshot = accessibility.cachedSnapshot(for: snapshotID) {
-            // Reuse existing snapshot — run the query against cached tree
+           let cachedSnapshot = accessibility.cachedSnapshot(for: snapshotID),
+           cachedSnapshotMatchesTarget(cachedSnapshot, target: target) {
+            // Reuse only a snapshot captured for the same target scope. A
+            // target window snapshot must carry both its window and owner PID;
+            // an unscoped/frontmost snapshot is never valid for a window query.
             let matched = queryService.findNodes(in: cachedNodes, predicate: predicate)
-            return UIQueryResult(snapshot: cachedSnapshot, app: apps.frontmostApp(), nodes: matched)
+            return UIQueryResult(snapshot: cachedSnapshot, app: target.map(appInfo(for:)), nodes: matched)
         } else {
-            queryResult = try queryUI(maxDepth: maxDepth, maxNodes: maxNodes, displayID: displayID, windowID: windowID)
+            queryResult = try queryUI(
+                maxDepth: maxDepth,
+                maxNodes: maxNodes,
+                displayID: displayID,
+                windowID: windowID
+            )
         }
         let matched = queryService.findNodes(in: queryResult.nodes, predicate: predicate)
         return UIQueryResult(snapshot: queryResult.snapshot, app: queryResult.app, nodes: matched)
+    }
+
+    private func cachedSnapshotMatchesTarget(_ snapshot: Snapshot, target: WindowInfo?) -> Bool {
+        guard let target else {
+            return snapshot.windowID == nil && snapshot.windowOwnerPID == nil
+        }
+        return snapshot.windowID == target.windowID && snapshot.windowOwnerPID == target.ownerPID
+    }
+
+    private func windowInfo(for windowID: Int) throws -> WindowInfo {
+        guard let window = apps.listWindows().first(where: { $0.windowID == windowID }) else {
+            throw AutomationError.notFound("Window \(windowID) was not found or is no longer available.")
+        }
+        guard window.ownerPID > 0 else {
+            throw AutomationError.unavailable("Window \(windowID) has no resolvable owning process.")
+        }
+        return window
+    }
+
+    private func appInfo(for window: WindowInfo) -> AppInfo {
+        apps.listApps().first(where: { $0.processIdentifier == window.ownerPID })
+            ?? AppInfo(
+                localizedName: window.ownerName,
+                bundleIdentifier: nil,
+                processIdentifier: window.ownerPID,
+                isActive: false
+            )
     }
 
     private func executeAction(

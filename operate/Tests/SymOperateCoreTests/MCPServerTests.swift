@@ -55,6 +55,7 @@ final class MCPServerTests: XCTestCase {
         let properties = schema?["properties"] as? [String: Any]
         XCTAssertNotNil(properties?["max_depth"])
         XCTAssertNotNil(properties?["max_nodes"])
+        XCTAssertNotNil(properties?["window_id"])
         XCTAssertEqual(schema?["type"] as? String, "object")
     }
 
