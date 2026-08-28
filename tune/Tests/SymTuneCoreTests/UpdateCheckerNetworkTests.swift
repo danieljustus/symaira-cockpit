@@ -32,7 +32,7 @@ final class UpdateCheckerNetworkTests: XCTestCase {
 
     private func makeResponse(statusCode: Int = 200) -> HTTPURLResponse {
         HTTPURLResponse(
-            url: URL(string: "https://api.github.com/repos/danieljustus/symaira-tune/releases/latest")!,
+            url: URL(string: "https://api.github.com/repos/danieljustus/symaira-cockpit/releases/latest")!,
             statusCode: statusCode,
             httpVersion: nil,
             headerFields: nil
@@ -57,7 +57,7 @@ final class UpdateCheckerNetworkTests: XCTestCase {
         XCTAssertEqual(info!.downloadURL, "https://github.com/example/releases/v0.2.0")
     }
 
-    func testCheckForUpdateReturnsOlderVersion() async {
+    func testCheckForUpdateTreatsOlderReleaseAsUpToDate() async {
         mock.responseData = makeReleaseJSON(tagName: "v0.0.1")
         mock.response = makeResponse()
 
@@ -65,7 +65,7 @@ final class UpdateCheckerNetworkTests: XCTestCase {
 
         XCTAssertNotNil(info)
         XCTAssertFalse(info!.updateAvailable)
-        XCTAssertEqual(info!.latestVersion, "v0.0.1")
+        XCTAssertEqual(info!.latestVersion, currentVersion)
     }
 
     func testCheckForUpdateReturnsSameVersion() async {

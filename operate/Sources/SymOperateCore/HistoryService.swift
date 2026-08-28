@@ -5,14 +5,34 @@ public final class HistoryService: HistoryServiceProtocol, Sendable {
     private let maxEvents = 1000
 
     public init(fileURL: URL? = nil) {
-        if let fileURL = fileURL {
+        if let fileURL {
             self.fileURL = fileURL
         } else {
-            let localShare = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/symoperate")
-            HistoryService.secureDirectory(at: localShare)
-            self.fileURL = localShare.appendingPathComponent("history.jsonl")
+            let stateDirectory = Self.defaultStateDirectory()
+            HistoryService.secureDirectory(at: stateDirectory)
+            self.fileURL = stateDirectory.appendingPathComponent("history.jsonl")
         }
+        HistoryService.secureDirectory(at: self.fileURL.deletingLastPathComponent())
         secureFile()
+    }
+
+    private static func defaultStateDirectory() -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let override = environment["SYMOPERATE_STATE_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+
+        // XCTest must never mutate the user's real audit trail. Use an
+        // isolated temporary directory even when a test forgets to inject a
+        // mock history service.
+        if environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestBundlePath"] != nil {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("symoperate-xctest", isDirectory: true)
+        }
+
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/share/symoperate", isDirectory: true)
     }
 
     /// Creates `~/.local/share/symoperate` with 0700 permissions (or hardens an

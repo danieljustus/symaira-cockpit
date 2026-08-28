@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
 
-        let statusBar = StatusBarController()
+        let statusBar = StatusBarController(updateVersionProvider: { CockpitAppVersion.current })
         statusBar.openCockpitTitle = "Open Cockpit…"
         statusBar.statusItemAccessibilityLabel = "Symaira Cockpit"
         statusBar.fallbackIconTitle = "SC"

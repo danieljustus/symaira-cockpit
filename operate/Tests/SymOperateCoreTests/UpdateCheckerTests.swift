@@ -43,11 +43,11 @@ final class UpdateCheckerTests: XCTestCase {
         status: Int = 200,
         currentVersion: String = "1.0.0"
     ) -> SymOperateCore.UpdateChecker {
-        let body = #"{"tag_name":"\#(latestTag)","html_url":"https://github.com/danieljustus/symaira-operate/releases/tag/\#(latestTag)"}"#
+        let body = #"{"tag_name":"\#(latestTag)","html_url":"https://github.com/danieljustus/symaira-cockpit/releases/tag/\#(latestTag)"}"#
         return SymOperateCore.UpdateChecker(
             currentVersion: currentVersion,
             repoOwner: "danieljustus",
-            repoName: "symaira-operate",
+            repoName: "symaira-cockpit",
             client: StubHTTPClient(body: body, status: status),
             cacheDirectory: cacheDir,
             userDefaults: defaults
