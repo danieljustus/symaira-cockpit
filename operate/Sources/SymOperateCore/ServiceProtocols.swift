@@ -41,6 +41,7 @@ public protocol AccessibilityServiceProtocol {
         maxNodes: Int
     ) throws -> [UINode]
     func resolveElement(snapshotID: String, elementID: String) -> AccessibilityService.ResolvedElement?
+    func performElementAction(snapshotID: String, elementID: String, action: String) throws
     func resolveElementAtPoint(x: Double, y: Double) -> AccessibilityService.ResolvedElement?
     func hasCachedNodes(for snapshotID: String) -> Bool
     func cachedNodes(for snapshotID: String) -> [UINode]?
@@ -68,6 +69,10 @@ extension AccessibilityServiceProtocol {
         maxNodes: Int
     ) throws -> [UINode] {
         throw AutomationError.unavailable("The accessibility service cannot resolve window \(windowID) for process \(processID).")
+    }
+
+    public func performElementAction(snapshotID: String, elementID: String, action: String) throws {
+        throw AutomationError.unsupported("Semantic route '\(action)' is unavailable for this accessibility service.")
     }
 
     public func frontmostContainsTextPolling(_ text: String) -> Bool {

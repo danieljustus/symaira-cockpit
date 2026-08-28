@@ -10,6 +10,28 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         public let title: String?
         public let label: String?
         public let value: String?
+        public let actions: [String]
+        public let enabled: Bool?
+
+        public init(
+            element: AXUIElement,
+            frame: RectValue?,
+            role: String?,
+            title: String?,
+            label: String?,
+            value: String?,
+            actions: [String] = [],
+            enabled: Bool? = nil
+        ) {
+            self.element = element
+            self.frame = frame
+            self.role = role
+            self.title = title
+            self.label = label
+            self.value = value
+            self.actions = actions
+            self.enabled = enabled
+        }
     }
 
     internal var elementCache: [String: [String: ResolvedElement]] = [:]
@@ -108,6 +130,22 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
 
     public func resolveElement(snapshotID: String, elementID: String) -> ResolvedElement? {
         elementCache[snapshotID]?[elementID]
+    }
+
+    public func performElementAction(snapshotID: String, elementID: String, action: String) throws {
+        guard let resolved = resolveElement(snapshotID: snapshotID, elementID: elementID) else {
+            throw AutomationError.staleReference("The referenced snapshot has expired or the element no longer exists.")
+        }
+        guard resolved.enabled != false else {
+            throw AutomationError.unsupported("The target UI element is disabled.")
+        }
+        guard resolved.actions.contains(action) else {
+            throw AutomationError.unsupported("The target UI element does not expose the '\(action)' semantic action.")
+        }
+        let result = AXUIElementPerformAction(resolved.element, action as CFString)
+        guard result == .success else {
+            throw AutomationError.operationFailed("The Accessibility action '\(action)' could not be performed.")
+        }
     }
 
     public func hasCachedNodes(for snapshotID: String) -> Bool {
@@ -287,7 +325,16 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         let actions = axCopyActionNames(element)
         let enabled = axBoolify(axCopyAttribute(element, attribute: kAXEnabledAttribute))
 
-        cache[id] = ResolvedElement(element: element, frame: frame, role: role, title: title, label: label, value: value)
+        cache[id] = ResolvedElement(
+            element: element,
+            frame: frame,
+            role: role,
+            title: title,
+            label: label,
+            value: value,
+            actions: actions,
+            enabled: enabled
+        )
 
         let children: [UINode]
         if depth < maxDepth, let rawChildren = axCopyElements(element, attribute: kAXChildrenAttribute) {

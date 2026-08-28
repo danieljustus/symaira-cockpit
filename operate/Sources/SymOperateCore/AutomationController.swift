@@ -277,6 +277,21 @@ public final class AutomationController {
         }
     }
 
+    private func defaultRouteDiagnostics(executionPath: String, deliveryMode: DeliveryMode) -> ActionRouteDiagnostics {
+        let route: ActionRoute
+        if deliveryMode == .foreground {
+            route = .foreground
+        } else if executionPath == "cg_event" {
+            route = .coordinate
+        } else {
+            route = .native
+        }
+        return ActionRouteDiagnostics(
+            route: route,
+            attempts: [ActionRouteAttempt(route: route, status: .selected, reason: "Selected by the bounded route policy.")]
+        )
+    }
+
     private func executeAction(
         name: String,
         targets: [String: String] = [:],
@@ -287,6 +302,7 @@ public final class AutomationController {
         snapshotID: String? = nil,
         windowID: Int? = nil,
         deliveryMode: DeliveryMode = .automatic,
+        routeDiagnostics: ActionRouteDiagnostics? = nil,
         action: () throws -> String
     ) throws -> ActionResult {
         var preconditionEvaluation: PredicateEvaluation?
@@ -368,6 +384,7 @@ public final class AutomationController {
                 executionPath: executionPath,
                 deliveryMode: deliveryMode,
                 target: decision.target ?? target,
+                routeDiagnostics: routeDiagnostics ?? defaultRouteDiagnostics(executionPath: executionPath, deliveryMode: deliveryMode),
                 conditions: conditionResult
             )
             try? history.record(HistoryEvent(
@@ -454,9 +471,48 @@ public final class AutomationController {
         if let y { targets["y"] = String(y) }
         let resolvedTarget = try resolveActionTarget(target, snapshotID: snapshotID)
 
-        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode) {
-            let target = try resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
-            try input.click(at: target, button: button, doubleClick: doubleClick, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
+        let semanticElement: AccessibilityService.ResolvedElement? = if let snapshotID, let elementID {
+            accessibility.resolveElement(snapshotID: snapshotID, elementID: elementID)
+        } else {
+            nil
+        }
+        let semanticAvailable = semanticElement?.enabled != false
+            && semanticElement?.actions.contains("AXPress") == true
+        let selectedRoute: ActionRoute
+        if deliveryMode == .foreground {
+            selectedRoute = .foreground
+        } else if semanticAvailable {
+            selectedRoute = .semantic
+        } else {
+            selectedRoute = .coordinate
+        }
+        var attempts: [ActionRouteAttempt] = []
+        if selectedRoute == .semantic {
+            attempts.append(ActionRouteAttempt(route: .semantic, status: .selected, reason: "The observed element exposes AXPress and is enabled."))
+        } else if deliveryMode == .foreground {
+            attempts.append(ActionRouteAttempt(route: .semantic, status: .skipped, reason: "Foreground delivery was explicitly requested."))
+            attempts.append(ActionRouteAttempt(route: .coordinate, status: .skipped, reason: "Foreground delivery supersedes coordinate delivery."))
+        } else if semanticElement?.enabled == false {
+            attempts.append(ActionRouteAttempt(route: .semantic, status: .refused, reason: "The observed element is disabled."))
+        } else {
+            attempts.append(ActionRouteAttempt(route: .semantic, status: .skipped, reason: "The observed element does not expose AXPress; no semantic retry is made."))
+        }
+        if selectedRoute != .semantic {
+            attempts.append(ActionRouteAttempt(route: selectedRoute, status: .selected, reason: "Selected by the bounded route policy."))
+        }
+        let diagnostics = ActionRouteDiagnostics(route: selectedRoute, attempts: attempts)
+
+        return try executeAction(name: "click", targets: targets, executionPath: "cg_event", target: actionTarget(for: resolvedTarget), conditions: conditions, snapshotID: snapshotID, windowID: resolvedTarget?.window?.windowID, deliveryMode: deliveryMode, routeDiagnostics: diagnostics) {
+            if selectedRoute == .semantic {
+                guard let snapshotID, let elementID else {
+                    throw AutomationError.staleReference("Semantic delivery requires the observed snapshot and element identity.")
+                }
+                try self.guardAgainstResolvedElement(semanticElement)
+                try self.accessibility.performElementAction(snapshotID: snapshotID, elementID: elementID, action: "AXPress")
+                return "Semantic AXPress action performed."
+            }
+            let target = try self.resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
+            try self.input.click(at: target, button: button, doubleClick: doubleClick, deliveryMode: deliveryMode, targetProcessID: resolvedTarget?.app.processIdentifier)
             return "Click event posted at (\(Int(target.x)), \(Int(target.y)))."
         }
     }
@@ -679,6 +735,21 @@ public final class AutomationController {
         throw AutomationError.operationFailed("Condition was not met within \(timeoutSeconds) seconds.")
     }
 
+    private func guardAgainstResolvedElement(_ resolved: AccessibilityService.ResolvedElement?) throws {
+        guard let resolved else {
+            throw AutomationError.staleReference("The referenced snapshot has expired or the element no longer exists.")
+        }
+        if resolved.role == "AXSecureTextField" {
+            throw AutomationError.permissionDenied("Refusing to target a secure text field.")
+        }
+        if actionPolicy.isDestructive(role: resolved.role, title: resolved.title, label: resolved.label, value: resolved.value) {
+            throw AutomationError.permissionDenied("Refusing to target a potentially destructive UI element.")
+        }
+        if resolved.enabled == false {
+            throw AutomationError.unsupported("The target UI element is disabled.")
+        }
+    }
+
     private func guardAgainstSecureField() throws {
         if let role = accessibility.frontmostFocusedElementRole(), role == "AXSecureTextField" {
             throw AutomationError.permissionDenied("Refusing to type into a secure text field.")
@@ -701,13 +772,7 @@ public final class AutomationController {
     private func resolvePoint(snapshotID: String?, elementID: String?, x: Double?, y: Double?) throws -> PointValue {
         if let snapshotID, let elementID {
             if let resolved = accessibility.resolveElement(snapshotID: snapshotID, elementID: elementID) {
-                if let role = resolved.role, role == "AXSecureTextField" {
-                    throw AutomationError.permissionDenied("Refusing to target a secure text field.")
-                }
-
-                if actionPolicy.isDestructive(role: resolved.role, title: resolved.title, label: resolved.label, value: resolved.value) {
-                    throw AutomationError.permissionDenied("Refusing to target a potentially destructive UI element.")
-                }
+                try guardAgainstResolvedElement(resolved)
 
                 if let frame = resolved.frame {
                     return frame.center
@@ -719,12 +784,7 @@ public final class AutomationController {
 
         if let x, let y {
             if let resolved = accessibility.resolveElementAtPoint(x: x, y: y) {
-                if let role = resolved.role, role == "AXSecureTextField" {
-                    throw AutomationError.permissionDenied("Refusing to target a secure text field via raw coordinates.")
-                }
-                if actionPolicy.isDestructive(role: resolved.role, title: resolved.title, label: resolved.label, value: resolved.value) {
-                    throw AutomationError.permissionDenied("Refusing to target a potentially destructive UI element via raw coordinates.")
-                }
+                try guardAgainstResolvedElement(resolved)
                 return PointValue(x: x, y: y)
             }
             throw AutomationError.permissionDenied("Cannot identify the element at the given coordinates. Use snapshot_id + element_id instead, or take a snapshot first to enable coordinate-based targeting.")

@@ -189,6 +189,7 @@ public final class MCPServer: @unchecked Sendable {
                     "y": ["type": "number"],
                     "button": ["type": "string", "enum": ["left", "right"]],
                     "double_click": ["type": "boolean"],
+                    "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]],
                     "process_id": ["type": "integer"],
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
@@ -204,12 +205,12 @@ public final class MCPServer: @unchecked Sendable {
             ]),
             tool("type_text", description: "Type raw unicode text into the current focused control.", input: [
                 "type": "object",
-                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema(), "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
+                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["text"],
             ]),
             tool("press_keys", description: "Press a keyboard shortcut like [\"cmd\", \"s\"] or [\"return\"].", input: [
                 "type": "object",
-                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema(), "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
+                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["keys"],
             ]),
             tool("scroll", description: "Scroll by pixel deltas.", input: [
@@ -217,6 +218,7 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "delta_x": ["type": "number", "default": 0],
                     "delta_y": ["type": "number"],
+                    "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]],
                     "process_id": ["type": "integer"],
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
@@ -237,6 +239,7 @@ public final class MCPServer: @unchecked Sendable {
                     "from_y": ["type": "number"],
                     "to_x": ["type": "number"],
                     "to_y": ["type": "number"],
+                    "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]],
                     "process_id": ["type": "integer"],
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
@@ -366,7 +369,9 @@ public final class MCPServer: @unchecked Sendable {
                     ],
                 ],
                 "executionPath": ["type": ["string", "null"]],
+                "deliveryMode": ["type": "string", "enum": ["automatic", "background", "foreground"]],
                 "target": ["type": ["object", "null"]],
+                "routeDiagnostics": ["type": ["object", "null"]],
                 "conditions": ["type": ["object", "null"]],
             ],
         ]
@@ -429,26 +434,30 @@ public final class MCPServer: @unchecked Sendable {
                 button: string(arguments["button"]) ?? "left",
                 doubleClick: bool(arguments["double_click"], default: false),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "type_text":
             payload = try controller.typeText(
                 requireString(arguments["text"], name: "text"),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "press_keys":
             payload = try controller.pressKeys(
                 requireStringArray(arguments["keys"], name: "keys"),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "scroll":
             payload = try controller.scroll(
                 deltaX: double(arguments["delta_x"]) ?? 0,
                 deltaY: requireDouble(arguments["delta_y"], name: "delta_y"),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "drag":
             payload = try controller.drag(
@@ -460,7 +469,8 @@ public final class MCPServer: @unchecked Sendable {
                 toX: double(arguments["to_x"]),
                 toY: double(arguments["to_y"]),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "launch_app":
             payload = try controller.launchApp(
@@ -474,13 +484,15 @@ public final class MCPServer: @unchecked Sendable {
                 appName: string(arguments["app_name"]),
                 title: string(arguments["title"]),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "menu_action":
             payload = try controller.menuAction(
                 path: requireStringArray(arguments["path"], name: "path"),
                 conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments)
+                target: targetIdentity(arguments),
+                deliveryMode: try deliveryMode(arguments)
             )
         case "wait_for":
             payload = try await controller.waitFor(
@@ -675,6 +687,14 @@ public final class MCPServer: @unchecked Sendable {
 }
 
 private extension MCPServer {
+    func deliveryMode(_ arguments: [String: Any]) throws -> DeliveryMode {
+        guard let value = string(arguments["delivery_mode"]) else { return .automatic }
+        guard let mode = DeliveryMode(rawValue: value) else {
+            throw AutomationError.invalidArgument("Unsupported delivery_mode '\(value)'. Expected automatic, background, or foreground.")
+        }
+        return mode
+    }
+
     func targetIdentity(_ arguments: [String: Any]) -> TargetIdentity? {
         let target = TargetIdentity(
             processID: int32(arguments["process_id"]),
