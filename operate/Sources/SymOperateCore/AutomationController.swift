@@ -205,18 +205,75 @@ public final class AutomationController {
             )
     }
 
+    private struct VerificationDecision {
+        let ok: Bool
+        let effect: EffectState
+        let verification: ActionVerification
+        let target: ActionTarget?
+
+        static func submitted(snapshot: Snapshot?, target: ActionTarget?) -> VerificationDecision {
+            VerificationDecision(
+                ok: true,
+                effect: .submitted,
+                verification: ActionVerification(
+                    status: .unverifiable,
+                    strategy: "post_action_snapshot",
+                    reason: snapshot == nil
+                        ? "The event was submitted, but no post-action snapshot was available."
+                        : "The event was submitted; a snapshot was captured but its semantic effect was not verified.",
+                    snapshotID: snapshot?.id
+                ),
+                target: target
+            )
+        }
+    }
+
     private func executeAction(
         name: String,
         targets: [String: String] = [:],
+        executionPath: String = "unknown",
+        target: ActionTarget? = nil,
+        verification: (() -> VerificationDecision)? = nil,
         action: () throws -> String
     ) throws -> ActionResult {
         do {
             let message = try action()
-            let result = ActionResult(ok: true, message: message, snapshot: try? screen.captureMainDisplay())
-            try? history.record(HistoryEvent(action: name, targets: targets, success: true, message: message))
+            let snapshot = try? screen.captureMainDisplay()
+            let decision = verification?() ?? .submitted(snapshot: snapshot, target: target)
+            let resolvedTarget = decision.target ?? target
+            let result = ActionResult(
+                ok: decision.ok,
+                message: message,
+                snapshot: snapshot,
+                effect: decision.effect,
+                verification: decision.verification,
+                executionPath: executionPath,
+                target: resolvedTarget
+            )
+            try? history.record(HistoryEvent(
+                action: name,
+                targets: targets,
+                success: decision.ok,
+                message: message,
+                contractVersion: EffectContract.currentVersion,
+                effect: decision.effect,
+                verification: decision.verification,
+                executionPath: executionPath,
+                target: resolvedTarget
+            ))
             return result
         } catch {
-            try? history.record(HistoryEvent(action: name, targets: targets, success: false, message: error.localizedDescription))
+            try? history.record(HistoryEvent(
+                action: name,
+                targets: targets,
+                success: false,
+                message: error.localizedDescription,
+                contractVersion: EffectContract.currentVersion,
+                effect: .refused,
+                verification: ActionVerification(status: .notAttempted, strategy: "precondition", reason: error.localizedDescription),
+                executionPath: executionPath,
+                target: target
+            ))
             throw error
         }
     }
@@ -236,7 +293,7 @@ public final class AutomationController {
         if let x { targets["x"] = String(x) }
         if let y { targets["y"] = String(y) }
 
-        return try executeAction(name: "click", targets: targets) {
+        return try executeAction(name: "click", targets: targets, executionPath: "cg_event") {
             let target = try resolvePoint(snapshotID: snapshotID, elementID: elementID, x: x, y: y)
             try input.click(at: target, button: button, doubleClick: doubleClick)
             return "Click event posted at (\(Int(target.x)), \(Int(target.y)))."
@@ -246,7 +303,7 @@ public final class AutomationController {
     public func typeText(_ text: String) throws -> ActionResult {
         try requirePermission(.input, for: "type_text")
         let redacted = "<redacted: \(text.count) chars>"
-        return try executeAction(name: "type_text", targets: ["text": redacted]) {
+        return try executeAction(name: "type_text", targets: ["text": redacted], executionPath: "cg_event") {
             guard !text.isEmpty else {
                 throw AutomationError.invalidArgument("type_text requires a non-empty text argument.")
             }
@@ -258,7 +315,7 @@ public final class AutomationController {
 
     public func pressKeys(_ keys: [String]) throws -> ActionResult {
         try requirePermission(.input, for: "press_keys")
-        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")]) {
+        return try executeAction(name: "press_keys", targets: ["keys": keys.joined(separator: "+")], executionPath: "cg_event") {
             try guardAgainstSecureField()
             try input.pressKeys(keys)
             return "Key events posted: \(keys.joined(separator: "+"))."
@@ -267,7 +324,7 @@ public final class AutomationController {
 
     public func scroll(deltaX: Double = 0, deltaY: Double) throws -> ActionResult {
         try requirePermission(.input, for: "scroll")
-        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)]) {
+        return try executeAction(name: "scroll", targets: ["deltaX": String(deltaX), "deltaY": String(deltaY)], executionPath: "cg_event") {
             try input.scroll(deltaX: deltaX, deltaY: deltaY)
             return "Scroll event posted with delta (\(deltaX), \(deltaY))."
         }
@@ -292,7 +349,7 @@ public final class AutomationController {
         if let toX { targets["toX"] = String(toX) }
         if let toY { targets["toY"] = String(toY) }
 
-        return try executeAction(name: "drag", targets: targets) {
+        return try executeAction(name: "drag", targets: targets, executionPath: "cg_event") {
             let start = try resolvePoint(snapshotID: snapshotID, elementID: fromElementID, x: fromX, y: fromY)
             let end = try resolvePoint(snapshotID: snapshotID, elementID: toElementID, x: toX, y: toY)
             try input.drag(from: start, to: end, steps: 24)
@@ -306,7 +363,7 @@ public final class AutomationController {
         if let bundleID { targets["bundleID"] = bundleID }
         if let appName { targets["appName"] = appName }
 
-        return try executeAction(name: "launch_app", targets: targets) {
+        return try executeAction(name: "launch_app", targets: targets, executionPath: "nsworkspace") {
             try apps.launchApp(bundleID: bundleID, appName: appName)
             return "Application launch requested."
         }
@@ -319,15 +376,94 @@ public final class AutomationController {
         if let appName { targets["appName"] = appName }
         if let title { targets["title"] = title }
 
-        return try executeAction(name: "focus_window", targets: targets) {
-            try apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
-            return "Window-focus request dispatched."
+        let requestedApp = apps.listApps().first { app in
+            if let bundleID, !bundleID.isEmpty { return app.bundleIdentifier == bundleID }
+            if let appName, !appName.isEmpty { return app.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame }
+            return false
         }
+        let requestedTarget = ActionTarget(
+            requestedPID: requestedApp?.processIdentifier,
+            requestedBundleID: bundleID,
+            requestedAppName: appName,
+            requestedWindowTitle: title
+        )
+
+        return try executeAction(
+            name: "focus_window",
+            targets: targets,
+            executionPath: "nsworkspace_ax",
+            target: requestedTarget,
+            verification: {
+                guard let frontmost = self.apps.frontmostApp() else {
+                    return VerificationDecision(
+                        ok: true,
+                        effect: .submitted,
+                        verification: ActionVerification(
+                            status: .unverifiable,
+                            strategy: "focus_readback",
+                            reason: "The focus request was submitted, but macOS exposed no frontmost application."
+                        ),
+                        target: requestedTarget
+                    )
+                }
+
+                let appMatches: Bool
+                if let bundleID, !bundleID.isEmpty {
+                    appMatches = frontmost.bundleIdentifier == bundleID
+                } else if let appName, !appName.isEmpty {
+                    appMatches = frontmost.localizedName.localizedCaseInsensitiveCompare(appName) == .orderedSame
+                } else {
+                    appMatches = true
+                }
+                let observedWindow = self.apps.frontmostWindow(
+                    ownerPID: frontmost.processIdentifier,
+                    title: title
+                )
+                let windowMatches = title?.isEmpty != false || observedWindow != nil
+                let observedTarget = ActionTarget(
+                    requestedPID: requestedApp?.processIdentifier,
+                    requestedBundleID: bundleID,
+                    requestedAppName: appName,
+                    requestedWindowTitle: title,
+                    frontmostPID: frontmost.processIdentifier,
+                    frontmostWindowID: observedWindow?.windowID
+                )
+
+                if appMatches && windowMatches {
+                    return VerificationDecision(
+                        ok: true,
+                        effect: .confirmed,
+                        verification: ActionVerification(
+                            status: .confirmed,
+                            strategy: "focus_readback",
+                            reason: "The requested application and window matched the frontmost read-back.",
+                            snapshotID: nil
+                        ),
+                        target: observedTarget
+                    )
+                }
+
+                return VerificationDecision(
+                    ok: false,
+                    effect: .suspectedNoop,
+                    verification: ActionVerification(
+                        status: .suspectedNoop,
+                        strategy: "focus_readback",
+                        reason: "The frontmost application or requested window did not match after focus was submitted."
+                    ),
+                    target: observedTarget
+                )
+            },
+            action: {
+                try self.apps.focusWindow(bundleID: bundleID, appName: appName, title: title)
+                return "Window-focus request submitted."
+            }
+        )
     }
 
     public func menuAction(path: [String]) throws -> ActionResult {
         try requirePermission(.menuAction, for: "menu_action")
-        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")]) {
+        return try executeAction(name: "menu_action", targets: ["path": path.joined(separator: " > ")], executionPath: "accessibility_api") {
             try accessibility.performMenuAction(path: path)
             return "Menu action posted: \(path.joined(separator: " > "))."
         }

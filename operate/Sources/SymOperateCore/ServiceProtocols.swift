@@ -91,8 +91,20 @@ public protocol AppServiceProtocol {
     func listApps() -> [AppInfo]
     func listWindows() -> [WindowInfo]
     func frontmostApp() -> AppInfo?
+    /// Returns the topmost matching window when the platform exposes ordering.
+    func frontmostWindow(ownerPID: Int32, title: String?) -> WindowInfo?
     func launchApp(bundleID: String?, appName: String?) throws
     func focusWindow(bundleID: String?, appName: String?, title: String?) throws
+}
+
+extension AppServiceProtocol {
+    public func frontmostWindow(ownerPID: Int32, title: String? = nil) -> WindowInfo? {
+        listWindows().first { window in
+            guard window.ownerPID == ownerPID else { return false }
+            guard let title, !title.isEmpty else { return true }
+            return window.title?.localizedCaseInsensitiveContains(title) == true
+        }
+    }
 }
 
 // MARK: - OCR Service

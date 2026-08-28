@@ -259,10 +259,44 @@ public final class MCPServer: @unchecked Sendable {
     }
 
     private func tool(_ name: String, description: String, input: [String: Any]) -> [String: Any] {
-        [
+        var result: [String: Any] = [
             "name": name,
             "description": description,
             "inputSchema": input.isEmpty ? ["type": "object", "properties": [:]] : input,
+        ]
+        if ["click", "type_text", "press_keys", "scroll", "drag", "launch_app", "focus_window", "menu_action"].contains(name) {
+            result["outputSchema"] = actionResultSchema()
+        }
+        return result
+    }
+
+    /// Shared output schema for state-changing tools. The legacy `ok`,
+    /// `message`, and `snapshot` fields remain present alongside the versioned
+    /// effect and verification metadata.
+    private func actionResultSchema() -> [String: Any] {
+        [
+            "type": "object",
+            "required": ["ok", "message", "contractVersion", "effect", "verification"],
+            "properties": [
+                "ok": ["type": "boolean", "description": "Legacy submission/error flag; do not treat true as confirmed effect."],
+                "message": ["type": "string"],
+                "snapshot": ["type": ["object", "null"]],
+                "contractVersion": ["type": "integer", "const": EffectContract.currentVersion],
+                "effect": ["type": "string", "enum": ["submitted", "confirmed", "unverifiable", "suspected_noop", "refused"]],
+                "verification": [
+                    "type": "object",
+                    "required": ["status", "strategy"],
+                    "properties": [
+                        "status": ["type": "string", "enum": ["confirmed", "unverifiable", "suspected_noop", "not_attempted"]],
+                        "strategy": ["type": "string"],
+                        "reason": ["type": ["string", "null"]],
+                        "snapshotID": ["type": ["string", "null"]],
+                        "checkedAt": ["type": ["string", "null"]],
+                    ],
+                ],
+                "executionPath": ["type": ["string", "null"]],
+                "target": ["type": ["object", "null"]],
+            ],
         ]
     }
 
@@ -482,6 +516,13 @@ public final class MCPServer: @unchecked Sendable {
             ],
             "structuredContent": [
                 "status": "refused",
+                "contractVersion": EffectContract.currentVersion,
+                "effect": "refused",
+                "verification": [
+                    "status": "not_attempted",
+                    "strategy": "precondition",
+                    "reason": message,
+                ],
                 "refusal": [
                     "code": code,
                     "message": message,
