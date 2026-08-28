@@ -13,9 +13,9 @@ bis der Port funktional gleichwertig ist.
 
 | Paket | LoC (Kern) | Swift-Äquivalent |
 | :--- | :--- | :--- |
-| `internal/mcpcfg` | 905 | `SymScopeMCPConfig` — Client-Config-Discovery (JSONC-Parsing) |
-| `cmd/symscope` | 734 | `symscope` CLI (ArgumentRouter) |
-| `internal/mcphealth` | 297 | `MCPHealthService` — stdio/HTTP-Probe |
+| `internal/mcpcfg` | 905 | `SymScopeMCPConfig` — removed; symbrain is the SSOT |
+| `cmd/symscope` | 734 | Swift CLI (ArgumentRouter) |
+| `internal/mcphealth` | 297 | `HarnessHealthService` — symbrain view; no local probes |
 | `internal/cache` | 251 | `SnapshotCache` (JSON auf XDG-Cache) |
 | `internal/ports` | 239 | `PortService` — `lsof`-Parse (statt gopsutil) |
 | `internal/explain` | 150 | `ExplainService` |
@@ -33,12 +33,14 @@ bis der Port funktional gleichwertig ist.
 symscope (executable) → SymScopeMCP → SymScopeCore
 ```
 
-- `SymScopeCore` — alle Logik (PortService, ContainerService, MCPDiscovery,
-  HealthService, Cache, Watch, Models). Nur Target mit System-Frameworks.
+- `SymScopeCore` — all local inventory logic (PortService, ContainerService,
+  HarnessInventoryService, MCPDiscovery, Cache, Watch, Models). MCP discovery
+  is a schema-2 view over symbrain; ports, daemons and containers remain
+  standalone.
 - `SymScopeMCP` — stdio JSON-RPC/MCP-Transport (SymairaMCP aus
   `symaira-appkit`, exact-pinned). 6 Tools: `scan`, `ports_list`,
   `ports_suggest`, `mcp_list`, `conflicts`, `mcp_health`.
-- `symscope` — dünne CLI: `scan`, `ports`, `mcp`, `containers`, `conflicts`,
+- `symscope` — thin CLI: `scan`, `ports`, `mcp`, `containers`, `conflicts`,
   `explain`, `cache`, `watch`, `serve`, `version`.
 
 ## Abhängigkeiten / Ersatz
@@ -46,7 +48,7 @@ symscope (executable) → SymScopeMCP → SymScopeCore
 | Go | Swift |
 | :--- | :--- |
 | `gopsutil/v4` (Prozesse) | `lsof`-Shellout oder `libproc` (kein Drittanbieter) |
-| `hujson` (JSONC) | Eigener stripper (JSON-Kommentare) oder appkit |
+| `hujson` (JSONC) | symbrain harness schema 2 (no local parser) |
 | `cobra` | Eigener ArgumentRouter (Swift ArgumentParser nicht nötig) |
 | `corekit/mcpserver` | `SymairaMCP` (appkit) |
 | `tailscale/hujson`, `yaml.v3` | Nur falls Konfig-Formate es brauchen |
@@ -54,9 +56,10 @@ symscope (executable) → SymScopeMCP → SymScopeCore
 ## CLI-Kompatibilität
 
 - `symscope scan` → Snapshot JSON (gleiche snake_case-Struktur)
-- `symscope ports list|suggest`, `symscope mcp list|add|remove|health`,
-  `symscope containers`, `symscope conflicts`, `symscope explain port|server`,
+- `symscope ports list|suggest`, `symscope mcp list|health`, `symscope containers`, `symscope conflicts`, `symscope explain port|server`,
   `symscope cache show|clear|stats`, `symscope serve`
+- `mcp list|health` requires symbrain; ports, daemons and containers remain
+  usable when symbrain is absent.
 - `version --json` mit `schema_version: 1` (SymairaToolKit-Handshake)
 
 ## CI / Verifikation

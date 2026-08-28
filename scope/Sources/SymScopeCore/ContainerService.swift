@@ -16,9 +16,16 @@ public enum ContainerService: Sendable {
         }
         let binary = resolveDockerBinary()
         let args = ["ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Ports}}"]
-        guard let output = try? run(binary: binary, args: args) else {
+        guard let result = try? run(binary: binary, args: args) else {
             return ([], ["docker ps failed; container inventory unavailable"])
         }
+        if result.timedOut {
+            return ([], ["docker ps timed out; container inventory unavailable"])
+        }
+        guard result.terminationStatus == 0 else {
+            return ([], ["docker ps failed; container inventory unavailable"])
+        }
+        let output = result.output
         var containers: [Container] = []
         for line in output.split(separator: "\n") {
             let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
@@ -44,17 +51,8 @@ public enum ContainerService: Sendable {
         return dockerPath
     }
 
-    private static func run(binary: String, args: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return String(data: data, encoding: .utf8) ?? ""
+    private static func run(binary: String, args: [String]) throws -> BoundedProcessResult {
+        try BoundedProcessRunner.run(executable: binary, arguments: args, timeoutSeconds: 10)
     }
 
     /// "0.0.0.0:8080->80/tcp, :::8080->80/tcp" → [8080]

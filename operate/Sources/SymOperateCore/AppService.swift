@@ -63,16 +63,11 @@ public struct AppService: AppServiceProtocol {
         }
 
         if let appName, !appName.isEmpty {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            process.arguments = ["-a", appName]
-            do {
-                try process.run()
-            } catch {
-                throw AutomationError.notFound("Failed to launch application named \(appName): \(error.localizedDescription)")
-            }
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
+            guard let result = try? BoundedAppProcessRunner.run(
+                executable: "/usr/bin/open",
+                arguments: ["-a", appName],
+                timeoutSeconds: 10
+            ), !result.timedOut, result.terminationStatus == 0 else {
                 throw AutomationError.notFound("No application found named \(appName).")
             }
             return

@@ -73,9 +73,8 @@ public struct MCPServer: Codable, Equatable, Sendable {
     public var env: [String: String]
     public var secretBacked: Bool
     public var credentialWarnings: [String]
-    /// Which inventory produced this entry: "builtin" (cockpit's own JSONC
-    /// config parse, full detail) or "symbrain" (symbrain's harness
-    /// inventory, name-only — command/args/url are unknown). See issue #19.
+    /// Which inventory produced this entry: "symbrain" (the authoritative
+    /// schema-2 harness inventory).
     public var source: String
 
     public init(

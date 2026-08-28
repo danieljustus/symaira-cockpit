@@ -139,20 +139,18 @@ public struct LocalDaemonCommandRunner: DaemonCommandRunning, Sendable {
     public init() {}
 
     public func run(executable: String, arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw DaemonCommandError.nonZero(process.terminationStatus)
+        let result = try BoundedProcessRunner.run(
+            executable: executable,
+            arguments: arguments,
+            timeoutSeconds: 10
+        )
+        if result.timedOut {
+            throw DaemonCommandError.timedOut
         }
-        return String(data: data, encoding: .utf8) ?? ""
+        guard result.terminationStatus == 0 else {
+            throw DaemonCommandError.nonZero(result.terminationStatus)
+        }
+        return result.output
     }
 }
 
@@ -180,10 +178,12 @@ public struct LocalDaemonFileSystem: DaemonFileSystemReading, Sendable {
 
 public enum DaemonCommandError: Error, LocalizedError, Sendable {
     case nonZero(Int32)
+    case timedOut
 
     public var errorDescription: String? {
         switch self {
         case .nonZero(let status): return "command exited with status \(status)"
+        case .timedOut: return "command timed out"
         }
     }
 }

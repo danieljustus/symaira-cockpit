@@ -32,6 +32,7 @@ public final class SymScopeMCPServer: @unchecked Sendable {
         case "initialize":
             return [
                 "protocolVersion": "2025-06-18",
+                "capabilities": ["tools": [:]],
                 "serverInfo": ["name": "symscope", "version": Version.version],
             ]
         case "notifications/initialized":
@@ -55,9 +56,12 @@ public final class SymScopeMCPServer: @unchecked Sendable {
 
     private func registerHandlers() {
         server
-            .withMethodHandler("initialize") { [self] (params: MCPInitializeParams) async throws -> MCPJSONValue in
+            .withMethodHandler("initialize") { (params: MCPInitializeParams) async throws -> MCPJSONValue in
                 .object([
                     "protocolVersion": .string(params.protocolVersion ?? MCPServer.supportedProtocolVersion),
+                    "capabilities": .object([
+                        "tools": .object([:]),
+                    ]),
                     "serverInfo": .object([
                         "name": .string("symscope"),
                         "version": .string(Version.version),
@@ -153,7 +157,10 @@ public final class SymScopeMCPServer: @unchecked Sendable {
             return toolResult(try encoder.encode(ports))
 
         case "mcp_list":
-            let (servers, _) = MCPDiscovery.discover()
+            let (servers, notes) = MCPDiscovery.discover()
+            if let note = notes.first(where: { $0.contains("requires symbrain") }) {
+                throw MCPServerError.unavailable(note)
+            }
             return toolResult(try encoder.encode(servers))
 
         case "conflicts":
@@ -162,8 +169,13 @@ public final class SymScopeMCPServer: @unchecked Sendable {
             return toolResult(try encoder.encode(conflicts))
 
         case "mcp_health":
-            let (servers, _) = MCPDiscovery.discover()
-            let results = await MCPHealthService.checkAll(servers)
+            let service = SymBrainHarnessService()
+            guard service.isAvailable else {
+                throw MCPServerError.unavailable(MCPDiscovery.requiresSymbrainNote)
+            }
+            guard let results = service.health() else {
+                throw MCPServerError.unavailable("mcp: symbrain harness health failed")
+            }
             return toolResult(try encoder.encode(results))
 
         case "daemons_list":
@@ -217,11 +229,13 @@ public final class SymScopeMCPServer: @unchecked Sendable {
 enum MCPServerError: Error, LocalizedError {
     case invalidParams(String)
     case methodNotFound(String)
+    case unavailable(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidParams(let msg): return msg
         case .methodNotFound(let msg): return msg
+        case .unavailable(let msg): return msg
         }
     }
 }

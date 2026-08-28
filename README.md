@@ -3,9 +3,10 @@
 **One command for your Mac: see what's running — and control what it does.**
 
 `symcockpit` is a native macOS CLI that tunes your Mac's thermals, power and
-display, inventories local ports, containers and MCP servers, and automates the
-graphical interface. Everything speaks JSON — and everything doubles as an MCP
-server, so AI agents get the exact same capabilities you have in the shell.
+display, inventories local ports, containers and the MCP servers registered by
+symbrain, and automates the graphical interface. Everything speaks JSON — and
+everything doubles as an MCP server, so AI agents get the exact same
+capabilities you have in the shell.
 
 [![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?label=release)](https://github.com/danieljustus/symaira-cockpit/releases)
@@ -22,8 +23,8 @@ server, so AI agents get the exact same capabilities you have in the shell.
 
 The facts you constantly need while developing on a Mac are scattered across a
 dozen places: Activity Monitor, `lsof`, Docker Desktop, System Settings,
-`pmset`, and a handful of MCP config files nobody remembers the path to.
-Symaira Cockpit pulls them into **one binary** with **one output format**:
+`pmset`, and the harness registrations managed by symbrain. Symaira Cockpit
+pulls the local machine facts into **one binary** with **one output format**:
 
 - **Structured, not scrapeable.** Every command answers in JSON with stable
   field names. No parsing human-readable output, no `awk`.
@@ -123,16 +124,17 @@ MCP server, where the action policy applies.
 ### `scope` — what is running on this machine
 
 An inventory of your local development environment: which process is holding
-port 3000, which containers are up, which MCP servers are configured in which
-AI client — and whether they actually respond.
+port 3000, which containers are up, and which MCP servers symbrain registered
+for each AI harness. Ports, daemons and containers are fully standalone; only
+MCP inventory is delegated to symbrain.
 
 ```bash
 symcockpit scope scan                  # Full snapshot: ports, MCP, containers
 symcockpit scope ports list            # Listening ports mapped to processes
 symcockpit scope ports suggest 3       # Suggest free TCP ports
 symcockpit scope conflicts             # Ports claimed by more than one process
-symcockpit scope mcp list              # MCP servers across every AI client
-symcockpit scope mcp health            # Probe each server: does it answer, how fast
+symcockpit scope mcp list              # MCP servers from symbrain's harness view
+symcockpit scope mcp health            # Health states reported by symbrain
 symcockpit scope containers            # Running Docker containers
 symcockpit scope explain port 5432     # What owns this port — and why
 symcockpit scope watch --interval 5    # Changes as an NDJSON event stream
