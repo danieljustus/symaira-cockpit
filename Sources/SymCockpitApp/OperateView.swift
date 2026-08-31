@@ -195,7 +195,7 @@ struct OperateView: View {
                             detail: window.ownerName
                         )
                     } trailing: {
-                        Text("\(Int(window.bounds.width))×\(Int(window.bounds.height))")
+                        Text("\(String(Int(window.bounds.width)))×\(String(Int(window.bounds.height)))")
                             .font(SymairaTypography.monoSmall)
                             .foregroundStyle(SymairaTheme.textSecondary)
                     }

@@ -170,7 +170,7 @@ private struct CockpitSidebarRow: View {
                     .font(SymairaTypography.bodyMedium)
                     .foregroundStyle(isSelected ? SymairaTheme.textPrimary : SymairaTheme.textSecondary)
                 Spacer(minLength: SymairaSpacing.small)
-                Text("⌘\(shortcut)")
+                Text("⌘\(String(shortcut))")
                     .font(SymairaTypography.micro)
                     .foregroundStyle(SymairaTheme.textMuted)
                     .opacity(isHovered || isSelected ? 1 : 0)

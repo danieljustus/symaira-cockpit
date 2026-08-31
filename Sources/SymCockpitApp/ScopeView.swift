@@ -244,7 +244,7 @@ struct ScopeView: View {
                                 CockpitBadge(text: "exit \(status)", tint: SymairaTheme.critical)
                             }
                             if let pid = daemon.pid {
-                                Text("pid \(pid)")
+                                Text("pid \(String(pid))")
                                     .font(SymairaTypography.monoSmall)
                                     .foregroundStyle(SymairaTheme.textMuted)
                                     .textSelection(.enabled)
