@@ -115,10 +115,10 @@ public struct CanonicalHistoryEvent: Codable, Equatable, Sendable {
 
     fileprivate func redacted() -> CanonicalHistoryEvent {
         CanonicalHistoryEvent(
-            source: HistoryRedactor.redact(source),
-            timestamp: HistoryRedactor.redact(timestamp),
-            action: HistoryRedactor.redact(action),
-            payload: payload.mapValues(HistoryRedactor.redact),
+            source: SecretRedactor.redact(source),
+            timestamp: SecretRedactor.redact(timestamp),
+            action: SecretRedactor.redact(action),
+            payload: payload.mapValues { SecretRedactor.redact($0) },
             schemaVersion: schemaVersion
         )
     }
@@ -126,36 +126,6 @@ public struct CanonicalHistoryEvent: Codable, Equatable, Sendable {
 
 public typealias HistoryRecord = CanonicalHistoryEvent
 
-private enum HistoryRedactor {
-    private static let patterns: [NSRegularExpression] = [
-        #"(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AIza[0-9A-Za-z_-]{20,})"#,
-        #"(?i)(authorization|bearer|api[_-]?key|token)\s*[:=]\s*("[^"]+"|'[^']+'|[A-Za-z0-9._-]{12,})"#,
-        #"(?i)\bbearer\s+[A-Za-z0-9._-]{12,}"#,
-        #"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#,
-    ].compactMap { try? NSRegularExpression(pattern: $0) }
-
-    static func redact(_ value: HistoryJSONValue) -> HistoryJSONValue {
-        switch value {
-        case .string(let text):
-            var result = text
-            for pattern in patterns {
-                result = pattern.stringByReplacingMatches(
-                    in: result,
-                    range: NSRange(result.startIndex..., in: result),
-                    withTemplate: "<redacted>"
-                )
-            }
-            return .string(result)
-        case .object(let object): return .object(object.mapValues(redact))
-        case .array(let array): return .array(array.map(redact))
-        default: return value
-        }
-    }
-
-    static func redact(_ text: String) -> String {
-        redact(.string(text)).stringValue ?? text
-    }
-}
 
 /// The sole JSONL writer/reader used by tune and operate.
 public final class CanonicalHistoryStore: @unchecked Sendable {
