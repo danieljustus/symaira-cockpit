@@ -67,6 +67,28 @@ public enum BoundedProcessRunner {
         )
     }
 
+    /// Runs a child without occupying a cooperative Swift concurrency thread
+    /// while `Process` waits and drains its pipes.
+    public static func runAsync(
+        executable: String,
+        arguments: [String] = [],
+        timeoutSeconds: TimeInterval = 3
+    ) async throws -> BoundedProcessResult {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                do {
+                    continuation.resume(returning: try run(
+                        executable: executable,
+                        arguments: arguments,
+                        timeoutSeconds: timeoutSeconds
+                    ))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     private static func waitUntilStopped(_ process: Process, before deadline: Date) {
         while process.isRunning && Date() < deadline {
             usleep(10_000)

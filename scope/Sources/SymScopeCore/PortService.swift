@@ -17,7 +17,10 @@ public enum PortService: Sendable {
     /// notes for aggregate callers such as `scope scan`.
     public static func listListeningReport() async -> (ports: [Port], notes: [String]) {
         var notes: [String] = []
-        guard let tcpOutput = try? await runLsof(args: ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcnP"]) else {
+        async let tcpTask = try? await runLsof(args: ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcnP"])
+        async let udpTask = try? await runLsof(args: ["-nP", "-iUDP", "-F", "pcnP"])
+
+        guard let tcpOutput = await tcpTask else {
             return ([], ["ports: lsof unavailable"])
         }
         var ports = tcpOutput.timedOut ? [] : parseLsofOutput(tcpOutput.output, protocol_: "tcp")
@@ -27,7 +30,7 @@ public enum PortService: Sendable {
 
         // UDP (bound sockets). `lsof -iUDP` also reports connected sockets;
         // parseLsofOutput rejects those before they can look like listeners.
-        guard let udpOutput = try? await runLsof(args: ["-nP", "-iUDP", "-F", "pcnP"]) else {
+        guard let udpOutput = await udpTask else {
             notes.append("ports: lsof UDP pass unavailable; listener inventory is partial")
             return (collapse(ports), notes)
         }
@@ -60,7 +63,7 @@ public enum PortService: Sendable {
     // MARK: - Internals
 
     private static func runLsof(args: [String]) async throws -> BoundedProcessResult {
-        try BoundedProcessRunner.run(executable: lsofPath, arguments: args, timeoutSeconds: 3)
+        try await BoundedProcessRunner.runAsync(executable: lsofPath, arguments: args, timeoutSeconds: 3)
     }
 
     /// Parses `lsof -F` output. Fields are prefixed: p=PID, c=command,

@@ -16,7 +16,7 @@ public enum ContainerService: Sendable {
         }
         let binary = resolveDockerBinary()
         let args = ["ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Ports}}"]
-        guard let result = try? run(binary: binary, args: args) else {
+        guard let result = try? await run(binary: binary, args: args) else {
             return ([], ["docker ps failed; container inventory unavailable"])
         }
         if result.timedOut {
@@ -51,8 +51,8 @@ public enum ContainerService: Sendable {
         return dockerPath
     }
 
-    private static func run(binary: String, args: [String]) throws -> BoundedProcessResult {
-        try BoundedProcessRunner.run(executable: binary, arguments: args, timeoutSeconds: 10)
+    private static func run(binary: String, args: [String]) async throws -> BoundedProcessResult {
+        try await BoundedProcessRunner.runAsync(executable: binary, arguments: args, timeoutSeconds: 10)
     }
 
     /// "0.0.0.0:8080->80/tcp, :::8080->80/tcp" → [8080]
