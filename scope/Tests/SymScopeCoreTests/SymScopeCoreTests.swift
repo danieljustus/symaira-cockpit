@@ -164,4 +164,16 @@ final class BoundedProcessRunnerTests: XCTestCase {
         XCTAssertTrue(result.timedOut)
         XCTAssertLessThan(Date().timeIntervalSince(started), 1)
     }
+
+    func testAsyncRunnerReturnsOutputWithoutChangingTimeoutContract() async throws {
+        let result = try await BoundedProcessRunner.runAsync(
+            executable: "/usr/bin/printf",
+            arguments: ["hello"],
+            timeoutSeconds: 1
+        )
+
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.output, "hello")
+    }
 }
