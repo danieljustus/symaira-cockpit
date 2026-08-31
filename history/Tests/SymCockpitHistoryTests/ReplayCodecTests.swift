@@ -90,4 +90,66 @@ final class ReplayCodecTests: XCTestCase {
             }
         }
     }
+
+    func testCodecRedactsOpaqueValuesForSensitiveKeyNames() throws {
+        let sensitiveKeys = [
+            "access_token", "refresh_token", "id_token", "client_secret",
+            "user_password", "x-api-key", "session_id"
+        ]
+        let codec = DeterministicReplayCodec()
+
+        for (index, key) in sensitiveKeys.enumerated() {
+            let opaqueValue = "opaque-runtime-value-\(index)"
+            let record = event(payload: [key: .string(opaqueValue)])
+            let sanitized = try codec.recording(from: [record]).records[0]
+            XCTAssertEqual(
+                sanitized.payload[key],
+                .string("<redacted>"),
+                "Expected opaque value under \(key) to be redacted"
+            )
+        }
+    }
+
+    func testCodecDoesNotRedactBenignKeyFragments() throws {
+        let record = event(payload: [
+            "monkey_business": .string("benign-value"),
+            "keyboard_layout": .string("qwerty")
+        ])
+
+        let sanitized = try DeterministicReplayCodec().recording(from: [record]).records[0]
+        XCTAssertEqual(sanitized.payload["monkey_business"], .string("benign-value"))
+        XCTAssertEqual(sanitized.payload["keyboard_layout"], .string("qwerty"))
+    }
+
+    func testCodecRedactionIsIdempotentThroughNestedObjectsAndArrays() throws {
+        let record = event(payload: [
+            "nested": .object([
+                "refresh_token": .string("opaque-nested-token"),
+                "items": .array([
+                    .object(["client_secret": .string("opaque-array-secret")]),
+                    .object(["session_id": .string("opaque-array-session")])
+                ])
+            ]),
+            "keyboard_layout": .string("qwerty")
+        ])
+        let codec = DeterministicReplayCodec()
+
+        let firstEncoding = try codec.encode([record])
+        let firstRecording = try codec.decode(firstEncoding)
+        let secondEncoding = try codec.encode(firstRecording)
+
+        XCTAssertEqual(firstEncoding, secondEncoding)
+        XCTAssertEqual(firstRecording.records[0].payload["keyboard_layout"], .string("qwerty"))
+        guard case .object(let nested) = firstRecording.records[0].payload["nested"],
+              case .string(let refreshToken) = nested["refresh_token"],
+              case .array(let items) = nested["items"],
+              case .object(let firstItem) = items[0],
+              case .object(let secondItem) = items[1] else {
+            return XCTFail("Expected nested replay payload to retain its structure")
+        }
+        XCTAssertEqual(refreshToken, "<redacted>")
+        XCTAssertEqual(firstItem["client_secret"], .string("<redacted>"))
+        XCTAssertEqual(secondItem["session_id"], .string("<redacted>"))
+    }
+
 }

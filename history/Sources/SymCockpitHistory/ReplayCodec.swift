@@ -178,6 +178,7 @@ public struct DeterministicReplayCodec: Sendable {
         "input_text", "one_time_code", "otp", "password", "private_key", "secret",
         "token"
     ]
+    private static let privateKeyStems: Set<String> = ["auth", "cookie", "key", "session"]
     private static let destructiveWords: Set<String> = [
         "authorize", "delete", "erase", "force_quit", "keychain", "quit", "remove",
         "shutdown", "terminate", "unlock", "uninstall"
@@ -306,7 +307,7 @@ public struct DeterministicReplayCodec: Sendable {
     }
 
     private func redactPayload(_ value: HistoryJSONValue, key: String? = nil) -> HistoryJSONValue {
-        if let key, Self.privateKeys.contains(Self.normalizedKey(key)) {
+        if let key, Self.isPrivateKey(key) {
             return .string("<redacted>")
         }
         switch value {
@@ -320,6 +321,16 @@ public struct DeterministicReplayCodec: Sendable {
             return .array(array.map { redactPayload($0) })
         default:
             return ReplayRedactor.redact(value)
+        }
+    }
+
+    private static func isPrivateKey(_ key: String) -> Bool {
+        let normalized = normalizedKey(key)
+        if privateKeys.contains(normalized) {
+            return true
+        }
+        return normalized.split(separator: "_").contains { component in
+            privateKeys.contains(String(component)) || privateKeyStems.contains(String(component))
         }
     }
 
