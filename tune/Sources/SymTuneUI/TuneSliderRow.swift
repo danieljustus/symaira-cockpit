@@ -48,7 +48,12 @@ struct TuneSliderRow: View {
             Slider(
                 value: Binding(
                     get: { displayedValue },
-                    set: { localValue = $0 }
+                    set: {
+                        localValue = $0
+                        if !isDragging {
+                            onCommit($0)
+                        }
+                    }
                 ),
                 in: range,
                 onEditingChanged: { editing in
