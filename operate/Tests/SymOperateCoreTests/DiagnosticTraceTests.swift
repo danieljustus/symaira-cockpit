@@ -98,4 +98,23 @@ final class DiagnosticTraceTests: XCTestCase {
         XCTAssertEqual(buffer.records.count, 2)
         XCTAssertEqual(buffer.records.map(\.request), [["label": "two"], ["label": "three"]])
     }
+
+    func testValueRedactionMasksVendorTokensWithinDiagnosticText() {
+        let gitLabToken = ["gl", "pat-"].joined() + String(repeating: "g", count: 12)
+        let slackToken = ["xo", "xb", "-"].joined() + String(repeating: "s", count: 8)
+        let googleToken = ["AI", "za"].joined() + String(repeating: "G", count: 20)
+        let diagnostic = "gitlab=\(gitLabToken); slack=\(slackToken); google=\(googleToken)"
+
+        let redacted = trace(arguments: ["diagnostic": diagnostic]).request["diagnostic"]
+
+        XCTAssertEqual(redacted, "gitlab=<redacted>; slack=<redacted>; google=<redacted>")
+    }
+
+    func testValueRedactionLeavesDiskCacheTextReadable() {
+        let diagnostic = "cache backend: disk-cache is healthy"
+
+        let redacted = trace(arguments: ["diagnostic": diagnostic]).request["diagnostic"]
+
+        XCTAssertEqual(redacted, diagnostic)
+    }
 }
