@@ -1,4 +1,5 @@
 import Foundation
+import SymTuneCore
 import SymairaUpdateCheck
 
 /// The one update target for the shipped `symcockpit` binary.
@@ -41,6 +42,10 @@ struct CockpitUpdateReport: Encodable {
         Self(status: "up_to_date", updateAvailable: false, latestVersion: nil, releaseURL: nil, error: nil)
     }
 
+    static var skipped: Self {
+        Self(status: "skipped", updateAvailable: false, latestVersion: nil, releaseURL: nil, error: nil)
+    }
+
     static func unavailable(_ error: Error) -> Self {
         Self(
             status: "unavailable",
@@ -50,6 +55,33 @@ struct CockpitUpdateReport: Encodable {
             error: error.localizedDescription
         )
     }
+}
+
+enum CockpitUpdatePolicy {
+    static let environmentKey = "SYMCOCKPIT_CHECK_UPDATES"
+
+    static func isEnabled(
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        if let value = env[environmentKey]?.lowercased(), !value.isEmpty {
+            if ["0", "false", "no", "off"].contains(value) { return false }
+        }
+        return UpdateChecker.isUpdateCheckEnabled(
+            env: env,
+            configPaths: ConfigPaths(env: env)
+        )
+    }
+}
+
+/// Performs the update check only when the caller has not opted out.
+func checkForCockpitUpdateIfEnabled(
+    args: [String] = [],
+    env: [String: String] = ProcessInfo.processInfo.environment
+) async -> CockpitUpdateReport {
+    guard !args.contains("--no-update-check"), CockpitUpdatePolicy.isEnabled(env: env) else {
+        return .skipped
+    }
+    return await checkForCockpitUpdate()
 }
 
 /// Performs the single cockpit release check used by dispatcher version output.
