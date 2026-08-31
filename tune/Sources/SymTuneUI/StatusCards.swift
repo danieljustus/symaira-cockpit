@@ -232,7 +232,14 @@ struct SystemStatusCard: View, Equatable {
     private var batteryState: String {
         guard let battery, battery.present else { return "No Battery Detected" }
         let capacity = battery.currentCapacityPercent.map { "\($0)%" } ?? "Unknown"
-        let state = battery.charging == true ? "Charging" : "On Battery"
+        let state: String
+        if battery.charging == true {
+            state = "Charging"
+        } else if battery.externalConnected == true {
+            state = "On AC"
+        } else {
+            state = "On Battery"
+        }
         return "\(capacity) (\(state))"
     }
 
