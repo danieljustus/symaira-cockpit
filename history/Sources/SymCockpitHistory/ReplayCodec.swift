@@ -229,9 +229,9 @@ public struct DeterministicReplayCodec: Sendable {
         }
 
         return CanonicalHistoryEvent(
-            source: ReplayRedactor.redact(event.source),
-            timestamp: ReplayRedactor.redact(event.timestamp),
-            action: ReplayRedactor.redact(event.action),
+            source: SecretRedactor.redact(event.source),
+            timestamp: SecretRedactor.redact(event.timestamp),
+            action: SecretRedactor.redact(event.action),
             payload: redactPayload(event.payload),
             schemaVersion: event.schemaVersion
         )
@@ -320,7 +320,7 @@ public struct DeterministicReplayCodec: Sendable {
         case .array(let array):
             return .array(array.map { redactPayload($0) })
         default:
-            return ReplayRedactor.redact(value)
+            return SecretRedactor.redact(value)
         }
     }
 
@@ -347,29 +347,3 @@ public struct DeterministicReplayCodec: Sendable {
 }
 
 public typealias ReplayCodec = DeterministicReplayCodec
-
-private enum ReplayRedactor {
-    private static let patterns: [NSRegularExpression] = [
-        #"(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AIza[0-9A-Za-z_-]{20,})"#,
-        #"(?i)(authorization|bearer|api[_-]?key|token)\s*[:=]\s*("[^"]+"|'[^']+'|[A-Za-z0-9._-]{12,})"#,
-        #"(?i)\bbearer\s+[A-Za-z0-9._-]{12,}"#,
-        #"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#,
-    ].compactMap { try? NSRegularExpression(pattern: $0) }
-
-    static func redact(_ value: HistoryJSONValue) -> HistoryJSONValue {
-        guard case .string(let text) = value else { return value }
-        return .string(redact(text))
-    }
-
-    static func redact(_ text: String) -> String {
-        var result = text
-        for pattern in patterns {
-            result = pattern.stringByReplacingMatches(
-                in: result,
-                range: NSRange(result.startIndex..., in: result),
-                withTemplate: "<redacted>"
-            )
-        }
-        return result
-    }
-}

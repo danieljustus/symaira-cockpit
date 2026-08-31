@@ -1,4 +1,5 @@
 import Foundation
+import SymCockpitHistory
 
 /// Versioned limits for locally persisted diagnostic evidence.
 public enum DiagnosticTraceContract {
@@ -260,31 +261,17 @@ private enum DiagnosticTraceRedactor {
         "api_key", "apikey", "access_key", "text", "input", "value", "screenshot", "image", "path"
     ]
 
-    private static let patterns: [NSRegularExpression] = [
-        #"«redacted:[^»]*»"#,
-        #"(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AIza[0-9A-Za-z_-]{20,})"#,
-        #"(?i)(authorization|bearer|api[_-]?key|token)\s*[:=]\s*("[^"]+"|'[^']+'|[A-Za-z0-9._-]{12,})"#,
-        #"(?i)\bbearer\s+[A-Za-z0-9._-]{12,}"#,
-        #"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#,
-    ].compactMap { try? NSRegularExpression(pattern: $0) }
-
     static func redact(_ value: String) -> String {
-        var redacted = String(value.prefix(DiagnosticTraceContract.maxStringLength))
-        for pattern in patterns {
-            redacted = pattern.stringByReplacingMatches(
-                in: redacted,
-                range: NSRange(redacted.startIndex..., in: redacted),
-                withTemplate: "<redacted>"
-            )
-        }
-        return redacted
+        SymCockpitHistory.SecretRedactor.redact(
+            String(value.prefix(DiagnosticTraceContract.maxStringLength))
+        )
     }
 
     static func redact(_ fields: [String: String]) -> [String: String] {
         Dictionary(uniqueKeysWithValues: fields.map { key, value in
             let normalized = key.replacingOccurrences(of: "-", with: "_").lowercased()
             let isSensitive = sensitiveKeys.contains { normalized == $0 || normalized.contains($0) }
-            return (key, isSensitive ? "<redacted>" : redact(value))
+            return (key, isSensitive ? SymCockpitHistory.SecretRedactor.placeholder : redact(value))
         })
     }
 }
