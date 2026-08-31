@@ -260,15 +260,24 @@ private enum DiagnosticTraceRedactor {
         "api_key", "apikey", "access_key", "text", "input", "value", "screenshot", "image", "path"
     ]
 
+    private static let patterns: [NSRegularExpression] = [
+        #"«redacted:[^»]*»"#,
+        #"(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|AIza[0-9A-Za-z_-]{20,})"#,
+        #"(?i)(authorization|bearer|api[_-]?key|token)\s*[:=]\s*("[^"]+"|'[^']+'|[A-Za-z0-9._-]{12,})"#,
+        #"(?i)\bbearer\s+[A-Za-z0-9._-]{12,}"#,
+        #"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#,
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
+
     static func redact(_ value: String) -> String {
-        let bounded = String(value.prefix(DiagnosticTraceContract.maxStringLength))
-        let lowered = bounded.lowercased()
-        if lowered.contains("bearer ") || lowered.contains("token=") || lowered.contains("api_key=")
-            || lowered.contains("authorization:") || lowered.contains("sk-") || lowered.contains("ghp_")
-            || lowered.contains("github_pat_") || lowered.contains("eyj") {
-            return "<redacted>"
+        var redacted = String(value.prefix(DiagnosticTraceContract.maxStringLength))
+        for pattern in patterns {
+            redacted = pattern.stringByReplacingMatches(
+                in: redacted,
+                range: NSRange(redacted.startIndex..., in: redacted),
+                withTemplate: "<redacted>"
+            )
         }
-        return bounded
+        return redacted
     }
 
     static func redact(_ fields: [String: String]) -> [String: String] {
