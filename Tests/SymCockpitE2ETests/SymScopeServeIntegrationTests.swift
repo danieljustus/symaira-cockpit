@@ -17,11 +17,12 @@ final class SymScopeServeIntegrationE2ETests: XCTestCase {
         let process = try launchScopeServe()
         defer { process.cleanupIfRunning() }
 
-        try process.writeFrame(#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#)
+        try process.writeFrame(#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01"}}"#)
         let initialize = try parseFrame(process.waitForNextFrame(timeout: frameTimeout))
         XCTAssertEqual(initialize["jsonrpc"] as? String, "2.0")
         XCTAssertNil(initialize["error"])
         let result = try XCTUnwrap(initialize["result"] as? [String: Any])
+        XCTAssertEqual(result["protocolVersion"] as? String, "2025-06-18")
         let capabilities = try XCTUnwrap(result["capabilities"] as? [String: Any])
         XCTAssertNotNil(capabilities["tools"] as? [String: Any])
 

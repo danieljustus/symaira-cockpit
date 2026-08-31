@@ -13,7 +13,7 @@ final class MCPServerTests: XCTestCase {
 
     func testInitializeReturnsProtocolVersion() async throws {
         let result = try await server.dispatch(method: "initialize", params: ["protocolVersion": "2024-11-05"])
-        XCTAssertEqual(result["protocolVersion"] as? String, "2024-11-05")
+        XCTAssertEqual(result["protocolVersion"] as? String, SymairaMCP.MCPServer.supportedProtocolVersion)
         let capabilities = result["capabilities"] as? [String: Any]
         XCTAssertNotNil(capabilities?["tools"])
     }
@@ -325,13 +325,16 @@ extension MCPServerTests {
         }
     }
 
-    func testWireInitializeEchoesRequestedProtocolVersion() async throws {
+    func testWireInitializeUsesSupportedProtocolVersion() async throws {
         let responses = try await runWire(server: server, requests: [
             #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}"#,
         ])
         XCTAssertEqual(responses.count, 1)
         let result = responses[0]["result"] as? [String: Any]
-        XCTAssertEqual(result?["protocolVersion"] as? String, "2024-11-05")
+        XCTAssertEqual(
+            result?["protocolVersion"] as? String,
+            SymairaMCP.MCPServer.supportedProtocolVersion
+        )
         let info = result?["serverInfo"] as? [String: Any]
         XCTAssertEqual(info?["name"] as? String, "symoperate")
         XCTAssertEqual(info?["version"] as? String, SymOperateVersion.current)
