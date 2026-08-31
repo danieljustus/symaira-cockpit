@@ -28,7 +28,7 @@ Families:
   operate    GUI automation: MCP server, doctor, permissions (symoperate)
   scope      Ports, containers, MCP inventory (symscope)
 
-  version [--json]    symcockpit version plus the component versions
+  version [--json] [--no-update-check]    symcockpit version plus the component versions
   help                This text
 
 Examples:
@@ -82,7 +82,7 @@ func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> Stri
     if let update {
         resolvedUpdate = update
     } else {
-        resolvedUpdate = await checkForCockpitUpdate()
+        resolvedUpdate = await checkForCockpitUpdateIfEnabled()
     }
 
     let report = Report(
@@ -119,7 +119,7 @@ case "operate":
 case "scope":
     code = await ScopeMain.run(Array(args.dropFirst()))
 case "version":
-    let update = await checkForCockpitUpdate()
+    let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {
         print(try await cockpitVersionJSON(update: update))
     } else {
@@ -129,6 +129,8 @@ case "version":
             if let latest = update.latestVersion { line += " — update available: \(latest)" }
         case "unavailable":
             line += " — update check unavailable"
+        case "skipped":
+            line += " — update check skipped"
         default:
             line += " — up to date"
         }
