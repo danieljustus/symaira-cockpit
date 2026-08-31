@@ -18,6 +18,10 @@ public struct DiagnosticTraceObservation: Codable, Sendable, Equatable {
         self.snapshotID = snapshotID.map(DiagnosticTraceRedactor.redact)
         self.nodeCount = nodeCount.map { max(0, $0) }
     }
+
+    fileprivate func resanitized() -> Self {
+        Self(snapshotID: snapshotID, nodeCount: nodeCount)
+    }
 }
 
 /// The policy decision and effective permissions at the time of an action.
@@ -28,6 +32,10 @@ public struct DiagnosticTracePolicy: Codable, Sendable, Equatable {
     public init(decision: String, permissions: [String] = []) {
         self.decision = DiagnosticTraceRedactor.redact(decision)
         self.permissions = Array(Set(permissions.map(DiagnosticTraceRedactor.redact))).sorted()
+    }
+
+    fileprivate func resanitized() -> Self {
+        Self(decision: decision, permissions: permissions)
     }
 }
 
@@ -51,6 +59,16 @@ public struct DiagnosticTraceOutcome: Codable, Sendable, Equatable {
         self.verification = verification
         self.message = DiagnosticTraceRedactor.redact(message)
         self.errorCode = errorCode.map(DiagnosticTraceRedactor.redact)
+    }
+
+    fileprivate func resanitized() -> Self {
+        Self(
+            success: success,
+            effect: effect,
+            verification: verification,
+            message: message,
+            errorCode: errorCode
+        )
     }
 }
 
@@ -160,7 +178,28 @@ public struct DiagnosticTraceRecord: Codable, Sendable, Equatable {
         self.outcome = outcome
     }
 
+    private init(alreadySanitized trace: DiagnosticTraceRecord) {
+        self.schemaVersion = trace.schemaVersion
+        self.traceID = trace.traceID
+        self.action = trace.action
+        self.startedAt = trace.startedAt
+        self.finishedAt = trace.finishedAt
+        self.request = trace.request
+        self.target = trace.target
+        self.before = trace.before
+        self.after = trace.after
+        self.route = trace.route
+        self.policy = trace.policy
+        self.outcome = trace.outcome
+    }
+
+    /// Copies a record that has already crossed the construction boundary.
     fileprivate func sanitized() -> DiagnosticTraceRecord {
+        DiagnosticTraceRecord(alreadySanitized: self)
+    }
+
+    /// Re-sanitizes a record decoded from an untrusted envelope.
+    fileprivate func resanitized() -> DiagnosticTraceRecord {
         DiagnosticTraceRecord(
             traceID: traceID,
             action: action,
@@ -168,11 +207,11 @@ public struct DiagnosticTraceRecord: Codable, Sendable, Equatable {
             finishedAt: finishedAt,
             request: request,
             target: target,
-            before: before,
-            after: after,
+            before: before?.resanitized(),
+            after: after?.resanitized(),
             route: route,
-            policy: policy,
-            outcome: outcome
+            policy: policy.resanitized(),
+            outcome: outcome.resanitized()
         )
     }
 }
@@ -212,7 +251,7 @@ public struct DiagnosticTraceSerializer: Sendable {
             guard trace.schemaVersion == DiagnosticTraceContract.currentVersion else {
                 throw DiagnosticTraceError.unsupportedVersion(trace.schemaVersion)
             }
-            return trace.sanitized()
+            return trace.resanitized()
         } catch let error as DiagnosticTraceError {
             throw error
         } catch {

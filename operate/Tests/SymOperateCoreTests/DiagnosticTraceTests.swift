@@ -63,14 +63,16 @@ final class DiagnosticTraceTests: XCTestCase {
 
     func testRoundTripDecodesTheVersionedRedactedRecord() throws {
         let record = trace(arguments: ["text": "private value"])
-        let data = try DiagnosticTraceSerializer().encode(record)
-        let decoded = try DiagnosticTraceSerializer().decode(data)
+        let serializer = DiagnosticTraceSerializer()
+        let data = try serializer.encode(record)
+        let decoded = try serializer.decode(data)
 
         XCTAssertEqual(decoded.schemaVersion, DiagnosticTraceContract.currentVersion)
         XCTAssertEqual(decoded.traceID, record.traceID)
         XCTAssertEqual(decoded.request["text"], "<redacted>")
         XCTAssertEqual(decoded.before?.snapshotID, "snapshot-before")
         XCTAssertEqual(decoded.outcome.errorCode, "destructive_control_refused")
+        XCTAssertEqual(try serializer.encode(decoded), data)
     }
 
     func testHistoryEventCarriesTraceThroughCodable() throws {
@@ -99,6 +101,18 @@ final class DiagnosticTraceTests: XCTestCase {
         XCTAssertEqual(buffer.records.map(\.request), [["label": "two"], ["label": "three"]])
     }
 
+    func testConstructionBufferingAndSerializationRemainRedacted() throws {
+        let rawCredential = ["raw", String(repeating: "credential", count: 2)].joined(separator: "-")
+        let trace = trace(arguments: ["credential": rawCredential])
+        var buffer = DiagnosticTraceBuffer(maximumRecords: 1)
+
+        buffer.append(trace)
+
+        XCTAssertEqual(buffer.records[0].request["credential"], "<redacted>")
+        let serialized = try DiagnosticTraceSerializer().encode(buffer.records[0])
+        XCTAssertFalse(String(decoding: serialized, as: UTF8.self).contains(rawCredential))
+    }
+
     func testValueRedactionMasksVendorTokensWithinDiagnosticText() {
         let gitLabToken = ["gl", "pat-"].joined() + String(repeating: "g", count: 12)
         let slackToken = ["xo", "xb", "-"].joined() + String(repeating: "s", count: 8)
@@ -116,5 +130,37 @@ final class DiagnosticTraceTests: XCTestCase {
         let redacted = trace(arguments: ["diagnostic": diagnostic]).request["diagnostic"]
 
         XCTAssertEqual(redacted, diagnostic)
+    }
+
+    func testDecodeResanitizesHandWrittenEnvelope() throws {
+        let rawCredential = ["raw", String(repeating: "credential", count: 2)].joined(separator: "-")
+        let envelope: [String: Any] = [
+            "schemaVersion": DiagnosticTraceContract.currentVersion,
+            "traceID": "trace-raw",
+            "action": "click",
+            "startedAt": "2026-08-28T10:00:00.000Z",
+            "finishedAt": "2026-08-28T10:00:01.000Z",
+            "request": ["credential": rawCredential],
+            "before": ["snapshotID": "token=\(rawCredential)", "nodeCount": 1],
+            "policy": ["decision": "token=\(rawCredential)", "permissions": ["Bearer \(rawCredential)"]],
+            "outcome": [
+                "success": true,
+                "effect": "submitted",
+                "verification": ["status": "not_attempted", "strategy": "test"],
+                "message": "token=\(rawCredential)",
+                "errorCode": "api_key=\(rawCredential)"
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+
+        let decoded = try DiagnosticTraceSerializer().decode(data)
+
+        XCTAssertEqual(decoded.request["credential"], "<redacted>")
+        XCTAssertEqual(decoded.before?.snapshotID, "<redacted>")
+        XCTAssertEqual(decoded.policy.decision, "<redacted>")
+        XCTAssertEqual(decoded.policy.permissions, ["<redacted>"])
+        XCTAssertEqual(decoded.outcome.message, "<redacted>")
+        XCTAssertEqual(decoded.outcome.errorCode, "<redacted>")
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("<redacted>"))
     }
 }
