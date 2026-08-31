@@ -1,4 +1,5 @@
 import XCTest
+import SymairaMCP
 @testable import SymScopeMCP
 
 final class SymScopeMCPTests: XCTestCase {
@@ -13,7 +14,14 @@ final class SymScopeMCPTests: XCTestCase {
 
     func testInitializeIncludesCapabilities() async throws {
         let server = SymScopeMCPServer()
-        let result = try await server.dispatch(method: "initialize")
+        let result = try await server.dispatch(
+            method: "initialize",
+            params: ["protocolVersion": "1999-01-01"]
+        )
+        XCTAssertEqual(
+            result["protocolVersion"] as? String,
+            SymairaMCP.MCPServer.supportedProtocolVersion
+        )
         let capabilities = result["capabilities"] as? [String: Any]
         XCTAssertNotNil(capabilities)
         XCTAssertNotNil(capabilities?["tools"] as? [String: Any])
