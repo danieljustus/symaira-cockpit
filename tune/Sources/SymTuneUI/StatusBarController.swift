@@ -235,8 +235,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 attributes: Self.badgeAttributes
             ))
         }
+        let plainText = MetricStyleFormatting.plainText(combined)
         button.attributedTitle = attributed
-        button.toolTip = MetricStyleFormatting.plainText(combined)
+        button.toolTip = plainText
+        button.setAccessibilityLabel(statusItemAccessibilityLabel)
+        button.setAccessibilityValue(plainText)
     }
 
     /// An SF Symbol drawn inline in the status-item title.
