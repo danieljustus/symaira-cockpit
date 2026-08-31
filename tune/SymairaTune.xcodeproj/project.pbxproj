@@ -1,0 +1,1089 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		018BE7DA4D7654EC3CF2B6E7 /* MetricsHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9470ADFB2BBE8D7385E6E24 /* MetricsHistoryService.swift */; };
+		022A5989A56286C4CA003288 /* PowerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D33E593D1AC1C90523A925A /* PowerService.swift */; };
+		02524E4D1A326D518300B306 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 507D733931BD16CEB76A0393 /* Assets.xcassets */; };
+		04127471F4A9D0A472A86CB5 /* ControlCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 168D79C76C5D8CDDCEA3FCCB /* ControlCards.swift */; };
+		043AE922435405389BB8D03D /* SymVaultCredentialField.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5AFDC400CB90B28390E695 /* SymVaultCredentialField.swift */; };
+		047DBFFB8F9DAEA1FD61BF12 /* RedactedErrorLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52153193B0DBDB6BD6C8989A /* RedactedErrorLine.swift */; };
+		06FA5D71970678B244EF7B7E /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F0C1280902878DC8B55BC1 /* PreferencesView.swift */; };
+		084D7E76854CE13B0C392F66 /* PowerAssertionSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48BA772AF4802C4EA6EEAEAE /* PowerAssertionSource.swift */; };
+		0ACA8F50DF089A7872E6066F /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 657FA458B63D22419B5E2C86 /* PreferencesManager.swift */; };
+		0B0021C60B38FDFC85B2CD3F /* ProcessUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68CB432500C534E29B1EA996 /* ProcessUsage.swift */; };
+		105288766DE7188852C01D42 /* DisplayWriteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1154F4FAF05F8D54B48EAA4 /* DisplayWriteService.swift */; };
+		19B0C1A64BE2D7EFAA6DFB6D /* SymBrainUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD6D2C69C09045B5BB9D261A /* SymBrainUsageClient.swift */; };
+		19F3E7328BF473C5EDCCE614 /* SymairaUpdateCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 00E0AC34436BFF560CD95DC2 /* SymairaUpdateCheck */; };
+		227BF7852EF6BBBA25F33937 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA1606AEF91B8048435FD7E /* Errors.swift */; };
+		24F52A9F3770232582300EC6 /* UntilTimeParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390B90FA56E55AF3A9C7716F /* UntilTimeParser.swift */; };
+		251A43CAFA61468A42033DF0 /* BatteryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C392F28A28A4D9E005D1A9F /* BatteryService.swift */; };
+		270650381D2F51A423D3944E /* DisplayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CA4D18E8809AD42A247BCE /* DisplayService.swift */; };
+		2737072F28F0C9E2D437736B /* AIUsageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9C4EBAD460DFE5DCF2892D /* AIUsageViewModel.swift */; };
+		2753CC6898DD725C6D21FB19 /* SymairaKeychain in Frameworks */ = {isa = PBXBuildFile; productRef = E243C5A5305300D4E9899230 /* SymairaKeychain */; };
+		2A5E4AFD9D04C661FDA4E0E8 /* ProcessUsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F8CB6917921F3F8699419B /* ProcessUsageService.swift */; };
+		2B181E8283A69CF1866AA199 /* OverrideTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DED5CCC7850ACCAF5CC21 /* OverrideTracker.swift */; };
+		2EBBCDD7FE0BA5F9488BCB68 /* MetricStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A27C4ADD12ECAA75FAA0BA2 /* MetricStyle.swift */; };
+		3813A58F891DEFF78D1F4B6A /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A542FBF31FCC3A2D7072C0 /* Models.swift */; };
+		3B78D83A6132F424B11FA9F6 /* TuneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3603115E7E2B051ED5AC8F59 /* TuneViewModel.swift */; };
+		3E2BE030D4921E7B5D4EB629 /* PowerWakeMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92EBA42E774C3B1279B82A53 /* PowerWakeMonitor.swift */; };
+		45FC85DCADB5A46E9CF265FE /* TopProcessesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E55F5F5D08E906D96D9A89 /* TopProcessesCard.swift */; };
+		4618CE68A22E2C73E728A9F1 /* TuneControllerErrorMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0345708291C92E4A77E7A0EB /* TuneControllerErrorMapping.swift */; };
+		47A5204B1B668339993A9220 /* AIUsagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85794A4E0BA8EC63F8D76BD7 /* AIUsagePreferences.swift */; };
+		4977C36A192F29B010495D88 /* SMCRestoreRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECED98230F09FDC98E519AD4 /* SMCRestoreRecord.swift */; };
+		4B15F70649D1BBFEA2B9118D /* libSymTuneUI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = AE4DABF215ADDD54132DCFF5 /* libSymTuneUI.a */; };
+		4B16F9D5205266284D8E708E /* AIUsageFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE197227B702A08CC3000B9 /* AIUsageFormatting.swift */; };
+		4E46343EF4BAF39EAF439AF2 /* HealthScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1CBEB6393FD73BCBF8C327 /* HealthScorer.swift */; };
+		510E2E629950A190C3BC9468 /* ChargeLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9957E1D90961DF6009E0511F /* ChargeLimitService.swift */; };
+		52E7859C5D5904645C20D106 /* HistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3EFC721840617E1C0517A4 /* HistoryService.swift */; };
+		58C1134A295F4B5EFC36510F /* DisplayEnumerationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C012DCADC4BB68351CAA2D /* DisplayEnumerationSource.swift */; };
+		59E4F9C514D85E43E9C98794 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC3F96AA7325A9AE8CBC985 /* NetworkService.swift */; };
+		5A4947631699787AB82CCFA1 /* Version.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E23FAB7876260075BCD295 /* Version.swift */; };
+		6271DA7A148A9812661E2437 /* ProcessesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C40B7C59BB05E3BCC0BFE0 /* ProcessesViewModel.swift */; };
+		62E389402B18971245D50726 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89FD8F3757E1D6B6B85C9ECA /* Config.swift */; };
+		630F986F6DB550262AF13A5A /* FanControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1853A4627B0652A0763B07 /* FanControlService.swift */; };
+		650F4600033E031448B359DA /* StatusOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291C836411D1850714CE3C63 /* StatusOptions.swift */; };
+		6738FC0942D47D3FBA61425A /* SystemMetricsSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE23D503CDFCD65203C4D711 /* SystemMetricsSource.swift */; };
+		6A1474EEC53D56FB3972E89E /* KeepAwakeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9AD85846488EA7B9E0EF25 /* KeepAwakeCard.swift */; };
+		6B5B28AC76AE21C15C09511E /* SafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBC12EBEC955779692E3D14 /* SafetyPolicy.swift */; };
+		6DDB36AF4F02224DD1BDEB72 /* MenuBarVisibilityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E2307B21B9F707FD2E289EA /* MenuBarVisibilityCard.swift */; };
+		6EF202B1F63F63066484D978 /* SMCRestoreTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530836A8D3D23538A482EC46 /* SMCRestoreTracker.swift */; };
+		70933A25FD6A35427497D51A /* KeychainCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06217EAFB56B8BB214247CB /* KeychainCredentials.swift */; };
+		789E60D5C4BE6F55A45416AA /* KeepAwakeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89D9C19B3D7DA84E6FFB4D1 /* KeepAwakeCoordinator.swift */; };
+		7DA017456FBFC729250C727E /* SMCHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76539AD04E01F956A80A5F9 /* SMCHelperProtocol.swift */; };
+		816213C798C1FFBFF3EBCD34 /* SparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4C3A69B4F5EB47123AF8C1 /* SparklineView.swift */; };
+		85529B4B2A596E006732CE61 /* MetricFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6046414C0CD3D84BE3C390AB /* MetricFormatting.swift */; };
+		86AC454622AC60BBEEDA9648 /* MetricsRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A595FBA79B3EAAF192021DB5 /* MetricsRingBuffer.swift */; };
+		8A1E09F998CE954DA9809475 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6B56530341322081233D02 /* AppDelegate.swift */; };
+		8A30F471E5474E14D94B16E4 /* AIUsagePreferencesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6DE0DBAE941419461C8954 /* AIUsagePreferencesSection.swift */; };
+		8BE66A9561BC3ABFAE4B6336 /* WriteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D6758C482B1D1D1887C5A1 /* WriteCommand.swift */; };
+		8E191C47E1C2B64A9C11A132 /* AIUsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B173CC4103E0F0B0620B52 /* AIUsageService.swift */; };
+		909AAD59F814E1516A3E2C8C /* SMCWritePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C65522D496F4A385B23DF643 /* SMCWritePolicy.swift */; };
+		916429891D20095BB540A3CA /* CenterAnchoredSliderRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69326F25ABED01A77E23AAE5 /* CenterAnchoredSliderRow.swift */; };
+		954D5BBC97390EDD13DEA547 /* libSymTuneCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 123BB390E7C2B39F63DE3B93 /* libSymTuneCore.a */; };
+		97A413A3E8ED3D6CF8E91CC7 /* UpdateNotificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A2FC972551D177CA01626C /* UpdateNotificationView.swift */; };
+		98385A254202D4906A88F974 /* SecretRedactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4CE27C0DAAF3A83E51F395 /* SecretRedactor.swift */; };
+		9A09EB96161009328A81C744 /* MetricStyleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC10E06BB33ED53FC26E0FA /* MetricStyleRow.swift */; };
+		A0AE7F65C8D390CD7ED4895E /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D09693F4FBB6FCA20BA4D40 /* UpdateChecker.swift */; };
+		A10FFCFB4A727C5FD12573F0 /* ChargeLimitState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6742B97B000DF5A382A4FA46 /* ChargeLimitState.swift */; };
+		A13ACD7B5E02F09175F9316F /* DimOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667976B07BC168E7CA3CD040 /* DimOverlay.swift */; };
+		A200135D50C6BB474FACF395 /* SMCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DBFBB5A2DE53058B10EE7F /* SMCService.swift */; };
+		AF3F598A36D4677C744C06F1 /* ProcessListingPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24B7E0DD12912C95937D4ED /* ProcessListingPresentation.swift */; };
+		AF4D9B21A3BAD3272B4C00BD /* BeyondNormalBrightness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A228717A3ED7DFA4E76714 /* BeyondNormalBrightness.swift */; };
+		AF7DC26E2D6748B3B881328E /* TuneController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87FFD767FA30816E9898131 /* TuneController.swift */; };
+		B020D5D940A5513E4A5BA94D /* EDROverlayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1569BDC4751F6B898A3D6F38 /* EDROverlayService.swift */; };
+		B07C034AAED7A9005E0F11D1 /* StateFilePermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91AEA76651ECDA7BB60FDF9B /* StateFilePermissions.swift */; };
+		B4B02C1DDB03D0514DC0692D /* SensorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592FD9161CDF4FC9CB9DC264 /* SensorService.swift */; };
+		B61B1FCE72B234A4A46421E7 /* ExitCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE5947E626B5F0A095C1B0A /* ExitCode.swift */; };
+		BC0AF9D28578F99572269DCF /* AIUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0944BD67D2AF2D447768BCC8 /* AIUsageCardView.swift */; };
+		BD94466541D5F9C33F5F8EEE /* SymCockpitHistory in Frameworks */ = {isa = PBXBuildFile; productRef = 3C4FF785B0F0DF6DE3AEE73A /* SymCockpitHistory */; };
+		BE24B8CC46467168BD5176D4 /* AwakeOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B065CAC73A1713C53DEBAF45 /* AwakeOptions.swift */; };
+		BF164222CCCD2CAD4118B82A /* TuneSliderRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC098B011466BC04FB1E0D2D /* TuneSliderRow.swift */; };
+		C93BF12A59ED637BEEBE95E8 /* DisplayGammaController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC3AA06A263B7D21BF2CC22 /* DisplayGammaController.swift */; };
+		CFF145D5410244F0513A33CD /* MetricRowData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6221E3809813057C52BBB0 /* MetricRowData.swift */; };
+		D302CDE4FC9DBE6A269ED043 /* DisplayGamma.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073BA3346947A5C708579EDC /* DisplayGamma.swift */; };
+		D3C14A234692B3944E7E23D9 /* AIUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B8954FB3FD01B276479A78 /* AIUsage.swift */; };
+		D4876F451287926767C50A24 /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F36E592CF3799F3710E149 /* ProfileService.swift */; };
+		D8F4812DB743DB13FDB55F92 /* StatusCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CDCC5A902B255BEFF53167 /* StatusCards.swift */; };
+		DD15C2D5E9BA84A95553CD03 /* SystemMetricsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39574AE548D5416D6AF8137 /* SystemMetricsService.swift */; };
+		E2036C738EBB5B979D2B58F3 /* MainStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96D79CC585387F001182EF04 /* MainStatusView.swift */; };
+		E777BF8E2492C1B9430311B3 /* MetricsHistoryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 956525AD160A014B963669DE /* MetricsHistoryCard.swift */; };
+		E9826649592ACC163EF2872F /* BatteryHealthParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8381501A5B7DEEB17D10B1FF /* BatteryHealthParser.swift */; };
+		EA7A8838516027266449746C /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85B4BEA852D089DA4458D24A /* StatusBarController.swift */; };
+		EB56C09DB5A313E7C292EC0D /* SymBrainUsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1855FE27754872056F445919 /* SymBrainUsageProvider.swift */; };
+		EB8D6BD36820A70901759180 /* SymairaTheme in Frameworks */ = {isa = PBXBuildFile; productRef = 1D07741835AF0587A0BF409E /* SymairaTheme */; };
+		EC0D3E1823148CB90D7493EC /* SymairaProviderKit in Frameworks */ = {isa = PBXBuildFile; productRef = C58D08E97D03D20E04ECF752 /* SymairaProviderKit */; };
+		F030CB30B0156611B5BF4BAD /* DisplayHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B9511EF956BB0A589FCFD5 /* DisplayHelpers.swift */; };
+		F913A7E7A8709047BBC1649C /* SymVaultCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FDBDE1900F52C41D6A6DD8 /* SymVaultCredentialStore.swift */; };
+		F9A435C53C18712CEBD50123 /* TOMLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25FB33EB65E175BFC82E34EE /* TOMLParser.swift */; };
+		F9A7534F2E1218E594CA37CC /* HistoryOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1545BEB0D151C31294C4DD /* HistoryOptions.swift */; };
+		FD80A284A97A6AF5083A855C /* BatterySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE75475490569DD390BECF1 /* BatterySource.swift */; };
+		FF6D7F0652EABD549D9C1FA6 /* DurationParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17855EF700E89243826BCCE7 /* DurationParser.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6C2602988A7DB1F3A0B0F5EF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E65424DD0754BE05FB66966E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 343B92040E32BCF0FC513141;
+			remoteInfo = SymTuneCore;
+		};
+		BF64163854050F26C4D50231 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E65424DD0754BE05FB66966E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5FBDEC37448394F256AA224C;
+			remoteInfo = SymTuneUI;
+		};
+		E123D5CEC5D39C43C0A92202 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E65424DD0754BE05FB66966E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 343B92040E32BCF0FC513141;
+			remoteInfo = SymTuneCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		00E55F5F5D08E906D96D9A89 /* TopProcessesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopProcessesCard.swift; sourceTree = "<group>"; };
+		0345708291C92E4A77E7A0EB /* TuneControllerErrorMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuneControllerErrorMapping.swift; sourceTree = "<group>"; };
+		073BA3346947A5C708579EDC /* DisplayGamma.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayGamma.swift; sourceTree = "<group>"; };
+		0944BD67D2AF2D447768BCC8 /* AIUsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsageCardView.swift; sourceTree = "<group>"; };
+		0DC3F96AA7325A9AE8CBC985 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
+		123BB390E7C2B39F63DE3B93 /* libSymTuneCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libSymTuneCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		12E23FAB7876260075BCD295 /* Version.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Version.swift; sourceTree = "<group>"; };
+		1569BDC4751F6B898A3D6F38 /* EDROverlayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EDROverlayService.swift; sourceTree = "<group>"; };
+		168D79C76C5D8CDDCEA3FCCB /* ControlCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlCards.swift; sourceTree = "<group>"; };
+		17855EF700E89243826BCCE7 /* DurationParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurationParser.swift; sourceTree = "<group>"; };
+		1855FE27754872056F445919 /* SymBrainUsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymBrainUsageProvider.swift; sourceTree = "<group>"; };
+		1E2307B21B9F707FD2E289EA /* MenuBarVisibilityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarVisibilityCard.swift; sourceTree = "<group>"; };
+		25FB33EB65E175BFC82E34EE /* TOMLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOMLParser.swift; sourceTree = "<group>"; };
+		291C836411D1850714CE3C63 /* StatusOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusOptions.swift; sourceTree = "<group>"; };
+		2A1CBEB6393FD73BCBF8C327 /* HealthScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthScorer.swift; sourceTree = "<group>"; };
+		2A27C4ADD12ECAA75FAA0BA2 /* MetricStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricStyle.swift; sourceTree = "<group>"; };
+		2F3EFC721840617E1C0517A4 /* HistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryService.swift; sourceTree = "<group>"; };
+		3603115E7E2B051ED5AC8F59 /* TuneViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuneViewModel.swift; sourceTree = "<group>"; };
+		38A228717A3ED7DFA4E76714 /* BeyondNormalBrightness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeyondNormalBrightness.swift; sourceTree = "<group>"; };
+		390B90FA56E55AF3A9C7716F /* UntilTimeParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UntilTimeParser.swift; sourceTree = "<group>"; };
+		3C392F28A28A4D9E005D1A9F /* BatteryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryService.swift; sourceTree = "<group>"; };
+		3F6221E3809813057C52BBB0 /* MetricRowData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricRowData.swift; sourceTree = "<group>"; };
+		45D6758C482B1D1D1887C5A1 /* WriteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteCommand.swift; sourceTree = "<group>"; };
+		46B9511EF956BB0A589FCFD5 /* DisplayHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHelpers.swift; sourceTree = "<group>"; };
+		47C40B7C59BB05E3BCC0BFE0 /* ProcessesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessesViewModel.swift; sourceTree = "<group>"; };
+		48BA772AF4802C4EA6EEAEAE /* PowerAssertionSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerAssertionSource.swift; sourceTree = "<group>"; };
+		49C012DCADC4BB68351CAA2D /* DisplayEnumerationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayEnumerationSource.swift; sourceTree = "<group>"; };
+		4AC3AA06A263B7D21BF2CC22 /* DisplayGammaController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayGammaController.swift; sourceTree = "<group>"; };
+		507D733931BD16CEB76A0393 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		51F36E592CF3799F3710E149 /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
+		52153193B0DBDB6BD6C8989A /* RedactedErrorLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactedErrorLine.swift; sourceTree = "<group>"; };
+		530836A8D3D23538A482EC46 /* SMCRestoreTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMCRestoreTracker.swift; sourceTree = "<group>"; };
+		592FD9161CDF4FC9CB9DC264 /* SensorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorService.swift; sourceTree = "<group>"; };
+		5CC10E06BB33ED53FC26E0FA /* MetricStyleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricStyleRow.swift; sourceTree = "<group>"; };
+		6046414C0CD3D84BE3C390AB /* MetricFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricFormatting.swift; sourceTree = "<group>"; };
+		62FDBDE1900F52C41D6A6DD8 /* SymVaultCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymVaultCredentialStore.swift; sourceTree = "<group>"; };
+		657FA458B63D22419B5E2C86 /* PreferencesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManager.swift; sourceTree = "<group>"; };
+		667976B07BC168E7CA3CD040 /* DimOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DimOverlay.swift; sourceTree = "<group>"; };
+		6742B97B000DF5A382A4FA46 /* ChargeLimitState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeLimitState.swift; sourceTree = "<group>"; };
+		68CB432500C534E29B1EA996 /* ProcessUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessUsage.swift; sourceTree = "<group>"; };
+		69326F25ABED01A77E23AAE5 /* CenterAnchoredSliderRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CenterAnchoredSliderRow.swift; sourceTree = "<group>"; };
+		6B4DED5CCC7850ACCAF5CC21 /* OverrideTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverrideTracker.swift; sourceTree = "<group>"; };
+		6C1853A4627B0652A0763B07 /* FanControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlService.swift; sourceTree = "<group>"; };
+		6D09693F4FBB6FCA20BA4D40 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
+		6D33E593D1AC1C90523A925A /* PowerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerService.swift; sourceTree = "<group>"; };
+		6DA1606AEF91B8048435FD7E /* Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Errors.swift; sourceTree = "<group>"; };
+		6DE197227B702A08CC3000B9 /* AIUsageFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsageFormatting.swift; sourceTree = "<group>"; };
+		74CDCC5A902B255BEFF53167 /* StatusCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusCards.swift; sourceTree = "<group>"; };
+		7B460BB0191B029D1E8012DB /* history */ = {isa = PBXFileReference; lastKnownFileType = folder; name = history; path = ../history; sourceTree = SOURCE_ROOT; };
+		7FBC12EBEC955779692E3D14 /* SafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyPolicy.swift; sourceTree = "<group>"; };
+		81F8CB6917921F3F8699419B /* ProcessUsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessUsageService.swift; sourceTree = "<group>"; };
+		8381501A5B7DEEB17D10B1FF /* BatteryHealthParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryHealthParser.swift; sourceTree = "<group>"; };
+		85794A4E0BA8EC63F8D76BD7 /* AIUsagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsagePreferences.swift; sourceTree = "<group>"; };
+		85B4BEA852D089DA4458D24A /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		86A2FC972551D177CA01626C /* UpdateNotificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateNotificationView.swift; sourceTree = "<group>"; };
+		86A542FBF31FCC3A2D7072C0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		89FD8F3757E1D6B6B85C9ECA /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		91AEA76651ECDA7BB60FDF9B /* StateFilePermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateFilePermissions.swift; sourceTree = "<group>"; };
+		92EBA42E774C3B1279B82A53 /* PowerWakeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerWakeMonitor.swift; sourceTree = "<group>"; };
+		94F0C1280902878DC8B55BC1 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		956525AD160A014B963669DE /* MetricsHistoryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsHistoryCard.swift; sourceTree = "<group>"; };
+		96CA4D18E8809AD42A247BCE /* DisplayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayService.swift; sourceTree = "<group>"; };
+		96D79CC585387F001182EF04 /* MainStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainStatusView.swift; sourceTree = "<group>"; };
+		9957E1D90961DF6009E0511F /* ChargeLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeLimitService.swift; sourceTree = "<group>"; };
+		A0B8954FB3FD01B276479A78 /* AIUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage.swift; sourceTree = "<group>"; };
+		A1154F4FAF05F8D54B48EAA4 /* DisplayWriteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayWriteService.swift; sourceTree = "<group>"; };
+		A24B7E0DD12912C95937D4ED /* ProcessListingPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessListingPresentation.swift; sourceTree = "<group>"; };
+		A595FBA79B3EAAF192021DB5 /* MetricsRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsRingBuffer.swift; sourceTree = "<group>"; };
+		A6B173CC4103E0F0B0620B52 /* AIUsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsageService.swift; sourceTree = "<group>"; };
+		A76539AD04E01F956A80A5F9 /* SMCHelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMCHelperProtocol.swift; sourceTree = "<group>"; };
+		AAE75475490569DD390BECF1 /* BatterySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatterySource.swift; sourceTree = "<group>"; };
+		AD4CE27C0DAAF3A83E51F395 /* SecretRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretRedactor.swift; sourceTree = "<group>"; };
+		AE23D503CDFCD65203C4D711 /* SystemMetricsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMetricsSource.swift; sourceTree = "<group>"; };
+		AE4DABF215ADDD54132DCFF5 /* libSymTuneUI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libSymTuneUI.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF1545BEB0D151C31294C4DD /* HistoryOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryOptions.swift; sourceTree = "<group>"; };
+		B065CAC73A1713C53DEBAF45 /* AwakeOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeOptions.swift; sourceTree = "<group>"; };
+		B3DBFBB5A2DE53058B10EE7F /* SMCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMCService.swift; sourceTree = "<group>"; };
+		BB6DE0DBAE941419461C8954 /* AIUsagePreferencesSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsagePreferencesSection.swift; sourceTree = "<group>"; };
+		C65522D496F4A385B23DF643 /* SMCWritePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMCWritePolicy.swift; sourceTree = "<group>"; };
+		C89D9C19B3D7DA84E6FFB4D1 /* KeepAwakeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAwakeCoordinator.swift; sourceTree = "<group>"; };
+		CE5AFDC400CB90B28390E695 /* SymVaultCredentialField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymVaultCredentialField.swift; sourceTree = "<group>"; };
+		D39574AE548D5416D6AF8137 /* SystemMetricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMetricsService.swift; sourceTree = "<group>"; };
+		D87FFD767FA30816E9898131 /* TuneController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuneController.swift; sourceTree = "<group>"; };
+		DC9C4EBAD460DFE5DCF2892D /* AIUsageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsageViewModel.swift; sourceTree = "<group>"; };
+		DD6D2C69C09045B5BB9D261A /* SymBrainUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymBrainUsageClient.swift; sourceTree = "<group>"; };
+		E1D60B133F1435A735FE281C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E9470ADFB2BBE8D7385E6E24 /* MetricsHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsHistoryService.swift; sourceTree = "<group>"; };
+		EA6B56530341322081233D02 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		EADC5F7656AC53DF9B9749FE /* SymairaTune.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SymairaTune.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ECED98230F09FDC98E519AD4 /* SMCRestoreRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMCRestoreRecord.swift; sourceTree = "<group>"; };
+		ED4C3A69B4F5EB47123AF8C1 /* SparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparklineView.swift; sourceTree = "<group>"; };
+		EDE5947E626B5F0A095C1B0A /* ExitCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExitCode.swift; sourceTree = "<group>"; };
+		F06217EAFB56B8BB214247CB /* KeychainCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentials.swift; sourceTree = "<group>"; };
+		FC098B011466BC04FB1E0D2D /* TuneSliderRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuneSliderRow.swift; sourceTree = "<group>"; };
+		FF9AD85846488EA7B9E0EF25 /* KeepAwakeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAwakeCard.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A73412F14ACAD6058ED4B13B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4B15F70649D1BBFEA2B9118D /* libSymTuneUI.a in Frameworks */,
+				954D5BBC97390EDD13DEA547 /* libSymTuneCore.a in Frameworks */,
+				BD94466541D5F9C33F5F8EEE /* SymCockpitHistory in Frameworks */,
+				2753CC6898DD725C6D21FB19 /* SymairaKeychain in Frameworks */,
+				EC0D3E1823148CB90D7493EC /* SymairaProviderKit in Frameworks */,
+				19F3E7328BF473C5EDCCE614 /* SymairaUpdateCheck in Frameworks */,
+				EB8D6BD36820A70901759180 /* SymairaTheme in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1B19BFDB4FD8EE70FE4A414C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				123BB390E7C2B39F63DE3B93 /* libSymTuneCore.a */,
+				AE4DABF215ADDD54132DCFF5 /* libSymTuneUI.a */,
+				EADC5F7656AC53DF9B9749FE /* SymairaTune.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3362872EFA9AA41429AE34FB /* SymTuneUI */ = {
+			isa = PBXGroup;
+			children = (
+				0944BD67D2AF2D447768BCC8 /* AIUsageCardView.swift */,
+				85794A4E0BA8EC63F8D76BD7 /* AIUsagePreferences.swift */,
+				BB6DE0DBAE941419461C8954 /* AIUsagePreferencesSection.swift */,
+				DC9C4EBAD460DFE5DCF2892D /* AIUsageViewModel.swift */,
+				69326F25ABED01A77E23AAE5 /* CenterAnchoredSliderRow.swift */,
+				168D79C76C5D8CDDCEA3FCCB /* ControlCards.swift */,
+				FF9AD85846488EA7B9E0EF25 /* KeepAwakeCard.swift */,
+				96D79CC585387F001182EF04 /* MainStatusView.swift */,
+				1E2307B21B9F707FD2E289EA /* MenuBarVisibilityCard.swift */,
+				956525AD160A014B963669DE /* MetricsHistoryCard.swift */,
+				5CC10E06BB33ED53FC26E0FA /* MetricStyleRow.swift */,
+				657FA458B63D22419B5E2C86 /* PreferencesManager.swift */,
+				94F0C1280902878DC8B55BC1 /* PreferencesView.swift */,
+				47C40B7C59BB05E3BCC0BFE0 /* ProcessesViewModel.swift */,
+				ED4C3A69B4F5EB47123AF8C1 /* SparklineView.swift */,
+				85B4BEA852D089DA4458D24A /* StatusBarController.swift */,
+				74CDCC5A902B255BEFF53167 /* StatusCards.swift */,
+				CE5AFDC400CB90B28390E695 /* SymVaultCredentialField.swift */,
+				00E55F5F5D08E906D96D9A89 /* TopProcessesCard.swift */,
+				FC098B011466BC04FB1E0D2D /* TuneSliderRow.swift */,
+				3603115E7E2B051ED5AC8F59 /* TuneViewModel.swift */,
+				86A2FC972551D177CA01626C /* UpdateNotificationView.swift */,
+			);
+			name = SymTuneUI;
+			path = Sources/SymTuneUI;
+			sourceTree = "<group>";
+		};
+		3713663D512E80D9D29677A2 = {
+			isa = PBXGroup;
+			children = (
+				D867B619C398AB100ADEF47C /* Packages */,
+				E7D74CD69F14B14B754C66AD /* SymTuneApp */,
+				CF1598DFCBF321D96014EDD7 /* SymTuneCore */,
+				3362872EFA9AA41429AE34FB /* SymTuneUI */,
+				1B19BFDB4FD8EE70FE4A414C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CF1598DFCBF321D96014EDD7 /* SymTuneCore */ = {
+			isa = PBXGroup;
+			children = (
+				A0B8954FB3FD01B276479A78 /* AIUsage.swift */,
+				6DE197227B702A08CC3000B9 /* AIUsageFormatting.swift */,
+				A6B173CC4103E0F0B0620B52 /* AIUsageService.swift */,
+				B065CAC73A1713C53DEBAF45 /* AwakeOptions.swift */,
+				8381501A5B7DEEB17D10B1FF /* BatteryHealthParser.swift */,
+				3C392F28A28A4D9E005D1A9F /* BatteryService.swift */,
+				AAE75475490569DD390BECF1 /* BatterySource.swift */,
+				38A228717A3ED7DFA4E76714 /* BeyondNormalBrightness.swift */,
+				9957E1D90961DF6009E0511F /* ChargeLimitService.swift */,
+				6742B97B000DF5A382A4FA46 /* ChargeLimitState.swift */,
+				89FD8F3757E1D6B6B85C9ECA /* Config.swift */,
+				667976B07BC168E7CA3CD040 /* DimOverlay.swift */,
+				49C012DCADC4BB68351CAA2D /* DisplayEnumerationSource.swift */,
+				073BA3346947A5C708579EDC /* DisplayGamma.swift */,
+				4AC3AA06A263B7D21BF2CC22 /* DisplayGammaController.swift */,
+				46B9511EF956BB0A589FCFD5 /* DisplayHelpers.swift */,
+				96CA4D18E8809AD42A247BCE /* DisplayService.swift */,
+				A1154F4FAF05F8D54B48EAA4 /* DisplayWriteService.swift */,
+				17855EF700E89243826BCCE7 /* DurationParser.swift */,
+				1569BDC4751F6B898A3D6F38 /* EDROverlayService.swift */,
+				6DA1606AEF91B8048435FD7E /* Errors.swift */,
+				EDE5947E626B5F0A095C1B0A /* ExitCode.swift */,
+				6C1853A4627B0652A0763B07 /* FanControlService.swift */,
+				2A1CBEB6393FD73BCBF8C327 /* HealthScorer.swift */,
+				AF1545BEB0D151C31294C4DD /* HistoryOptions.swift */,
+				2F3EFC721840617E1C0517A4 /* HistoryService.swift */,
+				C89D9C19B3D7DA84E6FFB4D1 /* KeepAwakeCoordinator.swift */,
+				F06217EAFB56B8BB214247CB /* KeychainCredentials.swift */,
+				6046414C0CD3D84BE3C390AB /* MetricFormatting.swift */,
+				3F6221E3809813057C52BBB0 /* MetricRowData.swift */,
+				E9470ADFB2BBE8D7385E6E24 /* MetricsHistoryService.swift */,
+				A595FBA79B3EAAF192021DB5 /* MetricsRingBuffer.swift */,
+				2A27C4ADD12ECAA75FAA0BA2 /* MetricStyle.swift */,
+				86A542FBF31FCC3A2D7072C0 /* Models.swift */,
+				0DC3F96AA7325A9AE8CBC985 /* NetworkService.swift */,
+				6B4DED5CCC7850ACCAF5CC21 /* OverrideTracker.swift */,
+				48BA772AF4802C4EA6EEAEAE /* PowerAssertionSource.swift */,
+				6D33E593D1AC1C90523A925A /* PowerService.swift */,
+				92EBA42E774C3B1279B82A53 /* PowerWakeMonitor.swift */,
+				A24B7E0DD12912C95937D4ED /* ProcessListingPresentation.swift */,
+				68CB432500C534E29B1EA996 /* ProcessUsage.swift */,
+				81F8CB6917921F3F8699419B /* ProcessUsageService.swift */,
+				51F36E592CF3799F3710E149 /* ProfileService.swift */,
+				52153193B0DBDB6BD6C8989A /* RedactedErrorLine.swift */,
+				7FBC12EBEC955779692E3D14 /* SafetyPolicy.swift */,
+				AD4CE27C0DAAF3A83E51F395 /* SecretRedactor.swift */,
+				592FD9161CDF4FC9CB9DC264 /* SensorService.swift */,
+				A76539AD04E01F956A80A5F9 /* SMCHelperProtocol.swift */,
+				ECED98230F09FDC98E519AD4 /* SMCRestoreRecord.swift */,
+				530836A8D3D23538A482EC46 /* SMCRestoreTracker.swift */,
+				B3DBFBB5A2DE53058B10EE7F /* SMCService.swift */,
+				C65522D496F4A385B23DF643 /* SMCWritePolicy.swift */,
+				91AEA76651ECDA7BB60FDF9B /* StateFilePermissions.swift */,
+				291C836411D1850714CE3C63 /* StatusOptions.swift */,
+				DD6D2C69C09045B5BB9D261A /* SymBrainUsageClient.swift */,
+				1855FE27754872056F445919 /* SymBrainUsageProvider.swift */,
+				62FDBDE1900F52C41D6A6DD8 /* SymVaultCredentialStore.swift */,
+				D39574AE548D5416D6AF8137 /* SystemMetricsService.swift */,
+				AE23D503CDFCD65203C4D711 /* SystemMetricsSource.swift */,
+				25FB33EB65E175BFC82E34EE /* TOMLParser.swift */,
+				D87FFD767FA30816E9898131 /* TuneController.swift */,
+				0345708291C92E4A77E7A0EB /* TuneControllerErrorMapping.swift */,
+				390B90FA56E55AF3A9C7716F /* UntilTimeParser.swift */,
+				6D09693F4FBB6FCA20BA4D40 /* UpdateChecker.swift */,
+				12E23FAB7876260075BCD295 /* Version.swift */,
+				45D6758C482B1D1D1887C5A1 /* WriteCommand.swift */,
+			);
+			name = SymTuneCore;
+			path = Sources/SymTuneCore;
+			sourceTree = "<group>";
+		};
+		D867B619C398AB100ADEF47C /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				7B460BB0191B029D1E8012DB /* history */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		E7D74CD69F14B14B754C66AD /* SymTuneApp */ = {
+			isa = PBXGroup;
+			children = (
+				EA6B56530341322081233D02 /* AppDelegate.swift */,
+				507D733931BD16CEB76A0393 /* Assets.xcassets */,
+				E1D60B133F1435A735FE281C /* Info.plist */,
+			);
+			name = SymTuneApp;
+			path = Sources/SymTuneApp;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		343B92040E32BCF0FC513141 /* SymTuneCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C56018DF52B0998006025B2E /* Build configuration list for PBXNativeTarget "SymTuneCore" */;
+			buildPhases = (
+				56EE8F5984D34E76094572D3 /* Sources */,
+				B23307CBC03EE272700AEC20 /* Copy Swift Objective-C Interface Header */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0614A31FF1EC716DFD12242E /* PBXTargetDependency */,
+				30588CA1139B1585BE23D715 /* PBXTargetDependency */,
+				733FAEC66D074D0DC821A71C /* PBXTargetDependency */,
+			);
+			name = SymTuneCore;
+			packageProductDependencies = (
+				9469D9DFEA172E166D5B7B49 /* SymCockpitHistory */,
+				E46EB1BD0F71B62098DA47CF /* SymairaKeychain */,
+				724B70FE77E1D7D654DD339A /* SymairaUpdateCheck */,
+			);
+			productName = SymTuneCore;
+			productReference = 123BB390E7C2B39F63DE3B93 /* libSymTuneCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		5FBDEC37448394F256AA224C /* SymTuneUI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9499EF95EF27321EA4DE41FB /* Build configuration list for PBXNativeTarget "SymTuneUI" */;
+			buildPhases = (
+				1E035DB1DCFD2445C73D7B21 /* Sources */,
+				DD995F68AEA1221B4905C15D /* Copy Swift Objective-C Interface Header */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				336FE5AC8FD7F1864F0CA5B3 /* PBXTargetDependency */,
+				98495FB913182D1DE69B1199 /* PBXTargetDependency */,
+				0231B0143F5CCE93DC148E44 /* PBXTargetDependency */,
+				D24A32D5E9EC63C75D622D62 /* PBXTargetDependency */,
+			);
+			name = SymTuneUI;
+			packageProductDependencies = (
+				E4978BF33C3D2FBEE8CDA96A /* SymairaProviderKit */,
+				E44C3979BF2C4355FE8A7342 /* SymairaUpdateCheck */,
+				126CF53FB3BE98C70DE4B503 /* SymairaTheme */,
+			);
+			productName = SymTuneUI;
+			productReference = AE4DABF215ADDD54132DCFF5 /* libSymTuneUI.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		684150381964C41BF0D9A686 /* SymairaTune */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A5742667BACBE1130E1E2D6 /* Build configuration list for PBXNativeTarget "SymairaTune" */;
+			buildPhases = (
+				5A57B8C35BE26E6B8AB5AD37 /* Sources */,
+				5D8D1E7B8A745B0800CFE9E5 /* Resources */,
+				A73412F14ACAD6058ED4B13B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F346054C085B0B9185F41860 /* PBXTargetDependency */,
+				89D325D8DACDCA42C2202269 /* PBXTargetDependency */,
+			);
+			name = SymairaTune;
+			packageProductDependencies = (
+				3C4FF785B0F0DF6DE3AEE73A /* SymCockpitHistory */,
+				E243C5A5305300D4E9899230 /* SymairaKeychain */,
+				C58D08E97D03D20E04ECF752 /* SymairaProviderKit */,
+				00E0AC34436BFF560CD95DC2 /* SymairaUpdateCheck */,
+				1D07741835AF0587A0BF409E /* SymairaTheme */,
+			);
+			productName = SymairaTune;
+			productReference = EADC5F7656AC53DF9B9749FE /* SymairaTune.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E65424DD0754BE05FB66966E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					684150381964C41BF0D9A686 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 64B6FCA6B0659F962CDAC085 /* Build configuration list for PBXProject "SymairaTune" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3713663D512E80D9D29677A2;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */,
+				7D5BC10490C8B8103F31D605 /* XCLocalSwiftPackageReference "../history" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1B19BFDB4FD8EE70FE4A414C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				343B92040E32BCF0FC513141 /* SymTuneCore */,
+				5FBDEC37448394F256AA224C /* SymTuneUI */,
+				684150381964C41BF0D9A686 /* SymairaTune */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5D8D1E7B8A745B0800CFE9E5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02524E4D1A326D518300B306 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B23307CBC03EE272700AEC20 /* Copy Swift Objective-C Interface Header */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(DERIVED_SOURCES_DIR)/$(SWIFT_OBJC_INTERFACE_HEADER_NAME)",
+			);
+			name = "Copy Swift Objective-C Interface Header";
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/include/$(PRODUCT_MODULE_NAME)/$(SWIFT_OBJC_INTERFACE_HEADER_NAME)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "ditto \"${SCRIPT_INPUT_FILE_0}\" \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+		};
+		DD995F68AEA1221B4905C15D /* Copy Swift Objective-C Interface Header */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(DERIVED_SOURCES_DIR)/$(SWIFT_OBJC_INTERFACE_HEADER_NAME)",
+			);
+			name = "Copy Swift Objective-C Interface Header";
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/include/$(PRODUCT_MODULE_NAME)/$(SWIFT_OBJC_INTERFACE_HEADER_NAME)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "ditto \"${SCRIPT_INPUT_FILE_0}\" \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1E035DB1DCFD2445C73D7B21 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BC0AF9D28578F99572269DCF /* AIUsageCardView.swift in Sources */,
+				47A5204B1B668339993A9220 /* AIUsagePreferences.swift in Sources */,
+				8A30F471E5474E14D94B16E4 /* AIUsagePreferencesSection.swift in Sources */,
+				2737072F28F0C9E2D437736B /* AIUsageViewModel.swift in Sources */,
+				916429891D20095BB540A3CA /* CenterAnchoredSliderRow.swift in Sources */,
+				04127471F4A9D0A472A86CB5 /* ControlCards.swift in Sources */,
+				6A1474EEC53D56FB3972E89E /* KeepAwakeCard.swift in Sources */,
+				E2036C738EBB5B979D2B58F3 /* MainStatusView.swift in Sources */,
+				6DDB36AF4F02224DD1BDEB72 /* MenuBarVisibilityCard.swift in Sources */,
+				9A09EB96161009328A81C744 /* MetricStyleRow.swift in Sources */,
+				E777BF8E2492C1B9430311B3 /* MetricsHistoryCard.swift in Sources */,
+				0ACA8F50DF089A7872E6066F /* PreferencesManager.swift in Sources */,
+				06FA5D71970678B244EF7B7E /* PreferencesView.swift in Sources */,
+				6271DA7A148A9812661E2437 /* ProcessesViewModel.swift in Sources */,
+				816213C798C1FFBFF3EBCD34 /* SparklineView.swift in Sources */,
+				EA7A8838516027266449746C /* StatusBarController.swift in Sources */,
+				D8F4812DB743DB13FDB55F92 /* StatusCards.swift in Sources */,
+				043AE922435405389BB8D03D /* SymVaultCredentialField.swift in Sources */,
+				45FC85DCADB5A46E9CF265FE /* TopProcessesCard.swift in Sources */,
+				BF164222CCCD2CAD4118B82A /* TuneSliderRow.swift in Sources */,
+				3B78D83A6132F424B11FA9F6 /* TuneViewModel.swift in Sources */,
+				97A413A3E8ED3D6CF8E91CC7 /* UpdateNotificationView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		56EE8F5984D34E76094572D3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3C14A234692B3944E7E23D9 /* AIUsage.swift in Sources */,
+				4B16F9D5205266284D8E708E /* AIUsageFormatting.swift in Sources */,
+				8E191C47E1C2B64A9C11A132 /* AIUsageService.swift in Sources */,
+				BE24B8CC46467168BD5176D4 /* AwakeOptions.swift in Sources */,
+				E9826649592ACC163EF2872F /* BatteryHealthParser.swift in Sources */,
+				251A43CAFA61468A42033DF0 /* BatteryService.swift in Sources */,
+				FD80A284A97A6AF5083A855C /* BatterySource.swift in Sources */,
+				AF4D9B21A3BAD3272B4C00BD /* BeyondNormalBrightness.swift in Sources */,
+				510E2E629950A190C3BC9468 /* ChargeLimitService.swift in Sources */,
+				A10FFCFB4A727C5FD12573F0 /* ChargeLimitState.swift in Sources */,
+				62E389402B18971245D50726 /* Config.swift in Sources */,
+				A13ACD7B5E02F09175F9316F /* DimOverlay.swift in Sources */,
+				58C1134A295F4B5EFC36510F /* DisplayEnumerationSource.swift in Sources */,
+				D302CDE4FC9DBE6A269ED043 /* DisplayGamma.swift in Sources */,
+				C93BF12A59ED637BEEBE95E8 /* DisplayGammaController.swift in Sources */,
+				F030CB30B0156611B5BF4BAD /* DisplayHelpers.swift in Sources */,
+				270650381D2F51A423D3944E /* DisplayService.swift in Sources */,
+				105288766DE7188852C01D42 /* DisplayWriteService.swift in Sources */,
+				FF6D7F0652EABD549D9C1FA6 /* DurationParser.swift in Sources */,
+				B020D5D940A5513E4A5BA94D /* EDROverlayService.swift in Sources */,
+				227BF7852EF6BBBA25F33937 /* Errors.swift in Sources */,
+				B61B1FCE72B234A4A46421E7 /* ExitCode.swift in Sources */,
+				630F986F6DB550262AF13A5A /* FanControlService.swift in Sources */,
+				4E46343EF4BAF39EAF439AF2 /* HealthScorer.swift in Sources */,
+				F9A7534F2E1218E594CA37CC /* HistoryOptions.swift in Sources */,
+				52E7859C5D5904645C20D106 /* HistoryService.swift in Sources */,
+				789E60D5C4BE6F55A45416AA /* KeepAwakeCoordinator.swift in Sources */,
+				70933A25FD6A35427497D51A /* KeychainCredentials.swift in Sources */,
+				85529B4B2A596E006732CE61 /* MetricFormatting.swift in Sources */,
+				CFF145D5410244F0513A33CD /* MetricRowData.swift in Sources */,
+				2EBBCDD7FE0BA5F9488BCB68 /* MetricStyle.swift in Sources */,
+				018BE7DA4D7654EC3CF2B6E7 /* MetricsHistoryService.swift in Sources */,
+				86AC454622AC60BBEEDA9648 /* MetricsRingBuffer.swift in Sources */,
+				3813A58F891DEFF78D1F4B6A /* Models.swift in Sources */,
+				59E4F9C514D85E43E9C98794 /* NetworkService.swift in Sources */,
+				2B181E8283A69CF1866AA199 /* OverrideTracker.swift in Sources */,
+				084D7E76854CE13B0C392F66 /* PowerAssertionSource.swift in Sources */,
+				022A5989A56286C4CA003288 /* PowerService.swift in Sources */,
+				3E2BE030D4921E7B5D4EB629 /* PowerWakeMonitor.swift in Sources */,
+				AF3F598A36D4677C744C06F1 /* ProcessListingPresentation.swift in Sources */,
+				0B0021C60B38FDFC85B2CD3F /* ProcessUsage.swift in Sources */,
+				2A5E4AFD9D04C661FDA4E0E8 /* ProcessUsageService.swift in Sources */,
+				D4876F451287926767C50A24 /* ProfileService.swift in Sources */,
+				047DBFFB8F9DAEA1FD61BF12 /* RedactedErrorLine.swift in Sources */,
+				7DA017456FBFC729250C727E /* SMCHelperProtocol.swift in Sources */,
+				4977C36A192F29B010495D88 /* SMCRestoreRecord.swift in Sources */,
+				6EF202B1F63F63066484D978 /* SMCRestoreTracker.swift in Sources */,
+				A200135D50C6BB474FACF395 /* SMCService.swift in Sources */,
+				909AAD59F814E1516A3E2C8C /* SMCWritePolicy.swift in Sources */,
+				6B5B28AC76AE21C15C09511E /* SafetyPolicy.swift in Sources */,
+				98385A254202D4906A88F974 /* SecretRedactor.swift in Sources */,
+				B4B02C1DDB03D0514DC0692D /* SensorService.swift in Sources */,
+				B07C034AAED7A9005E0F11D1 /* StateFilePermissions.swift in Sources */,
+				650F4600033E031448B359DA /* StatusOptions.swift in Sources */,
+				19B0C1A64BE2D7EFAA6DFB6D /* SymBrainUsageClient.swift in Sources */,
+				EB56C09DB5A313E7C292EC0D /* SymBrainUsageProvider.swift in Sources */,
+				F913A7E7A8709047BBC1649C /* SymVaultCredentialStore.swift in Sources */,
+				DD15C2D5E9BA84A95553CD03 /* SystemMetricsService.swift in Sources */,
+				6738FC0942D47D3FBA61425A /* SystemMetricsSource.swift in Sources */,
+				F9A435C53C18712CEBD50123 /* TOMLParser.swift in Sources */,
+				AF7DC26E2D6748B3B881328E /* TuneController.swift in Sources */,
+				4618CE68A22E2C73E728A9F1 /* TuneControllerErrorMapping.swift in Sources */,
+				24F52A9F3770232582300EC6 /* UntilTimeParser.swift in Sources */,
+				A0AE7F65C8D390CD7ED4895E /* UpdateChecker.swift in Sources */,
+				5A4947631699787AB82CCFA1 /* Version.swift in Sources */,
+				8BE66A9561BC3ABFAE4B6336 /* WriteCommand.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A57B8C35BE26E6B8AB5AD37 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A1E09F998CE954DA9809475 /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0231B0143F5CCE93DC148E44 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = E44C3979BF2C4355FE8A7342 /* SymairaUpdateCheck */;
+		};
+		0614A31FF1EC716DFD12242E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 9469D9DFEA172E166D5B7B49 /* SymCockpitHistory */;
+		};
+		30588CA1139B1585BE23D715 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = E46EB1BD0F71B62098DA47CF /* SymairaKeychain */;
+		};
+		336FE5AC8FD7F1864F0CA5B3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 343B92040E32BCF0FC513141 /* SymTuneCore */;
+			targetProxy = E123D5CEC5D39C43C0A92202 /* PBXContainerItemProxy */;
+		};
+		733FAEC66D074D0DC821A71C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 724B70FE77E1D7D654DD339A /* SymairaUpdateCheck */;
+		};
+		89D325D8DACDCA42C2202269 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 343B92040E32BCF0FC513141 /* SymTuneCore */;
+			targetProxy = 6C2602988A7DB1F3A0B0F5EF /* PBXContainerItemProxy */;
+		};
+		98495FB913182D1DE69B1199 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = E4978BF33C3D2FBEE8CDA96A /* SymairaProviderKit */;
+		};
+		D24A32D5E9EC63C75D622D62 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 126CF53FB3BE98C70DE4B503 /* SymairaTheme */;
+		};
+		F346054C085B0B9185F41860 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5FBDEC37448394F256AA224C /* SymTuneUI */;
+			targetProxy = BF64163854050F26C4D50231 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		28B6A04818947F15631D0668 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7F184BB675F4FB3C943B3CBD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+					"-framework",
+					IOKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.SymTuneCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		99B2DFFCF4F2333459F1C05D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.SymTuneUI;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A93C043EC2797CA3D8651D51 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.SymTuneUI;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B6BA39AD17A443BA1DF7879F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				EXECUTABLE_NAME = SymairaTune;
+				INFOPLIST_FILE = Sources/SymTuneApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+					"-framework",
+					IOKit,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.tune;
+				PRODUCT_NAME = "Symaira Tune";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D975ED5CC07680BB2FDBAE0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E9F5533CF053CDBA7B9A283C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				EXECUTABLE_NAME = SymairaTune;
+				INFOPLIST_FILE = Sources/SymTuneApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+					"-framework",
+					IOKit,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.tune;
+				PRODUCT_NAME = "Symaira Tune";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		EF03EFD41A82D31E0DB75D46 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+					"-framework",
+					IOKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.symaira.SymTuneCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		64B6FCA6B0659F962CDAC085 /* Build configuration list for PBXProject "SymairaTune" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D975ED5CC07680BB2FDBAE0C /* Debug */,
+				28B6A04818947F15631D0668 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7A5742667BACBE1130E1E2D6 /* Build configuration list for PBXNativeTarget "SymairaTune" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6BA39AD17A443BA1DF7879F /* Debug */,
+				E9F5533CF053CDBA7B9A283C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9499EF95EF27321EA4DE41FB /* Build configuration list for PBXNativeTarget "SymTuneUI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99B2DFFCF4F2333459F1C05D /* Debug */,
+				A93C043EC2797CA3D8651D51 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C56018DF52B0998006025B2E /* Build configuration list for PBXNativeTarget "SymTuneCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EF03EFD41A82D31E0DB75D46 /* Debug */,
+				7F184BB675F4FB3C943B3CBD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7D5BC10490C8B8103F31D605 /* XCLocalSwiftPackageReference "../history" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../history;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/danieljustus/symaira-appkit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.14.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		00E0AC34436BFF560CD95DC2 /* SymairaUpdateCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaUpdateCheck;
+		};
+		126CF53FB3BE98C70DE4B503 /* SymairaTheme */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaTheme;
+		};
+		1D07741835AF0587A0BF409E /* SymairaTheme */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaTheme;
+		};
+		3C4FF785B0F0DF6DE3AEE73A /* SymCockpitHistory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SymCockpitHistory;
+		};
+		724B70FE77E1D7D654DD339A /* SymairaUpdateCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaUpdateCheck;
+		};
+		9469D9DFEA172E166D5B7B49 /* SymCockpitHistory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SymCockpitHistory;
+		};
+		C58D08E97D03D20E04ECF752 /* SymairaProviderKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaProviderKit;
+		};
+		E243C5A5305300D4E9899230 /* SymairaKeychain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaKeychain;
+		};
+		E44C3979BF2C4355FE8A7342 /* SymairaUpdateCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaUpdateCheck;
+		};
+		E46EB1BD0F71B62098DA47CF /* SymairaKeychain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaKeychain;
+		};
+		E4978BF33C3D2FBEE8CDA96A /* SymairaProviderKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9DB3FF41BDB372FCE7E97162 /* XCRemoteSwiftPackageReference "symaira-appkit" */;
+			productName = SymairaProviderKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = E65424DD0754BE05FB66966E /* Project object */;
+}

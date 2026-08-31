@@ -9,7 +9,9 @@ options:
 packages:
   symaira-appkit:
     url: https://github.com/danieljustus/symaira-appkit.git
-    revision: "39dbab726db39ecd88814ae5e9b20ff7705cebfa"
+    exactVersion: 0.14.0
+  history:
+    path: ../history
 
 targets:
   SymTuneCore:
@@ -17,6 +19,13 @@ targets:
     platform: macOS
     sources:
       - Sources/SymTuneCore
+    dependencies:
+      - package: history
+        product: SymCockpitHistory
+      - package: symaira-appkit
+        product: SymairaKeychain
+      - package: symaira-appkit
+        product: SymairaUpdateCheck
     settings:
       base:
         MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -38,6 +47,8 @@ targets:
     dependencies:
       - target: SymTuneCore
       - package: symaira-appkit
+        product: SymairaProviderKit
+      - package: symaira-appkit
         product: SymairaUpdateCheck
       - package: symaira-appkit
         product: SymairaTheme
@@ -57,6 +68,12 @@ targets:
     dependencies:
       - target: SymTuneUI
       - target: SymTuneCore
+      - package: history
+        product: SymCockpitHistory
+      - package: symaira-appkit
+        product: SymairaKeychain
+      - package: symaira-appkit
+        product: SymairaProviderKit
       - package: symaira-appkit
         product: SymairaUpdateCheck
       - package: symaira-appkit
