@@ -30,11 +30,7 @@ public final class SymScopeMCPServer: @unchecked Sendable {
     public func dispatch(method: String, params: [String: Any] = [:]) async throws -> [String: Any] {
         switch method {
         case "initialize":
-            return [
-                "protocolVersion": "2025-06-18",
-                "capabilities": ["tools": [:]],
-                "serverInfo": ["name": "symscope", "version": Version.version],
-            ]
+            return Self.initializeResult()
         case "notifications/initialized":
             return [:]
         case "ping":
@@ -56,17 +52,8 @@ public final class SymScopeMCPServer: @unchecked Sendable {
 
     private func registerHandlers() {
         server
-            .withMethodHandler("initialize") { (params: MCPInitializeParams) async throws -> MCPJSONValue in
-                .object([
-                    "protocolVersion": .string(params.protocolVersion ?? MCPServer.supportedProtocolVersion),
-                    "capabilities": .object([
-                        "tools": .object([:]),
-                    ]),
-                    "serverInfo": .object([
-                        "name": .string("symscope"),
-                        "version": .string(Version.version),
-                    ]),
-                ])
+            .withMethodHandler("initialize") { (_: MCPInitializeParams) async throws -> MCPJSONValue in
+                Self.jsonValue(Self.initializeResult())
             }
             .withMethodHandler("tools/list") { [self] (_: MCPNoParams) async throws -> MCPJSONValue in
                 .object(["tools": .array(tools().map(Self.jsonValue))])
@@ -88,6 +75,14 @@ public final class SymScopeMCPServer: @unchecked Sendable {
                     throw MCPError(error.localizedDescription)
                 }
             }
+    }
+
+    private static func initializeResult() -> [String: Any] {
+        [
+            "protocolVersion": SymairaMCP.MCPServer.supportedProtocolVersion,
+            "capabilities": ["tools": [:]],
+            "serverInfo": ["name": "symscope", "version": Version.version],
+        ]
     }
 
     // MARK: - Tools

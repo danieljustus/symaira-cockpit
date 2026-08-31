@@ -18,7 +18,7 @@ final class MCPServerRunTests: XCTestCase {
         let envelope = try mcpDecodeEnvelope(try await mcpNextLine(harness.reader))
         XCTAssertEqual(envelope.id, .number(1))
         let result = try XCTUnwrap(try mcpDecodeResult(envelope, as: MCPInitializeResult.self))
-        XCTAssertNotNil(result.protocolVersion)
+        XCTAssertEqual(result.protocolVersion, SymairaMCP.MCPServer.supportedProtocolVersion)
         XCTAssertNotNil(result.capabilities)
         XCTAssertEqual(result.serverInfo.name, "symtune")
         XCTAssertEqual(result.serverInfo.version, TuneVersion.current)

@@ -51,7 +51,7 @@ public final class MCPServer: @unchecked Sendable {
     public func dispatch(method: String, params: [String: Any]) async throws -> [String: Any] {
         switch method {
         case "initialize":
-            return initializeResult(requestedProtocol: params["protocolVersion"] as? String)
+            return initializeResult()
         case "notifications/initialized":
             return [:]
         case "ping":
@@ -70,13 +70,12 @@ public final class MCPServer: @unchecked Sendable {
     }
 
     /// Registers the symoperate methods on appkit's server. `initialize` is
-    /// deliberately overridden to preserve the previous echo semantics:
-    /// the server answers with the client's requested protocol version (or
-    /// the legacy default) instead of always advertising its own.
+    /// overridden so the server always advertises the protocol version it
+    /// supports, regardless of the client's requested version.
     private func registerHandlers() {
         server
-            .withMethodHandler("initialize") { [self] (params: MCPInitializeParams) async throws -> MCPJSONValue in
-                Self.jsonValue(initializeResult(requestedProtocol: params.protocolVersion))
+            .withMethodHandler("initialize") { [self] (_: MCPInitializeParams) async throws -> MCPJSONValue in
+                Self.jsonValue(initializeResult())
             }
             .withMethodHandler("tools/list") { [self] (_: MCPNoParams) async throws -> MCPJSONValue in
                 .object(["tools": .array(tools().map(Self.jsonValue))])
@@ -103,9 +102,9 @@ public final class MCPServer: @unchecked Sendable {
             }
     }
 
-    private func initializeResult(requestedProtocol: String?) -> [String: Any] {
+    private func initializeResult() -> [String: Any] {
         [
-            "protocolVersion": requestedProtocol ?? "2024-11-05",
+            "protocolVersion": SymairaMCP.MCPServer.supportedProtocolVersion,
             "capabilities": [
                 "tools": [
                     "listChanged": false,
