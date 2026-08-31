@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Packages: the three nested tool packages plus the symcockpit dispatcher
+  # Packages: the four nested packages plus the symcockpit dispatcher
   # package at the repo root. Matrix per package so a failure is attributable
   # by name. macOS-only code (AppKit/IOKit/AX) — no ubuntu leg.
   # macos-latest rather than macos-15: tune targets Xcode 27 (Swift 6.4) and
@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [tune, operate, scope, root]
+        pkg: [tune, operate, scope, history, root]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -62,7 +62,7 @@ jobs:
 
   # Coverage tracking only — main-branch pushes, not a PR check. Keeps PR
   # checks fast (see the `swift` job above) while still recording coverage
-  # figures for tune/operate/scope over time.
+  # figures for tune/operate/scope/history over time.
   coverage:
     if: github.event_name == 'push'
     name: coverage (${{ matrix.pkg }})
@@ -73,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [tune, operate, scope]
+        pkg: [tune, operate, scope, history]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

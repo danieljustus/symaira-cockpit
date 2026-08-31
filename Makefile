@@ -1,7 +1,7 @@
 # Symaira Cockpit — aggregation Makefile
-# Builds and tests all nested SPM packages (tune, operate, scope).
+# Builds and tests all nested SPM packages (tune, operate, scope, history).
 
-PACKAGES := tune operate scope
+PACKAGES := tune operate scope history
 
 # Resolve a full Xcode toolchain: CommandLineTools alone fails on actool.
 # If xcode-select points at CommandLineTools, fall back to an installed Xcode.
