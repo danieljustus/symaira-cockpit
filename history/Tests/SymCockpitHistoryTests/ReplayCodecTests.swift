@@ -152,4 +152,28 @@ final class ReplayCodecTests: XCTestCase {
         XCTAssertEqual(secondItem["session_id"], .string("<redacted>"))
     }
 
+    func testDecodeResanitizesHandWrittenEnvelope() throws {
+        let rawCredential = ["raw", String(repeating: "credential", count: 2)].joined(separator: "-")
+        let envelope: [String: Any] = [
+            "schema_version": DeterministicReplayRecording.currentSchemaVersion,
+            "records": [[
+                "schema_version": CanonicalHistoryEvent.currentSchemaVersion,
+                "source": "operate",
+                "timestamp": timestamp,
+                "action": "click",
+                "payload": [
+                    "target": ["bundle_id": "com.example.Editor"],
+                    "credential": rawCredential,
+                    "success": true
+                ]
+            ]]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+
+        let decoded = try DeterministicReplayCodec().decode(data)
+
+        XCTAssertEqual(decoded.records[0].payload["credential"], .string("<redacted>"))
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("<redacted>"))
+    }
+
 }

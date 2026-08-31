@@ -99,7 +99,7 @@ public struct DeterministicReplayCodec: Sendable {
 
     /// Encodes records with sorted object keys and unchanged record ordering.
     public func encode(_ records: [CanonicalHistoryEvent]) throws -> Data {
-        try encode(recording(from: records))
+        try encodeValidated(recording(from: records))
     }
 
     /// Encodes an already-built recording after applying the same validation.
@@ -108,10 +108,14 @@ public struct DeterministicReplayCodec: Sendable {
         guard recording.schemaVersion == DeterministicReplayRecording.currentSchemaVersion else {
             throw DeterministicReplayError.unsupportedSchemaVersion(recording.schemaVersion)
         }
+        return try encodeValidated(validated)
+    }
 
+    /// Encodes a recording that has already crossed the validation and redaction boundary.
+    private func encodeValidated(_ recording: DeterministicReplayRecording) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(validated)
+        let data = try encoder.encode(recording)
         guard data.count <= maximumBytes else {
             throw DeterministicReplayError.encodedSizeExceeded(actual: data.count, maximum: maximumBytes)
         }
