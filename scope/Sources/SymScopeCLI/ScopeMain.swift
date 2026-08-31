@@ -182,7 +182,7 @@ public enum ScopeMain {
             return 0
 
         case "help", "--help", "-h":
-            printUsage()
+            printUsage(to: .standardOutput)
             return 0
 
         default:
@@ -210,7 +210,7 @@ public enum ScopeMain {
         print(String(data: data, encoding: .utf8) ?? "{}")
     }
 
-    public static func printUsage() {
+    static func printUsage(to output: FileHandle) {
         let text = """
         symscope — inventory local ports, containers, background services, and MCP servers
 
@@ -232,6 +232,10 @@ public enum ScopeMain {
 
         (Legacy alias: symscope <command> works identically.)
         """
-        fputs(text, stderr)
+        output.write(Data(text.utf8))
+    }
+
+    public static func printUsage() {
+        printUsage(to: .standardError)
     }
 }

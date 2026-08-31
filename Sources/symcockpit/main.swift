@@ -136,7 +136,7 @@ case "version":
     }
     code = 0
 case "help", "--help", "-h":
-    fputs(usage, stderr)
+    FileHandle.standardOutput.write(Data(usage.utf8))
     code = 0
 default:
     FileHandle.standardError.write(Data("symcockpit: unknown family '\(args[0])'\n\n".utf8))
