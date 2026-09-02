@@ -154,10 +154,6 @@ public enum ActivityRedactor {
     private static let secretPattern = try! NSRegularExpression(
         pattern: #"(?i)\b(password|passcode|secret|token|api[_-]?key)\b\s*[:=]"#
     )
-    private static let tokenPattern = try! NSRegularExpression(
-        pattern: #"(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})"#
-    )
-
     public static func redact(_ event: ActivitySourceEvent, policy: ActionPolicy) -> ActivitySourceEvent {
         ActivitySourceEvent(
             timestamp: event.timestamp,
@@ -181,7 +177,7 @@ public enum ActivityRedactor {
 
         let range = NSRange(redactedTitle.startIndex..., in: redactedTitle)
         if secretPattern.firstMatch(in: redactedTitle, range: range) != nil
-            || tokenPattern.firstMatch(in: redactedTitle, range: range) != nil {
+            || SecretRedactor.redact(redactedTitle) != redactedTitle {
             return nil
         }
         return redactedTitle

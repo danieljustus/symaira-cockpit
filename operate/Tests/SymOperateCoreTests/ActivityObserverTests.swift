@@ -91,6 +91,14 @@ final class ActivityObserverTests: XCTestCase {
         )
     }
 
+    func testHistorySecretRedactorDropsRuntimeAssembledGitHubTokenTitle() {
+        let credential = "github" + "_pat_" + String(repeating: "A", count: 20)
+
+        XCTAssertNil(
+            ActivityRedactor.redactWindowTitle("Issue \(credential)", policy: ActionPolicy())
+        )
+    }
+
     func testRetentionAndMaximumSegmentsBoundDiskState() throws {
         let store = ActivitySegmentStore(rootURL: rootURL, retention: 3600, maxSegments: 2)
         let first = Date(timeIntervalSince1970: 1_725_000_001)
