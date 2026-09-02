@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /tune
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /operate
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /scope
+    schedule:
+      interval: weekly
