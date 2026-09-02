@@ -1,4 +1,5 @@
 import Foundation
+import SymCockpitHistory
 
 // MARK: - Published symbrain usage contract
 
@@ -188,53 +189,33 @@ public struct ProcessSymBrainCommandRunner: SymBrainCommandRunner, Sendable {
     }
 
     public func run(arguments: [String], environment: [String: String]) throws -> SymBrainCommandResult {
-        guard let binary = Self.resolve(binaryName, environment: environment) else {
-            throw SymBrainUsageError.binaryUnavailable
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = arguments
-        process.environment = environment
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-
+        let result: BoundedProcessResult
         do {
-            try process.run()
+            result = try SymCockpitHistory.BoundedProcessRunner.run(
+                executable: binaryName,
+                arguments: arguments,
+                timeoutSeconds: timeout,
+                environment: environment
+            )
+        } catch let error as BoundedProcessRunnerError {
+            switch error {
+            case .executableUnavailable:
+                throw SymBrainUsageError.binaryUnavailable
+            case .standardInputWriteFailed:
+                throw SymBrainUsageError.commandFailed(-1)
+            }
         } catch {
             throw SymBrainUsageError.binaryUnavailable
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning, Date() < deadline {
-            usleep(10_000)
-        }
-        if process.isRunning {
-            process.terminate()
+        if result.timedOut {
             throw SymBrainUsageError.commandFailed(-1)
         }
-
         return SymBrainCommandResult(
-            standardOutput: stdout.fileHandleForReading.readDataToEndOfFile(),
-            standardError: stderr.fileHandleForReading.readDataToEndOfFile(),
-            terminationStatus: process.terminationStatus
+            standardOutput: result.standardOutput,
+            standardError: result.standardError,
+            terminationStatus: result.terminationStatus
         )
-    }
-
-    private static func resolve(_ name: String, environment: [String: String]) -> String? {
-        if name.hasPrefix("/") {
-            return FileManager.default.isExecutableFile(atPath: name) ? name : nil
-        }
-        guard let path = environment["PATH"] else { return nil }
-        for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
-            let candidate = "\(directory)/\(name)"
-            if FileManager.default.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
-        }
-        return nil
     }
 }
 
