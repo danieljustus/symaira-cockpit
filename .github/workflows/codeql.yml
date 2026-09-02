@@ -36,17 +36,26 @@ jobs:
             echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
           fi
 
+      # Resolve the locked SwiftPM graph before CodeQL installs its build
+      # tracer. SwiftPM's resolver can otherwise block on macOS 26 while the
+      # tracer is active, even though all versions are already pinned.
+      - name: Resolve SwiftPM dependencies
+        run: swift package resolve --only-use-versions-from-resolved-file
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: swift
+          build-mode: manual
 
       - name: Build for analysis
         run: |
-          # The app target needs an Xcode toolchain (actool); plain swift build
-          # covers the dispatcher plus all three family packages, which is what
-          # CodeQL should see. Nested packages resolve via the root Package.swift.
-          swift build
+          # Keep the traced build locked to the resolved graph and one
+          # architecture. The legacy driver is the SwiftPM equivalent of
+          # SWIFT_USE_INTEGRATED_DRIVER=NO, which GitHub documents for traced
+          # Swift builds.
+          swift build --arch arm64 --only-use-versions-from-resolved-file \
+            -Xswiftc -disallow-use-new-driver
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
