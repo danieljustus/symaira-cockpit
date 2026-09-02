@@ -27,7 +27,7 @@ jobs:
         # binary that misreports itself, and Homebrew's `test do` block would
         # fail after the release is already public.
         run: |
-          declared=$(grep -o 'static let current = "[^"]*"' Sources/symcockpit/main.swift | head -1 | sed 's/.*"\(.*\)"/\1/')
+          declared=$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)".*/\1/p' Sources/SymCockpitVersion/CockpitVersion.swift)
           if [ "$declared" != "${{ steps.version.outputs.version }}" ]; then
             echo "tag ${{ steps.version.outputs.version }} != CockpitVersion.current $declared" >&2
             exit 1

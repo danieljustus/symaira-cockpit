@@ -1,13 +1,7 @@
 import XCTest
 
-/// The GUI carries the product version in three places that must agree: the
-/// dispatcher's `CockpitVersion.current`, the app's `CockpitAppVersion.current`
-/// and the bundle's `CFBundleShortVersionString`. The release workflow only
-/// guards the first against the tag, so a bump that forgets the other two would
-/// ship an app that misreports itself in its own window and its Get Info panel.
-///
-/// The sources are read as text: the dispatcher and the app are executable
-/// targets, which a test target cannot import.
+/// The CLI, GUI, release guard and assembled bundle all use the shared
+/// cockpit release source. Family package versions remain independent.
 final class GUIVersionConsistencyTests: XCTestCase {
     /// `<repo>/`, derived from this file's location.
     private var repoRoot: URL {
@@ -15,6 +9,13 @@ final class GUIVersionConsistencyTests: XCTestCase {
             .deletingLastPathComponent()  // SymCockpitE2ETests
             .deletingLastPathComponent()  // Tests
             .deletingLastPathComponent()  // repo root
+    }
+
+    private func read(_ path: String) throws -> String {
+        try String(
+            contentsOf: repoRoot.appendingPathComponent(path),
+            encoding: .utf8
+        )
     }
 
     private func firstMatch(_ pattern: String, in text: String) throws -> String? {
@@ -27,29 +28,46 @@ final class GUIVersionConsistencyTests: XCTestCase {
         return String(text[group])
     }
 
-    func testDispatcherAppAndBundleVersionsAgree() throws {
-        let dispatcher = try String(
-            contentsOf: repoRoot.appendingPathComponent("Sources/symcockpit/main.swift"),
-            encoding: .utf8
-        )
-        let app = try String(
-            contentsOf: repoRoot.appendingPathComponent("Sources/SymCockpitApp/CockpitVersion.swift"),
-            encoding: .utf8
-        )
-        let plist = try String(
-            contentsOf: repoRoot.appendingPathComponent("Sources/SymCockpitApp/Info.plist"),
-            encoding: .utf8
+    func testSharedSourceFeedsDispatcherAndGUI() throws {
+        let shared = try read("Sources/SymCockpitVersion/CockpitVersion.swift")
+        let dispatcher = try read("Sources/symcockpit/main.swift")
+        let updateChecker = try read("Sources/symcockpit/CockpitUpdateChecker.swift")
+        let app = try read("Sources/SymCockpitApp/CockpitVersion.swift")
+
+        let sharedVersion = try firstMatch(
+            #"public static let current = "([^"]+)""#,
+            in: shared
         )
 
-        let dispatcherVersion = try firstMatch(#"static let current = "([^"]+)""#, in: dispatcher)
-        let appVersion = try firstMatch(#"static let current = "([^"]+)""#, in: app)
-        let bundleVersion = try firstMatch(
-            #"<key>CFBundleShortVersionString</key>\s*<string>([^<]+)</string>"#,
-            in: plist
+        XCTAssertNotNil(sharedVersion)
+        XCTAssertEqual(
+            shared.components(separatedBy: "public static let current =").count - 1,
+            1,
+            "the shared source must contain exactly one cockpit version declaration"
         )
+        XCTAssertTrue(dispatcher.contains("import SymCockpitVersion"))
+        XCTAssertTrue(updateChecker.contains("import SymCockpitVersion"))
+        XCTAssertFalse(dispatcher.contains("static let current = \""))
+        XCTAssertTrue(app.contains("import SymCockpitVersion"))
+        XCTAssertTrue(app.contains("typealias CockpitAppVersion = CockpitVersion"))
+        XCTAssertFalse(app.contains("static let current = \""))
+    }
 
-        XCTAssertNotNil(dispatcherVersion, "CockpitVersion.current not found in main.swift")
-        XCTAssertEqual(appVersion, dispatcherVersion, "CockpitAppVersion.current is out of step with the dispatcher")
-        XCTAssertEqual(bundleVersion, dispatcherVersion, "CFBundleShortVersionString is out of step with the dispatcher")
+    func testBundleAndReleaseVerificationUseSharedSource() throws {
+        let plist = try read("Sources/SymCockpitApp/Info.plist")
+        let buildScript = try read("scripts/build-app.sh")
+        let releaseWorkflow = try read(".github/workflows/release.yml")
+
+        XCTAssertTrue(
+            plist.contains("<string>$(COCKPIT_VERSION)</string>"),
+            "the source plist must leave the bundle version for build-app substitution"
+        )
+        XCTAssertTrue(buildScript.contains("Sources/SymCockpitVersion/CockpitVersion.swift"))
+        XCTAssertTrue(buildScript.contains("$(COCKPIT_VERSION)"))
+        XCTAssertTrue(
+            releaseWorkflow.contains("Sources/SymCockpitVersion/CockpitVersion.swift"),
+            "release verification must read the shared source"
+        )
+        XCTAssertFalse(releaseWorkflow.contains("Sources/symcockpit/main.swift"))
     }
 }

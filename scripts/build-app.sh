@@ -23,6 +23,12 @@ PRODUCT="SymCockpitApp"
 
 cd "$(dirname "$0")/.."
 
+COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)".*/\1/p' Sources/SymCockpitVersion/CockpitVersion.swift)"
+[[ -n "$COCKPIT_VERSION" ]] || {
+  printf 'Could not read cockpit version from Sources/SymCockpitVersion/CockpitVersion.swift\n' >&2
+  exit 1
+}
+
 BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION")
 if [[ "$UNIVERSAL" == "1" ]]; then
   BUILD_ARGS+=(--arch arm64 --arch x86_64)
@@ -49,6 +55,7 @@ sed \
   -e "s|\$(EXECUTABLE_NAME)|$PRODUCT|g" \
   -e "s|\$(PRODUCT_BUNDLE_IDENTIFIER)|$BUNDLE_ID|g" \
   -e "s|\$(MACOSX_DEPLOYMENT_TARGET)|${DEPLOYMENT_TARGET:-15.0}|g" \
+  -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
 printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
