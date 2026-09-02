@@ -28,7 +28,7 @@ public enum ScopeMain {
         }
 
         switch first {
-        case "version":
+        case "version", "--version", "-V":
             if args.contains("--json") {
                 try printJSON(Version.info(), pretty: false)
             } else {

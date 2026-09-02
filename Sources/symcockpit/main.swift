@@ -29,6 +29,7 @@ Families:
   scope      Ports, containers, MCP inventory (symscope)
 
   version [--json] [--no-update-check]    symcockpit version plus the component versions
+  --version, -V                           aliases for `symcockpit version`
   help                This text
 
 Examples:
@@ -115,10 +116,10 @@ switch args[0] {
 case "tune":
     code = SymTuneMain.run(Array(args.dropFirst()))
 case "operate":
-    code = OperateMain.run(Array(args.dropFirst()))
+    code = OperateMain.runWithVersionAliases(Array(args.dropFirst()))
 case "scope":
     code = await ScopeMain.run(Array(args.dropFirst()))
-case "version":
+case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {
         print(try await cockpitVersionJSON(update: update))

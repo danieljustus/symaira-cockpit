@@ -36,6 +36,32 @@ final class HelpRoutingE2ETests: XCTestCase {
         }
     }
 
+    func testRootVersionAliasesMatchVersionOutput() throws {
+        let version = try run(["version"])
+
+        XCTAssertEqual(version.status, 0)
+        XCTAssertTrue(version.stderr.isEmpty, version.stderr)
+        for alias in ["--version", "-V"] {
+            let result = try run([alias])
+            XCTAssertEqual(result.status, 0, "\(alias) should exit 0")
+            XCTAssertEqual(result.stdout, version.stdout, "\(alias) should match `version` output")
+            XCTAssertEqual(result.stderr, version.stderr, "\(alias) should match `version` diagnostics")
+        }
+    }
+
+    func testScopeVersionAliasesMatchVersionOutput() throws {
+        let version = try run(["scope", "version"])
+
+        XCTAssertEqual(version.status, 0)
+        XCTAssertTrue(version.stderr.isEmpty, version.stderr)
+        for alias in ["--version", "-V"] {
+            let result = try run(["scope", alias])
+            XCTAssertEqual(result.status, 0, "scope \(alias) should exit 0")
+            XCTAssertEqual(result.stdout, version.stdout, "scope \(alias) should match scope version output")
+            XCTAssertEqual(result.stderr, version.stderr, "scope \(alias) should match scope version diagnostics")
+        }
+    }
+
     func testUnknownFamilyKeepsUsageOnStderrAndExitsTwo() throws {
         let result = try run(["unknown-family"])
 
