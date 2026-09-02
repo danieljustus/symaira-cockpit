@@ -1,4 +1,5 @@
 import Foundation
+import SymCockpitHistory
 
 public struct SymVaultCommandResult: Sendable, Equatable {
     public let standardOutput: Data
@@ -16,6 +17,7 @@ public protocol SymVaultCommandRunner: Sendable {
     func run(arguments: [String], standardInput: Data?) throws -> SymVaultCommandResult
 }
 
+/// SymVault's command contract backed by the shared bounded runner.
 public struct ProcessSymVaultCommandRunner: SymVaultCommandRunner, Sendable {
     public let binaryName: String
     public let timeout: TimeInterval
@@ -26,69 +28,34 @@ public struct ProcessSymVaultCommandRunner: SymVaultCommandRunner, Sendable {
     }
 
     public func run(arguments: [String], standardInput: Data?) throws -> SymVaultCommandResult {
-        let environment = ProcessInfo.processInfo.environment
-        guard let binary = Self.resolve(binaryName, environment: environment) else {
-            throw SymVaultCredentialError.binaryUnavailable
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = arguments
-        process.environment = environment
-
-        let input = Pipe()
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardInput = input
-        process.standardOutput = stdout
-        process.standardError = stderr
-
+        let result: BoundedProcessResult
         do {
-            try process.run()
+            result = try SymCockpitHistory.BoundedProcessRunner.run(
+                executable: binaryName,
+                arguments: arguments,
+                timeoutSeconds: timeout,
+                environment: ProcessInfo.processInfo.environment,
+                standardInput: standardInput
+            )
+        } catch let error as BoundedProcessRunnerError {
+            switch error {
+            case .executableUnavailable:
+                throw SymVaultCredentialError.binaryUnavailable
+            case .standardInputWriteFailed:
+                throw SymVaultCredentialError.commandFailed(-1)
+            }
         } catch {
             throw SymVaultCredentialError.binaryUnavailable
         }
 
-        if let standardInput {
-            do {
-                try input.fileHandleForWriting.write(contentsOf: standardInput)
-            } catch {
-                process.terminate()
-                process.waitUntilExit()
-                throw SymVaultCredentialError.commandFailed(-1)
-            }
-        }
-        try? input.fileHandleForWriting.close()
-
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning, Date() < deadline {
-            usleep(10_000)
-        }
-        if process.isRunning {
-            process.terminate()
-            process.waitUntilExit()
+        if result.timedOut {
             throw SymVaultCredentialError.commandFailed(-1)
         }
-
         return SymVaultCommandResult(
-            standardOutput: stdout.fileHandleForReading.readDataToEndOfFile(),
-            standardError: stderr.fileHandleForReading.readDataToEndOfFile(),
-            terminationStatus: process.terminationStatus
+            standardOutput: result.standardOutput,
+            standardError: result.standardError,
+            terminationStatus: result.terminationStatus
         )
-    }
-
-    private static func resolve(_ name: String, environment: [String: String]) -> String? {
-        if name.hasPrefix("/") {
-            return FileManager.default.isExecutableFile(atPath: name) ? name : nil
-        }
-        guard let path = environment["PATH"] else { return nil }
-        for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
-            let candidate = "\(directory)/\(name)"
-            if FileManager.default.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
-        }
-        return nil
     }
 }
 
