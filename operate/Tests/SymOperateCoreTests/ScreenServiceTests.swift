@@ -2,6 +2,23 @@ import XCTest
 @testable import SymOperateCore
 
 final class ScreenServiceTests: XCTestCase {
+    func testSnapshotDirectoryAndDebugPNGUsePrivateModes() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("symoperate-mode-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let service = ScreenService(snapshotDirectory: directory)
+        let directoryAttributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        XCTAssertEqual((directoryAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+
+        let debugPNG = try service.writeDebugPNG(
+            Data([0x89, 0x50, 0x4E, 0x47]),
+            id: "mode-regression"
+        )
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: debugPNG.path)
+        XCTAssertEqual((fileAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    }
+
     // MARK: - Screen Recording TCC denial classification
 
     func testTCCDomainDenialClassifiesAsPermissionDenied() {
