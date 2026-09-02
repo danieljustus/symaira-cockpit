@@ -17,6 +17,27 @@ final class BoundedProcessRunnerTests: XCTestCase {
         XCTAssertEqual(String(data: result.standardError, encoding: .utf8), "err")
     }
 
+    func testDrainsMoreThanOneMiBFromBothStreamsWithoutCorruption() throws {
+        let bytesPerStream = 2 * 1024 * 1024
+        let result = try BoundedProcessRunner.run(
+            executable: "/bin/sh",
+            arguments: [
+                "-c",
+                "dd if=/dev/zero bs=1024 count=2048 2>/dev/null | tr '\\000' O; " +
+                    "dd if=/dev/zero bs=1024 count=2048 2>/dev/null | tr '\\000' E >&2"
+            ],
+            timeoutSeconds: 3,
+            environment: ["PATH": "/bin:/usr/bin"]
+        )
+
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.standardOutput.count, bytesPerStream)
+        XCTAssertEqual(result.standardError.count, bytesPerStream)
+        XCTAssertTrue(result.standardOutput.allSatisfy { $0 == 0x4F })
+        XCTAssertTrue(result.standardError.allSatisfy { $0 == 0x45 })
+    }
+
     func testWritesOptionalStandardInputAndClosesItAtEOF() throws {
         let result = try BoundedProcessRunner.run(
             executable: "cat",

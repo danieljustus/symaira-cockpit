@@ -44,9 +44,8 @@ public enum BoundedProcessRunnerError: Error, LocalizedError, Sendable, Equatabl
 ///
 /// A bare executable name is resolved only against the supplied environment's
 /// `PATH`; no shell or user-specific fallback path is used. Absolute paths are
-/// accepted for callers that already own a system path. Output is read after
-/// the child has stopped. Concurrent pipe draining is intentionally outside
-/// this foundation's scope so a later runner hardening can preserve this API.
+/// accepted for callers that already own a system path. Standard output and
+/// standard error are drained concurrently while the child is running.
 public enum BoundedProcessRunner {
     public static func run(
         executable: String,
@@ -71,6 +70,11 @@ public enum BoundedProcessRunner {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
+        let terminationSemaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            terminationSemaphore.signal()
+        }
+
         do {
             try process.run()
         } catch {
@@ -79,44 +83,72 @@ public enum BoundedProcessRunner {
         let processGroupID = process.processIdentifier
         let hasDedicatedProcessGroup = setpgid(processGroupID, processGroupID) == 0
 
+        let outputCollector = DataCollector()
+        let errorCollector = DataCollector()
+        let readerGroup = DispatchGroup()
+        readerGroup.enter()
+        readerGroup.enter()
+
+        // Register both readers immediately after launch. A child can fill
+        // either pipe while it is still running, so post-exit reads can deadlock.
+        let outputReader = PipeReader(
+            handle: outputPipe.fileHandleForReading,
+            collector: outputCollector,
+            completion: readerGroup
+        )
+        let errorReader = PipeReader(
+            handle: errorPipe.fileHandleForReading,
+            collector: errorCollector,
+            completion: readerGroup
+        )
+
         do {
             if let standardInput {
                 try inputPipe.fileHandleForWriting.write(contentsOf: standardInput)
             }
             try inputPipe.fileHandleForWriting.close()
         } catch {
-            terminateAndReap(process, processGroupID: processGroupID, hasDedicatedProcessGroup: hasDedicatedProcessGroup)
+            terminateAndReap(
+                process,
+                processGroupID: processGroupID,
+                hasDedicatedProcessGroup: hasDedicatedProcessGroup,
+                terminationSemaphore: terminationSemaphore
+            )
+            waitForReaders(
+                readerGroup,
+                outputReader: outputReader,
+                errorReader: errorReader
+            )
             throw BoundedProcessRunnerError.standardInputWriteFailed
         }
 
-        let deadline = Date().addingTimeInterval(max(0, timeoutSeconds))
-        while process.isRunning && Date() < deadline {
-            usleep(10_000)
-        }
-
-        var timedOut = false
-        if process.isRunning {
-            timedOut = true
-            terminateAndReap(process, processGroupID: processGroupID, hasDedicatedProcessGroup: hasDedicatedProcessGroup)
+        let waitResult = terminationSemaphore.wait(timeout: .now() + max(0, timeoutSeconds))
+        let timedOut = waitResult == .timedOut
+        if timedOut {
+            terminateAndReap(
+                process,
+                processGroupID: processGroupID,
+                hasDedicatedProcessGroup: hasDedicatedProcessGroup,
+                terminationSemaphore: terminationSemaphore
+            )
         } else {
-            // waitUntilExit is also the explicit reap for naturally completed
-            // children; polling is not a substitute for collecting the status.
+            // waitUntilExit is the explicit reap for naturally completed
+            // children; the termination handler only provides bounded waiting.
             process.waitUntilExit()
         }
+        process.terminationHandler = nil
 
-        // This intentionally remains a post-exit read. Concurrent draining is
-        // issue #159 and must be introduced without changing this API. A timed
-        // out command may have descendants holding the inherited pipe open, so
-        // take only the bytes currently available instead of waiting for EOF.
-        let output = timedOut
-            ? readAvailableData(from: outputPipe.fileHandleForReading)
-            : outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let error = timedOut
-            ? readAvailableData(from: errorPipe.fileHandleForReading)
-            : errorPipe.fileHandleForReading.readDataToEndOfFile()
+        // On timeout the process group is gone before waiting for EOF, so all
+        // inherited pipe writers have been closed and both readers can finish.
+        waitForReaders(
+            readerGroup,
+            outputReader: outputReader,
+            errorReader: errorReader,
+            timeout: timedOut ? .milliseconds(100) : .milliseconds(500)
+        )
         return BoundedProcessResult(
-            standardOutput: output,
-            standardError: error,
+            standardOutput: outputCollector.value,
+            standardError: errorCollector.value,
             terminationStatus: process.terminationStatus,
             timedOut: timedOut
         )
@@ -163,13 +195,11 @@ public enum BoundedProcessRunner {
     private static func terminateAndReap(
         _ process: Process,
         processGroupID: Int32,
-        hasDedicatedProcessGroup: Bool
+        hasDedicatedProcessGroup: Bool,
+        terminationSemaphore: DispatchSemaphore
     ) {
-        if process.isRunning {
-            process.terminate()
-            waitUntilStopped(process, before: Date().addingTimeInterval(0.25))
-        }
-        if process.isRunning {
+        process.terminate()
+        if terminationSemaphore.wait(timeout: .now() + .milliseconds(250)) == .timedOut {
             _ = kill(process.processIdentifier, SIGKILL)
             if hasDedicatedProcessGroup {
                 _ = kill(-processGroupID, SIGKILL)
@@ -180,31 +210,94 @@ public enum BoundedProcessRunner {
         process.waitUntilExit()
     }
 
-    private static func waitUntilStopped(_ process: Process, before deadline: Date) {
-        while process.isRunning && Date() < deadline {
-            usleep(10_000)
+    private static func waitForReaders(
+        _ readerGroup: DispatchGroup,
+        outputReader: PipeReader,
+        errorReader: PipeReader,
+        timeout: DispatchTimeInterval = .milliseconds(500)
+    ) {
+        guard readerGroup.wait(timeout: .now() + timeout) == .timedOut else {
+            return
+        }
+        // A failed process-group setup can leave an inherited writer alive.
+        // Stop handlers after the bounded grace period rather than hanging the
+        // runner indefinitely; bytes already delivered remain captured.
+        outputReader.cancel()
+        errorReader.cancel()
+    }
+}
+
+private final class DataCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ data: Data) {
+        lock.lock()
+        self.data.append(data)
+        lock.unlock()
+    }
+
+    var value: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+}
+
+private final class PipeReader: @unchecked Sendable {
+    private let handle: FileHandle
+    private let collector: DataCollector
+    private let completion: DispatchGroup
+    private let stateLock = NSLock()
+    private var finished = false
+
+    init(handle: FileHandle, collector: DataCollector, completion: DispatchGroup) {
+        self.handle = handle
+        self.collector = collector
+        self.completion = completion
+        handle.readabilityHandler = { [weak self] handle in
+            self?.consume(handle)
         }
     }
 
-    private static func readAvailableData(from handle: FileHandle) -> Data {
-        let descriptor = handle.fileDescriptor
-        let flags = fcntl(descriptor, F_GETFL)
-        guard flags >= 0 else { return Data() }
-        guard fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0 else { return Data() }
+    private func consume(_ handle: FileHandle) {
+        stateLock.lock()
+        let isFinished = finished
+        stateLock.unlock()
+        guard !isFinished else { return }
 
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = Darwin.read(descriptor, &buffer, buffer.count)
-            if count > 0 {
-                data.append(buffer, count: count)
-            } else if count == 0 {
-                return data
-            } else if errno == EINTR {
-                continue
-            } else {
-                return data
-            }
+        let data = handle.availableData
+        if !data.isEmpty {
+            collector.append(data)
+            return
         }
+
+        finish(handle: handle)
+    }
+
+    private func finish(handle: FileHandle) {
+        stateLock.lock()
+        guard !finished else {
+            stateLock.unlock()
+            return
+        }
+        finished = true
+        stateLock.unlock()
+
+        handle.readabilityHandler = nil
+        completion.leave()
+    }
+
+    func cancel() {
+        stateLock.lock()
+        guard !finished else {
+            stateLock.unlock()
+            return
+        }
+        finished = true
+        stateLock.unlock()
+
+        handle.readabilityHandler = nil
+        completion.leave()
     }
 }
