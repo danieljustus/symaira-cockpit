@@ -432,3 +432,18 @@ extension MCPServerTests {
         XCTAssertEqual((responses[1]["result"] as? [String: Any])?.isEmpty, true)
     }
 }
+
+
+extension MCPServerTests {
+    func testToolCatalogNamesMatchExposedToolsInOrder() async throws {
+        let definitions = SymOperateMCP.MCPServer.toolDefinitions
+        let catalogNames = definitions.map(\.name)
+        XCTAssertEqual(definitions.count, 20)
+        XCTAssertEqual(Set(catalogNames).count, catalogNames.count, "Tool catalog names must be unique")
+        XCTAssertTrue(definitions.allSatisfy { !$0.description.isEmpty })
+
+        let result = try await server.dispatch(method: "tools/list", params: [:])
+        let exposedNames = (result["tools"] as? [[String: Any]])?.compactMap { $0["name"] as? String }
+        XCTAssertEqual(exposedNames, catalogNames)
+    }
+}

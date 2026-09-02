@@ -117,12 +117,35 @@ public final class MCPServer: @unchecked Sendable {
         ]
     }
 
-    private func tools() -> [[String: Any]] {
-        [
-            tool("list_apps", description: "List currently running GUI apps on macOS.", input: [:]),
-            tool("list_windows", description: "List currently visible windows.", input: [:]),
-            tool("list_displays", description: "List all connected displays with bounds and IDs.", input: [:]),
-            tool("snapshot", description: "Capture a display or window as PNG plus coordinate transform metadata. Both parameters are optional: omit both for the main display, provide display_id for a specific display, or provide window_id for a specific window. When window_id is provided, display_id is ignored.", input: [
+    /// The complete Operate MCP tool catalog. Each entry owns both the
+    /// schema advertised by `tools/list` and the handler used by `tools/call`.
+    /// Keep this table as the only per-tool name/schema/dispatch inventory.
+    static let toolDefinitions: [ToolDefinition] = [
+        ToolDefinition(
+            name: "list_apps",
+            description: "List currently running GUI apps on macOS.",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { server, _ in server.controller.listApps() }
+        ),
+        ToolDefinition(
+            name: "list_windows",
+            description: "List currently visible windows.",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { server, _ in server.controller.listWindows() }
+        ),
+        ToolDefinition(
+            name: "list_displays",
+            description: "List all connected displays with bounds and IDs.",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { server, _ in server.controller.listDisplays() }
+        ),
+        ToolDefinition(
+            name: "snapshot",
+            description: "Capture a display or window as PNG plus coordinate transform metadata. Both parameters are optional: omit both for the main display, provide display_id for a specific display, or provide window_id for a specific window. When window_id is provided, display_id is ignored.",
+            inputSchema: { _ in [
                 "type": "object",
                 "properties": [
                     "display_id": ["type": "integer", "description": "Display ID to capture. Omit for main display."],
@@ -132,8 +155,20 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_title": ["type": "string"],
                 ],
-            ]),
-            tool("query_ui", description: "Capture a screenshot and accessible UI tree. With no window_id, query the frontmost app; with window_id, query that window in its owning process without falling back to the frontmost app.", input: [
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                try server.controller.snapshot(
+                    displayID: server.uint32(arguments["display_id"]),
+                    windowID: server.intOptional(arguments["window_id"]),
+                    target: server.targetIdentity(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "query_ui",
+            description: "Capture a screenshot and accessible UI tree. With no window_id, query the frontmost app; with window_id, query that window in its owning process without falling back to the frontmost app.",
+            inputSchema: { _ in [
                 "type": "object",
                 "properties": [
                     "max_depth": ["type": "integer", "default": 4],
@@ -145,8 +180,22 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_title": ["type": "string"],
                 ],
-            ]),
-            tool("query_ui_ocr", description: "Like query_ui but falls back to Vision OCR when the Accessibility tree is weak. Returns OCR text regions with coordinates.", input: [
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                try server.controller.queryUI(
+                    maxDepth: server.int(arguments["max_depth"], default: 4),
+                    maxNodes: server.int(arguments["max_nodes"], default: 200),
+                    displayID: server.uint32(arguments["display_id"]),
+                    windowID: server.intOptional(arguments["window_id"]),
+                    target: server.targetIdentity(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "query_ui_ocr",
+            description: "Like query_ui but falls back to Vision OCR when the Accessibility tree is weak. Returns OCR text regions with coordinates.",
+            inputSchema: { _ in [
                 "type": "object",
                 "properties": [
                     "max_depth": ["type": "integer", "default": 4],
@@ -158,8 +207,22 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_title": ["type": "string"],
                 ],
-            ]),
-            tool("find_ui", description: "Search the UI tree by role, title, label, value, subrole, or actions. Supports regex patterns (wrap in /slashes/). When snapshot_id is provided and the snapshot is still cached, reuses the existing snapshot instead of taking a fresh one.", input: [
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                try server.controller.queryUIWithOCR(
+                    maxDepth: server.int(arguments["max_depth"], default: 4),
+                    maxNodes: server.int(arguments["max_nodes"], default: 200),
+                    displayID: server.uint32(arguments["display_id"]),
+                    windowID: server.intOptional(arguments["window_id"]),
+                    target: server.targetIdentity(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "find_ui",
+            description: "Search the UI tree by role, title, label, value, subrole, or actions. Supports regex patterns (wrap in /slashes/). When snapshot_id is provided and the snapshot is still cached, reuses the existing snapshot instead of taking a fresh one.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "role": ["type": "string"],
@@ -178,8 +241,32 @@ public final class MCPServer: @unchecked Sendable {
                     "window_title": ["type": "string"],
                     "snapshot_id": ["type": "string", "description": "Reuse an existing snapshot only when its target scope matches the request."],
                 ],
-            ]),
-            tool("click", description: "Click by x/y coordinates or by snapshot_id + element_id. Requires exactly one of two groups: (x, y) for coordinate-based clicking, or (snapshot_id, element_id) for element-based clicking. Raw coordinates require a prior query_ui snapshot so the target element can be identified and safety-checked; destructive controls and secure text fields are always blocked. Optional: button (default \"left\"), double_click.", input: [
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                let predicate = UIElementPredicate(
+                    role: server.string(arguments["role"]),
+                    title: server.string(arguments["title"]),
+                    label: server.string(arguments["label"]),
+                    value: server.string(arguments["value"]),
+                    subrole: server.string(arguments["subrole"]),
+                    actions: arguments["actions"] as? [String]
+                )
+                return try server.controller.findUI(
+                    predicate: predicate,
+                    snapshotID: server.string(arguments["snapshot_id"]),
+                    maxDepth: server.int(arguments["max_depth"], default: 4),
+                    maxNodes: server.int(arguments["max_nodes"], default: 200),
+                    displayID: server.uint32(arguments["display_id"]),
+                    windowID: server.intOptional(arguments["window_id"]),
+                    target: server.targetIdentity(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "click",
+            description: "Click by x/y coordinates or by snapshot_id + element_id. Requires exactly one of two groups: (x, y) for coordinate-based clicking, or (snapshot_id, element_id) for element-based clicking. Raw coordinates require a prior query_ui snapshot so the target element can be identified and safety-checked; destructive controls and secure text fields are always blocked. Optional: button (default \"left\"), double_click.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "snapshot_id": ["type": "string"],
@@ -194,25 +281,69 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "oneOf": [
                     ["required": ["x", "y"]],
                     ["required": ["snapshot_id", "element_id"]],
                 ],
-            ]),
-            tool("type_text", description: "Type raw unicode text into the current focused control.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.click(
+                    snapshotID: server.string(arguments["snapshot_id"]),
+                    elementID: server.string(arguments["element_id"]),
+                    x: server.double(arguments["x"]),
+                    y: server.double(arguments["y"]),
+                    button: server.string(arguments["button"]) ?? "left",
+                    doubleClick: server.bool(arguments["double_click"], default: false),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "type_text",
+            description: "Type raw unicode text into the current focused control.",
+            inputSchema: { server in [
                 "type": "object",
-                "properties": ["text": ["type": "string"], "precondition": predicateSchema(), "postcondition": predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
+                "properties": ["text": ["type": "string"], "precondition": server.predicateSchema(), "postcondition": server.predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["text"],
-            ]),
-            tool("press_keys", description: "Press a keyboard shortcut like [\"cmd\", \"s\"] or [\"return\"].", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.typeText(
+                    server.requireString(arguments["text"], name: "text"),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "press_keys",
+            description: "Press a keyboard shortcut like [\"cmd\", \"s\"] or [\"return\"].",
+            inputSchema: { server in [
                 "type": "object",
-                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": predicateSchema(), "postcondition": predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
+                "properties": ["keys": ["type": "array", "items": ["type": "string"]], "precondition": server.predicateSchema(), "postcondition": server.predicateSchema(), "delivery_mode": ["type": "string", "enum": ["automatic", "background", "foreground"]], "process_id": ["type": "integer"], "bundle_id": ["type": "string"], "app_name": ["type": "string"], "window_id": ["type": "integer"], "window_title": ["type": "string"]],
                 "required": ["keys"],
-            ]),
-            tool("scroll", description: "Scroll by pixel deltas.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.pressKeys(
+                    server.requireStringArray(arguments["keys"], name: "keys"),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "scroll",
+            description: "Scroll by pixel deltas.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "delta_x": ["type": "number", "default": 0],
@@ -223,12 +354,26 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "required": ["delta_y"],
-            ]),
-            tool("drag", description: "Drag from one coordinate or element to another. Requires exactly one of two groups: (from_x, from_y, to_x, to_y) for coordinate-based dragging, or (snapshot_id, from_element_id, to_element_id) for element-based dragging. Raw coordinates require a prior query_ui snapshot so the target element can be identified and safety-checked; destructive controls and secure text fields are always blocked.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.scroll(
+                    deltaX: server.double(arguments["delta_x"]) ?? 0,
+                    deltaY: server.requireDouble(arguments["delta_y"], name: "delta_y"),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "drag",
+            description: "Drag from one coordinate or element to another. Requires exactly one of two groups: (from_x, from_y, to_x, to_y) for coordinate-based dragging, or (snapshot_id, from_element_id, to_element_id) for element-based dragging. Raw coordinates require a prior query_ui snapshot so the target element can be identified and safety-checked; destructive controls and secure text fields are always blocked.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "snapshot_id": ["type": "string"],
@@ -244,28 +389,59 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "oneOf": [
                     ["required": ["from_x", "from_y", "to_x", "to_y"]],
                     ["required": ["snapshot_id", "from_element_id", "to_element_id"]],
                 ],
-            ]),
-            tool("launch_app", description: "Launch an app by bundle_id or app_name. At least one of bundle_id or app_name is required.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.drag(
+                    snapshotID: server.string(arguments["snapshot_id"]),
+                    fromElementID: server.string(arguments["from_element_id"]),
+                    toElementID: server.string(arguments["to_element_id"]),
+                    fromX: server.double(arguments["from_x"]),
+                    fromY: server.double(arguments["from_y"]),
+                    toX: server.double(arguments["to_x"]),
+                    toY: server.double(arguments["to_y"]),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "launch_app",
+            description: "Launch an app by bundle_id or app_name. At least one of bundle_id or app_name is required.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "bundle_id": ["type": "string"],
                     "app_name": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "anyOf": [
                     ["required": ["bundle_id"]],
                     ["required": ["app_name"]],
                 ],
-            ]),
-            tool("focus_window", description: "Activate an app and optionally raise a matching window title. At least one of bundle_id or app_name is required.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.launchApp(
+                    bundleID: server.string(arguments["bundle_id"]),
+                    appName: server.string(arguments["app_name"]),
+                    conditions: try server.actionConditions(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "focus_window",
+            description: "Activate an app and optionally raise a matching window title. At least one of bundle_id or app_name is required.",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "bundle_id": ["type": "string"],
@@ -274,15 +450,30 @@ public final class MCPServer: @unchecked Sendable {
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
                     "title": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "anyOf": [
                     ["required": ["bundle_id"]],
                     ["required": ["app_name"]],
                 ],
-            ]),
-            tool("menu_action", description: "Trigger a frontmost-app menu path like [\"File\", \"Save\"].", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.focusWindow(
+                    bundleID: server.string(arguments["bundle_id"]),
+                    appName: server.string(arguments["app_name"]),
+                    title: server.string(arguments["title"]),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "menu_action",
+            description: "Trigger a frontmost-app menu path like [\"File\", \"Save\"].",
+            inputSchema: { server in [
                 "type": "object",
                 "properties": [
                     "path": ["type": "array", "items": ["type": "string"]],
@@ -291,12 +482,25 @@ public final class MCPServer: @unchecked Sendable {
                     "app_name": ["type": "string"],
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
-                    "precondition": predicateSchema(),
-                    "postcondition": predicateSchema(),
+                    "precondition": server.predicateSchema(),
+                    "postcondition": server.predicateSchema(),
                 ],
                 "required": ["path"],
-            ]),
-            tool("wait_for", description: "Wait until text appears in the frontmost UI or an app becomes available.", input: [
+            ] },
+            outputSchema: { $0.actionResultSchema() },
+            handler: { server, arguments in
+                try server.controller.menuAction(
+                    path: server.requireStringArray(arguments["path"], name: "path"),
+                    conditions: try server.actionConditions(arguments),
+                    target: server.targetIdentity(arguments),
+                    deliveryMode: try server.deliveryMode(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "wait_for",
+            description: "Wait until text appears in the frontmost UI or an app becomes available.",
+            inputSchema: { _ in [
                 "type": "object",
                 "properties": [
                     "text": ["type": "string"],
@@ -308,12 +512,90 @@ public final class MCPServer: @unchecked Sendable {
                     "window_id": ["type": "integer"],
                     "window_title": ["type": "string"],
                 ],
-            ]),
-            tool("permissions_status", description: "Report screen recording and accessibility permission status.", input: [:]),
-            tool("get_policy", description: "Get the current action policy (deny/allow keywords, allowed bundle IDs, granted permissions).", input: [:]),
-            setPolicyToolSchema(),
-            tool("version", description: "Print current version and check for updates from GitHub releases.", input: [:]),
-        ]
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                try await server.controller.waitFor(
+                    text: server.string(arguments["text"]),
+                    app: server.string(arguments["app"]),
+                    timeoutSeconds: server.double(arguments["timeout_seconds"]) ?? 10,
+                    target: server.targetIdentity(arguments)
+                )
+            }
+        ),
+        ToolDefinition(
+            name: "permissions_status",
+            description: "Report screen recording and accessibility permission status.",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { server, _ in server.controller.permissionsStatus() }
+        ),
+        ToolDefinition(
+            name: "get_policy",
+            description: "Get the current action policy (deny/allow keywords, allowed bundle IDs, granted permissions).",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { server, _ in server.policyPayload() }
+        ),
+        ToolDefinition(
+            name: "set_policy",
+            description: "Update the action policy. Extends defaults; cannot weaken the built-in safety guard. Requires the policy_modify permission. When granted_permissions is provided it REPLACES the effective grant, but it may only narrow the immutable startup grant from --grant or ~/.config/symoperate/policy.json.",
+            inputSchema: { server in [
+                "type": "object",
+                "properties": [
+                    "extra_deny_keywords": ["type": "array", "items": ["type": "string"], "description": "Additional keywords to block."],
+                    "allow_keywords": ["type": "array", "items": ["type": "string"], "description": "Keywords to allow (overrides deny)."],
+                    "allow_bundle_ids": ["type": "array", "items": ["type": "string"], "description": "Bundle IDs to exempt from destructive checks."],
+                    "granted_permissions": ["type": "array", "items": ["type": "string"], "description": "Permission flag names to grant: capture, input, app_control, menu_action, destructive_action, secure_field_access, policy_modify. Replaces the current set when present."],
+                ],
+            ] },
+            outputSchema: nil,
+            handler: { server, arguments in
+                if let violation = server.controller.actionPolicy.firstViolation(requiredPermission: .policyModify) {
+                    throw AutomationError.permissionDenied(
+                        "Permission denied: the '\(violation.flagNames.joined(separator: ", "))' permission is required for set_policy."
+                    )
+                }
+                let requestedPermissions: PermissionFlags?
+                if let granted = arguments["granted_permissions"] as? [String] {
+                    let requested = PermissionFlags.parse(names: granted)
+                    if !requested.subtracting(server.controller.actionPolicy.startupGrantedPermissions).isEmpty {
+                        throw AutomationError.permissionDenied(
+                            "Permission denied: set_policy cannot widen the startup grant (startup permissions: \(server.controller.actionPolicy.startupGrantedPermissions.flagNames.joined(separator: ", ")))."
+                        )
+                    }
+                    requestedPermissions = requested
+                } else {
+                    requestedPermissions = nil
+                }
+                if let extraDeny = arguments["extra_deny_keywords"] as? [String] {
+                    for kw in extraDeny { server.controller.actionPolicy.addDenyKeyword(kw) }
+                }
+                if let allowKw = arguments["allow_keywords"] as? [String] {
+                    for kw in allowKw { server.controller.actionPolicy.allowKeyword(kw) }
+                }
+                if let allowBundle = arguments["allow_bundle_ids"] as? [String] {
+                    for bid in allowBundle { server.controller.actionPolicy.allowBundleID(bid) }
+                }
+                if let requestedPermissions {
+                    guard server.controller.actionPolicy.setGrantedPermissions(requestedPermissions) else {
+                        throw AutomationError.permissionDenied("Permission denied: set_policy cannot widen the startup grant.")
+                    }
+                }
+                return server.policyPayload()
+            }
+        ),
+        ToolDefinition(
+            name: "version",
+            description: "Print current version and check for updates from GitHub releases.",
+            inputSchema: { _ in [:] },
+            outputSchema: nil,
+            handler: { _, _ in await UpdateChecker().checkForUpdate() }
+        ),
+    ]
+
+    private func tools() -> [[String: Any]] {
+        Self.toolDefinitions.map { tool($0) }
     }
 
     private func predicateSchema() -> [String: Any] {
@@ -335,14 +617,15 @@ public final class MCPServer: @unchecked Sendable {
         ]
     }
 
-    private func tool(_ name: String, description: String, input: [String: Any]) -> [String: Any] {
+    private func tool(_ definition: ToolDefinition) -> [String: Any] {
+        let inputSchema = definition.inputSchema(self)
         var result: [String: Any] = [
-            "name": name,
-            "description": description,
-            "inputSchema": input.isEmpty ? ["type": "object", "properties": [:]] : input,
+            "name": definition.name,
+            "description": definition.description,
+            "inputSchema": inputSchema.isEmpty ? ["type": "object", "properties": [:]] : inputSchema,
         ]
-        if ["click", "type_text", "press_keys", "scroll", "drag", "launch_app", "focus_window", "menu_action"].contains(name) {
-            result["outputSchema"] = actionResultSchema()
+        if let outputSchema = definition.outputSchema {
+            result["outputSchema"] = outputSchema(self)
         }
         return result
     }
@@ -376,195 +659,14 @@ public final class MCPServer: @unchecked Sendable {
         ]
     }
 
-    /// Schema of the `set_policy` tool. Kept in its own function so `tools()`
-    /// stays within SwiftLint's function-body budget.
-    private func setPolicyToolSchema() -> [String: Any] {
-        tool("set_policy", description: "Update the action policy. Extends defaults; cannot weaken the built-in safety guard. Requires the policy_modify permission. When granted_permissions is provided it REPLACES the effective grant, but it may only narrow the immutable startup grant from --grant or ~/.config/symoperate/policy.json.", input: [
-            "type": "object",
-            "properties": [
-                "extra_deny_keywords": ["type": "array", "items": ["type": "string"], "description": "Additional keywords to block."],
-                "allow_keywords": ["type": "array", "items": ["type": "string"], "description": "Keywords to allow (overrides deny)."],
-                "allow_bundle_ids": ["type": "array", "items": ["type": "string"], "description": "Bundle IDs to exempt from destructive checks."],
-                "granted_permissions": ["type": "array", "items": ["type": "string"], "description": "Permission flag names to grant: capture, input, app_control, menu_action, destructive_action, secure_field_access, policy_modify. Replaces the current set when present."],
-            ],
-        ])
-    }
-
     /// Executes one tool and builds the `tools/call` result payload:
     /// `content` (human-readable JSON summary), `structuredContent`
     /// (machine-readable payload), and `isError: false`.
     private func callTool(name: String, arguments: [String: Any]) async throws -> [String: Any] {
-        let payload: Encodable
-        switch name {
-        case "snapshot":
-            payload = try controller.snapshot(
-                displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"]),
-                target: targetIdentity(arguments)
-            )
-        case "list_apps":
-            payload = controller.listApps()
-        case "list_windows":
-            payload = controller.listWindows()
-        case "list_displays":
-            payload = controller.listDisplays()
-        case "query_ui":
-            payload = try controller.queryUI(
-                maxDepth: int(arguments["max_depth"], default: 4),
-                maxNodes: int(arguments["max_nodes"], default: 200),
-                displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"]),
-                target: targetIdentity(arguments)
-            )
-        case "query_ui_ocr":
-            payload = try controller.queryUIWithOCR(
-                maxDepth: int(arguments["max_depth"], default: 4),
-                maxNodes: int(arguments["max_nodes"], default: 200),
-                displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"]),
-                target: targetIdentity(arguments)
-            )
-        case "click":
-            payload = try controller.click(
-                snapshotID: string(arguments["snapshot_id"]),
-                elementID: string(arguments["element_id"]),
-                x: double(arguments["x"]),
-                y: double(arguments["y"]),
-                button: string(arguments["button"]) ?? "left",
-                doubleClick: bool(arguments["double_click"], default: false),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "type_text":
-            payload = try controller.typeText(
-                requireString(arguments["text"], name: "text"),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "press_keys":
-            payload = try controller.pressKeys(
-                requireStringArray(arguments["keys"], name: "keys"),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "scroll":
-            payload = try controller.scroll(
-                deltaX: double(arguments["delta_x"]) ?? 0,
-                deltaY: requireDouble(arguments["delta_y"], name: "delta_y"),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "drag":
-            payload = try controller.drag(
-                snapshotID: string(arguments["snapshot_id"]),
-                fromElementID: string(arguments["from_element_id"]),
-                toElementID: string(arguments["to_element_id"]),
-                fromX: double(arguments["from_x"]),
-                fromY: double(arguments["from_y"]),
-                toX: double(arguments["to_x"]),
-                toY: double(arguments["to_y"]),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "launch_app":
-            payload = try controller.launchApp(
-                bundleID: string(arguments["bundle_id"]),
-                appName: string(arguments["app_name"]),
-                conditions: try actionConditions(arguments)
-            )
-        case "focus_window":
-            payload = try controller.focusWindow(
-                bundleID: string(arguments["bundle_id"]),
-                appName: string(arguments["app_name"]),
-                title: string(arguments["title"]),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "menu_action":
-            payload = try controller.menuAction(
-                path: requireStringArray(arguments["path"], name: "path"),
-                conditions: try actionConditions(arguments),
-                target: targetIdentity(arguments),
-                deliveryMode: try deliveryMode(arguments)
-            )
-        case "wait_for":
-            payload = try await controller.waitFor(
-                text: string(arguments["text"]),
-                app: string(arguments["app"]),
-                timeoutSeconds: double(arguments["timeout_seconds"]) ?? 10,
-                target: targetIdentity(arguments)
-            )
-        case "permissions_status":
-            payload = controller.permissionsStatus()
-        case "get_policy":
-            payload = policyPayload()
-        case "set_policy":
-            // Gate and validate BEFORE mutating: an agent without policy_modify
-            // cannot change policy, and no field may be partially applied when a
-            // requested grant exceeds the immutable startup ceiling.
-            if let violation = controller.actionPolicy.firstViolation(requiredPermission: .policyModify) {
-                throw AutomationError.permissionDenied(
-                    "Permission denied: the '\(violation.flagNames.joined(separator: ", "))' permission is required for set_policy."
-                )
-            }
-            let requestedPermissions: PermissionFlags?
-            if let granted = arguments["granted_permissions"] as? [String] {
-                let requested = PermissionFlags.parse(names: granted)
-                if !requested.subtracting(controller.actionPolicy.startupGrantedPermissions).isEmpty {
-                    throw AutomationError.permissionDenied(
-                        "Permission denied: set_policy cannot widen the startup grant (startup permissions: \(controller.actionPolicy.startupGrantedPermissions.flagNames.joined(separator: ", ")))."
-                    )
-                }
-                requestedPermissions = requested
-            } else {
-                requestedPermissions = nil
-            }
-            if let extraDeny = arguments["extra_deny_keywords"] as? [String] {
-                for kw in extraDeny { controller.actionPolicy.addDenyKeyword(kw) }
-            }
-            if let allowKw = arguments["allow_keywords"] as? [String] {
-                for kw in allowKw { controller.actionPolicy.allowKeyword(kw) }
-            }
-            if let allowBundle = arguments["allow_bundle_ids"] as? [String] {
-                for bid in allowBundle { controller.actionPolicy.allowBundleID(bid) }
-            }
-            if let requestedPermissions {
-                guard controller.actionPolicy.setGrantedPermissions(requestedPermissions) else {
-                    throw AutomationError.permissionDenied("Permission denied: set_policy cannot widen the startup grant.")
-                }
-            }
-            payload = policyPayload()
-        case "find_ui":
-            let predicate = UIElementPredicate(
-                role: string(arguments["role"]),
-                title: string(arguments["title"]),
-                label: string(arguments["label"]),
-                value: string(arguments["value"]),
-                subrole: string(arguments["subrole"]),
-                actions: arguments["actions"] as? [String]
-            )
-            payload = try controller.findUI(
-                predicate: predicate,
-                snapshotID: string(arguments["snapshot_id"]),
-                maxDepth: int(arguments["max_depth"], default: 4),
-                maxNodes: int(arguments["max_nodes"], default: 200),
-                displayID: uint32(arguments["display_id"]),
-                windowID: intOptional(arguments["window_id"]),
-                target: targetIdentity(arguments)
-            )
-        case "version":
-            let checker = UpdateChecker()
-            payload = await checker.checkForUpdate()
-        default:
+        guard let definition = Self.toolDefinitions.first(where: { $0.name == name }) else {
             throw AutomationError.notFound("Unknown tool '\(name)'.")
         }
-
+        let payload = try await definition.handler(self, arguments)
         let structured = try encodeToJSONObject(payload)
         let summary = textSummary(for: name, payload: structured)
         return [
