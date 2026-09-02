@@ -60,6 +60,22 @@ final class UpdateCheckOptOutE2ETests: XCTestCase {
         XCTAssertEqual(try updateStatus(from: result.stdout), "skipped")
     }
 
+    func testCapturedPipePlainVersionSkipsNetwork() throws {
+        let result = try run(["version"])
+
+        XCTAssertEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.isEmpty, result.stderr)
+        XCTAssertTrue(result.stdout.contains("update check skipped"), result.stdout)
+    }
+
+    func testCapturedPipeJSONVersionSkipsNetworkAndKeepsJSONShape() throws {
+        let result = try run(["version", "--json"])
+
+        XCTAssertEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.isEmpty, result.stderr)
+        XCTAssertEqual(try updateStatus(from: result.stdout), "skipped")
+    }
+
     func testPlainVersionReportsSkippedCheck() throws {
         let result = try run(["version", "--no-update-check"])
 

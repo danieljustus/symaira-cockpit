@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import SymTuneCore
 import SymairaUpdateCheck
 
@@ -71,14 +72,27 @@ enum CockpitUpdatePolicy {
             configPaths: ConfigPaths(env: env)
         )
     }
+
+    /// An explicit environment opt-in keeps scripted invocations useful while
+    /// the default remains non-blocking when stdout is redirected or piped.
+    static func explicitlyRequestsCheck(
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        guard let value = env[environmentKey]?.lowercased() else { return false }
+        return ["1", "true", "yes", "on"].contains(value)
+    }
 }
 
 /// Performs the update check only when the caller has not opted out.
 func checkForCockpitUpdateIfEnabled(
     args: [String] = [],
-    env: [String: String] = ProcessInfo.processInfo.environment
+    env: [String: String] = ProcessInfo.processInfo.environment,
+    isInteractive: Bool = isatty(FileHandle.standardOutput.fileDescriptor) == 1
 ) async -> CockpitUpdateReport {
     guard !args.contains("--no-update-check"), CockpitUpdatePolicy.isEnabled(env: env) else {
+        return .skipped
+    }
+    guard isInteractive || CockpitUpdatePolicy.explicitlyRequestsCheck(env: env) else {
         return .skipped
     }
     return await checkForCockpitUpdate()

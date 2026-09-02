@@ -12,6 +12,18 @@ enum Command: String {
     case updates
 }
 
+/// Normalizes version aliases at the shipped cockpit dispatcher boundary.
+/// Operate's historical command surface keeps `version` as its canonical
+/// command while the unified binary accepts the conventional root aliases.
+public extension OperateMain {
+    static func runWithVersionAliases(_ args: [String]) -> Int32 {
+        guard let first = args.first, first == "--version" || first == "-V" else {
+            return run(args)
+        }
+        return run(["version"] + Array(args.dropFirst()))
+    }
+}
+
 struct GrantResult: Codable {
     let prompted: Bool
 }
