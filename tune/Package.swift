@@ -17,7 +17,7 @@ let package = Package(
         .library(name: "SymTuneUI", targets: ["SymTuneUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.0"),
+        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.1"),
         .package(path: "../history"),
     ],
     targets: [
