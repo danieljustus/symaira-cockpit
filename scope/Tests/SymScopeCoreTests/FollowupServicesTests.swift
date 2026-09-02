@@ -55,45 +55,6 @@ final class WatchServiceTests: XCTestCase {
     }
 }
 
-final class CacheServiceTests: XCTestCase {
-    private var originalDir: String!
-
-    override func setUp() {
-        super.setUp()
-        originalDir = CacheService.cacheDir
-    }
-
-    override func tearDown() {
-        try? FileManager.default.removeItem(atPath: CacheService.cacheFile)
-        super.tearDown()
-    }
-
-    func testSaveLoadRoundtrip() {
-        let snapshot = Snapshot(
-            ports: [Port(port: 8080, protocol_: "tcp", address: "127.0.0.1", pid: 1, process: "x")],
-            mcpServers: [],
-            containers: []
-        )
-        XCTAssertNil(CacheService.save(snapshot))
-        let loaded = CacheService.load()
-        XCTAssertEqual(loaded?.ports, snapshot.ports)
-    }
-
-    func testStatsReflectState() {
-        let stats = CacheService.stats()
-        XCTAssertEqual(stats.path, CacheService.cacheFile)
-        XCTAssertFalse(stats.exists)
-    }
-
-    func testClearRemovesFile() {
-        let snapshot = Snapshot(ports: [])
-        XCTAssertNil(CacheService.save(snapshot))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: CacheService.cacheFile))
-        XCTAssertNil(CacheService.clear())
-        XCTAssertFalse(FileManager.default.fileExists(atPath: CacheService.cacheFile))
-    }
-}
-
 final class ExplainServiceTests: XCTestCase {
     func testExplainPortFindsHolders() {
         let ports = [

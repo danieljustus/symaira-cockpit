@@ -11,7 +11,12 @@ public final class ScreenService: ScreenServiceProtocol {
 
     public init(snapshotDirectory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("symoperate-snapshots", isDirectory: true)) {
         self.snapshotDirectory = snapshotDirectory
-        try? fm.createDirectory(at: snapshotDirectory, withIntermediateDirectories: true)
+        try? fm.createDirectory(
+            at: snapshotDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: snapshotDirectory.path)
         cleanupOldSnapshots()
     }
 
@@ -110,9 +115,7 @@ public final class ScreenService: ScreenServiceProtocol {
 
         var debugPath: String?
         if saveDebugImage {
-            let path = snapshotDirectory.appendingPathComponent("\(id).png")
-            try png.write(to: path)
-            debugPath = path.path
+            debugPath = try writeDebugPNG(png, id: id).path
         }
 
         cleanupOldSnapshots()
@@ -137,6 +140,14 @@ public final class ScreenService: ScreenServiceProtocol {
             debugImagePath: debugPath,
             transform: transform
         )
+    }
+
+    @discardableResult
+    func writeDebugPNG(_ png: Data, id: String) throws -> URL {
+        let path = snapshotDirectory.appendingPathComponent("\(id).png")
+        try png.write(to: path, options: .atomic)
+        try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        return path
     }
 
     private func captureScreenWithScreenCaptureKit(displayID: CGDirectDisplayID = CGMainDisplayID()) throws -> (image: CGImage, contentRect: CGRect) {
