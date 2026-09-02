@@ -9,6 +9,7 @@
 // process; exit codes propagate unchanged.
 
 import Foundation
+import SymCockpitVersion
 import SymOperateCore
 import SymOperateCLI
 import SymScopeCLI
@@ -40,14 +41,6 @@ Examples:
 symcockpit replaces the former symtune, symoperate and symscope binaries;
 their commands are now the family subcommands above.
 """
-
-/// The product version of symcockpit itself, as opposed to the versions of
-/// the three families it dispatches to. Those keep their own numbering: they
-/// were separately released tools before the repo consolidation, and their
-/// version history stays meaningful to anyone migrating from them.
-enum CockpitVersion {
-    static let current = "0.5.1"
-}
 
 /// The version report, in the ecosystem's `version --json` shape: a `tool`,
 /// its `version`, and the component families underneath.

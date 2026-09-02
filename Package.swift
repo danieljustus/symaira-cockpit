@@ -23,9 +23,11 @@ let package = Package(
         .package(path: "scope"),
     ],
     targets: [
+        .target(name: "SymCockpitVersion"),
         .executableTarget(
             name: "symcockpit",
             dependencies: [
+                "SymCockpitVersion",
                 .product(name: "SymTuneCLI", package: "tune"),
                 .product(name: "SymOperateCLI", package: "operate"),
                 .product(name: "SymScopeCLI", package: "scope"),
@@ -36,6 +38,7 @@ let package = Package(
         .executableTarget(
             name: "SymCockpitApp",
             dependencies: [
+                "SymCockpitVersion",
                 .product(name: "SymTuneUI", package: "tune"),
                 .product(name: "SymTuneCore", package: "tune"),
                 .product(name: "SymScopeCore", package: "scope"),

@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import SymCockpitVersion
 import SymTuneCore
 import SymairaUpdateCheck
 
