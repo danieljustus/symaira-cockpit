@@ -34,10 +34,14 @@ operate/                  # macOS GUI automation package
   Sources/SymOperateMCP/  # Operate MCP transport
   Sources/SymOperateCLI/  # Operate command library
 scope/                    # ports, containers, and MCP inventory package
+history/                  # shared library: canonical history, replay codec,
+                          # secret redaction, bounded subprocess runner
 ```
 
 The nested packages remain independently buildable for package-level
-compatibility, but only `symcockpit` is the shipped CLI binary.
+compatibility, but only `symcockpit` is the shipped CLI binary. `history/`
+is the odd one out: no CLI, no MCP server, just a library that `tune/` and
+`operate/` depend on by path. It is built and tested with the rest.
 
 ## Build and test
 
@@ -55,8 +59,8 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build --pack
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test --package-path tune
 ```
 
-Use the equivalent `operate` or `scope` path for those packages. For root
-changes, run both commands from the repository root:
+Use the equivalent `operate`, `scope` or `history` path for those packages.
+For root changes, run both commands from the repository root:
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build
