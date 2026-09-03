@@ -18,12 +18,22 @@ This repo is the result of merging the archived `symaira-tune`,
 | `tune/` | thermals, power, display, brightness | Swift 6 (AppKit/IOKit) |
 | `operate/` | screenshots, AX tree, input, apps/windows | Swift 6 (AppKit/AX/ScreenCaptureKit) |
 | `scope/` | ports, containers, MCP servers, health | Swift 6 |
+| `history/` | shared library: canonical history store, replay codec, secret redaction, bounded subprocess runner | Swift 6 |
 
 Each family is its own SPM package with its own `Package.swift` and its own
 `AGENTS.md`. The CLI logic lives in a library target (`SymTuneCLI`,
 `SymOperateCLI`, `SymScopeCLI`) consumed by **both** the package's own
 executable target and the root dispatcher — so a family stays independently
 buildable while only `symcockpit` is released.
+
+`history/` is not a family: it has no CLI, no MCP server and no `AGENTS.md`
+of its own. It is a plain SPM package that `tune/` and `operate/` depend on
+by path, and it holds the privacy boundary for everything the tool persists
+— `SecretRedactor` at the output boundary and `ReplayCodec`, which decides
+which recorded actions are safe to replay. It is built and tested with the
+other packages (`PACKAGES` in the `Makefile`, both matrices in
+`.github/workflows/ci.yml`), so a regression in that boundary cannot reach a
+release unobserved.
 
 ## Build & Test
 
@@ -76,11 +86,18 @@ live in the repo environment `release`.
   `symscope` — their formulae are deprecated on purpose. The one other root
   product is `SymCockpitApp`, the GUI; it is a different artifact class (an
   `.app`, distributed as a cask), not a second CLI.
-- **No credential I/O at construction.** AI-usage providers resolve their
-  Keychain/environment credentials lazily (`CredentialCache`), because the
-  catalog is built on every launch and every CLI invocation — an eager read
-  pops a system dialog for an entry the user may never use. New providers must
-  follow suit; `CredentialLazinessTests` guards it.
+- **No credential I/O at construction — and no plaintext at all.** The
+  AI-usage provider catalog is built on every launch and every CLI
+  invocation, so an eager credential read would pop a system dialog for an
+  entry the user may never use. `SymBrainUsageProvider` therefore carries
+  metadata only. Beyond that, cockpit does not resolve provider secrets at
+  any point: `SymVaultCredentialStore.reference(for:)` builds an opaque
+  `symvault://` URI, and that reference — never a secret — is what goes into
+  the child environment for `symbrain usage`, which resolves it itself. Two
+  tests hold the line:
+  `SymVaultCredentialStoreTests.testReferenceUsesSymVaultWithoutReadingASecret`
+  and
+  `AIUsageServiceTests.testInvokesExactPublishedCommandAndPassesSymVaultReferenceToEnvironment`.
 - **The GUI owns no logic.** Every section reads the same core services the
   CLI does (`SymTuneCore`, `SymScopeCore`, `SymOperateCore`), and the Tune
   section embeds `SymTuneUI`'s panel rather than reimplementing it, so the
