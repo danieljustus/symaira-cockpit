@@ -84,10 +84,25 @@ private struct ProviderRow: View {
         .background(SymairaTheme.bgCard, in: RoundedRectangle(cornerRadius: 8))
     }
 
+    /// A provider's meters, its balance, or — when it answered with neither
+    /// — a line saying so. A successful fetch that yields no meter used to
+    /// render as a bare provider name over empty space, which is exactly what
+    /// a broken card looks like.
     @ViewBuilder
     private func meters(_ snapshot: AIUsageSnapshot) -> some View {
         ForEach(Array(snapshot.meters.enumerated()), id: \.offset) { _, meter in
             meterRow(meter)
+        }
+        if let balance = AIUsageFormatting.balanceText(for: snapshot) {
+            Text(balance)
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(SymairaTheme.textSecondary)
+        }
+        if let empty = AIUsageFormatting.emptySnapshotText(for: snapshot) {
+            Text(empty)
+                .font(.caption)
+                .foregroundStyle(SymairaTheme.textMuted)
         }
     }
 

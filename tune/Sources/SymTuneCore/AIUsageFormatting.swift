@@ -43,8 +43,8 @@ public enum AIUsageFormatting {
         switch meter.unit {
         case .percent:
             return "\(percentText(remaining))% left"
-        case .currency:
-            return "\(currencyText(remaining)) of \(currencyText(limit)) left"
+        case .currency(let code):
+            return "\(currencyText(remaining, code: code)) of \(currencyText(limit, code: code)) left"
         case .tokens, .requests, .credits:
             return "\(plainText(remaining)) of \(plainText(limit)) \(meter.unit.unitLabel) left"
         }
@@ -68,16 +68,40 @@ public enum AIUsageFormatting {
 
     /// Compact status-item text for a provider's primary meter: the used
     /// percent (e.g. `42%`), or `—` when nothing is readable.
+    ///
+    /// A provider that reports no meters at all but does report a balance —
+    /// a credit account rather than a quota — falls back to that balance, so
+    /// the readout is blank only when there is genuinely nothing to say.
     public static func statusItemText(for snapshot: AIUsageSnapshot?) -> String {
-        guard let snapshot, let meter = snapshot.meters.first else { return "—" }
+        guard let snapshot else { return "—" }
+        guard let meter = snapshot.meters.first else {
+            guard let balance = snapshot.balance else { return "—" }
+            return currencyText(balance, code: snapshot.currency ?? "USD")
+        }
         switch meter.unit {
         case .percent:
             return "\(percentText(meter.used ?? 0))%"
-        case .currency:
-            return currencyText(meter.used ?? 0)
+        case .currency(let code):
+            return currencyText(meter.used ?? 0, code: code)
         case .tokens, .requests, .credits:
             return plainText(meter.used ?? 0)
         }
+    }
+
+    /// A provider's balance line, e.g. `Balance: $12.40` — or `nil` when it
+    /// reports none.
+    public static func balanceText(for snapshot: AIUsageSnapshot) -> String? {
+        guard let balance = snapshot.balance else { return nil }
+        return "Balance: " + currencyText(balance, code: snapshot.currency ?? "USD")
+    }
+
+    /// Why a successful fetch produced nothing to show. A provider can answer
+    /// with no quota at all (an unlimited plan, or one whose account type
+    /// exposes no meter), and that has to read as an answer rather than as an
+    /// empty box that looks like a broken card.
+    public static func emptySnapshotText(for snapshot: AIUsageSnapshot) -> String? {
+        guard snapshot.meters.isEmpty, snapshot.balance == nil else { return nil }
+        return "No quota reported for this account."
     }
 
     // MARK: - Internals
@@ -87,10 +111,20 @@ public enum AIUsageFormatting {
         return String(format: "%.0f", double.rounded())
     }
 
-    private static func currencyText(_ value: Decimal) -> String {
+    /// Amounts arrive in the currency's major unit — symbrain passes each
+    /// provider's own figure through unscaled, and every provider that
+    /// reports money reports it in whole currency (OpenRouter's `usage` and
+    /// `limit` are dollars, not cents). Rendering assumed cents here, which
+    /// divided every spend figure by 100.
+    private static func currencyText(_ value: Decimal, code: String) -> String {
         let double = NSDecimalNumber(decimal: value).doubleValue
-        return String(format: "$%.2f", double / 100)
+        if let symbol = currencySymbols[code.uppercased()] {
+            return String(format: "%@%.2f", symbol, double)
+        }
+        return String(format: "%.2f %@", double, code)
     }
+
+    private static let currencySymbols = ["USD": "$", "EUR": "€", "GBP": "£"]
 
     private static func plainText(_ value: Decimal) -> String {
         let double = NSDecimalNumber(decimal: value).doubleValue
@@ -102,8 +136,8 @@ public enum AIUsageFormatting {
 
     private static func amountText(_ value: Decimal, unit: AIUsageUnit) -> String {
         switch unit {
-        case .currency:
-            return currencyText(value)
+        case .currency(let code):
+            return currencyText(value, code: code)
         default:
             return plainText(value)
         }

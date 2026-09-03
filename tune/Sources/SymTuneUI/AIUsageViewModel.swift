@@ -139,16 +139,25 @@ final class AIUsageViewModel {
         buffer.recordValue(fraction * 100, timestamp: date)
     }
 
+    /// The readout follows the first provider that has something to say, not
+    /// merely the first that answered: a provider can return a snapshot with
+    /// no meters (an unlimited plan, or an account type that exposes none),
+    /// and stopping there left the menu bar blank while a later provider had
+    /// a perfectly good number.
     private func updateStatusItem() {
-        guard preferences.menuBarEnabled,
-              let first = rows.first(where: { $0.snapshot != nil })
-        else {
+        guard preferences.menuBarEnabled else {
             statusItemText = ""
             onStatusItemTextChanged?()
             return
         }
-        let text = AIUsageFormatting.statusItemText(for: first.snapshot)
-        statusItemText = text == "—" ? "" : "AI \(text)"
+        let text = rows.lazy
+            .compactMap { row -> String? in
+                guard row.snapshot != nil else { return nil }
+                let text = AIUsageFormatting.statusItemText(for: row.snapshot)
+                return text == "—" ? nil : text
+            }
+            .first
+        statusItemText = text.map { "AI \($0)" } ?? ""
         onStatusItemTextChanged?()
     }
 }
