@@ -47,14 +47,25 @@ final class AIUsageFormattingTests: XCTestCase {
         XCTAssertEqual(AIUsageFormatting.remainingText(for: meter), "1834 of 2048 requests left")
     }
 
+    /// Money arrives in the currency's major unit — OpenRouter's `usage` and
+    /// `limit` are dollars, and symbrain passes them through unscaled — so
+    /// $7.34 of a $100 key limit must read as such, not as the $0.07 that
+    /// treating the figures as cents produced.
     func testRemainingCurrencyMeter() {
-        let meter = AIUsageMeter(label: "On-demand", used: 734, limit: 10_000, unit: .currency("USD"))
+        let meter = AIUsageMeter(label: "On-demand", used: 7.34, limit: 100, unit: .currency("USD"))
         XCTAssertEqual(AIUsageFormatting.remainingText(for: meter), "$92.66 of $100.00 left")
     }
 
     func testRemainingWithoutLimitFallsBackToUsed() {
         let meter = AIUsageMeter(label: "Cash balance", used: 42, limit: nil, unit: .currency("USD"))
-        XCTAssertEqual(AIUsageFormatting.remainingText(for: meter), "$0.42 used")
+        XCTAssertEqual(AIUsageFormatting.remainingText(for: meter), "$42.00 used")
+    }
+
+    /// A currency without a known symbol keeps its code rather than being
+    /// silently rendered as dollars.
+    func testRemainingUnknownCurrencyKeepsItsCode() {
+        let meter = AIUsageMeter(label: "Spend", used: 12.5, limit: nil, unit: .currency("CHF"))
+        XCTAssertEqual(AIUsageFormatting.remainingText(for: meter), "12.50 CHF used")
     }
 
     // MARK: Progress fraction
@@ -90,5 +101,50 @@ final class AIUsageFormattingTests: XCTestCase {
 
     func testStatusItemTextWithoutSnapshot() {
         XCTAssertEqual(AIUsageFormatting.statusItemText(for: nil), "—")
+    }
+
+    /// A credit account reports a balance and no meters; the readout follows
+    /// the balance rather than going blank.
+    func testStatusItemTextFallsBackToBalance() {
+        let snapshot = AIUsageSnapshot(
+            providerID: "openrouter",
+            meters: [],
+            balance: 12.4,
+            currency: "USD",
+            source: "api"
+        )
+        XCTAssertEqual(AIUsageFormatting.statusItemText(for: snapshot), "$12.40")
+    }
+
+    // MARK: Empty snapshots
+
+    /// A fetch that succeeds and reports nothing has to say so. Left
+    /// unhandled it rendered as a provider name over empty space — which is
+    /// what a broken card looks like.
+    func testEmptySnapshotTextExplainsAnAnswerWithNoMeters() {
+        let empty = AIUsageSnapshot(providerID: "codex", meters: [], source: "oauth")
+        XCTAssertEqual(
+            AIUsageFormatting.emptySnapshotText(for: empty),
+            "No quota reported for this account."
+        )
+
+        let metered = AIUsageSnapshot(
+            providerID: "codex",
+            meters: [AIUsageMeter(label: "1w", used: 67, limit: 100, unit: .percent)],
+            source: "oauth"
+        )
+        XCTAssertNil(AIUsageFormatting.emptySnapshotText(for: metered))
+
+        // A balance is content too, so it is not the empty state.
+        let balanceOnly = AIUsageSnapshot(
+            providerID: "openrouter",
+            meters: [],
+            balance: 3,
+            currency: "USD",
+            source: "api"
+        )
+        XCTAssertNil(AIUsageFormatting.emptySnapshotText(for: balanceOnly))
+        XCTAssertEqual(AIUsageFormatting.balanceText(for: balanceOnly), "Balance: $3.00")
+        XCTAssertNil(AIUsageFormatting.balanceText(for: empty))
     }
 }
