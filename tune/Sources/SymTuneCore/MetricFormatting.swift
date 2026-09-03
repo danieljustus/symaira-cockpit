@@ -27,13 +27,18 @@ public enum MetricFormatting {
     ///
     /// The value handed in is always a "used" quantity — that is what the
     /// history ring buffers record — so a `style.basis == .free` request is
-    /// honoured by converting before formatting: for `.disk` the buffer
-    /// already stores a percentage, so the free share is just its complement;
-    /// for `.memory` the buffer stores raw used bytes, so `totalBytes` (used +
-    /// free, effectively constant for a running session) is needed to derive
-    /// the free amount. Without `totalBytes` a `.memory` value cannot be
-    /// converted and is rendered as-is, the same way ``MetricStyleFormatting``
-    /// treats data it cannot honour a style against.
+    /// honoured by converting before formatting. The two byte metrics store
+    /// different things, and `totalBytes` is what bridges them:
+    ///
+    /// - `.memory` stores raw used bytes, so `totalBytes` (used + free,
+    ///   effectively constant for a running session) yields both the free
+    ///   amount and the percentage.
+    /// - `.disk` stores a used *percentage*, so `totalBytes` (the volume's
+    ///   capacity) is what turns it back into gigabytes.
+    ///
+    /// Without `totalBytes` neither conversion is possible, and the value is
+    /// rendered in whatever form it was stored — the same way
+    /// ``MetricStyleFormatting`` treats data it cannot honour a style against.
     public static func value(
         _ id: MetricIdentifier,
         _ value: Double,
@@ -44,8 +49,14 @@ public enum MetricFormatting {
         case .cpu:
             return String(format: "%.0f%%", value)
         case .disk:
-            let displayed = style.basis == .free ? (100 - value) : value
-            return String(format: "%.0f%%", displayed)
+            let usedShare = style.basis == .free ? (100 - value) : value
+            guard let totalBytes, totalBytes > 0 else { return percentText(usedShare) }
+            return amountText(
+                usedShare / 100 * Double(totalBytes),
+                share: usedShare,
+                style: style,
+                convention: id.byteUnitConvention
+            )
         case .memory:
             let displayed: Double
             if style.basis == .free, let totalBytes {
@@ -53,15 +64,46 @@ public enum MetricFormatting {
             } else {
                 displayed = value
             }
-            if displayed >= 1_073_741_824 {
-                return String(format: "%.1f GB", displayed / 1_073_741_824.0)
-            }
-            return String(format: "%.0f MB", displayed / 1_048_576.0)
+            let share = totalBytes.flatMap { $0 > 0 ? displayed / Double($0) * 100 : nil }
+            return amountText(displayed, share: share, style: style, convention: id.byteUnitConvention)
         case .network:
             return netRate(value)
         default:
             return String(format: "%.1f", value)
         }
+    }
+
+    /// One reading rendered per ``MetricStyle/ValueScale``: the amount, its
+    /// share of the total, or both.
+    ///
+    /// Unlike the menu bar this card is not fighting for width, so units are
+    /// always spelled out and percentages are not padded. A `.relative` or
+    /// `.both` request without a `share` falls back to the amount — the card
+    /// showing gigabytes is better than the card showing nothing.
+    private static func amountText(
+        _ amount: Double,
+        share: Double?,
+        style: MetricStyle,
+        convention: ByteUnitConvention
+    ) -> String {
+        let absolute = byteText(amount, convention: convention)
+        guard let share else { return absolute }
+        switch style.scale {
+        case .absolute: return absolute
+        case .relative: return percentText(share)
+        case .both: return absolute + " · " + percentText(share)
+        }
+    }
+
+    private static func percentText(_ value: Double) -> String {
+        String(format: "%.0f%%", value)
+    }
+
+    private static func byteText(_ value: Double, convention: ByteUnitConvention) -> String {
+        if value >= convention.gigabyte {
+            return String(format: "%.1f GB", value / convention.gigabyte)
+        }
+        return String(format: "%.0f MB", value / convention.megabyte)
     }
 
     /// Value shown before enough history exists for min/max, or `nil` when the
@@ -81,16 +123,25 @@ public enum MetricFormatting {
             guard let utilization = report.cpu.totalUtilization else { return nil }
             return String(format: "%.0f%%", utilization * 100)
         case .memory:
-            if style.basis == .free {
-                guard let free = report.memory.freeBytes else { return nil }
-                return value(.memory, Double(free))
-            }
             guard let used = report.memory.usedBytes else { return nil }
-            return value(.memory, Double(used))
+            let free = report.memory.freeBytes
+            guard let amount = style.basis == .free ? free : used else { return nil }
+            let total = free.map { used + $0 }
+            return amountText(
+                Double(amount),
+                share: total.flatMap { $0 > 0 ? Double(amount) / Double($0) * 100 : nil },
+                style: style,
+                convention: id.byteUnitConvention
+            )
         case .disk:
             guard let disk = report.disk, disk.capacityBytes > 0 else { return nil }
             let amount = style.basis == .free ? disk.freeBytes : disk.usedBytes
-            return String(format: "%.0f%%", Double(amount) / Double(disk.capacityBytes) * 100)
+            return amountText(
+                Double(amount),
+                share: Double(amount) / Double(disk.capacityBytes) * 100,
+                style: style,
+                convention: id.byteUnitConvention
+            )
         case .network:
             let down = report.network.aggregateBytesInPerSecond
             let up = report.network.aggregateBytesOutPerSecond
@@ -115,9 +166,10 @@ public enum MetricFormatting {
     /// `.free` both converts each figure (see ``value(_:_:style:totalBytes:)``)
     /// and swaps which raw sample backs "minimum" and "maximum": the sample
     /// with the least usage is the one with the most free space, and vice
-    /// versa. `totalBytes` is only consulted for `.memory` — pass the current
-    /// used + free byte count (assumed effectively constant across the
-    /// session); `.disk`'s stored percentage needs no such context.
+    /// versa. Pass `totalBytes` for both byte metrics — used + free for
+    /// `.memory` (assumed effectively constant across the session), the
+    /// volume capacity for `.disk` — so amounts and percentages are both
+    /// derivable; see ``value(_:_:style:totalBytes:)``.
     public static func historyRowValues(
         _ id: MetricIdentifier,
         stats: MetricStats,
@@ -126,9 +178,9 @@ public enum MetricFormatting {
     ) -> HistoryRowValues {
         guard style.basis == .free else {
             return HistoryRowValues(
-                current: value(id, stats.current, style: style),
-                minimum: value(id, stats.min, style: style),
-                maximum: value(id, stats.max, style: style)
+                current: value(id, stats.current, style: style, totalBytes: totalBytes),
+                minimum: value(id, stats.min, style: style, totalBytes: totalBytes),
+                maximum: value(id, stats.max, style: style, totalBytes: totalBytes)
             )
         }
         return HistoryRowValues(
@@ -188,7 +240,7 @@ public enum MetricFormatting {
                 }
             case .disk:
                 if let disk = report.disk {
-                    let gigabytes = Double(disk.usedBytes) / 1_073_741_824.0
+                    let gigabytes = Double(disk.usedBytes) / MetricIdentifier.disk.byteUnitConvention.gigabyte
                     parts.append(String(format: "💾%.0fG", gigabytes))
                 }
             case .network:

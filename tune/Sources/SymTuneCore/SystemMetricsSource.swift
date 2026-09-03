@@ -154,7 +154,47 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
         }
     }
 
+    /// Boot-volume capacity, as macOS itself reports it.
+    ///
+    /// Two things have to match Finder and System Settings › Storage, or the
+    /// reading is quietly tens of gigabytes off:
+    ///
+    /// - **Which "free" figure.** `statfs`'s `f_bfree` counts only blocks that
+    ///   are free *right now*. macOS reports what an app can actually claim,
+    ///   which also covers purgeable content — caches and local Time Machine
+    ///   snapshots the system evicts on demand. That is
+    ///   `volumeAvailableCapacityForImportantUsage`; on a nearly full disk the
+    ///   two differ by hundreds of megabytes to several gigabytes, and every
+    ///   such byte lands in the used figure.
+    /// - **Which volume.** `/` is the sealed read-only system snapshot, so the
+    ///   resource values are asked of the data volume; both report the shared
+    ///   APFS container, but only the data volume answers the availability
+    ///   question the Storage pane asks.
+    ///
+    /// `statfs` stays as the fallback for the case where neither URL yields
+    /// resource values.
     private func readDisk() -> DiskStatistics? {
+        for path in ["/System/Volumes/Data", "/"] {
+            if let stats = readDiskResourceValues(at: path) { return stats }
+        }
+        return readDiskStatfs()
+    }
+
+    private func readDiskResourceValues(at path: String) -> DiskStatistics? {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        let values = try? url.resourceValues(forKeys: [
+            .volumeTotalCapacityKey,
+            .volumeAvailableCapacityForImportantUsageKey
+        ])
+        guard let total = values?.volumeTotalCapacity, total > 0,
+              let available = values?.volumeAvailableCapacityForImportantUsage, available >= 0
+        else { return nil }
+        let capacity = UInt64(total)
+        let free = min(UInt64(available), capacity)
+        return DiskStatistics(capacityBytes: capacity, usedBytes: capacity - free, freeBytes: free)
+    }
+
+    private func readDiskStatfs() -> DiskStatistics? {
         var stats = statfs()
         guard statfs("/", &stats) == 0 else { return nil }
         let blockSize = UInt64(stats.f_bsize)

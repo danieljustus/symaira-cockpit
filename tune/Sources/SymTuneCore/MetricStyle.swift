@@ -8,6 +8,25 @@ import Foundation
 /// belongs there differs per person: some want `CPU 12%`, some a glyph and a
 /// bare number, some the full `17.0 GB`. Each axis below is independent so the
 /// combinations do not have to be enumerated.
+/// Which multiple a byte count is divided by before it is given a `GB`/`MB`
+/// suffix.
+///
+/// macOS is not consistent here and neither can we be: Finder, System
+/// Settings › Storage and every drive vendor count storage in powers of 1000,
+/// while Activity Monitor counts memory in powers of 1024. Following each
+/// surface's own convention is what makes a Tune reading match the number the
+/// user can check it against — using 1024 for storage reports a disk as ~7%
+/// emptier than System Settings does, which is a 33 GB lie on a 500 GB disk.
+public enum ByteUnitConvention: Sendable {
+    /// Powers of 1024 — memory.
+    case binary
+    /// Powers of 1000 — storage.
+    case decimal
+
+    public var gigabyte: Double { self == .binary ? 1_073_741_824 : 1_000_000_000 }
+    public var megabyte: Double { self == .binary ? 1_048_576 : 1_000_000 }
+}
+
 public struct MetricStyle: Equatable, Sendable {
     /// What precedes the value.
     public enum LabelStyle: String, CaseIterable, Sendable {
@@ -19,13 +38,17 @@ public struct MetricStyle: Equatable, Sendable {
         case hidden
     }
 
-    /// Whether the value is an amount or a share of the total.
+    /// Whether the value is an amount, a share of the total, or both.
     ///
-    /// Not every metric has both: CPU is inherently a percentage and network
-    /// throughput has no meaningful total, so those ignore `relative`.
+    /// Not every metric has a total: CPU is inherently a percentage and
+    /// network throughput has nothing to divide by, so those ignore anything
+    /// but `absolute`.
     public enum ValueScale: String, CaseIterable, Sendable {
         case absolute
         case relative
+        /// `442 GB · 89%` — the amount with its share appended. Costs the most
+        /// menu-bar width, which is why it is not the default.
+        case both
     }
 
     /// How much unit suffix the value carries.
@@ -94,6 +117,12 @@ extension MetricIdentifier {
         case .network: return "arrow.up.arrow.down"
         default: return "gauge"
         }
+    }
+
+    /// Which byte-unit convention this metric's amounts are counted in.
+    /// See ``ByteUnitConvention``.
+    public var byteUnitConvention: ByteUnitConvention {
+        self == .disk ? .decimal : .binary
     }
 
     /// Whether ``MetricStyle/ValueScale/relative`` means anything here.
@@ -195,6 +224,8 @@ public enum MetricStyleFormatting {
     /// A live reading would make the preview flicker while the user is reading
     /// it, and would show nothing at all for a metric with no data.
     /// 42% CPU, 8 GB of 16 GB memory, 256 GB of 512 GB disk, 2 MB/s down.
+    /// The disk figures are round in decimal GB — the convention storage is
+    /// counted in — so the preview reads `256.0 GB`, not `238.4 GB`.
     public static let sampleReport = SystemMetricsReport(
         cpu: CPUReport(totalUtilization: 0.42, perCoreUtilization: []),
         memory: MemoryReport(
@@ -205,9 +236,9 @@ public enum MetricStyleFormatting {
             pressure: nil
         ),
         disk: DiskReport(
-            capacityBytes: 549_755_813_888,
-            usedBytes: 274_877_906_944,
-            freeBytes: 274_877_906_944
+            capacityBytes: 512_000_000_000,
+            usedBytes: 256_000_000_000,
+            freeBytes: 256_000_000_000
         ),
         network: NetworkReport(
             interfaces: [],
@@ -244,28 +275,24 @@ public enum MetricStyleFormatting {
 
         case .memory:
             guard let used = report.memory.usedBytes else { return nil }
-            if style.scale == .relative {
-                guard let free = report.memory.freeBytes, used + free > 0 else { return nil }
-                let share = style.basis == .free ? Double(free) : Double(used)
-                return percent(share / Double(used + free) * 100, style: style)
-            }
-            if style.basis == .free {
-                guard let free = report.memory.freeBytes else { return nil }
-                return bytes(Double(free), style: style)
-            }
-            return bytes(Double(used), style: style)
+            let free = report.memory.freeBytes
+            guard let amount = style.basis == .free ? free : used else { return nil }
+            return amountText(
+                Double(amount),
+                total: free.map { Double(used + $0) },
+                style: style,
+                convention: id.byteUnitConvention
+            )
 
         case .disk:
             guard let disk = report.disk else { return nil }
-            if style.scale == .relative {
-                guard disk.capacityBytes > 0 else { return nil }
-                let share = style.basis == .free ? Double(disk.freeBytes) : Double(disk.usedBytes)
-                return percent(share / Double(disk.capacityBytes) * 100, style: style)
-            }
-            if style.basis == .free {
-                return bytes(Double(disk.freeBytes), style: style)
-            }
-            return bytes(Double(disk.usedBytes), style: style)
+            let amount = style.basis == .free ? disk.freeBytes : disk.usedBytes
+            return amountText(
+                Double(amount),
+                total: disk.capacityBytes > 0 ? Double(disk.capacityBytes) : nil,
+                style: style,
+                convention: id.byteUnitConvention
+            )
 
         case .network:
             let down = report.network.aggregateBytesInPerSecond
@@ -286,17 +313,45 @@ public enum MetricStyleFormatting {
 
     // MARK: Unit rendering
 
+    /// One byte amount rendered per ``MetricStyle/ValueScale``: the amount,
+    /// its share of `total`, or both.
+    ///
+    /// A share needs a total, so a `.relative` request without one has no
+    /// answer and returns `nil` (the metric is then skipped rather than shown
+    /// as a placeholder); `.both` degrades to the amount alone instead, since
+    /// it did ask for that much.
+    private static func amountText(
+        _ amount: Double,
+        total: Double?,
+        style: MetricStyle,
+        convention: ByteUnitConvention
+    ) -> String? {
+        switch style.scale {
+        case .absolute:
+            return bytes(amount, style: style, convention: convention)
+        case .relative:
+            return total.map { percent(amount / $0 * 100, style: style) }
+        case .both:
+            let absolute = bytes(amount, style: style, convention: convention)
+            // In `.both` the percentage sits next to another number, so it
+            // keeps its sign even when the unit style is `.hidden` — two bare
+            // numbers side by side are unreadable.
+            guard let total else { return absolute }
+            return absolute + " · " + percent(amount / total * 100, style: style, forceSign: true)
+        }
+    }
+
     /// Two-digit padded, as the status item always has been: an unpadded
     /// percentage makes the whole menu-bar title shift left every time CPU
     /// crosses 10%.
-    private static func percent(_ value: Double, style: MetricStyle) -> String {
+    private static func percent(_ value: Double, style: MetricStyle, forceSign: Bool = false) -> String {
         let number = String(format: "%2d", Int(value.rounded()))
-        return style.unit == .hidden ? number : number + "%"
+        return style.unit == .hidden && !forceSign ? number : number + "%"
     }
 
-    private static func bytes(_ value: Double, style: MetricStyle) -> String {
-        let gigabyte = 1_073_741_824.0
-        let megabyte = 1_048_576.0
+    private static func bytes(_ value: Double, style: MetricStyle, convention: ByteUnitConvention) -> String {
+        let gigabyte = convention.gigabyte
+        let megabyte = convention.megabyte
 
         if value >= gigabyte {
             let number = String(format: "%.1f", value / gigabyte)

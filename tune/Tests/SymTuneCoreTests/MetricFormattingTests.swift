@@ -10,10 +10,12 @@ final class MetricFormattingTests: XCTestCase {
         cpu: Double? = 0.5,
         memoryUsed: UInt64? = 8_589_934_592,
         memoryFree: UInt64? = 8_589_934_592,
+        // Storage is counted in decimal GB (see `ByteUnitConvention`), so the
+        // fixture is round there: 256 GB used of 512 GB.
         disk: DiskReport? = DiskReport(
-            capacityBytes: 549_755_813_888,
-            usedBytes: 274_877_906_944,
-            freeBytes: 274_877_906_944
+            capacityBytes: 512_000_000_000,
+            usedBytes: 256_000_000_000,
+            freeBytes: 256_000_000_000
         ),
         down: Double? = 2_097_152,
         up: Double? = 524_288
@@ -106,6 +108,53 @@ final class MetricFormattingTests: XCTestCase {
     }
 
     // MARK: - value basis
+
+    /// The disk history buffer stores a used percentage, so `totalBytes` (the
+    /// volume capacity) is what turns a stored sample back into gigabytes —
+    /// and in decimal units, matching System Settings › Storage.
+    func testValueDerivesDiskGigabytesFromCapacity() {
+        let capacity: UInt64 = 512_000_000_000
+        XCTAssertEqual(MetricFormatting.value(.disk, 50, totalBytes: capacity), "256.0 GB")
+        XCTAssertEqual(
+            MetricFormatting.value(.disk, 50, style: MetricStyle(basis: .free), totalBytes: capacity),
+            "256.0 GB"
+        )
+        XCTAssertEqual(
+            MetricFormatting.value(.disk, 75, style: MetricStyle(scale: .both), totalBytes: capacity),
+            "384.0 GB · 75%"
+        )
+        XCTAssertEqual(
+            MetricFormatting.value(.disk, 75, style: MetricStyle(scale: .relative), totalBytes: capacity),
+            "75%"
+        )
+    }
+
+    /// Without a capacity there is nothing to turn the stored percentage into,
+    /// so the percentage is what gets shown — never a gigabyte figure derived
+    /// from a guess.
+    func testValueFallsBackToPercentForDiskWithoutCapacity() {
+        XCTAssertEqual(MetricFormatting.value(.disk, 30), "30%")
+        XCTAssertEqual(MetricFormatting.value(.disk, 30, totalBytes: 0), "30%")
+    }
+
+    /// The history row carries the capacity through on both bases, so the
+    /// `.used` path is not silently left on percentages.
+    func testHistoryRowValuesDerivesDiskGigabytesOnBothBases() {
+        let capacity: UInt64 = 512_000_000_000
+        let stats = MetricStats(current: 50, min: 25, max: 75)
+        let used = MetricFormatting.historyRowValues(.disk, stats: stats, style: .default, totalBytes: capacity)
+        XCTAssertEqual(used.current, "256.0 GB")
+        XCTAssertEqual(used.minimum, "128.0 GB")
+        XCTAssertEqual(used.maximum, "384.0 GB")
+
+        let free = MetricFormatting.historyRowValues(
+            .disk, stats: stats, style: MetricStyle(basis: .free), totalBytes: capacity
+        )
+        XCTAssertEqual(free.current, "256.0 GB")
+        // Least free is the complement of the busiest sample, and vice versa.
+        XCTAssertEqual(free.minimum, "128.0 GB")
+        XCTAssertEqual(free.maximum, "384.0 GB")
+    }
 
     /// The disk history buffer stores a used percentage; `.free` reports the
     /// complement without needing any extra context.
@@ -225,8 +274,11 @@ final class MetricFormattingTests: XCTestCase {
         XCTAssertNil(MetricFormatting.fallbackValue(.memory, report: report(memoryUsed: nil)))
     }
 
-    func testFallbackValueShowsDiskUsageAsPercentOfCapacity() {
-        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report()), "50%")
+    /// The default `.absolute` scale reports gigabytes, in the decimal units
+    /// Finder and System Settings › Storage use — 256 GB, not the 238 GB that
+    /// dividing by 1024³ would produce.
+    func testFallbackValueShowsDiskUsageInDecimalGigabytes() {
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report()), "256.0 GB")
         XCTAssertNil(MetricFormatting.fallbackValue(.disk, report: report(disk: nil)))
         // A zero-capacity disk has no meaningful percentage.
         let zeroCapacity = DiskReport(capacityBytes: 0, usedBytes: 0, freeBytes: 0)
@@ -287,8 +339,40 @@ final class MetricFormattingTests: XCTestCase {
             usedBytes: 300_000_000_000,
             freeBytes: 100_000_000_000
         )
-        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: usedStyle), "75%")
-        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: freeStyle), "25%")
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: usedStyle), "300.0 GB")
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: freeStyle), "100.0 GB")
+
+        let percentUsed = MetricStyle(scale: .relative, basis: .used)
+        let percentFree = MetricStyle(scale: .relative, basis: .free)
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: percentUsed), "75%")
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: percentFree), "25%")
+    }
+
+    /// `.both` is the point of the storage work: one reading that carries the
+    /// amount and its share, so neither has to be worked out by hand.
+    func testFallbackValueShowsAmountAndPercentTogether() {
+        let both = MetricStyle(scale: .both)
+        XCTAssertEqual(MetricFormatting.fallbackValue(.disk, report: report(), style: both), "256.0 GB · 50%")
+        XCTAssertEqual(MetricFormatting.fallbackValue(.memory, report: report(), style: both), "8.0 GB · 50%")
+
+        let bothFree = MetricStyle(scale: .both, basis: .free)
+        let lopsided = DiskReport(
+            capacityBytes: 400_000_000_000,
+            usedBytes: 300_000_000_000,
+            freeBytes: 100_000_000_000
+        )
+        XCTAssertEqual(
+            MetricFormatting.fallbackValue(.disk, report: report(disk: lopsided), style: bothFree),
+            "100.0 GB · 25%"
+        )
+    }
+
+    /// Memory stays on powers of 1024, the way Activity Monitor reports it:
+    /// 8 GiB of RAM must read as "8.0 GB", not "8.6 GB".
+    func testMemoryKeepsBinaryUnits() {
+        XCTAssertEqual(MetricFormatting.fallbackValue(.memory, report: report()), "8.0 GB")
+        XCTAssertEqual(MetricIdentifier.memory.byteUnitConvention, .binary)
+        XCTAssertEqual(MetricIdentifier.disk.byteUnitConvention, .decimal)
     }
 
     // MARK: - statusItemText

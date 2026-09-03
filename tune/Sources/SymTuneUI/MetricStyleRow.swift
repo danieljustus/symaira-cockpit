@@ -2,8 +2,12 @@ import SwiftUI
 import SymairaTheme
 import SymTuneCore
 
-/// The menu-bar rendering options for one metric, shown beneath its row in
-/// Preferences once the metric is actually in the menu bar.
+/// The rendering options for one metric — how it reads in the menu bar and in
+/// the System Metrics card — shown beneath its row in Preferences once the
+/// metric is monitored.
+///
+/// "Value" picks amount, percent, or both; "Basis" picks whether that reports
+/// what is occupied or what is still free.
 ///
 /// Split out of ``PreferencesView`` to keep that type readable; it is only
 /// ever rendered from the metric list there.
@@ -26,7 +30,11 @@ struct MetricStyleRow: View {
             }
 
             stylePicker("Value", selection: style.scale) { scale in
-                scale == .absolute ? "Amount" : "Percent"
+                switch scale {
+                case .absolute: return "Amount"
+                case .relative: return "Percent"
+                case .both: return "Both"
+                }
             }
             // CPU is already a percentage and throughput has no total to
             // divide by, so there is nothing for this control to switch.
@@ -84,7 +92,8 @@ struct MetricStyleRow: View {
     }
 
     /// What this metric will look like in the menu bar, using a fixed sample
-    /// reading so the preview does not flicker while the user is reading it.
+    /// reading (8 GB of 16 GB memory, 256 GB of 512 GB disk) so the preview
+    /// does not flicker while the user is reading it.
     private var preview: String {
         MetricStyleFormatting.plainText(
             MetricStyleFormatting.statusItemSegments(

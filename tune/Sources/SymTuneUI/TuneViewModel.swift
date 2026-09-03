@@ -243,14 +243,21 @@ final class TuneViewModel {
         rows.reserveCapacity(ordered.count)
         for id in ordered {
             let style = preferences.metricStyles[id] ?? .default
-            // Only memory needs the total to convert a used-bytes history
-            // sample to free bytes; disk's history is already a percentage,
-            // whose free share is just the complement.
+            // Both byte metrics need a total, for different reasons: memory
+            // stores used bytes and needs used + free to derive the free side
+            // and the percentage; disk stores a percentage and needs the
+            // volume capacity to derive gigabytes.
             let totalBytes: UInt64? = {
-                guard id == .memory,
-                      let used = report.memory.usedBytes,
-                      let free = report.memory.freeBytes else { return nil }
-                return used + free
+                switch id {
+                case .memory:
+                    guard let used = report.memory.usedBytes,
+                          let free = report.memory.freeBytes else { return nil }
+                    return used + free
+                case .disk:
+                    return report.disk?.capacityBytes
+                default:
+                    return nil
+                }
             }()
 
             guard let stats = controller.metricsHistoryStats(for: id) else {
