@@ -255,9 +255,11 @@ struct PreferencesView: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             row
-            // Style controls only matter for a metric that is actually in the
-            // menu bar, so they appear with it rather than sitting there inert.
-            if isVisible {
+            // Style controls follow "Monitor", not "Show": they drive the
+            // System Metrics card as well as the menu bar, so a metric that is
+            // measured but kept out of the menu bar still has something to
+            // configure.
+            if isEnabled {
                 MetricStyleRow(manager: manager, metric: metric)
             }
         }

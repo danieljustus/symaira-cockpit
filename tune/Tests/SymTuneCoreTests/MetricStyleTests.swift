@@ -7,14 +7,16 @@ final class MetricStyleTests: XCTestCase {
     // MARK: - Fixtures
 
     /// 8 GB used of 16 GB, 50% CPU, 256 GB used of 512 GB, 2 MB/s down + 512 KB/s up.
+    /// Memory is counted in powers of 1024 and storage in powers of 1000, the
+    /// way macOS itself counts them — see `ByteUnitConvention`.
     private func report(
         cpu: Double? = 0.5,
         memoryUsed: UInt64? = 8_589_934_592,
         memoryFree: UInt64? = 8_589_934_592,
         disk: DiskReport? = DiskReport(
-            capacityBytes: 549_755_813_888,
-            usedBytes: 274_877_906_944,
-            freeBytes: 274_877_906_944
+            capacityBytes: 512_000_000_000,
+            usedBytes: 256_000_000_000,
+            freeBytes: 256_000_000_000
         ),
         down: Double? = 2_097_152,
         up: Double? = 524_288
@@ -130,9 +132,9 @@ final class MetricStyleTests: XCTestCase {
 
     func testFreeBasisDiskAbsoluteReportsWhatIsStillAvailable() {
         let partial = report(disk: DiskReport(
-            capacityBytes: 549_755_813_888,
-            usedBytes: 137_438_953_472, // 128 GB used
-            freeBytes: 412_316_860_416 // 384 GB free
+            capacityBytes: 512_000_000_000,
+            usedBytes: 128_000_000_000, // 128 GB used
+            freeBytes: 384_000_000_000 // 384 GB free
         ))
         XCTAssertEqual(
             text([.disk], [.disk: MetricStyle(basis: .free)], report: partial),
@@ -142,14 +144,42 @@ final class MetricStyleTests: XCTestCase {
 
     func testFreeBasisDiskRelativeReportsTheFreeShareOfCapacity() {
         let partial = report(disk: DiskReport(
-            capacityBytes: 549_755_813_888,
-            usedBytes: 137_438_953_472, // 128 GB used
-            freeBytes: 412_316_860_416 // 384 GB free
+            capacityBytes: 512_000_000_000,
+            usedBytes: 128_000_000_000, // 128 GB used
+            freeBytes: 384_000_000_000 // 384 GB free
         ))
         XCTAssertEqual(
             text([.disk], [.disk: MetricStyle(scale: .relative, basis: .free)], report: partial),
             "Disk 75%"
         )
+    }
+
+    // MARK: - Both
+
+    /// `.both` puts the amount and its share in one reading. The percentage
+    /// keeps its sign even when the unit style would drop it, because two bare
+    /// numbers side by side cannot be told apart.
+    func testBothScaleShowsAmountAndShare() {
+        XCTAssertEqual(text([.disk], [.disk: MetricStyle(scale: .both)]), "Disk 256.0G · 50%")
+        XCTAssertEqual(text([.memory], [.memory: MetricStyle(scale: .both)]), "RAM 8.0G · 50%")
+        XCTAssertEqual(
+            text([.disk], [.disk: MetricStyle(scale: .both, basis: .free)]),
+            "Disk 256.0G · 50%"
+        )
+        XCTAssertEqual(
+            text([.disk], [.disk: MetricStyle(scale: .both, unit: .hidden)]),
+            "Disk 256.0 · 50%"
+        )
+    }
+
+    /// Storage counts in decimal gigabytes, memory in binary ones — the same
+    /// split Finder and Activity Monitor use. A 512 GB disk reported half full
+    /// must read `256.0G`, not the `238.4G` that dividing by 1024³ produces.
+    func testStorageUsesDecimalGigabytesAndMemoryBinaryOnes() {
+        XCTAssertEqual(text([.disk], [.disk: MetricStyle()]), "Disk 256.0G")
+        XCTAssertEqual(text([.memory], [.memory: MetricStyle()]), "RAM 8.0G")
+        XCTAssertEqual(MetricIdentifier.disk.byteUnitConvention, .decimal)
+        XCTAssertEqual(MetricIdentifier.memory.byteUnitConvention, .binary)
     }
 
     func testUsedBasisIsTheDefaultAndMatchesPriorBehavior() {
