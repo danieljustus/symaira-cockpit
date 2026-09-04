@@ -22,6 +22,11 @@ public final class TuneController: Sendable {
     private let keepAwakeCoordinator: KeepAwakeCoordinator
     private let metricsService: SystemMetricsService
     private let processUsage: ProcessUsageService
+    private let fanGovernorRunning: @Sendable () -> Bool
+    private let privilegedFanSet: @Sendable (Double) throws -> Void
+    private let privilegedFanGovernor: @Sendable (URL) throws -> Void
+    private let privilegeIsRoot: @Sendable () -> Bool
+    private let fanProfileURL: URL?
     public let metricsHistory: MetricsHistoryService
 
     public let dataDir: URL
@@ -49,7 +54,12 @@ public final class TuneController: Sendable {
         keepAwakeSource: (any PowerAssertionSource)? = nil,
         metricsSource: (any SystemMetricsSource)? = nil,
         aiUsageClient: (any SymBrainUsageClientProtocol)? = nil,
-        processSource: (any ProcessSampleSource)? = nil
+        processSource: (any ProcessSampleSource)? = nil,
+        fanGovernorRunning: (@Sendable () -> Bool)? = nil,
+        privilegedFanSet: (@Sendable (Double) throws -> Void)? = nil,
+        privilegedFanGovernor: (@Sendable (URL) throws -> Void)? = nil,
+        privilegeIsRoot: (@Sendable () -> Bool)? = nil,
+        fanProfileURL: URL? = nil
     ) {
         self.config = config
         self.displayWrite = displayWrite ?? HardwareDisplayWriteService(
@@ -86,6 +96,26 @@ public final class TuneController: Sendable {
         self.keepAwakeCoordinator = KeepAwakeCoordinator(source: keepAwakeSource ?? HardwarePowerAssertionSource())
         self.metricsService = SystemMetricsService(source: metricsSource ?? HardwareSystemMetricsSource(smc: smc))
         self.processUsage = ProcessUsageService(source: processSource ?? LibprocProcessSampleSource())
+        self.fanGovernorRunning = fanGovernorRunning ?? {
+            guard let result = try? BoundedProcessRunner.run(
+                executable: "/usr/bin/pgrep",
+                arguments: ["-f", "tune fan governor"],
+                timeoutSeconds: 5
+            ) else { return false }
+            return result.terminationStatus == 0
+        }
+        self.privilegedFanSet = privilegedFanSet ?? { fraction in
+            try PrivilegedElevation.runSymCockpit([
+                "tune", "fan", "set", PrivilegedElevation.shellFormat(fraction)
+            ])
+        }
+        self.privilegedFanGovernor = privilegedFanGovernor ?? { stateURL in
+            try PrivilegedElevation.runSymCockpitDetached([
+                "tune", "fan", "governor", "--state", stateURL.path
+            ])
+        }
+        self.privilegeIsRoot = privilegeIsRoot ?? { PrivilegedElevation.isRunningAsRoot }
+        self.fanProfileURL = fanProfileURL
         self.metricsHistory = MetricsHistoryService(capacity: 120)
         // Sync enabled metrics from config into the history buffers
         metricsHistory.ensureBuffers(for: config.enabledMetrics)
@@ -554,9 +584,9 @@ extension TuneController {
             try fanControl.applyFan(fraction: fraction, config: config)
             logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
         } catch {
-            if allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot, PrivilegedElevation.isWorthEscalating(error) {
+            if allowPrivilegeEscalation, !privilegeIsRoot(), PrivilegedElevation.isWorthEscalating(error) {
                 do {
-                    try PrivilegedElevation.runSymCockpit(["tune", "fan", "set", PrivilegedElevation.shellFormat(fraction)])
+                    try privilegedFanSet(fraction)
                     logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
                     return
                 } catch let elevationError as PrivilegedElevation.ElevationError {
@@ -583,7 +613,9 @@ extension TuneController {
     // MARK: - Fan profile (three-position control)
 
     /// Where the selected `FanProfile` is stored for this user.
-    public var fanProfileStore: FanProfileStore { FanProfileStore(url: FanProfileStore.defaultURL()) }
+    public var fanProfileStore: FanProfileStore {
+        FanProfileStore(url: fanProfileURL ?? FanProfileStore.defaultURL())
+    }
 
     /// The currently selected fan profile.
     public var activeFanProfile: FanProfile { fanProfileStore.read() }
@@ -597,12 +629,7 @@ extension TuneController {
     /// this is what decides whether changing position needs a password
     /// prompt at all.
     public func isFanGovernorRunning() -> Bool {
-        guard let result = try? BoundedProcessRunner.run(
-            executable: "/usr/bin/pgrep",
-            arguments: ["-f", "tune fan governor"],
-            timeoutSeconds: 5
-        ) else { return false }
-        return result.terminationStatus == 0
+        fanGovernorRunning()
     }
 
     /// Move the fan control to `profile`.
@@ -623,12 +650,10 @@ extension TuneController {
 
         guard profile != .system, !isFanGovernorRunning() else { return }
 
-        guard allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot else { return }
+        guard allowPrivilegeEscalation, !privilegeIsRoot() else { return }
 
         do {
-            try PrivilegedElevation.runSymCockpitDetached(
-                ["tune", "fan", "governor", "--state", fanProfileStore.url.path]
-            )
+            try privilegedFanGovernor(fanProfileStore.url)
         } catch let error as PrivilegedElevation.ElevationError {
             // The selection is already persisted; undo it so the control does
             // not show a position no governor is enforcing.
