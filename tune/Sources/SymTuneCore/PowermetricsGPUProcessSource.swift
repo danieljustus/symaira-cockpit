@@ -84,7 +84,7 @@ public struct PowermetricsGPUProcessSource: GPUProcessReporting {
     /// before giving up — a miss returns `nil` (surfaced as a clear note by
     /// ``report(limit:)``) rather than fabricating a number.
     static func parseProcessGPU(plistData: Data) -> [ProcessUsage]? {
-        let trimmed = plistData.split(separator: 0, maxSplits: 1, omittingEmptySubsequences: true).first
+        let trimmed = plistData.split(separator: UInt8(0), maxSplits: 1, omittingEmptySubsequences: true).first
             .map(Data.init) ?? plistData
         guard let root = try? PropertyListSerialization.propertyList(from: trimmed, format: nil) as? [String: Any] else {
             return nil
