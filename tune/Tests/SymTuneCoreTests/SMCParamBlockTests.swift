@@ -3,15 +3,33 @@ import XCTest
 
 final class SMCParamBlockTests: XCTestCase {
 
-    func testKeyRoundTripsBigEndian() {
+    /// `SMCParamStruct.key` is a native-endian `UInt32` struct member, not a
+    /// big-endian wire field. Encoding it big-endian hands the SMC a
+    /// byte-reversed key and every lookup — `#KEY` included — comes back
+    /// `kSMCKeyNotFound`, which is the whole of issue #185.
+    func testKeyRoundTripsNativeEndian() {
         var block = SMCParamBlock()
         block.key = 0xDEADBEEF
         XCTAssertEqual(block.key, 0xDEADBEEF)
-        // Big-endian byte layout: DE AD BE EF at bytes 0-3.
-        XCTAssertEqual(block.data[0], 0xDE)
-        XCTAssertEqual(block.data[1], 0xAD)
-        XCTAssertEqual(block.data[2], 0xBE)
-        XCTAssertEqual(block.data[3], 0xEF)
+        // Little-endian byte layout: EF BE AD DE at bytes 0-3.
+        XCTAssertEqual(block.data[0], 0xEF)
+        XCTAssertEqual(block.data[1], 0xBE)
+        XCTAssertEqual(block.data[2], 0xAD)
+        XCTAssertEqual(block.data[3], 0xDE)
+    }
+
+    /// The key a real probe sends. `#KEY` must reach the driver as the ASCII
+    /// bytes in reverse order; the forward order is what the broken build sent.
+    func testProbeKeyIsEncodedForTheDriver() {
+        var block = SMCParamBlock()
+        block.key = smcEncodeKey("#KEY")
+        XCTAssertEqual(Array(block.data[0..<4]), Array("#KEY".utf8).reversed())
+    }
+
+    func testData32IsNativeEndian() {
+        var block = SMCParamBlock()
+        block.data32 = 0x01020304
+        XCTAssertEqual(Array(block.data[44..<48]), [0x04, 0x03, 0x02, 0x01])
     }
 
     func testKeyInfoSizeAndTypeRoundTrip() {

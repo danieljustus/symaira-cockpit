@@ -156,12 +156,30 @@ symcockpit tune extbright set 1.4      # EDR / extended brightness beyond 100%
 symcockpit tune warmth set 0.3         # Shift color temperature warmer
 symcockpit tune awake --for 2h         # Stay awake for two hours
 symcockpit tune profile save night     # Store the current settings as a profile
-sudo symcockpit tune fan set 0.5       # Fan speed (SMC write)
+symcockpit tune fan profile comfort    # Three-position fan control
+sudo symcockpit tune fan governor      # Run the temperature-tracking loop
+sudo symcockpit tune fan set 0.5       # One-shot fan speed (SMC write)
 sudo symcockpit tune battery-limit set 80
 ```
 
 The SMC writes (fans, charge limit) require `root`. Values are clamped to safe
 ranges and restored automatically on normal exit or `Ctrl-C`.
+
+#### Fan control
+
+The fan control has three positions. `system` is the default and writes
+nothing at all — your Mac runs its own firmware curve exactly as it would
+without this tool. `comfort` and `performance` start the fans earlier and ramp
+them harder, so the chassis stays cool enough to keep on your lap and the chip
+keeps its clocks under sustained load.
+
+Neither of those is a fixed speed. Both keep following the CPU/GPU die
+temperature, so an idle Mac is still quiet on `performance` and full speed is
+reached only when the die is genuinely hot. Because the SMC holds whatever
+target it was last given, the two governed positions are a loop
+(`tune fan governor`) rather than a single write — in the cockpit app that
+loop is started for you behind one administrator prompt, and moving between
+positions afterwards needs no further prompt.
 
 ### `operate` — drive the interface
 

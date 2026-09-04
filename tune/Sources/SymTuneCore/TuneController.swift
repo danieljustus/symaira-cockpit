@@ -1,4 +1,5 @@
 import Foundation
+import SymCockpitHistory
 
 /// Facade over the individual services. Both the CLI and the MCP server talk to
 /// the controller only — they never touch services directly. This is also where
@@ -527,6 +528,22 @@ extension TuneController {
     ///   call this too, and neither must ever block on a GUI password dialog
     ///   with no human present to answer it. Only the interactive GUI (the
     ///   fan slider in ``TuneController``'s SwiftUI consumers) passes `true`.
+    ///
+    /// The escalation trigger is deliberately wide (any failure, not only a
+    /// `FanControlError` from the write itself): on at least one real machine
+    /// (macOS build with a locked-down `AppleSMC` user client), even the
+    /// *read-only* `smc.isAvailable` probe `FanControlService.applyFan` gates
+    /// on fails when unprivileged — every key, including ones that
+    /// unquestionably exist (`FNum`, `TC0P`), comes back `kSMCKeyNotFound`
+    /// rather than a permission error. That throws a plain
+    /// `TuneError.permission("SMC not available…")` before any
+    /// `FanControlError` is even in play, so gating escalation on that one
+    /// error type would silently never fire on exactly the machines that need
+    /// it most. Retrying via a privileged child process is safe even when the
+    /// local diagnosis is wrong about *why* it failed: thermal/AC-power
+    /// safety checks (`SMCWritePolicy`) re-evaluate fresh inside the elevated
+    /// process, so escalating cannot bypass them — worst case is one
+    /// unnecessary password prompt for a genuinely hopeless case.
     public func applyFan(fraction: Double, allowPrivilegeEscalation: Bool = false) throws {
         let clamped = SMCWritePolicy.clampFanFraction(fraction, min: config.fanFractionMin, max: config.fanFractionMax)
         do {
@@ -536,8 +553,8 @@ extension TuneController {
             }
             try fanControl.applyFan(fraction: fraction, config: config)
             logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
-        } catch let error as FanControlError {
-            if allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot, PrivilegedElevation.isPermissionShaped(error) {
+        } catch {
+            if allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot, PrivilegedElevation.isWorthEscalating(error) {
                 do {
                     try PrivilegedElevation.runSymCockpit(["tune", "fan", "set", PrivilegedElevation.shellFormat(fraction)])
                     logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
@@ -551,14 +568,139 @@ extension TuneController {
                 }
             }
             logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
-            throw mapFanControlError(error)
-        } catch let error as SMCWritePolicy.ValidationError {
-            logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
-            throw mapValidationError(error)
-        } catch {
-            logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
-            throw error
+            throw Self.mapApplyFanError(error)
         }
+    }
+
+    private static func mapApplyFanError(_ error: Error) -> Error {
+        switch error {
+        case let error as FanControlError: return mapFanControlError(error)
+        case let error as SMCWritePolicy.ValidationError: return mapValidationError(error)
+        default: return error
+        }
+    }
+
+    // MARK: - Fan profile (three-position control)
+
+    /// Where the selected `FanProfile` is stored for this user.
+    public var fanProfileStore: FanProfileStore { FanProfileStore(url: FanProfileStore.defaultURL()) }
+
+    /// The currently selected fan profile.
+    public var activeFanProfile: FanProfile { fanProfileStore.read() }
+
+    /// Whether a privileged `FanGovernor` is already running for this Mac.
+    ///
+    /// Matched by command line rather than a pid file on purpose: the
+    /// governor runs as root, and having it write a pid file into the user's
+    /// home would put a root-owned file in a user-writable directory for no
+    /// benefit. A running governor re-reads the profile file every tick, so
+    /// this is what decides whether changing position needs a password
+    /// prompt at all.
+    public func isFanGovernorRunning() -> Bool {
+        guard let result = try? BoundedProcessRunner.run(
+            executable: "/usr/bin/pgrep",
+            arguments: ["-f", "tune fan governor"],
+            timeoutSeconds: 5
+        ) else { return false }
+        return result.terminationStatus == 0
+    }
+
+    /// Move the fan control to `profile`.
+    ///
+    /// Selecting `.system` needs no privileges and shows no prompt: the
+    /// stored profile is all a running governor consults, and it restores the
+    /// fans and exits on its next tick. If no governor is running, nothing
+    /// was overridden and there is nothing to undo.
+    ///
+    /// Selecting a governed profile likewise costs nothing when a governor is
+    /// already running — it just changes curve. Only starting the first one
+    /// asks for an administrator password, and `allowPrivilegeEscalation`
+    /// gates that so CLI and MCP callers never trigger a blocking GUI dialog
+    /// with nobody present to answer it.
+    public func applyFanProfile(_ profile: FanProfile, allowPrivilegeEscalation: Bool = false) throws {
+        try fanProfileStore.write(profile)
+        logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
+
+        guard profile != .system, !isFanGovernorRunning() else { return }
+
+        guard allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot else { return }
+
+        do {
+            try PrivilegedElevation.runSymCockpitDetached(
+                ["tune", "fan", "governor", "--state", fanProfileStore.url.path]
+            )
+        } catch let error as PrivilegedElevation.ElevationError {
+            // The selection is already persisted; undo it so the control does
+            // not show a position no governor is enforcing.
+            try? fanProfileStore.write(.system)
+            logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
+            throw TuneError.permission(error.description)
+        }
+    }
+
+    /// Run the governor loop in *this* process until the stored profile
+    /// becomes `.system`. Requires root; this is what the detached elevated
+    /// process launched by ``applyFanProfile(_:allowPrivilegeEscalation:)``
+    /// executes.
+    public func runFanGovernor(stateURL: URL) throws {
+        guard PrivilegedElevation.isRunningAsRoot else {
+            throw TuneError.permission(
+                "the fan governor writes the SMC and must run as root — "
+                + "start it with `sudo symtune fan governor`, or use the "
+                + "cockpit's fan control, which elevates for you"
+            )
+        }
+        let store = FanProfileStore(url: stateURL)
+
+        // Say what was read and from where. The loop exits immediately and
+        // correctly when the selection is `system`, and without this line
+        // that is indistinguishable from a crash — which is exactly how the
+        // `sudo` home-directory bug first presented.
+        let selected = store.read()
+        FileHandle.standardError.write(Data(
+            "fan governor: profile '\(selected.rawValue)' from \(stateURL.path)\n".utf8
+        ))
+        if selected == .system {
+            let message = "fan governor: nothing to do — the fan control is on its "
+                + "default position, so the firmware curve is left alone. Select "
+                + "'comfort' or 'performance' first (`symtune fan profile comfort`).\n"
+            FileHandle.standardError.write(Data(message.utf8))
+            return
+        }
+
+        let governor = FanGovernor(fanControl: fanControl, sensors: sensors, config: config)
+
+        // The loop's own `defer` restores the fans on a normal exit, but a
+        // signal would kill the process before it runs and leave the fans
+        // pinned at whatever was last written. Signals therefore stop the
+        // loop rather than the process, so it unwinds through the restore.
+        let stopped = FanGovernorStopFlag()
+        var sources: [DispatchSourceSignal] = []
+        for sig in [SIGINT, SIGTERM, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .global())
+            source.setEventHandler { stopped.stop() }
+            source.resume()
+            sources.append(source)
+        }
+        defer { sources.forEach { $0.cancel() } }
+
+        // One line per change on stderr: enough to verify the loop by hand
+        // with `sudo symtune fan governor`, and harmless when the cockpit
+        // launches it detached with its streams redirected to /dev/null.
+        try governor.run(
+            profileProvider: { store.read() },
+            shouldContinue: { !stopped.isStopped },
+            onTick: { temperature, applied in
+                guard let temperature, let applied else { return }
+                FileHandle.standardError.write(Data(
+                    String(
+                        format: "fan governor: die %.1f°C -> %.0f%%\n",
+                        temperature, applied * 100
+                    ).utf8
+                ))
+            }
+        )
     }
 
     public func restoreFanAuto() throws {
@@ -695,7 +837,10 @@ extension TuneController {
                 : smc.isAvailable
                     ? "SMC connected but this process is not root, so writes are rejected. The CLI needs "
                         + "`sudo`; the cockpit app prompts for your administrator password on demand instead."
-                    : "SMC write access unavailable. Fan and charge-limit features require a real Mac.",
+                    : "SMC unreachable: the AppleSMC driver answered the open probe with no key "
+                        + "found. This is not a privilege problem and `sudo` cannot fix it — it means "
+                        + "a VM, or an SMC generation this build does not speak. Fan and charge-limit "
+                        + "control are unavailable; thermal pressure still reports normally.",
         ]
         if config.isMCPReadOnly {
             notes.append("MCP server mode is read-only (write tools hidden from tools/list).")
@@ -722,7 +867,9 @@ extension TuneController {
             Capability(id: "sensors.smc", available: smcAvailable, tier: "core",
                        detail: smcAvailable
                            ? "Detailed die temps & fan RPM via AppleSMC IOKit (unprivileged)."
-                           : "SMC connection unavailable — detailed sensors not accessible."),
+                           : "SMC unreachable — detailed sensors not accessible. Reads are "
+                             + "unprivileged, so this is a platform gap (VM, or an unsupported SMC "
+                             + "generation), not something running as root would change."),
             Capability(id: "battery.read", available: batteryPresent, tier: "core",
                        detail: batteryPresent ? "AppleSmartBattery health readout." : "No battery present."),
             Capability(id: "display.edr.read", available: edrCapable, tier: "core",
@@ -750,7 +897,9 @@ extension TuneController {
                             : smcAvailable
                                 ? "Fan speed control via SMC. Requires root — the CLI needs `sudo`; "
                                     + "the cockpit app prompts for your administrator password on demand."
-                                : "SMC unavailable — fan control not possible."),
+                                : "SMC unreachable — not a privilege problem, and `sudo` will not "
+                                    + "help. Either this is a VM, or the host's SMC generation is not "
+                                    + "supported by this build."),
             Capability(id: "battery.chargeLimit", available: smcWritable, tier: "core",
                        detail: smcWritable
                             ? "Battery charge limiting via SMC."

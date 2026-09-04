@@ -81,6 +81,54 @@ public enum PrivilegedElevation: Sendable {
         return result.standardOutput
     }
 
+    /// Starts `symcockpit <arguments>` as a *detached* root process behind
+    /// one authorization prompt, and returns as soon as it is running.
+    ///
+    /// `runSymCockpit` waits for the command to finish, which is right for a
+    /// one-shot write but wrong for `FanGovernor`, whose whole job is to keep
+    /// running. Redirecting its standard streams and backgrounding it lets the
+    /// shell `osascript` spawned exit immediately while the governor survives
+    /// — so moving the fan control costs one password prompt, not one per
+    /// sample. The governor re-reads its profile file every tick, so later
+    /// changes of position need no prompt at all.
+    ///
+    /// Arguments are quoted exactly as in `runSymCockpit`; the only unquoted
+    /// text is the fixed redirection-and-background suffix assembled here.
+    public static func runSymCockpitDetached(_ arguments: [String]) throws {
+        guard let binaryPath = BoundedProcessRunner.resolveExecutablePath("symcockpit") else {
+            throw ElevationError.executableUnavailable
+        }
+
+        let quotedParts = ([binaryPath] + arguments).map {
+            "(quoted form of \(appleScriptStringLiteral($0)))"
+        }
+        let command = quotedParts.joined(separator: " & \" \" & ")
+        let script = "do shell script \(command) & \" >/dev/null 2>&1 &\" "
+            + "with administrator privileges"
+
+        let result: BoundedProcessResult
+        do {
+            result = try BoundedProcessRunner.run(
+                executable: "/usr/bin/osascript",
+                arguments: ["-e", script],
+                timeoutSeconds: 120
+            )
+        } catch {
+            throw ElevationError.failed("could not launch the authorization prompt: \(error.localizedDescription)")
+        }
+
+        guard !result.timedOut else {
+            throw ElevationError.failed("the authorization prompt did not finish in time")
+        }
+        guard result.terminationStatus == 0 else {
+            let stderrText = String(data: result.standardError, encoding: .utf8) ?? ""
+            if stderrText.contains("User canceled") || stderrText.contains("(-128)") {
+                throw ElevationError.cancelledByUser
+            }
+            throw ElevationError.failed(stderrText.isEmpty ? "privileged command failed" : stderrText)
+        }
+    }
+
     /// Whether *this exact process* currently has root — the only thing that
     /// makes a direct SMC write (or an unprivileged `powermetrics` call)
     /// succeed. A read-only SMC connection opens unprivileged and says
@@ -89,15 +137,29 @@ public enum PrivilegedElevation: Sendable {
     /// processes that could never actually write.
     public static var isRunningAsRoot: Bool { geteuid() == 0 }
 
-    /// Whether a ``FanControlError`` looks like a privilege problem worth
-    /// retrying through elevation, as opposed to a hardware/platform mismatch
-    /// that a password prompt cannot fix.
-    static func isPermissionShaped(_ error: FanControlError) -> Bool {
+    /// Whether a failed unprivileged SMC operation is worth retrying through
+    /// elevation, as opposed to a hardware/platform mismatch a password
+    /// prompt cannot fix. Deliberately wide: on at least one real machine,
+    /// even `SMCService.isAvailable`'s read-only probe fails when
+    /// unprivileged (every key, including ones that certainly exist, comes
+    /// back "not found" rather than a clean permission error), so the
+    /// resulting error can be a plain `TuneError.permission(...)` rather than
+    /// a typed `FanControlError` — excluding anything but the two narrow
+    /// `FanControlError` cases would silently never escalate on exactly the
+    /// machines that need it. `SMCWritePolicy` safety checks (thermal
+    /// emergency, AC power) re-evaluate fresh inside the elevated process, so
+    /// widening this cannot bypass them.
+    static func isWorthEscalating(_ error: Error) -> Bool {
         switch error {
-        case .fanModeWriteRejected, .targetRPMWriteFailed:
+        case let error as FanControlError:
+            switch error {
+            case .fanModeWriteRejected, .targetRPMWriteFailed:
+                return true
+            case .noFansDetected, .unsupportedPlatform:
+                return false
+            }
+        default:
             return true
-        case .noFansDetected, .unsupportedPlatform:
-            return false
         }
     }
 

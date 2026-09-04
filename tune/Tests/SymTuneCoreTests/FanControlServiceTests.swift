@@ -55,11 +55,12 @@ final class FanControlServiceTests: XCTestCase {
 
     private func floatBytes(_ value: Double) -> [UInt8] {
         let raw = Float(value).bitPattern
+        // `flt ` payloads are little-endian (issue #185).
         return [
-            UInt8((raw >> 24) & 0xFF),
-            UInt8((raw >> 16) & 0xFF),
+            UInt8(raw & 0xFF),
             UInt8((raw >> 8) & 0xFF),
-            UInt8(raw & 0xFF)
+            UInt8((raw >> 16) & 0xFF),
+            UInt8((raw >> 24) & 0xFF)
         ]
     }
 
@@ -154,8 +155,11 @@ final class FanControlServiceTests: XCTestCase {
     }
 
     #if arch(arm64)
-    func testFanControlRefusesThermalEmergency() {
-        var keys = makeAppleSiliconFanKeys()
+    /// The hazard the thermal gate exists for: slowing the fans on a Mac that
+    /// is already too hot. Fan 0 is currently targeting 90 of 100 rpm and the
+    /// requested 0.5 would drop it to 50, so the write is refused.
+    func testFanControlRefusesSlowdownDuringThermalEmergency() {
+        var keys = makeAppleSiliconFanKeys(targetRPM: 90, maxRPM: 100)
         let flt = smcEncodeKey("flt ")
         keys["Ts0S"] = FakeSMCKeyResult(dataType: flt, bytes: floatBytes(95)) // above 90 threshold
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
@@ -165,6 +169,25 @@ final class FanControlServiceTests: XCTestCase {
         XCTAssertThrowsError(try service.applyFan(fraction: 0.5, config: TuneConfig())) { error in
             XCTAssertTrue("\(error)".contains("thermal"))
         }
+        XCTAssertFalse(conn.writtenKeys.contains { $0.key == "F0Tg" })
+    }
+
+    /// The opposite case must go through. A hot Mac is exactly when
+    /// `FanGovernor` needs to reach full speed, and an M4 Pro sits above the
+    /// 90 °C threshold under sustained load — refusing to speed the fans up
+    /// there would make the gate the hazard (issue #185).
+    func testFanControlAllowsSpeedUpDuringThermalEmergency() throws {
+        var keys = makeAppleSiliconFanKeys(targetRPM: 10, maxRPM: 100)
+        let flt = smcEncodeKey("flt ")
+        keys["Ts0S"] = FakeSMCKeyResult(dataType: flt, bytes: floatBytes(95))
+        let conn = FakeSMCConnection(isOpen: true, keys: keys)
+        let smc = SMCService(connection: conn)
+        let service = FanControlService(smc: smc, sensors: SensorService(smc: smc))
+
+        try service.applyFan(fraction: 1.0, config: TuneConfig())
+
+        let target = conn.writtenKeys.first { $0.key == "F0Tg" }
+        XCTAssertEqual(target?.bytes, floatBytes(100))
     }
 
     func testAppleSiliconFanControlRetriesAndFailsOnManualMode() {

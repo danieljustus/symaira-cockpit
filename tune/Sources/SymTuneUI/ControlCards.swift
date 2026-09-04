@@ -120,65 +120,86 @@ struct FanControlCard: View {
     let model: TuneViewModel
 
     @State private var fanError: String?
-    /// Mirrors the manual-mode switch so the toggle can revert on failure.
-    @State private var manualOverride: Bool?
+    /// Mirrors the selected position so the control can revert on failure.
+    @State private var pendingProfile: FanProfile?
     /// True while a privileged write is waiting on the system's own
     /// administrator-password dialog (a few seconds, or longer while the
     /// person is looking for their password) — surfaced so the slider does
     /// not look like it silently ignored the drag.
     @State private var isAwaitingAuthorization = false
 
+    /// See ``MainStatusView/hasFans`` for why an unsupported SMC read (not
+    /// just a missing sensors report) must also be treated as "unknown," not
+    /// "no fans" — this duplicate exists because ``MainStatusView`` decides
+    /// whether to show this card at all, while this one decides what to draw
+    /// inside it, and both need the same answer or the card would render
+    /// only to immediately show "Not available on this Mac".
     private var hasFans: Bool {
-        guard let fans = model.sensors?.fans else { return true }
-        return !fans.isEmpty
+        guard let sensors = model.sensors else { return true }
+        guard sensors.smcSupported else { return true }
+        return !sensors.fans.isEmpty
     }
 
-    private var isManualMode: Bool {
-        manualOverride ?? (model.overrides.fanFraction != nil)
-    }
-
-    private var fanFraction: Double {
-        model.overrides.fanFraction ?? 0.0
+    /// The position to draw: the pending one while a change is in flight, so
+    /// the control follows the click instead of snapping back until the next
+    /// model refresh lands.
+    private var selectedProfile: FanProfile {
+        pendingProfile ?? model.fanProfile
     }
 
     var body: some View {
         if hasFans {
-            VStack(spacing: SymairaSpacing.small) {
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                 HStack {
                     Label("Fan Control", systemImage: "fanblades.fill")
                         .symairaText(.subheading)
                         .foregroundStyle(SymairaTheme.textSecondary)
                     Spacer()
-                    Toggle("", isOn: manualBinding)
-                        .toggleStyle(.switch)
+                    if let rpm = currentRPM {
+                        Text("\(rpm) rpm")
+                            .symairaText(.caption)
+                            .foregroundStyle(SymairaTheme.textMuted)
+                    }
                 }
 
-                TuneSliderRow(
-                    title: "Target Speed",
-                    systemImage: "gauge.medium",
-                    value: fanFraction,
-                    range: 0.0...1.0,
-                    isEnabled: isManualMode
-                ) { value in
-                    apply { try controller.applyFan(fraction: value, allowPrivilegeEscalation: true) }
+                Picker("", selection: profileBinding) {
+                    ForEach(FanProfile.ordered, id: \.self) { profile in
+                        Text(profile.displayName).tag(profile)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(selectedProfile.summary)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if isAwaitingAuthorization {
-                    Text("Applying — you may be asked for your administrator password…")
+                    Text("Starting the fan governor — you may be asked for your "
+                         + "administrator password…")
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTheme.textMuted)
-                        .padding(.top, SymairaSpacing.xSmall)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if let fanError {
                     Text(fanError)
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTheme.critical)
-                        .padding(.top, SymairaSpacing.xSmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if selectedProfile != .system && !model.fanGovernorRunning {
+                    // Honest reporting: a selected position with nothing
+                    // enforcing it means the fans are still on the firmware
+                    // curve, and saying "Cool" would be a lie.
+                    Text("Not in effect — no fan governor is running.")
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTheme.critical)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .cardStyle()
-            .onChange(of: model.overrides.fanFraction) { _, _ in
+            .onChange(of: model.fanProfile) { _, _ in
                 // The model is authoritative again once it reflects the change.
-                manualOverride = nil
+                pendingProfile = nil
             }
         } else {
             VStack(spacing: 6) {
@@ -196,23 +217,20 @@ struct FanControlCard: View {
         }
     }
 
-    private var manualBinding: Binding<Bool> {
+    private var currentRPM: Int? {
+        model.sensors?.fans.map(\.rpm).max()
+    }
+
+    private var profileBinding: Binding<FanProfile> {
         Binding(
-            get: { isManualMode },
+            get: { selectedProfile },
             set: { newValue in
-                manualOverride = newValue
-                // Captured before crossing into the detached task: `fanFraction`
-                // reads a MainActor-isolated model, which a `@Sendable` closure
-                // must not touch once it may run off the main actor.
-                let targetFraction = fanFraction
+                let previous = selectedProfile
+                pendingProfile = newValue
                 apply {
-                    if newValue {
-                        try controller.applyFan(fraction: targetFraction, allowPrivilegeEscalation: true)
-                    } else {
-                        try controller.restoreFanAuto()
-                    }
+                    try controller.applyFanProfile(newValue, allowPrivilegeEscalation: true)
                 } onFailure: {
-                    manualOverride = !newValue
+                    pendingProfile = previous
                 }
             }
         )

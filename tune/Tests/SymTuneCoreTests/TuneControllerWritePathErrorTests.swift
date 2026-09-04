@@ -211,11 +211,12 @@ final class TuneControllerFanChargeErrorTests: XCTestCase {
         let raw = Float(value).bitPattern
         return FakeSMCKeyResult(
             dataType: smcEncodeKey("flt "),
+            // `flt ` payloads are little-endian (issue #185).
             bytes: [
-                UInt8((raw >> 24) & 0xFF),
-                UInt8((raw >> 16) & 0xFF),
+                UInt8(raw & 0xFF),
                 UInt8((raw >> 8) & 0xFF),
-                UInt8(raw & 0xFF)
+                UInt8((raw >> 16) & 0xFF),
+                UInt8((raw >> 24) & 0xFF)
             ]
         )
     }

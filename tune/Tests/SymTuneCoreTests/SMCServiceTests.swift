@@ -21,7 +21,9 @@ final class SMCServiceTests: XCTestCase {
 
     func testTemperatureReadings() {
         let fpe2 = smcEncodeKey("fpe2")
-        // 0x0100 / 256 = 1.0
+        // 0x3200 / 256 = 50.0 °C — a plausible die reading. Values outside
+        // `SMCService.plausibleTemperatureRange` are dropped on purpose, so a
+        // fixture has to be a temperature a running Mac could actually report.
         #if arch(arm64)
         let key = "Tp01"
         let label = "CPU Core 1"
@@ -30,7 +32,7 @@ final class SMCServiceTests: XCTestCase {
         let label = "CPU Core 1"
         #endif
         let conn = FakeSMCConnection(isOpen: true, keys: [
-            key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00])
+            key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
         ])
         let service = SMCService(connection: conn)
 
@@ -38,7 +40,7 @@ final class SMCServiceTests: XCTestCase {
         XCTAssertEqual(readings.count, 1)
         XCTAssertEqual(readings.first?.key, key)
         XCTAssertEqual(readings.first?.label, label)
-        XCTAssertEqual(readings.first?.celsius ?? 0, 1.0, accuracy: 0.01)
+        XCTAssertEqual(readings.first?.celsius ?? 0, 50.0, accuracy: 0.01)
     }
 
     func testFanCountZeroReturnsEmpty() {
@@ -80,7 +82,7 @@ final class SMCServiceTests: XCTestCase {
         XCTAssertEqual(written.bytes, [0x02, 0x00])
     }
 
-    func testWriteKeyValueEncodesFloatBigEndian() {
+    func testWriteKeyValueEncodesFloatLittleEndian() {
         let conn = FakeSMCConnection(isOpen: true)
         let service = SMCService(connection: conn)
 
@@ -92,13 +94,20 @@ final class SMCServiceTests: XCTestCase {
 
         let val: Float = 42.0
         let raw = val.bitPattern
+        // Little-endian, so the write path round-trips with `smcConvertValue`
+        // and matches what the SMC actually returns (issue #185).
         let expected = [
-            UInt8((raw >> 24) & 0xFF),
-            UInt8((raw >> 16) & 0xFF),
+            UInt8(raw & 0xFF),
             UInt8((raw >> 8) & 0xFF),
-            UInt8(raw & 0xFF)
+            UInt8((raw >> 16) & 0xFF),
+            UInt8((raw >> 24) & 0xFF)
         ]
         XCTAssertEqual(written.bytes, expected)
+        XCTAssertEqual(
+            smcConvertValue(dataType: smcEncodeKey("flt "), bytes: written.bytes),
+            42.0,
+            accuracy: 0.001
+        )
     }
 
     func testWriteKeyValueEncodesUInt32BigEndian() {
@@ -162,11 +171,12 @@ final class SMCServiceTests: XCTestCase {
         let raw = Float(value).bitPattern
         return FakeSMCKeyResult(
             dataType: smcEncodeKey("flt "),
+            // `flt ` is little-endian on the wire (issue #185).
             bytes: [
-                UInt8((raw >> 24) & 0xFF),
-                UInt8((raw >> 16) & 0xFF),
+                UInt8(raw & 0xFF),
                 UInt8((raw >> 8) & 0xFF),
-                UInt8(raw & 0xFF)
+                UInt8((raw >> 16) & 0xFF),
+                UInt8((raw >> 24) & 0xFF)
             ]
         )
     }
@@ -225,6 +235,33 @@ final class SMCServiceTests: XCTestCase {
         XCTAssertNil(power?.amps)
     }
 
+    /// A key the host exposes but that is not the sensor the candidate table
+    /// names reads far outside the physical band. An M4 Pro implements
+    /// `Tp01`–`Tp09` and `Ta0P` but reads them back as 0–8 °C while the die is
+    /// at 85 °C, and the old `celsius > 0` gate published those as real core
+    /// temperatures (issue #185).
+    func testImplausibleTemperaturesAreNotReported() {
+        let fpe2 = smcEncodeKey("fpe2")
+        let table = currentArchTable
+        let conn = FakeSMCConnection(isOpen: true, keys: [
+            // 0x0230 / 256 ≈ 2.2 °C — the value a power-gated core reports.
+            table[0].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x02, 0x30]),
+            table[1].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x55, 0x00]),
+        ])
+        conn.enumeratedKeys = [table[0].key, table[1].key]
+
+        let readings = makeService(connection: conn).readTemperatures()
+        XCTAssertEqual(readings.map(\.key), [table[1].key])
+    }
+
+    func testPlausibleTemperatureRangeBounds() {
+        XCTAssertFalse(SMCService.isPlausibleTemperature(2.2))
+        XCTAssertFalse(SMCService.isPlausibleTemperature(8.3))
+        XCTAssertTrue(SMCService.isPlausibleTemperature(50.0))
+        XCTAssertTrue(SMCService.isPlausibleTemperature(96.2))
+        XCTAssertFalse(SMCService.isPlausibleTemperature(200.0))
+    }
+
     // MARK: - Chip generation detection (issue #233)
 
     func testChipGenerationDetectionFromBrandString() {
@@ -243,9 +280,15 @@ final class SMCServiceTests: XCTestCase {
         // M3 carries the M3 E-core row…
         XCTAssertTrue(m3Keys.contains("Te0L"))
         XCTAssertTrue(m3Keys.contains("Te0P"))
-        // …the M4 row carries the M4 E-core keys instead.
-        XCTAssertTrue(m4Keys.contains("Te09"))
-        XCTAssertTrue(m4Keys.contains("Te0H"))
+        // …the M4 row carries the M4 E-core keys instead. `Te04`–`Te06` and
+        // `Te0R`–`Te0T` were read back as plausible cluster temperatures on an
+        // M4 Pro (Mac16,8); `Te09`/`Te0H`, which this row used to claim, are
+        // not implemented on that chip at all (issue #185).
+        for key in ["Te04", "Te05", "Te06", "Te0R", "Te0S", "Te0T"] {
+            XCTAssertTrue(m4Keys.contains(key), "M4 row must carry \(key)")
+        }
+        XCTAssertFalse(m4Keys.contains("Te09"))
+        XCTAssertFalse(m4Keys.contains("Te0H"))
         XCTAssertFalse(m4Keys.contains("Te0L"))
         // CPU die hotspot (TCMz) and GPU die hotspot (TRDX) are in every row.
         XCTAssertTrue(m3Keys.contains("TCMz"))
@@ -254,7 +297,8 @@ final class SMCServiceTests: XCTestCase {
 
     func testUnknownGenerationUsesUnionOfECoreRows() {
         let keys = Set(SMCService.appleSiliconTemperatureKeys(for: .unknown).map { $0.key })
-        for eCoreKey in ["Te04", "Te05", "Te06", "Te09", "Te0H", "Te0L", "Te0P", "Te0S"] {
+        let union = ["Te04", "Te05", "Te06", "Te09", "Te0H", "Te0L", "Te0P", "Te0R", "Te0S", "Te0T"]
+        for eCoreKey in union {
             XCTAssertTrue(keys.contains(eCoreKey), "unknown row must carry \(eCoreKey)")
         }
     }
@@ -291,9 +335,9 @@ final class SMCServiceTests: XCTestCase {
         let exposed = [table[0].key, "ZZZZ"]
         var keys: [String: FakeSMCKeyResult] = [:]
         for (key, _) in table where exposed.contains(key) {
-            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00])
+            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
         }
-        keys["ZZZZ"] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00])
+        keys["ZZZZ"] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
 
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = exposed
@@ -314,7 +358,7 @@ final class SMCServiceTests: XCTestCase {
 
         var keys: [String: FakeSMCKeyResult] = [:]
         for (key, _) in table {
-            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00])
+            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
         }
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = nil // enumeration unavailable
@@ -329,7 +373,7 @@ final class SMCServiceTests: XCTestCase {
         let fpe2 = smcEncodeKey("fpe2")
         // The host exposes only a key that is NOT a candidate in the table.
         let conn = FakeSMCConnection(isOpen: true, keys: [
-            "Te0Q": FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00])
+            "Te0Q": FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
         ])
         conn.enumeratedKeys = ["Te0Q"]
         let service = SMCService(connection: conn)

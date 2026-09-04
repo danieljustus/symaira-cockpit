@@ -51,6 +51,26 @@ symtune (executable)  →  SymTuneMCP  →  SymTuneCore
   clamp through `SafetyPolicy` before applying, and MUST never disable firmware
   thermal protection. The controller is responsible for *restore-on-exit*: any
   overridden value resets to the system default when the process ends.
+- **The SMC param block is native-endian**: `SMCParamStruct`'s `UInt32`
+  members (`key`, `keyInfo.dataSize`/`dataType`, `data32`) are plain struct
+  fields the driver reads in host byte order — *not* big-endian wire fields.
+  Encoding them big-endian sends a byte-reversed key and the firmware answers
+  `kSMCKeyNotFound` for every key including `#KEY`, which reads exactly like
+  "this Mac has no SMC" (issue #185). The *payload* at bytes 48-79 is the
+  opposite: it is wire data with per-type byte order — `ui8`/`ui16`/`ui32`/
+  `sp78`/`fpe2` are big-endian, `flt ` is little-endian. Do not "simplify"
+  either side into one consistent order.
+- **A key that exists is not the sensor you named it**: an M4 Pro implements
+  `Tp01`–`Tp09` and reads them back at 0–8 °C while the die is at 85 °C.
+  `readTemperatures` gates on `SMCService.plausibleTemperatureRange`, not on
+  `> 0`. When adding candidate rows, verify them against live hardware.
+- **The aggressive fan positions stay temperature-driven**: `FanProfile`'s
+  governed positions must never pin the fans at a constant speed. They move the
+  curve, so idle stays quiet and full speed still requires a hot die. The
+  thermal-emergency gate correspondingly refuses only writes that would *slow*
+  the fans on an already-hot Mac (`SMCWritePolicy.requireThermalHeadroom`'s
+  `coolingIncrease`), because refusing to speed them up there is the hazard,
+  not the safeguard.
 - **One owner for the gamma table**: colour warmth and extended brightness both
   write the display's gamma LUT. All writes go through `DisplayGammaController`,
   which composes both inputs onto the ramp captured *before* any override — never

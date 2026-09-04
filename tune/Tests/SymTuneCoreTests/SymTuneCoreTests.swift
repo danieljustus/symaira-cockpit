@@ -555,14 +555,26 @@ final class SMCConvertValueTests: XCTestCase {
         let dataType = smcEncodeKey("flt ")
         var val: Float = 42.0
         let raw = withUnsafePointer(to: &val) { $0.withMemoryRebound(to: UInt32.self, capacity: 1) { $0.pointee } }
+        // `flt ` payloads are little-endian, unlike the integer and
+        // fixed-point types (issue #185, verified against an M4 Pro).
         let bytes: [UInt8] = [
-            UInt8((raw >> 24) & 0xFF),
-            UInt8((raw >> 16) & 0xFF),
-            UInt8((raw >> 8) & 0xFF),
             UInt8(raw & 0xFF),
+            UInt8((raw >> 8) & 0xFF),
+            UInt8((raw >> 16) & 0xFF),
+            UInt8((raw >> 24) & 0xFF),
         ]
         let result = smcConvertValue(dataType: dataType, bytes: bytes)
         XCTAssertEqual(result, 42.0, accuracy: 0.01)
+    }
+
+    /// Bytes captured from a live M4 Pro `F0Ac` read: 5235.6 rpm
+    /// little-endian, and a nonsensical -2.1e10 big-endian.
+    func testFltDecodesHardwareCapturedFanRPM() {
+        let result = smcConvertValue(
+            dataType: smcEncodeKey("flt "),
+            bytes: [0xD1, 0x9C, 0xA3, 0x45]
+        )
+        XCTAssertEqual(result, 5235.6, accuracy: 0.1)
     }
 
     func testFltInsufficientBytesReturnsZero() {

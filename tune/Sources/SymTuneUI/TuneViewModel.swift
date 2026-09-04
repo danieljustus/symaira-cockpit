@@ -40,6 +40,14 @@ final class TuneViewModel {
     private(set) var overrides = ActiveOverrides()
     private(set) var keepAwake: KeepAwakeSession = .inactive
 
+    /// Which of the three fan-control positions is selected, and whether a
+    /// privileged governor is actually enforcing it. The two are read
+    /// separately on purpose: a selection with no governor behind it means
+    /// the fans are still on the firmware curve, and the card says so rather
+    /// than showing a position that is not in effect.
+    private(set) var fanProfile: FanProfile = .system
+    private(set) var fanGovernorRunning = false
+
     /// Rendered menu-bar text (empty when the icon fallback should be used).
     private(set) var statusItemText: String = ""
 
@@ -206,6 +214,11 @@ final class TuneViewModel {
     private func refreshMainThreadState() {
         let currentOverrides = controller.activeOverrides()
         if overrides != currentOverrides { overrides = currentOverrides }
+
+        let currentProfile = controller.activeFanProfile
+        if fanProfile != currentProfile { fanProfile = currentProfile }
+        let governorRunning = controller.isFanGovernorRunning()
+        if fanGovernorRunning != governorRunning { fanGovernorRunning = governorRunning }
 
         // `activeOverrides()` already read the built-in brightness; reuse it
         // instead of hitting DisplayServices a second time per refresh.
