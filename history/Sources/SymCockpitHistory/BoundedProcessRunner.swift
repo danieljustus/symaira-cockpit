@@ -42,11 +42,32 @@ public enum BoundedProcessRunnerError: Error, LocalizedError, Sendable, Equatabl
 
 /// Runs local commands with bounded lifetime and captured output.
 ///
-/// A bare executable name is resolved only against the supplied environment's
-/// `PATH`; no shell or user-specific fallback path is used. Absolute paths are
-/// accepted for callers that already own a system path. Standard output and
-/// standard error are drained concurrently while the child is running.
+/// A bare executable name is resolved against the supplied environment's
+/// `PATH` first, then against a small, fixed list of standard install
+/// locations (Homebrew's prefixes and the managed `~/.symaira/bin`) — never
+/// against a shell-resolved or otherwise user-configurable path. The fallback
+/// exists because a GUI app launched by launchd inherits launchd's minimal
+/// PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), which never includes Homebrew —
+/// an interactive shell only adds it via `.zprofile`/`.zshrc`. Without it, sibling
+/// Symaira CLIs (`symbrain`, `symvault`) installed the documented way are
+/// invisible to the app even though they work fine from a terminal. Absolute
+/// paths are accepted for callers that already own a system path. Standard
+/// output and standard error are drained concurrently while the child is
+/// running.
 public enum BoundedProcessRunner {
+    /// Resolves `executable` to an absolute path using the same PATH-then-
+    /// fallback search ``run(executable:arguments:timeoutSeconds:environment:standardInput:)``
+    /// uses internally, without spawning anything. Callers that need to embed
+    /// an absolute path in another process's command line (e.g. inside a
+    /// privileged `do shell script`, whose own environment cannot be trusted
+    /// to resolve it) resolve it here first.
+    public static func resolveExecutablePath(
+        _ executable: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        resolve(executable, environment: environment)
+    }
+
     public static func run(
         executable: String,
         arguments: [String] = [],
@@ -182,14 +203,34 @@ public enum BoundedProcessRunner {
         if executable.hasPrefix("/") {
             return FileManager.default.isExecutableFile(atPath: executable) ? executable : nil
         }
-        guard let path = environment["PATH"] else { return nil }
-        for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
+        if let path = environment["PATH"] {
+            for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
+                let candidate = "\(directory)/\(executable)"
+                if FileManager.default.isExecutableFile(atPath: candidate) {
+                    return candidate
+                }
+            }
+        }
+        for directory in fallbackDirectories(environment: environment) {
             let candidate = "\(directory)/\(executable)"
             if FileManager.default.isExecutableFile(atPath: candidate) {
                 return candidate
             }
         }
         return nil
+    }
+
+    /// Fixed, non-configurable install roots checked only after a PATH-based
+    /// lookup fails. This is deliberately a short allowlist of well-known
+    /// locations — not the caller's full inherited environment — so the
+    /// widened search stays auditable and cannot be redirected by anything
+    /// the process happens to inherit.
+    private static func fallbackDirectories(environment: [String: String]) -> [String] {
+        var directories = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"]
+        if let home = environment["HOME"] ?? ProcessInfo.processInfo.environment["HOME"] {
+            directories.append("\(home)/.symaira/bin")
+        }
+        return directories
     }
 
     private static func terminateAndReap(
