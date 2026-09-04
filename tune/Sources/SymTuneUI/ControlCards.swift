@@ -122,6 +122,11 @@ struct FanControlCard: View {
     @State private var fanError: String?
     /// Mirrors the manual-mode switch so the toggle can revert on failure.
     @State private var manualOverride: Bool?
+    /// True while a privileged write is waiting on the system's own
+    /// administrator-password dialog (a few seconds, or longer while the
+    /// person is looking for their password) — surfaced so the slider does
+    /// not look like it silently ignored the drag.
+    @State private var isAwaitingAuthorization = false
 
     private var hasFans: Bool {
         guard let fans = model.sensors?.fans else { return true }
@@ -155,10 +160,15 @@ struct FanControlCard: View {
                     range: 0.0...1.0,
                     isEnabled: isManualMode
                 ) { value in
-                    apply { try controller.applyFan(fraction: value) }
+                    apply { try controller.applyFan(fraction: value, allowPrivilegeEscalation: true) }
                 }
 
-                if let fanError {
+                if isAwaitingAuthorization {
+                    Text("Applying — you may be asked for your administrator password…")
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTheme.textMuted)
+                        .padding(.top, SymairaSpacing.xSmall)
+                } else if let fanError {
                     Text(fanError)
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTheme.critical)
@@ -191,9 +201,13 @@ struct FanControlCard: View {
             get: { isManualMode },
             set: { newValue in
                 manualOverride = newValue
+                // Captured before crossing into the detached task: `fanFraction`
+                // reads a MainActor-isolated model, which a `@Sendable` closure
+                // must not touch once it may run off the main actor.
+                let targetFraction = fanFraction
                 apply {
                     if newValue {
-                        try controller.applyFan(fraction: fanFraction)
+                        try controller.applyFan(fraction: targetFraction, allowPrivilegeEscalation: true)
                     } else {
                         try controller.restoreFanAuto()
                     }
@@ -204,17 +218,27 @@ struct FanControlCard: View {
         )
     }
 
+    /// Runs `work` off the main actor and reports back on it: a privileged
+    /// write can block for as long as the system's own password dialog is on
+    /// screen, and that must never freeze the slider or the popover.
     private func apply(
-        _ work: () throws -> Void,
-        onFailure: () -> Void = {}
+        _ work: @escaping @Sendable () throws -> Void,
+        onFailure: @escaping () -> Void = {}
     ) {
-        do {
-            try work()
-            fanError = nil
-            model.refreshNow()
-        } catch {
-            fanError = error.localizedDescription
-            onFailure()
+        isAwaitingAuthorization = true
+        Task {
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try work()
+                }.value
+                isAwaitingAuthorization = false
+                fanError = nil
+                model.refreshNow()
+            } catch {
+                isAwaitingAuthorization = false
+                fanError = error.localizedDescription
+                onFailure()
+            }
         }
     }
 }

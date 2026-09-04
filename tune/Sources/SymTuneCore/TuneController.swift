@@ -519,7 +519,15 @@ extension TuneController {
     @available(*, deprecated, renamed: "sensorsReport")
     public func sensors_report() -> SensorReport { sensorsReport() }
 
-    public func applyFan(fraction: Double) throws {
+    /// - Parameter allowPrivilegeEscalation: When `true` and this process is
+    ///   not already root, a direct SMC write rejected for lack of privilege
+    ///   is retried by re-invoking `symcockpit tune fan set` under a one-time
+    ///   administrator authorization prompt (see ``PrivilegedElevation``).
+    ///   Defaults to `false` and must stay opt-in: the CLI and the MCP server
+    ///   call this too, and neither must ever block on a GUI password dialog
+    ///   with no human present to answer it. Only the interactive GUI (the
+    ///   fan slider in ``TuneController``'s SwiftUI consumers) passes `true`.
+    public func applyFan(fraction: Double, allowPrivilegeEscalation: Bool = false) throws {
         let clamped = SMCWritePolicy.clampFanFraction(fraction, min: config.fanFractionMin, max: config.fanFractionMax)
         do {
             let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
@@ -529,6 +537,19 @@ extension TuneController {
             try fanControl.applyFan(fraction: fraction, config: config)
             logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
         } catch let error as FanControlError {
+            if allowPrivilegeEscalation, !PrivilegedElevation.isRunningAsRoot, PrivilegedElevation.isPermissionShaped(error) {
+                do {
+                    try PrivilegedElevation.runSymCockpit(["tune", "fan", "set", PrivilegedElevation.shellFormat(fraction)])
+                    logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: clamped, result: "success")
+                    return
+                } catch let elevationError as PrivilegedElevation.ElevationError {
+                    logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
+                    throw TuneError.permission(elevationError.description)
+                } catch {
+                    logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
+                    throw error
+                }
+            }
             logHistory(action: "fan.set", requested: fraction, clamped: clamped, applied: nil, result: "failed", error: error)
             throw mapFanControlError(error)
         } catch let error as SMCWritePolicy.ValidationError {
@@ -667,11 +688,14 @@ extension TuneController {
 
 extension TuneController {
     public func permissions() -> PermissionStatus {
-        let smcWritable = smc.isAvailable
+        let smcWritable = smc.isAvailable && PrivilegedElevation.isRunningAsRoot
         var notes: [String] = [
             smcWritable
-                ? "SMC write access available. Fan and charge-limit writes require root (run with sudo)."
-                : "SMC write access unavailable. Fan and charge-limit features require a real Mac and root privileges.",
+                ? "SMC write access available."
+                : smc.isAvailable
+                    ? "SMC connected but this process is not root, so writes are rejected. The CLI needs "
+                        + "`sudo`; the cockpit app prompts for your administrator password on demand instead."
+                    : "SMC write access unavailable. Fan and charge-limit features require a real Mac.",
         ]
         if config.isMCPReadOnly {
             notes.append("MCP server mode is read-only (write tools hidden from tools/list).")
@@ -690,7 +714,7 @@ extension TuneController {
         let batteryPresent = battery.read().present
         let edrCapable = displays.anyEDRCapable()
         let smcAvailable = sensors.smcAvailable
-        let smcWritable = smc.isAvailable
+        let smcWritable = smc.isAvailable && PrivilegedElevation.isRunningAsRoot
 
         let caps: [Capability] = [
             Capability(id: "sensors.thermalPressure", available: true, tier: "core",
@@ -722,12 +746,17 @@ extension TuneController {
                        detail: "Prevent idle sleep via IOKit power assertion."),
             Capability(id: "fan.control", available: smcWritable, tier: "core",
                        detail: smcWritable
-                            ? "Fan speed control via SMC. Requires root for writes."
-                            : "SMC unavailable — fan control not possible."),
+                            ? "Fan speed control via SMC."
+                            : smcAvailable
+                                ? "Fan speed control via SMC. Requires root — the CLI needs `sudo`; "
+                                    + "the cockpit app prompts for your administrator password on demand."
+                                : "SMC unavailable — fan control not possible."),
             Capability(id: "battery.chargeLimit", available: smcWritable, tier: "core",
                        detail: smcWritable
-                            ? "Battery charge limiting via SMC. Requires root for writes."
-                            : "SMC unavailable — charge limiting not possible."),
+                            ? "Battery charge limiting via SMC."
+                            : smcAvailable
+                                ? "Battery charge limiting via SMC. Requires root (run the CLI with `sudo`)."
+                                : "SMC unavailable — charge limiting not possible."),
             powerDrawCapability(),
         ]
 
