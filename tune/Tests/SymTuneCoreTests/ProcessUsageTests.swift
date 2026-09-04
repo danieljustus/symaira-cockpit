@@ -30,14 +30,16 @@ private func sample(
     _ name: String,
     cpuNanoseconds: UInt64,
     memoryMB: UInt64,
-    threads: Int? = 4
+    threads: Int? = 4,
+    gpuPercent: Double? = nil
 ) -> ProcessSample {
     ProcessSample(
         pid: pid,
         name: name,
         cpuTimeNanoseconds: cpuNanoseconds,
         memoryBytes: memoryMB * 1_048_576,
-        threadCount: threads
+        threadCount: threads,
+        gpuPercent: gpuPercent
     )
 }
 
@@ -204,6 +206,49 @@ final class ProcessUsageRankingTests: XCTestCase {
         XCTAssertEqual(report.processes.count, 3)
         XCTAssertEqual(report.processes.map(\.pid), [20, 19, 18])
         XCTAssertEqual(report.sampledProcessCount, 20, "the count reflects the sweep, not the limit")
+    }
+
+    func testGPURankingUsesMemoryAsTheTieBreakerWhenNoGPURateExists() {
+        let set = ProcessSampleSet(
+            timestamp: 0,
+            samples: [
+                sample(1, "small", cpuNanoseconds: 0, memoryMB: 100),
+                sample(2, "large", cpuNanoseconds: 0, memoryMB: 700),
+            ],
+            unreadableCount: 0
+        )
+
+        let report = ProcessUsageRanking.report(
+            current: set, previous: nil, sortedBy: .gpu, limit: 5
+        )
+
+        XCTAssertEqual(report.sortedBy, .gpu)
+        XCTAssertEqual(report.processes.map(\.pid), [2, 1])
+        XCTAssertTrue(report.processes.allSatisfy { $0.gpuPercent == nil })
+    }
+
+    func testGPURankingOrdersKnownGPUValues() {
+        let set = ProcessSampleSet(
+            timestamp: 0,
+            samples: [
+                sample(1, "light", cpuNanoseconds: 0, memoryMB: 700, gpuPercent: 5),
+                sample(2, "heavy", cpuNanoseconds: 0, memoryMB: 100, gpuPercent: 45),
+            ],
+            unreadableCount: 0
+        )
+
+        let report = ProcessUsageRanking.report(
+            current: set, previous: nil, sortedBy: .gpu, limit: 5
+        )
+
+        XCTAssertEqual(report.processes.map(\.pid), [2, 1])
+        XCTAssertEqual(report.processes.map(\.gpuPercent), [45, 5])
+    }
+
+    func testProcessSortKeyDisplayNamesDescribeEachMetric() {
+        XCTAssertEqual(ProcessSortKey.cpu.displayName, "CPU")
+        XCTAssertEqual(ProcessSortKey.memory.displayName, "RAM")
+        XCTAssertEqual(ProcessSortKey.gpu.displayName, "GPU")
     }
 }
 

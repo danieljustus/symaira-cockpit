@@ -101,19 +101,23 @@ public struct ProcessSample: Equatable, Sendable {
     public let cpuTimeNanoseconds: UInt64
     public let memoryBytes: UInt64
     public let threadCount: Int?
+    /// GPU usage when a source can provide it alongside the raw sample.
+    public let gpuPercent: Double?
 
     public init(
         pid: Int32,
         name: String,
         cpuTimeNanoseconds: UInt64,
         memoryBytes: UInt64,
-        threadCount: Int? = nil
+        threadCount: Int? = nil,
+        gpuPercent: Double? = nil
     ) {
         self.pid = pid
         self.name = name
         self.cpuTimeNanoseconds = cpuTimeNanoseconds
         self.memoryBytes = memoryBytes
         self.threadCount = threadCount
+        self.gpuPercent = gpuPercent
     }
 }
 
@@ -186,7 +190,8 @@ public enum ProcessUsageRanking: Sendable {
                 name: sample.name,
                 cpuPercent: percent,
                 memoryBytes: sample.memoryBytes,
-                threadCount: sample.threadCount
+                threadCount: sample.threadCount,
+                gpuPercent: sample.gpuPercent
             ))
         }
 

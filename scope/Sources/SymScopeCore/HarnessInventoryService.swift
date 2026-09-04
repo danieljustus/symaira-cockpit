@@ -185,19 +185,31 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
     }
 
     private func resolveSymbrain() -> String? {
-        if let bin = ProcessInfo.processInfo.environment["SYMAIRA_BIN"] {
+        Self.resolveSymbrain(
+            environment: ProcessInfo.processInfo.environment,
+            isExecutableFile: { FileManager.default.isExecutableFile(atPath: $0) },
+            pathLookup: Self.lookPath
+        )
+    }
+
+    static func resolveSymbrain(
+        environment: [String: String],
+        isExecutableFile: (String) -> Bool,
+        pathLookup: (String) -> String?
+    ) -> String? {
+        if let bin = environment["SYMAIRA_BIN"] {
             let candidate = "\(bin)/symbrain"
-            if FileManager.default.isExecutableFile(atPath: candidate) {
+            if isExecutableFile(candidate) {
                 return candidate
             }
         }
-        if let home = ProcessInfo.processInfo.environment["HOME"] {
+        if let home = environment["HOME"] {
             let managed = "\(home)/.symaira/bin/symbrain"
-            if FileManager.default.isExecutableFile(atPath: managed) {
+            if isExecutableFile(managed) {
                 return managed
             }
         }
-        if let found = Self.lookPath("symbrain") {
+        if let found = pathLookup("symbrain") {
             return found
         }
         // A GUI-launched process inherits launchd's minimal PATH
@@ -209,7 +221,7 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
         // though `symbrain harness list` works fine from a terminal.
         // Mirrors ContainerService.resolveDockerBinary()'s fixed candidate list.
         for candidate in ["/opt/homebrew/bin/symbrain", "/usr/local/bin/symbrain"] {
-            if FileManager.default.isExecutableFile(atPath: candidate) {
+            if isExecutableFile(candidate) {
                 return candidate
             }
         }

@@ -162,6 +162,21 @@ final class ProcessListingPresentationTests: XCTestCase {
         XCTAssertFalse(row.contains(String(repeating: "x", count: ProcessListingPresentation.nameWidth + 1)))
     }
 
+    func testGPURateRendersAsAStableOneDecimalValueOrNotAvailable() {
+        XCTAssertEqual(
+            ProcessListingPresentation.gpuText(
+                for: ProcessUsage(pid: 1, name: "idle", cpuPercent: nil, memoryBytes: 0)
+            ),
+            "n/a"
+        )
+        XCTAssertEqual(
+            ProcessListingPresentation.gpuText(
+                for: ProcessUsage(pid: 2, name: "renderer", cpuPercent: nil, memoryBytes: 0, gpuPercent: 12.34)
+            ),
+            "12.3"
+        )
+    }
+
     func testOneRowPerReportedProcess() {
         let processes = (1...5).map {
             ProcessUsage(pid: Int32($0), name: "p\($0)", cpuPercent: Double($0), memoryBytes: 1024)
