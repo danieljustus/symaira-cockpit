@@ -197,7 +197,23 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
                 return managed
             }
         }
-        return Self.lookPath("symbrain")
+        if let found = Self.lookPath("symbrain") {
+            return found
+        }
+        // A GUI-launched process inherits launchd's minimal PATH
+        // (/usr/bin:/bin:/usr/sbin:/sbin), which never includes Homebrew's
+        // prefix — only an interactive shell's .zprofile/.zshrc adds that.
+        // Without this fallback, a symbrain installed exactly the way the
+        // app's own error note recommends (`brew install
+        // danieljustus/tap/symbrain`) is invisible from the cockpit GUI even
+        // though `symbrain harness list` works fine from a terminal.
+        // Mirrors ContainerService.resolveDockerBinary()'s fixed candidate list.
+        for candidate in ["/opt/homebrew/bin/symbrain", "/usr/local/bin/symbrain"] {
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     private static func lookPath(_ name: String) -> String? {

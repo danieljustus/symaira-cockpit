@@ -54,6 +54,11 @@ struct MainStatusView: View {
     /// Title of the ``onOpenCockpit`` row inside the popover.
     var openCockpitTitle: String = "Open Cockpit…"
 
+    /// Header title and version line (branding override — see
+    /// ``StatusHeaderView``).
+    var panelTitle: String = "SYMAIRA TUNE"
+    var panelVersion: String = TuneVersion.current
+
     /// Reason string for the Keep Awake power assertion (branding override).
     var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
@@ -86,7 +91,7 @@ struct MainStatusView: View {
     private var cards: some View {
         VStack(spacing: SymairaSpacing.medium) {
             if chrome == .popover {
-                StatusHeaderView()
+                StatusHeaderView(title: panelTitle, version: panelVersion)
                 if let onOpenCockpit {
                     openCockpitRow(onOpenCockpit)
                 }
@@ -196,12 +201,20 @@ struct MainStatusView: View {
         shows(.displayControls) || shows(.keepAwake) || shows(.fanControl, hardwareAvailable: hasFans)
     }
 
-    /// Whether this Mac reports any fan. `nil` sensors means "not read yet" —
-    /// treated as present so the card does not flicker away on the first frame
-    /// and back once the first sensor read lands.
+    /// Whether this Mac reports any fan. `nil` sensors means "not read yet",
+    /// and an unsupported SMC connection means "unknown, not measured" —
+    /// both treated as present so the card does not disappear just because
+    /// the read that would confirm fans is itself blocked. On at least one
+    /// real machine, `SMCService.isAvailable`'s read-only probe fails when
+    /// unprivileged even though the hardware and the write path both work
+    /// fine once elevated (see ``PrivilegedElevation``); treating that as
+    /// "no fans" would hide the one card that could otherwise recover via
+    /// escalation. Only a genuinely successful read reporting zero fans
+    /// hides the card.
     private var hasFans: Bool {
-        guard let fans = model.sensors?.fans else { return true }
-        return !fans.isEmpty
+        guard let sensors = model.sensors else { return true }
+        guard sensors.smcSupported else { return true }
+        return !sensors.fans.isEmpty
     }
 }
 

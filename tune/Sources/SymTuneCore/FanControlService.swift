@@ -144,7 +144,6 @@ public struct FanControlService: Sendable {
         guard smc.isAvailable else {
             throw TuneError.permission("SMC not available — fan control requires a real Mac")
         }
-        try SMCWritePolicy.requireThermalHeadroom(sensors: sensors)
 
         let clamped = SMCWritePolicy.clampFanFraction(
             fraction,
@@ -154,6 +153,11 @@ public struct FanControlService: Sendable {
 
         let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
         guard fanCount > 0 else { throw FanControlError.noFansDetected }
+
+        try SMCWritePolicy.requireThermalHeadroom(
+            sensors: sensors,
+            coolingIncrease: increasesCooling(to: clamped, fanCount: fanCount)
+        )
 
         #if arch(arm64)
         try applyAppleSilicon(fraction: clamped, fanCount: fanCount)
@@ -176,6 +180,63 @@ public struct FanControlService: Sendable {
         #else
         guard let originalFS = FanControlService.originalFSBitmask(smc: smc) else { return }
         _ = smc.writeKeyValue("FS!", value: Double(originalFS), dataType: "ui16")
+        #endif
+    }
+
+    /// Whether writing `fraction` would ask the fans for at least as much
+    /// air as they are already being asked for. Compared per fan against the
+    /// live target (`F{n}Tg`), since a fraction is of each fan's own maximum.
+    /// Unknown state answers `false`: without a reading to compare against,
+    /// the write is treated as the possibly-slowing one and stays gated.
+    private func increasesCooling(to fraction: Double, fanCount: Int) -> Bool {
+        guard fanCount > 0 else { return false }
+        for index in 0..<fanCount {
+            guard let requested = try? SMCWritePolicy.targetRPM(
+                    fraction: fraction, fanIndex: index, smc: smc),
+                  let current = smc.readFanTargetRPM(fanIndex: index)
+            else { return false }
+            if requested < current { return false }
+        }
+        return true
+    }
+
+    // MARK: - Original state capture and restore
+
+    /// Capture every fan's mode and target before the governor's first write,
+    /// so the way out restores what was actually found rather than a guessed
+    /// "auto" constant. On an M4 Pro the resting mode is already `1`, so
+    /// `restoreAuto`'s hardcoded `3` would not put the fan back where it was.
+    public func captureOriginalStates() -> [Int: (mode: UInt8?, targetRPM: Double?)] {
+        let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
+        var states: [Int: (mode: UInt8?, targetRPM: Double?)] = [:]
+        for index in 0..<fanCount {
+            states[index] = originalState(fanIndex: index)
+        }
+        return states
+    }
+
+    /// Restore captured per-fan state. Best effort: this runs on the way out
+    /// of the governor, including from a signal handler, where throwing would
+    /// only lose the remaining fans' restores.
+    public func restore(originalStates: [Int: (mode: UInt8?, targetRPM: Double?)]) {
+        for (index, state) in originalStates.sorted(by: { $0.key < $1.key }) {
+            if let targetRPM = state.targetRPM {
+                _ = smc.writeKeyValue("F\(index)Tg", value: targetRPM, dataType: fanTargetDataType)
+            }
+            if let mode = state.mode {
+                _ = smc.writeKeyValue("F\(index)Md", value: Double(mode), dataType: "ui8 ")
+            }
+        }
+        if originalStates.isEmpty { try? restoreAuto() }
+    }
+
+    /// SMC data type of the fan target register: `flt ` on Apple Silicon,
+    /// `fpe2` on Intel.
+    private var fanTargetDataType: String {
+        #if arch(arm64)
+        return "flt "
+        #else
+        return "fpe2"
         #endif
     }
 

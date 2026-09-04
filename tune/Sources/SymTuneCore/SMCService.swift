@@ -35,10 +35,14 @@ func smcConvertValue(dataType: UInt32, bytes: [UInt8]) -> Double {
         return Double(raw) / 256.0
 
     case "flt ":
-        // IEEE 754 float (4 bytes, big-endian).
+        // IEEE 754 float, 4 bytes, *little-endian* — unlike the integer and
+        // fixed-point types below, which the SMC reports big-endian. Verified
+        // on Apple Silicon hardware (issue #185): `F0Ac` reads
+        // `d1 9c a3 45`, which is 5235.6 RPM little-endian and nonsense
+        // (-2.1e10) big-endian.
         guard bytes.count >= 4 else { return 0 }
-        let raw: UInt32 = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16
-                        | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
+        let raw: UInt32 = UInt32(bytes[0]) | UInt32(bytes[1]) << 8
+                        | UInt32(bytes[2]) << 16 | UInt32(bytes[3]) << 24
         return Double(Float(bitPattern: raw))
 
     case "sp78":
@@ -74,7 +78,22 @@ func smcConvertValue(dataType: UInt32, bytes: [UInt8]) -> Double {
 
 /// Raw 80-byte buffer matching the C `SMCParamStruct` layout used by the
 /// AppleSMC IOKit driver. Fields are accessed via byte offsets derived from
-/// the canonical C struct:
+/// the canonical C struct.
+///
+/// The `UInt32` fields (`key`, `keyInfo.dataSize`, `keyInfo.dataType`,
+/// `data32`) are *native-endian* struct members, not big-endian wire fields:
+/// the C reference implementation assigns a plain `UInt32` to them and the
+/// driver reads it back with host byte order. Encoding them big-endian — as
+/// this code originally did — hands the SMC a byte-reversed key, and the
+/// firmware answers `kSMCKeyNotFound` (132) for *every* key, including
+/// `#KEY`, which is exactly the failure reported in issue #185. Both x86_64
+/// and arm64 Macs are little-endian, so native-endian access is correct on
+/// every host this ships to.
+///
+/// Note the asymmetry with the *payload* at bytes 48-79, which is wire data
+/// and keeps its own per-type byte order (see `smcConvertValue`).
+///
+/// Layout:
 ///
 /// ```
 /// offset  0: key            (UInt32)
@@ -98,20 +117,20 @@ struct SMCParamBlock: @unchecked Sendable {
     // MARK: Key (bytes 0-3)
 
     var key: UInt32 {
-        get { data.loadBE32(at: 0) }
-        set { data.storeBE32(newValue, at: 0) }
+        get { data.loadNative32(at: 0) }
+        set { data.storeNative32(newValue, at: 0) }
     }
 
     // MARK: KeyInfo (bytes 28-39)
 
     var keyInfoDataSize: UInt32 {
-        get { data.loadBE32(at: 28) }
-        set { data.storeBE32(newValue, at: 28) }
+        get { data.loadNative32(at: 28) }
+        set { data.storeNative32(newValue, at: 28) }
     }
 
     var keyInfoDataType: UInt32 {
-        get { data.loadBE32(at: 32) }
-        set { data.storeBE32(newValue, at: 32) }
+        get { data.loadNative32(at: 32) }
+        set { data.storeNative32(newValue, at: 32) }
     }
 
     var keyInfoDataAttributes: UInt8 {
@@ -137,8 +156,8 @@ struct SMCParamBlock: @unchecked Sendable {
     // MARK: data32 (bytes 44-47)
 
     var data32: UInt32 {
-        get { data.loadBE32(at: 44) }
-        set { data.storeBE32(newValue, at: 44) }
+        get { data.loadNative32(at: 44) }
+        set { data.storeNative32(newValue, at: 44) }
     }
 
     // MARK: Data bytes (bytes 48-79)
@@ -151,19 +170,22 @@ struct SMCParamBlock: @unchecked Sendable {
     }
 }
 
-// MARK: - UInt8 Array BE Helpers
+// MARK: - UInt8 Array Byte-Order Helpers
 
-private extension Array where Element == UInt8 {
-    func loadBE32(at offset: Int) -> UInt32 {
-        UInt32(self[offset]) << 24 | UInt32(self[offset + 1]) << 16
-        | UInt32(self[offset + 2]) << 8 | UInt32(self[offset + 3])
+extension Array where Element == UInt8 {
+    /// Load a `UInt32` struct member in host byte order (little-endian on
+    /// every Mac). Used for `SMCParamStruct`'s own fields — never for the
+    /// payload, whose byte order is per data type.
+    func loadNative32(at offset: Int) -> UInt32 {
+        UInt32(self[offset]) | UInt32(self[offset + 1]) << 8
+        | UInt32(self[offset + 2]) << 16 | UInt32(self[offset + 3]) << 24
     }
 
-    mutating func storeBE32(_ value: UInt32, at offset: Int) {
-        self[offset]     = UInt8((value >> 24) & 0xFF)
-        self[offset + 1] = UInt8((value >> 16) & 0xFF)
-        self[offset + 2] = UInt8((value >> 8) & 0xFF)
-        self[offset + 3] = UInt8(value & 0xFF)
+    mutating func storeNative32(_ value: UInt32, at offset: Int) {
+        self[offset]     = UInt8(value & 0xFF)
+        self[offset + 1] = UInt8((value >> 8) & 0xFF)
+        self[offset + 2] = UInt8((value >> 16) & 0xFF)
+        self[offset + 3] = UInt8((value >> 24) & 0xFF)
     }
 }
 
@@ -611,12 +633,13 @@ public struct SMCService: Sendable {
             let raw = UInt16((value * 256.0).rounded())
             bytes = [UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF)]
         case "flt ":
+            // Little-endian, mirroring the read path in `smcConvertValue`.
             let raw = Float(value).bitPattern
             bytes = [
-                UInt8((raw >> 24) & 0xFF),
-                UInt8((raw >> 16) & 0xFF),
+                UInt8(raw & 0xFF),
                 UInt8((raw >> 8) & 0xFF),
-                UInt8(raw & 0xFF)
+                UInt8((raw >> 16) & 0xFF),
+                UInt8((raw >> 24) & 0xFF)
             ]
         case "ui8 ":
             bytes = [UInt8(min(max(value, 0), 255))]
@@ -662,11 +685,25 @@ public struct SMCService: Sendable {
         var readings: [SensorReading] = []
         for (key, label) in keys {
             if let knownKeys, !knownKeys.contains(key) { continue }
-            if let celsius = readKeyValue(key), celsius > 0 {
+            if let celsius = readKeyValue(key), Self.isPlausibleTemperature(celsius) {
                 readings.append(SensorReading(key: key, label: label, celsius: celsius))
             }
         }
         return readings
+    }
+
+    /// Physically plausible range for a die/proximity sensor on a running Mac.
+    ///
+    /// Presence in the host's key table is not proof a candidate row means
+    /// what the table claims: an M4 Pro exposes `Tp01`–`Tp09` and `Ta0P`, but
+    /// reads them back as 0–8 °C, so the old `celsius > 0` gate published
+    /// "CPU Core 1: 2 °C" beside a real 85 °C die reading. A key that is
+    /// wired on this chip but is not the sensor the row names reads far
+    /// outside this band, so the band is what separates them.
+    static let plausibleTemperatureRange: ClosedRange<Double> = 10.0...125.0
+
+    static func isPlausibleTemperature(_ celsius: Double) -> Bool {
+        plausibleTemperatureRange.contains(celsius)
     }
 
     // MARK: - Fan Sensors
@@ -809,8 +846,14 @@ public struct SMCService: Sendable {
         .m1: [],
         .m2: ["Te04", "Te05", "Te06"],
         .m3: ["Te05", "Te0L", "Te0P", "Te0S"],
-        .m4: ["Te05", "Te0S", "Te09", "Te0H"],
-        .unknown: ["Te04", "Te05", "Te06", "Te09", "Te0H", "Te0L", "Te0P", "Te0S"],
+        // Verified on an M4 Pro (Mac16,8): `Te04`–`Te06` and `Te0R`–`Te0T`
+        // read plausible cluster temperatures; the previously listed `Te09`
+        // and `Te0H` are not implemented on this chip at all (issue #185).
+        .m4: ["Te04", "Te05", "Te06", "Te0R", "Te0S", "Te0T"],
+        .unknown: [
+            "Te04", "Te05", "Te06", "Te09", "Te0H", "Te0L",
+            "Te0P", "Te0R", "Te0S", "Te0T",
+        ],
     ]
 
     /// The full Apple Silicon candidate table for one chip generation.

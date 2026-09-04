@@ -74,10 +74,14 @@ struct TopProcessesCard: View {
             .labelsHidden()
 
             if model.report.processes.isEmpty {
-                Text(model.isWarmingUp ? "Sampling…" : "No readable processes.")
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
-                    .padding(.vertical, SymairaSpacing.small)
+                if model.sortedBy == .gpu {
+                    gpuEmptyState
+                } else {
+                    Text(model.isWarmingUp ? "Sampling…" : "No readable processes.")
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTheme.textMuted)
+                        .padding(.vertical, SymairaSpacing.small)
+                }
             } else {
                 ForEach(model.report.processes) { process in
                     ProcessRow(
@@ -92,6 +96,31 @@ struct TopProcessesCard: View {
 
             footer
         }
+    }
+
+    /// GPU sampling needs root (`powermetrics` refuses to run otherwise), so
+    /// it never runs on the normal polling timer — only this explicit,
+    /// one-shot action, which prompts once for an administrator password
+    /// rather than on every sample tick.
+    private var gpuEmptyState: some View {
+        VStack(spacing: SymairaSpacing.xSmall) {
+            Text(model.isLoadingGPUUsage
+                ? "Loading GPU usage…"
+                : (model.report.notes.first ?? "No GPU data."))
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTheme.textMuted)
+                .multilineTextAlignment(.center)
+            if !model.isLoadingGPUUsage {
+                Button("Load GPU Usage…") {
+                    model.loadGPUUsageWithElevation()
+                }
+                .buttonStyle(.plain)
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTheme.goldSecondary)
+                .help("Prompts once for your administrator password — powermetrics needs root to report per-process GPU time.")
+            }
+        }
+        .padding(.vertical, SymairaSpacing.small)
     }
 
     private var footer: some View {
@@ -138,6 +167,7 @@ struct TopProcessesCard: View {
             switch model.report.sortedBy {
             case .cpu: return candidate.cpuPercent ?? 0
             case .memory: return Double(candidate.memoryBytes)
+            case .gpu: return candidate.gpuPercent ?? 0
             }
         }
         guard let maximum = values.max(), maximum > 0 else { return 0 }
@@ -145,6 +175,7 @@ struct TopProcessesCard: View {
         switch model.report.sortedBy {
         case .cpu: own = process.cpuPercent ?? 0
         case .memory: own = Double(process.memoryBytes)
+        case .gpu: own = process.gpuPercent ?? 0
         }
         return min(max(own / maximum, 0), 1)
     }
@@ -202,11 +233,15 @@ private struct ProcessRow: View {
             return process.cpuPercent.map { String(format: "%.1f%%", $0) } ?? "—"
         case .memory:
             return MetricFormatting.bytes(process.memoryBytes)
+        case .gpu:
+            return process.gpuPercent.map { String(format: "%.1f%%", $0) } ?? "—"
         }
     }
 
     /// The other resource is shown alongside the identity: a process at the top
-    /// of the CPU list is usually worth checking for memory as well.
+    /// of the CPU list is usually worth checking for memory as well. GPU rows
+    /// carry no CPU/memory figures of their own — a different, privileged
+    /// data source — so only PID/threads are shown.
     private var detailText: String {
         var parts = ["PID \(process.pid)"]
         if let threads = process.threadCount {
@@ -219,6 +254,8 @@ private struct ProcessRow: View {
             if let cpu = process.cpuPercent {
                 parts.append(String(format: "%.1f%% CPU", cpu))
             }
+        case .gpu:
+            break
         }
         return parts.joined(separator: " · ")
     }

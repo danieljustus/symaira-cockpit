@@ -31,12 +31,16 @@ struct TuneSectionView: View {
             Button {
                 openPreferences()
             } label: {
-                Label("Metrics, AI usage and update settings", systemImage: "gearshape")
+                // Same label as the toolbar's gear button (``CockpitRootView``):
+                // both open the identical Preferences window, and using the
+                // same words here makes that obvious instead of reading as
+                // two different destinations.
+                Label("Tune Preferences", systemImage: "gearshape")
                     .font(SymairaTypography.caption)
             }
             .buttonStyle(.plain)
             .foregroundStyle(SymairaTheme.textMuted)
-            .help("Open Tune preferences (⌘,)")
+            .help("Metrics, AI usage and update settings (⌘,)")
         }
     }
 }

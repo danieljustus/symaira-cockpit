@@ -101,6 +101,7 @@ public final class ProcessUsageService: @unchecked Sendable {
     public static let maximumLimit = 50
 
     private let source: any ProcessSampleSource
+    private let gpuSource: any GPUProcessReporting
     private let lock = NSLock()
     private var previous: ProcessSampleSet?
     /// Names cached by PID so a process seen before does not pay for
@@ -109,15 +110,27 @@ public final class ProcessUsageService: @unchecked Sendable {
     /// is re-resolved rather than reporting its predecessor's name.
     private var names: [Int32: String] = [:]
 
-    public init(source: any ProcessSampleSource = LibprocProcessSampleSource()) {
+    public init(
+        source: any ProcessSampleSource = LibprocProcessSampleSource(),
+        gpuSource: any GPUProcessReporting = PowermetricsGPUProcessSource()
+    ) {
         self.source = source
+        self.gpuSource = gpuSource
     }
 
     /// Take a sweep and rank it against the previous one.
+    ///
+    /// `.gpu` bypasses the libproc sweep entirely and defers to `gpuSource`:
+    /// it is a wholly different, privileged data source with no CPU-time
+    /// baseline to difference against.
     public func report(
         sortedBy: ProcessSortKey = .cpu,
         limit: Int = ProcessUsageService.defaultLimit
     ) -> ProcessUsageReport {
+        if sortedBy == .gpu {
+            return gpuSource.report(limit: min(max(limit, 1), Self.maximumLimit))
+        }
+
         lock.lock()
         let knownNames = names
         lock.unlock()

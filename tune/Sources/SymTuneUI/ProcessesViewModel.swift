@@ -17,6 +17,9 @@ final class ProcessesViewModel {
     private(set) var report: ProcessUsageReport = .empty
     /// `true` between the first sweep and the second, when no CPU rate exists.
     private(set) var isWarmingUp = true
+    /// `true` while an explicit, elevated GPU fetch is in flight (waiting on
+    /// the administrator-password prompt, then on `powermetrics` itself).
+    private(set) var isLoadingGPUUsage = false
 
     /// Which resource the list is ranked by. Changing it re-ranks immediately
     /// from the sample already in hand — no extra sweep.
@@ -96,6 +99,22 @@ final class ProcessesViewModel {
 
     private func sample() async {
         let sort = sortedBy
+        if sort == .gpu {
+            // GPU has no cheap, unprivileged sample to poll: powermetrics
+            // refuses to run without root at all. Only the explicit
+            // ``loadGPUUsageWithElevation()`` action populates real data;
+            // this just clears a stale non-GPU report when the tab is first
+            // selected, so the empty state shows instead of leftover rows
+            // under the wrong label. Once a GPU report is already showing
+            // (empty-with-note, or real elevated data), later ticks leave it
+            // alone rather than re-running the in-process (always
+            // unprivileged) sampler and clobbering it every couple seconds.
+            if report.sortedBy != .gpu {
+                report = ProcessUsageReport(sortedBy: .gpu, processes: [], sampledProcessCount: 0, unreadableProcessCount: 0)
+            }
+            return
+        }
+
         let limit = self.limit
         let controller = self.controller
         // libproc sweeps the whole process table; keep it off the main thread.
@@ -106,6 +125,43 @@ final class ProcessesViewModel {
         if report != fresh { report = fresh }
         if isWarmingUp, fresh.processes.contains(where: { $0.cpuPercent != nil }) {
             isWarmingUp = false
+        }
+    }
+
+    /// One-shot, explicitly user-triggered GPU sample, run as root via
+    /// ``PrivilegedElevation``. Deliberately not part of the polling loop:
+    /// GPU sampling needs an administrator-password prompt, and popping that
+    /// every couple of seconds would be unacceptable — this runs only when
+    /// the person taps the button, once per tap.
+    func loadGPUUsageWithElevation() {
+        guard !isLoadingGPUUsage else { return }
+        isLoadingGPUUsage = true
+        let requestedLimit = limit
+
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) { () -> ProcessUsageReport in
+                do {
+                    let output = try PrivilegedElevation.runSymCockpit([
+                        "tune", "processes", "--sort", "gpu", "--limit", "\(requestedLimit)", "--json",
+                    ])
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    return try decoder.decode(ProcessUsageReport.self, from: output)
+                } catch {
+                    let message = (error as? PrivilegedElevation.ElevationError)?.description
+                        ?? "Could not load GPU usage: \(error.localizedDescription)"
+                    return ProcessUsageReport(
+                        sortedBy: .gpu,
+                        processes: [],
+                        sampledProcessCount: 0,
+                        unreadableProcessCount: 0,
+                        notes: [message]
+                    )
+                }
+            }.value
+
+            isLoadingGPUUsage = false
+            report = outcome
         }
     }
 }

@@ -52,8 +52,22 @@ public enum SMCWritePolicy: Sendable {
     }
 
     /// Refuse a manual fan write if any die sensor is above the thermal
-    /// emergency threshold. Returns the highest temperature seen.
-    public static func requireThermalHeadroom(sensors: SensorService) throws {
+    /// emergency threshold.
+    ///
+    /// The point of the gate is that a person must not be able to *slow* the
+    /// fans on a Mac that is already too hot. A write that speeds them up is
+    /// the opposite of the hazard, and refusing it would be actively harmful:
+    /// it is exactly the moment `FanGovernor` most needs to reach full speed,
+    /// and an M4 Pro under sustained load sits above this threshold routinely.
+    /// So `coolingIncrease` — set by the caller when the requested target is
+    /// at or above what the fans are already being asked for — permits the
+    /// write through. Everything else about the write is unchanged: the
+    /// fraction is still clamped and still floored at the firmware minimum.
+    public static func requireThermalHeadroom(
+        sensors: SensorService,
+        coolingIncrease: Bool = false
+    ) throws {
+        guard !coolingIncrease else { return }
         let report = sensors.read()
         let maxTemp = report.temperatures.map(\.celsius).max() ?? 0
         guard maxTemp < SafetyPolicy.thermalOverrideCelsius else {

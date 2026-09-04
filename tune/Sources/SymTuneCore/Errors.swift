@@ -2,7 +2,14 @@ import Foundation
 
 /// Domain error type for symtune. Carries a human-readable message and maps to
 /// a typed `ExitCode` so the CLI exit status is meaningful for scripts/agents.
-public enum TuneError: Error, Sendable, CustomStringConvertible {
+///
+/// `LocalizedError` conformance matters beyond convention: SwiftUI code across
+/// SymTuneUI (`ControlCards`, `PreferencesView`, `ProcessesViewModel`, …)
+/// surfaces failures via `error.localizedDescription`, which — without this
+/// conformance — ignores `description` entirely and falls back to Swift's
+/// generic NSError bridging (e.g. "SymTuneCore.TuneError error 2"), hiding
+/// every carefully-written message behind a useless case-index string.
+public enum TuneError: Error, Sendable, CustomStringConvertible, LocalizedError {
     /// Bad command or flag usage.
     case usage(String)
     /// Invalid configuration file/value.
@@ -26,6 +33,8 @@ public enum TuneError: Error, Sendable, CustomStringConvertible {
         case .failed(let message): return message
         }
     }
+
+    public var errorDescription: String? { description }
 
     public var exitCode: Int32 {
         switch self {

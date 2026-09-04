@@ -5,11 +5,12 @@ final class SMCWritePolicyTests: XCTestCase {
     // Helper to generate Float bytes for SMC
     private func floatBytes(_ value: Double) -> [UInt8] {
         let raw = Float(value).bitPattern
+        // `flt ` payloads are little-endian (issue #185).
         return [
-            UInt8((raw >> 24) & 0xFF),
-            UInt8((raw >> 16) & 0xFF),
+            UInt8(raw & 0xFF),
             UInt8((raw >> 8) & 0xFF),
-            UInt8(raw & 0xFF)
+            UInt8((raw >> 16) & 0xFF),
+            UInt8((raw >> 24) & 0xFF)
         ]
     }
 

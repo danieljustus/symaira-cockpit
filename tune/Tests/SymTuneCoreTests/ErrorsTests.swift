@@ -56,4 +56,18 @@ final class TuneErrorTests: XCTestCase {
     func testFailedExitCode() {
         XCTAssertEqual(TuneError.failed("x").exitCode, ExitCode.error.rawValue)
     }
+
+    /// Regression test: without `LocalizedError` conformance,
+    /// `(error as Error).localizedDescription` ignores `description` entirely
+    /// and falls back to Swift's generic NSError bridging (something like
+    /// "SymTuneCore.TuneError error 2"), which is what every SwiftUI error
+    /// label in SymTuneUI (ControlCards, PreferencesView, ProcessesViewModel,
+    /// …) actually reads. Asserting through `Error.localizedDescription`
+    /// specifically (not `.description`) is the point: it is what the UI
+    /// calls, and only `errorDescription` reaches it.
+    func testLocalizedDescriptionSurfacesTheRealMessageNotTheGenericBridging() {
+        let error: Error = TuneError.permission("SMC rejected manual mode for fan 0")
+
+        XCTAssertEqual(error.localizedDescription, "permission error: SMC rejected manual mode for fan 0")
+    }
 }

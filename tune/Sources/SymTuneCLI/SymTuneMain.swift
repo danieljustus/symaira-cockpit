@@ -47,6 +47,9 @@ WRITE COMMANDS
   restore                     Restore all overrides to defaults
   fan set <0.0-1.0>           Fan speed fraction (requires sudo)
   fan auto                    Return fans to firmware automatic control
+  fan profile [name]          Three-position fan control:
+                              system (your Mac's own curve), comfort, performance
+  fan governor                Run the temperature-tracking loop (requires sudo)
   battery-limit set <50-100>  Hold charge at target percent (requires sudo)
   battery-limit clear         Re-enable charging (requires sudo)
   profile save <name>         Save current settings as a profile
@@ -425,13 +428,75 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
     if rest.contains(where: { $0 == "--help" || $0 == "-h" }) {
         emit("Usage: symtune fan set <0.0-1.0>")
         emit("       symtune fan auto")
+        emit("       symtune fan profile [system|comfort|performance]")
+        emit("       symtune fan governor [--state <path>]   (requires root)")
     } else if rest.first == "auto" {
         try controller.restoreFanAuto()
         try emitJSON(ApplyResult(applied: true))
+    } else if rest.first == "profile" {
+        try runFanProfile(Array(rest.dropFirst()), controller: controller)
+    } else if rest.first == "governor" {
+        try runFanGovernor(Array(rest.dropFirst()), controller: controller)
     } else if let cmd = writeCommandByPrefix["fan set"] {
         try runWriteCommand(cmd, rest: rest, controller: controller)
     } else {
-        throw TuneError.usage("fan: expected 'set <value>' or 'auto'.")
+        throw TuneError.usage("fan: expected 'set <value>', 'auto', 'profile' or 'governor'.")
+    }
+}
+
+/// `symtune fan profile [name]` — read or set the three-position fan control.
+///
+/// Setting a profile only records the selection; it never elevates on its own,
+/// because a CLI or MCP caller may have no human present to answer a password
+/// prompt. A governor already running picks the change up on its next tick; if
+/// none is, this says so and how to start one.
+private func runFanProfile(_ rest: [String], controller: TuneController) throws {
+    guard let name = rest.first else {
+        try emitJSON(FanProfileResult(
+            profile: controller.activeFanProfile.rawValue,
+            governorRunning: controller.isFanGovernorRunning()
+        ))
+        return
+    }
+    guard let profile = FanProfile(rawValue: name.lowercased()) else {
+        throw TuneError.usage(
+            "fan profile: expected one of "
+            + FanProfile.allCases.map(\.rawValue).joined(separator: ", ")
+            + "."
+        )
+    }
+    try controller.applyFanProfile(profile)
+    let running = controller.isFanGovernorRunning()
+    if profile != .system && !running {
+        emit("Selected \(profile.rawValue). No fan governor is running — "
+             + "start one with `sudo symtune fan governor`.")
+    }
+    try emitJSON(FanProfileResult(profile: profile.rawValue, governorRunning: running))
+}
+
+/// `symtune fan governor [--state <path>]` — run the temperature-tracking loop
+/// in the foreground until the selected profile becomes `system`.
+///
+/// `--state` exists because the cockpit launches this as root, where `HOME` is
+/// `/var/root` and the default per-user path would resolve to the wrong file.
+private func runFanGovernor(_ rest: [String], controller: TuneController) throws {
+    var stateURL = FanProfileStore.defaultURL()
+    if let index = rest.firstIndex(of: "--state") {
+        guard index + 1 < rest.count else {
+            throw TuneError.usage("fan governor: --state requires a path.")
+        }
+        stateURL = URL(fileURLWithPath: rest[index + 1])
+    }
+    try controller.runFanGovernor(stateURL: stateURL)
+}
+
+private struct FanProfileResult: Encodable {
+    let profile: String
+    let governorRunning: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case profile
+        case governorRunning = "governor_running"
     }
 }
 

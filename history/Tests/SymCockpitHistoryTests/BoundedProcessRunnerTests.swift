@@ -75,4 +75,28 @@ final class BoundedProcessRunnerTests: XCTestCase {
             )
         }
     }
+
+    /// Regression test for a GUI-launched process (launchd's minimal PATH,
+    /// no Homebrew) still finding a sibling Symaira CLI installed at the
+    /// documented managed location, ~/.symaira/bin.
+    func testFallsBackToManagedSymairaBinDirectoryWhenPATHOmitsIt() throws {
+        let tempHome = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let binDir = tempHome.appendingPathComponent(".symaira/bin")
+        try FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempHome) }
+
+        let scriptPath = binDir.appendingPathComponent("fixture-symtool")
+        try "#!/bin/sh\nprintf found\n".write(to: scriptPath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+
+        let result = try BoundedProcessRunner.run(
+            executable: "fixture-symtool",
+            timeoutSeconds: 1,
+            environment: ["PATH": "/empty", "HOME": tempHome.path]
+        )
+
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.output, "found")
+    }
 }
