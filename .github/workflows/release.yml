@@ -192,6 +192,7 @@ jobs:
             --wait
           xcrun stapler staple "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
+          spctl --assess --type execute --verbose=4 "$APP_PATH"
 
       - name: Package release assets
         run: |
@@ -205,6 +206,18 @@ jobs:
             "dist/Symaira-Cockpit-${VERSION}-macos.dmg" \
             "Symaira Cockpit"
 
+      - name: Sign and verify DMG
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_PATH="dist/Symaira-Cockpit-${VERSION}-macos.dmg"
+          if [ -z "${CODESIGN_IDENTITY:-}" ]; then
+            echo "::error::CODESIGN_IDENTITY is required before signing the DMG."
+            exit 1
+          fi
+          codesign --force --sign "$CODESIGN_IDENTITY" --timestamp "$DMG_PATH"
+          codesign --verify --strict --verbose=2 "$DMG_PATH"
+
       - name: Notarize and staple DMG
         env:
           NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
@@ -212,6 +225,13 @@ jobs:
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
         run: |
           set -euo pipefail
+          for secret in NOTARY_API_KEY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID; do
+            if [ -z "${!secret:-}" ]; then
+              echo "::error::$secret must be configured in the release environment."
+              exit 1
+            fi
+          done
+
           VERSION="${{ steps.version.outputs.version }}"
           DMG_PATH="dist/Symaira-Cockpit-${VERSION}-macos.dmg"
           API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
@@ -223,6 +243,8 @@ jobs:
             --wait
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
+          codesign --verify --strict --verbose=2 "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
 
       - name: Upload app artifacts to GitHub Release
         env:
@@ -232,6 +254,36 @@ jobs:
             dist/Symaira-Cockpit-*.zip \
             dist/Symaira-Cockpit-*-macos.dmg \
             --clobber
+
+      - name: Verify published DMG bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          ASSET="Symaira-Cockpit-${VERSION}-macos.dmg"
+          LOCAL_PATH="dist/${ASSET}"
+          DOWNLOAD_DIR="$RUNNER_TEMP/published-release"
+          mkdir -p "$DOWNLOAD_DIR"
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "$ASSET" \
+            --dir "$DOWNLOAD_DIR"
+          PUBLISHED_PATH="$DOWNLOAD_DIR/$ASSET"
+          test -f "$LOCAL_PATH"
+          test -f "$PUBLISHED_PATH"
+          LOCAL_SHA=$(shasum -a 256 "$LOCAL_PATH" | awk '{print $1}')
+          PUBLISHED_SHA=$(shasum -a 256 "$PUBLISHED_PATH" | awk '{print $1}')
+          echo "Local DMG SHA-256: $LOCAL_SHA"
+          echo "Published DMG SHA-256: $PUBLISHED_SHA"
+          if [ "$LOCAL_SHA" != "$PUBLISHED_SHA" ]; then
+            echo "::error::Published DMG bytes differ from the verified workspace artifact."
+            exit 1
+          fi
+          cmp -s "$LOCAL_PATH" "$PUBLISHED_PATH"
+          codesign --verify --strict --verbose=2 "$PUBLISHED_PATH"
+          xcrun stapler validate "$PUBLISHED_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$PUBLISHED_PATH"
 
       - name: Clean up signing material
         if: always()
@@ -271,9 +323,11 @@ jobs:
             --dir artifacts
           TAR_SHA256=$(shasum -a 256 "artifacts/symcockpit_${VERSION}_darwin_universal.tar.gz" | awk '{print $1}')
           DMG_SHA256=$(shasum -a 256 "artifacts/Symaira-Cockpit-${VERSION}-macos.dmg" | awk '{print $1}')
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "TAR_SHA256=$TAR_SHA256" >> "$GITHUB_ENV"
-          echo "DMG_SHA256=$DMG_SHA256" >> "$GITHUB_ENV"
+          {
+            echo "VERSION=$VERSION"
+            echo "TAR_SHA256=$TAR_SHA256"
+            echo "DMG_SHA256=$DMG_SHA256"
+          } >> "$GITHUB_ENV"
 
       - name: Write formula
         run: |
