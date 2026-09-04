@@ -40,12 +40,13 @@ public enum ProcessListingPresentation: Sendable {
 
     /// Usage text for `--help`, one line per entry.
     public static let usageLines = [
-        "Usage: symtune processes [--sort cpu|memory] [--limit N] [--interval <seconds>] [--json]",
+        "Usage: symtune processes [--sort cpu|memory|gpu] [--limit N] [--interval <seconds>] [--json]",
         "",
-        "Rank running processes by CPU or memory usage. CPU is a rate, so the",
-        "command samples twice --interval seconds apart (default 1.0) before",
+        "Rank running processes by CPU, memory (RAM), or GPU usage. CPU is a rate,",
+        "so the command samples twice --interval seconds apart (default 1.0) before",
         "reporting. Processes owned by another user are counted but not readable",
-        "without elevation.",
+        "without elevation. GPU sampling additionally requires root (powermetrics",
+        "refuses to run otherwise) — run this command with sudo to get GPU figures.",
     ]
 
     /// Parse the command's arguments.
@@ -69,7 +70,7 @@ public enum ProcessListingPresentation: Sendable {
                 index += 1
                 guard index < args.count,
                       let parsed = ProcessSortKey(rawValue: args[index].lowercased()) else {
-                    throw TuneError.usage("processes: --sort expects 'cpu' or 'memory'")
+                    throw TuneError.usage("processes: --sort expects 'cpu', 'memory', or 'gpu'")
                 }
                 options.sortedBy = parsed
             case "--limit":
@@ -106,22 +107,28 @@ public enum ProcessListingPresentation: Sendable {
     ///
     /// Padding is manual because `String(format:)` ignores width flags on `%@`
     /// on Apple platforms — `%-8@` silently produces an unpadded column.
+    /// A GPU-sorted report has no CPU/memory figures (a different, privileged
+    /// data source), so its second column shows GPU % instead of memory.
     public static func tableLines(for report: ProcessUsageReport) -> [String] {
+        let secondColumnTitle = report.sortedBy == .gpu ? "GPU %" : "MEMORY"
         var lines = [
             column("PID", pidWidth)
                 + column("PROCESS", nameWidth)
                 + column("CPU %", cpuWidth, alignRight: true)
                 + " "
-                + column("MEMORY", memoryWidth, alignRight: true),
+                + column(secondColumnTitle, memoryWidth, alignRight: true),
             String(repeating: "-", count: ruleWidth),
         ]
         for process in report.processes {
+            let secondColumn = report.sortedBy == .gpu
+                ? gpuText(for: process)
+                : MetricFormatting.bytes(process.memoryBytes)
             lines.append(
                 column(String(process.pid), pidWidth)
                     + column(process.name, nameWidth)
                     + column(cpuText(for: process), cpuWidth, alignRight: true)
                     + " "
-                    + column(MetricFormatting.bytes(process.memoryBytes), memoryWidth, alignRight: true)
+                    + column(secondColumn, memoryWidth, alignRight: true)
             )
         }
         return lines
@@ -131,6 +138,13 @@ public enum ProcessListingPresentation: Sendable {
     /// unavailable rate never reads as genuine idleness.
     static func cpuText(for process: ProcessUsage) -> String {
         guard let percent = process.cpuPercent else { return "n/a" }
+        return String(format: "%.1f", percent)
+    }
+
+    /// GPU column for one row: `n/a` when powermetrics did not report a
+    /// figure for this process (e.g. it used none this sample).
+    static func gpuText(for process: ProcessUsage) -> String {
+        guard let percent = process.gpuPercent else { return "n/a" }
         return String(format: "%.1f", percent)
     }
 

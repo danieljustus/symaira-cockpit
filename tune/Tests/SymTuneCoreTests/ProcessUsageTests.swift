@@ -207,6 +207,22 @@ final class ProcessUsageRankingTests: XCTestCase {
     }
 }
 
+/// Records whether it was asked for a report, so tests can prove `.gpu`
+/// bypasses the libproc pipeline entirely rather than merely re-labeling it.
+private final class StubGPUSource: GPUProcessReporting, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var callCount = 0
+    private(set) var lastLimit: Int?
+    let stubbed: ProcessUsageReport
+
+    init(stubbed: ProcessUsageReport) { self.stubbed = stubbed }
+
+    func report(limit: Int) -> ProcessUsageReport {
+        lock.lock(); callCount += 1; lastLimit = limit; lock.unlock()
+        return stubbed
+    }
+}
+
 final class ProcessUsageServiceTests: XCTestCase {
 
     func testServiceDifferencesConsecutiveCalls() throws {
@@ -324,5 +340,37 @@ final class ProcessUsageServiceTests: XCTestCase {
         // Sweep 1 resolves all four. Sweeps 2-4 resolve only what was pruned
         // while absent: 3 and 4 each get one re-resolution, 5 one resolution.
         XCTAssertEqual(source.resolutionCount, 4 + 1 + 1 + 1)
+    }
+
+    // MARK: - GPU routing
+
+    func testGPUSortRoutesToTheGPUSourceInsteadOfLibproc() {
+        let libprocSource = ScriptedProcessSource([
+            ProcessSampleSet(timestamp: 0, samples: [sample(1, "cpu-bound", cpuNanoseconds: 0, memoryMB: 10)], unreadableCount: 0),
+        ])
+        let stubbedReport = ProcessUsageReport(
+            sortedBy: .gpu,
+            processes: [ProcessUsage(pid: 99, name: "renderer", cpuPercent: nil, memoryBytes: 0, gpuPercent: 42)],
+            sampledProcessCount: 1,
+            unreadableProcessCount: 0
+        )
+        let gpuSource = StubGPUSource(stubbed: stubbedReport)
+        let service = ProcessUsageService(source: libprocSource, gpuSource: gpuSource)
+
+        let report = service.report(sortedBy: .gpu, limit: 7)
+
+        XCTAssertEqual(gpuSource.callCount, 1)
+        XCTAssertEqual(gpuSource.lastLimit, 7)
+        XCTAssertEqual(libprocSource.sampleCount, 0, "GPU sampling must never trigger a libproc sweep")
+        XCTAssertEqual(report.processes.first?.gpuPercent, 42)
+    }
+
+    func testGPULimitIsClampedTheSameWayAsCPUAndMemory() {
+        let gpuSource = StubGPUSource(stubbed: .empty)
+        let service = ProcessUsageService(source: ScriptedProcessSource([]), gpuSource: gpuSource)
+
+        _ = service.report(sortedBy: .gpu, limit: 5_000)
+
+        XCTAssertEqual(gpuSource.lastLimit, ProcessUsageService.maximumLimit)
     }
 }

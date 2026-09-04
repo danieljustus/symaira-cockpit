@@ -4,11 +4,18 @@ import Foundation
 public enum ProcessSortKey: String, Codable, Sendable, CaseIterable {
     case cpu
     case memory
+    /// Per-process GPU time. Unlike ``cpu``/``memory``, this cannot be read
+    /// via libproc — macOS exposes it only through `powermetrics`, which
+    /// refuses to run unprivileged. See ``ProcessUsageService`` and
+    /// ``PowermetricsGPUProcessSource``.
+    case gpu
 
     public var displayName: String {
         switch self {
         case .cpu: return "CPU"
-        case .memory: return "Memory"
+        // "Memory" reads ambiguously (disk vs. RAM); this is resident memory.
+        case .memory: return "RAM"
+        case .gpu: return "GPU"
         }
     }
 }
@@ -26,6 +33,11 @@ public struct ProcessUsage: Codable, Equatable, Sendable, Identifiable {
     public let memoryBytes: UInt64
     /// Thread count, when the kernel reported it.
     public let threadCount: Int?
+    /// Share of GPU time powermetrics attributed to this process, as a
+    /// percentage of the sample window. `nil` unless this report came from
+    /// ``ProcessSortKey/gpu`` sampling — the CPU/memory (libproc) source never
+    /// populates it.
+    public let gpuPercent: Double?
 
     public var id: Int32 { pid }
 
@@ -34,13 +46,15 @@ public struct ProcessUsage: Codable, Equatable, Sendable, Identifiable {
         name: String,
         cpuPercent: Double?,
         memoryBytes: UInt64,
-        threadCount: Int? = nil
+        threadCount: Int? = nil,
+        gpuPercent: Double? = nil
     ) {
         self.pid = pid
         self.name = name
         self.cpuPercent = cpuPercent
         self.memoryBytes = memoryBytes
         self.threadCount = threadCount
+        self.gpuPercent = gpuPercent
     }
 }
 
@@ -189,6 +203,18 @@ public enum ProcessUsageRanking: Sendable {
             }
         case .memory:
             ranked = usages.sorted { $0.memoryBytes > $1.memoryBytes }
+        case .gpu:
+            // Unreachable via `ProcessUsageService.report`, which routes
+            // `.gpu` to `PowermetricsGPUProcessSource` instead — libproc
+            // sweeps never populate `gpuPercent`. Handled here anyway so the
+            // switch stays exhaustive and behaves sanely if ever called
+            // directly with `.gpu`.
+            ranked = usages.sorted {
+                let left = $0.gpuPercent ?? -1
+                let right = $1.gpuPercent ?? -1
+                if left == right { return $0.memoryBytes > $1.memoryBytes }
+                return left > right
+            }
         }
 
         var notes: [String] = []
