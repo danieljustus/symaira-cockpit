@@ -69,6 +69,13 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// ``onOpenCockpit`` is set.
     public var openCockpitTitle: String = "Open Cockpit"
 
+    /// Title shown at the top of the status popover header. The cockpit host
+    /// overrides this to "SYMAIRA COCKPIT" so left-clicking its (only) menu
+    /// bar icon shows the same product name as the window it opens, instead
+    /// of "SYMAIRA TUNE" — previously the one visible surface that gave away
+    /// that Tune was a separate app stapled on rather than a section of one.
+    public var panelTitle: String = "SYMAIRA TUNE"
+
     /// Accessibility description of the menu bar icon (VoiceOver).
     public var statusItemAccessibilityLabel: String = "SymairaTune"
 
@@ -322,6 +329,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             openPreferences: { [weak self] in self?.openPreferences() },
             onOpenCockpit: onOpenCockpit,
             openCockpitTitle: openCockpitTitle,
+            panelTitle: panelTitle,
+            panelVersion: updateVersionProvider(),
             keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome

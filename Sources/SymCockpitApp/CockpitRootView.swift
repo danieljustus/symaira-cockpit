@@ -58,7 +58,14 @@ struct CockpitRootView: View {
                 Button {
                     openPreferences()
                 } label: {
-                    Label("Preferences", systemImage: "gearshape")
+                    // Named for what it actually configures (Tune's metrics,
+                    // AI usage and update settings) rather than a bare
+                    // "Preferences" that reads as cockpit-wide when Scope and
+                    // Operate have no preferences of their own — the same
+                    // window this button opens is also reachable from inside
+                    // the Tune section itself, so matching labels make clear
+                    // it is the same destination rather than a different one.
+                    Label("Tune Preferences", systemImage: "gearshape")
                 }
                 .help("Open Tune preferences (⌘,)")
             }

@@ -29,13 +29,21 @@ extension View {
 // MARK: - Header / footer
 
 struct StatusHeaderView: View {
+    /// Defaults match the standalone Tune app; the cockpit host overrides
+    /// both via ``StatusBarController/panelTitle`` and its version provider
+    /// so the popover reads "SYMAIRA COCKPIT" + the cockpit's own version
+    /// instead of Tune's — the two were previously out of sync, which is
+    /// exactly what made the app read as several tools stapled together.
+    var title: String = "SYMAIRA TUNE"
+    var version: String = TuneVersion.current
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("SYMAIRA TUNE")
+                Text(title)
                     .symairaText(.heading)
                     .foregroundStyle(SymairaTheme.goldPrimary)
-                Text("v\(TuneVersion.current)")
+                Text("v\(version)")
                     .symairaText(.monoSmall)
                     .foregroundStyle(SymairaTheme.textMuted)
             }

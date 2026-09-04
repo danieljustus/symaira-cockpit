@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let statusBar = StatusBarController(updateVersionProvider: { CockpitAppVersion.current })
         statusBar.openCockpitTitle = "Open Cockpit…"
+        statusBar.panelTitle = "SYMAIRA COCKPIT"
         statusBar.statusItemAccessibilityLabel = "Symaira Cockpit"
         statusBar.fallbackIconTitle = "SC"
         statusBar.preferencesWindowTitle = "Symaira Cockpit Preferences"

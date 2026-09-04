@@ -54,6 +54,11 @@ struct MainStatusView: View {
     /// Title of the ``onOpenCockpit`` row inside the popover.
     var openCockpitTitle: String = "Open Cockpit…"
 
+    /// Header title and version line (branding override — see
+    /// ``StatusHeaderView``).
+    var panelTitle: String = "SYMAIRA TUNE"
+    var panelVersion: String = TuneVersion.current
+
     /// Reason string for the Keep Awake power assertion (branding override).
     var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
@@ -86,7 +91,7 @@ struct MainStatusView: View {
     private var cards: some View {
         VStack(spacing: SymairaSpacing.medium) {
             if chrome == .popover {
-                StatusHeaderView()
+                StatusHeaderView(title: panelTitle, version: panelVersion)
                 if let onOpenCockpit {
                     openCockpitRow(onOpenCockpit)
                 }
