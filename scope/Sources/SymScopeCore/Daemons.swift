@@ -306,13 +306,20 @@ public struct DaemonService: Sendable {
 
     public static func health(_ daemons: [Daemon]) -> [DaemonHealthResult] {
         daemons.map { daemon in
-            let healthy = daemon.state != "not-loaded" && (daemon.lastExitStatus ?? 0) == 0
+            // A live PID takes precedence over a stale prior exit status: a running
+            // job can legitimately retain the previous invocation's signal/exit code.
+            let healthy = daemon.state == "running"
+                || (daemon.state != "not-loaded" && (daemon.lastExitStatus ?? 0) == 0)
+            var notes = daemon.notes
+            if daemon.state == "not-loaded" {
+                notes = Self.mergeNotes(notes, ["not loaded (inactive by design, not a failure)"])
+            }
             return DaemonHealthResult(
                 label: daemon.label,
                 state: daemon.state,
                 healthy: healthy,
                 lastExitStatus: daemon.lastExitStatus,
-                notes: daemon.notes
+                notes: notes
             )
         }
     }

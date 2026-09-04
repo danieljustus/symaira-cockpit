@@ -140,6 +140,25 @@ final class DaemonParserTests: XCTestCase {
         XCTAssertTrue(health[1].healthy)
     }
 
+    func testHealthPrefersLivePIDOverHistoricalExitStatus() {
+        let daemons = [
+            Daemon(label: "running.nonzero", state: "running", pid: 42, lastExitStatus: 143, domain: "user"),
+            Daemon(label: "running.zero", state: "running", pid: 43, lastExitStatus: 0, domain: "user"),
+            Daemon(label: "stopped.nonzero", state: "loading", pid: nil, lastExitStatus: 255, domain: "user"),
+            Daemon(label: "not.loaded", state: "not-loaded", pid: nil, lastExitStatus: nil, domain: "user"),
+        ]
+
+        let health = DaemonService.health(daemons)
+        let byLabel = Dictionary(uniqueKeysWithValues: health.map { ($0.label, $0) })
+
+        XCTAssertTrue(byLabel["running.nonzero"]!.healthy, "a live PID must not be marked unhealthy by a stale prior exit status")
+        XCTAssertEqual(byLabel["running.nonzero"]!.lastExitStatus, 143, "historical exit status stays available for diagnosis")
+        XCTAssertTrue(byLabel["running.zero"]!.healthy)
+        XCTAssertFalse(byLabel["stopped.nonzero"]!.healthy)
+        XCTAssertFalse(byLabel["not.loaded"]!.healthy)
+        XCTAssertTrue(byLabel["not.loaded"]!.notes.contains { $0.contains("inactive by design") }, "not-loaded is presented as intentional, not a bare failure")
+    }
+
     func testMissingHomebrewIsOnlyANote() async {
         let runner = FixtureCommandRunner(outputs: [
             "/bin/launchctl list": "PID Status Label\n- 0 com.example.worker\n",
