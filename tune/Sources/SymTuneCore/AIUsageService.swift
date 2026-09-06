@@ -40,7 +40,12 @@ public struct AIUsageService: @unchecked Sendable {
             let report = try client.fetchReport()
             return reportResults(report)
         } catch {
-            let message = "AI usage unavailable."
+            // Name the failure instead of collapsing it. Every
+            // ``SymBrainUsageError`` description is a fixed string that never
+            // embeds subprocess output, so this stays secret-free — and a
+            // missing `symbrain` now says so rather than looking exactly like
+            // a provider that simply has no data.
+            let message = (error as? SymBrainUsageError)?.errorDescription ?? "AI usage unavailable."
             return providers.map { ProviderResult(providerID: $0.id, snapshot: nil, error: message) }
         }
     }
