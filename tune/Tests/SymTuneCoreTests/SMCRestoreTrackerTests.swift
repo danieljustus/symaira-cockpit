@@ -95,8 +95,9 @@ final class SMCRestoreTrackerTests: XCTestCase {
         return [
             "FNum": FakeSMCKeyResult(dataType: ui8, bytes: [1]),
             "F0Md": FakeSMCKeyResult(dataType: ui8, bytes: [3]),
-            "F0Tg": FakeSMCKeyResult(dataType: fpe2, bytes: [0x0A, 0x00]), // 10 RPM
-            "F0Mx": FakeSMCKeyResult(dataType: fpe2, bytes: [0x64, 0x00]), // 100 RPM
+            // `fpe2` is unsigned fixed-point 14.2: raw = RPM * 4 (issue #193).
+            "F0Tg": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x28]), // 10 RPM
+            "F0Mx": FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x90]), // 100 RPM
             "FS!": FakeSMCKeyResult(dataType: ui16, bytes: [0, 0]),
             "CHLC": FakeSMCKeyResult(dataType: ui16, bytes: [0, 0]),
         ]
@@ -130,7 +131,7 @@ final class SMCRestoreTrackerTests: XCTestCase {
         tracker.restoreAll()
 
         let target = conn.writtenKeys.first { $0.key == "F0Tg" }
-        XCTAssertEqual(target?.bytes, [0x0A, 0x00])
+        XCTAssertEqual(target?.bytes, [0x00, 0x28]) // 10 RPM at 14.2 fixed-point
     }
 
     func testRestoreChargeReenablesChargingIntel() {
