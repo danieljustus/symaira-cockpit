@@ -21,7 +21,8 @@ final class SMCServiceTests: XCTestCase {
 
     func testTemperatureReadings() {
         let fpe2 = smcEncodeKey("fpe2")
-        // 0x3200 / 256 = 50.0 °C — a plausible die reading. Values outside
+        // 0x00C8 / 4 = 50.0 °C — a plausible die reading (fpe2 is unsigned
+        // fixed-point 14.2, issue #193). Values outside
         // `SMCService.plausibleTemperatureRange` are dropped on purpose, so a
         // fixture has to be a temperature a running Mac could actually report.
         #if arch(arm64)
@@ -32,7 +33,7 @@ final class SMCServiceTests: XCTestCase {
         let label = "CPU Core 1"
         #endif
         let conn = FakeSMCConnection(isOpen: true, keys: [
-            key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
+            key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0xC8])
         ])
         let service = SMCService(connection: conn)
 
@@ -56,10 +57,10 @@ final class SMCServiceTests: XCTestCase {
     func testFanReadings() {
         let ui8 = smcEncodeKey("ui8 ")
         let fpe2 = smcEncodeKey("fpe2")
-        // 0x0500 / 256 = 5.0
+        // 0x0014 / 4 = 5.0 (fpe2 is unsigned fixed-point 14.2, issue #193)
         let conn = FakeSMCConnection(isOpen: true, keys: [
             "FNum": FakeSMCKeyResult(dataType: ui8, bytes: [1]),
-            "F0Ac": FakeSMCKeyResult(dataType: fpe2, bytes: [0x05, 0x00])
+            "F0Ac": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x14])
         ])
         let service = SMCService(connection: conn)
 
@@ -79,7 +80,27 @@ final class SMCServiceTests: XCTestCase {
         XCTAssertEqual(conn.writtenKeys.count, 1)
         let written = conn.writtenKeys.first!
         XCTAssertEqual(written.key, "F0Tg")
-        XCTAssertEqual(written.bytes, [0x02, 0x00])
+        // fpe2 is unsigned fixed-point 14.2: 2.0 * 4 = 8 = 0x0008 (issue #193).
+        XCTAssertEqual(written.bytes, [0x00, 0x08])
+    }
+
+    /// Real firmware example from issue #193: encoding a fan target of 6000
+    /// RPM must produce the same raw bytes (0x5DC0) a real Intel SMC would
+    /// report back for that speed — the inverse of
+    /// `testFpe2DecodesRealFirmwareFanRPM` in `SymTuneCoreTests.swift`. The
+    /// old `* 256` encoding would have overflowed `UInt16` at this magnitude.
+    func testWriteKeyValueEncodesFpe2RealFirmwareRoundTrip() {
+        let conn = FakeSMCConnection(isOpen: true)
+        let service = SMCService(connection: conn)
+
+        let success = service.writeKeyValue("F0Tg", value: 6000.0, dataType: "fpe2")
+        XCTAssertTrue(success)
+        let written = conn.writtenKeys.first!
+        XCTAssertEqual(written.bytes, [0x5D, 0xC0])
+
+        // And it must decode back to the same physical RPM.
+        let roundTripped = smcConvertValue(dataType: written.dataType, bytes: written.bytes)
+        XCTAssertEqual(roundTripped, 6000.0, accuracy: 0.01)
     }
 
     func testWriteKeyValueEncodesFloatLittleEndian() {
@@ -244,9 +265,11 @@ final class SMCServiceTests: XCTestCase {
         let fpe2 = smcEncodeKey("fpe2")
         let table = currentArchTable
         let conn = FakeSMCConnection(isOpen: true, keys: [
-            // 0x0230 / 256 ≈ 2.2 °C — the value a power-gated core reports.
-            table[0].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x02, 0x30]),
-            table[1].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x55, 0x00]),
+            // 0x0009 / 4 = 2.25 °C — the value a power-gated core reports
+            // (fpe2 is unsigned fixed-point 14.2, issue #193).
+            table[0].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x09]),
+            // 0x0154 / 4 = 85.0 °C — a plausible reading.
+            table[1].key: FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x54]),
         ])
         conn.enumeratedKeys = [table[0].key, table[1].key]
 
@@ -332,12 +355,13 @@ final class SMCServiceTests: XCTestCase {
         let fpe2 = smcEncodeKey("fpe2")
 
         // Host exposes only one table key plus a foreign key.
+        // 0x00C8 / 4 = 50.0 (fpe2 is unsigned fixed-point 14.2, issue #193).
         let exposed = [table[0].key, "ZZZZ"]
         var keys: [String: FakeSMCKeyResult] = [:]
         for (key, _) in table where exposed.contains(key) {
-            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
+            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0xC8])
         }
-        keys["ZZZZ"] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
+        keys["ZZZZ"] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0xC8])
 
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = exposed
@@ -358,7 +382,8 @@ final class SMCServiceTests: XCTestCase {
 
         var keys: [String: FakeSMCKeyResult] = [:]
         for (key, _) in table {
-            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x32, 0x00])
+            // 0x00C8 / 4 = 50.0 (fpe2 is unsigned fixed-point 14.2, issue #193).
+            keys[key] = FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0xC8])
         }
         let conn = FakeSMCConnection(isOpen: true, keys: keys)
         conn.enumeratedKeys = nil // enumeration unavailable
@@ -433,12 +458,14 @@ final class SMCServiceTests: XCTestCase {
     func testM4GenerationSkipsDeliberatelyAbsentKey() {
         let fpe2 = smcEncodeKey("fpe2")
         // The M4 row expects Te05/Te0S/Te09/Te0H; Te0H is deliberately absent
-        // from this host's enumeration and key table.
+        // from this host's enumeration and key table. Bytes are 16/32/48/64
+        // °C at fpe2's unsigned fixed-point 14.2 scale, raw = value * 4
+        // (issue #193).
         let conn = FakeSMCConnection(isOpen: true, keys: [
-            "TCMz": FakeSMCKeyResult(dataType: fpe2, bytes: [0x10, 0x00]),
-            "Te05": FakeSMCKeyResult(dataType: fpe2, bytes: [0x20, 0x00]),
-            "Te0S": FakeSMCKeyResult(dataType: fpe2, bytes: [0x30, 0x00]),
-            "Te09": FakeSMCKeyResult(dataType: fpe2, bytes: [0x40, 0x00]),
+            "TCMz": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x40]),
+            "Te05": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x80]),
+            "Te0S": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0xC0]),
+            "Te09": FakeSMCKeyResult(dataType: fpe2, bytes: [0x01, 0x00]),
         ])
         conn.enumeratedKeys = ["TCMz", "Te05", "Te0S", "Te09"]
         let service = SMCService(connection: conn, generation: .m4)

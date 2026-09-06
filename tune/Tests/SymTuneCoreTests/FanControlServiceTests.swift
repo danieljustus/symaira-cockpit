@@ -65,7 +65,8 @@ final class FanControlServiceTests: XCTestCase {
     }
 
     private func fpe2Bytes(_ value: Double) -> [UInt8] {
-        let raw = UInt16((value * 256).rounded())
+        // `fpe2` is unsigned fixed-point 14.2: raw = value * 4 (issue #193).
+        let raw = UInt16((value * 4).rounded())
         return [UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF)]
     }
 

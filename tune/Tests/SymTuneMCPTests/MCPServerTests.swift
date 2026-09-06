@@ -683,7 +683,8 @@ final class MockSMCConnection: SMCConnectionProtocol, @unchecked Sendable {
     }
 
     private func encodeFpe2(_ value: Double) -> (UInt32, [UInt8]) {
-        let raw = UInt16((value * 256.0).rounded())
+        // `fpe2` is unsigned fixed-point 14.2: raw = value * 4 (issue #193).
+        let raw = UInt16((value * 4.0).rounded())
         return (
             smcEncodeKey("fpe2"),
             [
