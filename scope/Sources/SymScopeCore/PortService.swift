@@ -102,6 +102,13 @@ public enum PortService: Sendable {
                 currentAddr = ""
             case "c":
                 currentCommand = value
+            case "f":
+                // A new file descriptor starts a new n/P pair within the same
+                // p record. Flush the previous descriptor's address (if any)
+                // before resetting; keep the pid/command, which are shared by
+                // every descriptor in this record.
+                flush()
+                currentAddr = ""
             case "n":
                 currentAddr = value
             default:

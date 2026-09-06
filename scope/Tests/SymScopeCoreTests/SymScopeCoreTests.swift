@@ -64,6 +64,30 @@ final class PortParseTests: XCTestCase {
         XCTAssertEqual(ports.count, 1)
         XCTAssertEqual(ports[0].pid, 456)
     }
+
+    /// Regression for #192: real `lsof -F pcnP` output emits one `f`/`P`/`n`
+    /// triple per file descriptor within a single `p` record. Before the fix,
+    /// only the flush on a new `p` (or EOF) emitted a port, so every address
+    /// but the last for a process was silently overwritten and dropped.
+    func testParseLsofOutputEmitsEveryDescriptorInARecord() {
+        let output = """
+        p789
+        cnode
+        f4
+        PTCP
+        n127.0.0.1:8080
+        f6
+        PTCP
+        n*:9090
+        f8
+        PTCP
+        n0.0.0.0:3000
+        """
+        let ports = PortService.parseLsofOutput(output, protocol_: "tcp")
+        XCTAssertEqual(ports.count, 3)
+        XCTAssertTrue(ports.allSatisfy { $0.pid == 789 && $0.process == "node" })
+        XCTAssertEqual(Set(ports.map(\.port)), [8080, 9090, 3000])
+    }
 }
 
 final class ContainerPortParseTests: XCTestCase {
