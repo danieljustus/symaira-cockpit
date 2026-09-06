@@ -7,6 +7,9 @@ private struct HardwareSnapshot: Sendable {
     let metrics: SystemMetricsReport
     let sensors: SensorReport?
     let battery: BatteryReport?
+    /// Whether the privileged fan governor is running, probed via `pgrep`.
+    /// `nil` when the detail surface is closed and the probe was skipped.
+    let fanGovernorRunning: Bool?
 }
 
 /// Single source of truth for the menu-bar app.
@@ -18,7 +21,8 @@ private struct HardwareSnapshot: Sendable {
 ///
 /// - **Every tick**: system metrics (cheap: `sysctl`/`mach` calls only).
 /// - **Every tick while the popover is open**: SMC sensors and battery — the
-///   expensive IOKit reads, executed **off the main thread**.
+///   expensive IOKit reads — and the fan-governor probe (`pgrep`, a
+///   fork/exec), all executed **off the main thread**.
 /// - **Every eighth tick**: the display list, which changes only when the user
 ///   plugs a monitor in.
 ///
@@ -178,13 +182,15 @@ final class TuneViewModel {
         let wantsDetail = isDetailVisible
         let controller = self.controller
 
-        // Expensive, AppKit-free IOKit reads run off the main thread so the UI
-        // never stalls on the SMC.
+        // Expensive, AppKit-free IOKit reads — and the `pgrep`-based governor
+        // probe, a synchronous fork/exec (issue #194) — run off the main
+        // thread so the UI never stalls on the SMC or on process spawning.
         let snapshot = await Task.detached(priority: .utility) {
             HardwareSnapshot(
                 metrics: controller.metricsReport(),
                 sensors: wantsDetail ? controller.sensorsReport() : nil,
-                battery: wantsDetail ? controller.batteryReport() : nil
+                battery: wantsDetail ? controller.batteryReport() : nil,
+                fanGovernorRunning: wantsDetail ? controller.isFanGovernorRunning() : nil
             )
         }.value
 
@@ -199,6 +205,7 @@ final class TuneViewModel {
         if metrics != snapshot.metrics { metrics = snapshot.metrics }
         if let value = snapshot.sensors, sensors != value { sensors = value }
         if let value = snapshot.battery, battery != value { battery = value }
+        if let value = snapshot.fanGovernorRunning, fanGovernorRunning != value { fanGovernorRunning = value }
 
         updateStatusItemText()
         rebuildMetricRows()
@@ -211,14 +218,17 @@ final class TuneViewModel {
     }
 
     /// Reads that must stay on the main actor (AppKit / overlay state).
+    ///
+    /// The fan-governor probe used to run here too (a synchronous `pgrep`
+    /// fork/exec) but has moved into the `Task.detached` block in
+    /// ``refresh(scheduled:)`` alongside the sensors/battery reads — it needs
+    /// no AppKit and has no business blocking the main actor (issue #194).
     private func refreshMainThreadState() {
         let currentOverrides = controller.activeOverrides()
         if overrides != currentOverrides { overrides = currentOverrides }
 
         let currentProfile = controller.activeFanProfile
         if fanProfile != currentProfile { fanProfile = currentProfile }
-        let governorRunning = controller.isFanGovernorRunning()
-        if fanGovernorRunning != governorRunning { fanGovernorRunning = governorRunning }
 
         // `activeOverrides()` already read the built-in brightness; reuse it
         // instead of hitting DisplayServices a second time per refresh.
