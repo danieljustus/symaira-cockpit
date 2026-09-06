@@ -19,7 +19,8 @@ final class TuneControllerFanChargeTests: XCTestCase {
     }
 
     private func fpe2(_ value: Double) -> FakeSMCKeyResult {
-        let raw = UInt16((value * 256.0).rounded())
+        // `fpe2` is unsigned fixed-point 14.2: raw = value * 4 (issue #193).
+        let raw = UInt16((value * 4.0).rounded())
         return FakeSMCKeyResult(dataType: smcEncodeKey("fpe2"), bytes: [UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF)])
     }
 

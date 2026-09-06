@@ -531,18 +531,30 @@ final class SMCKeyTests: XCTestCase {
 }
 
 final class SMCConvertValueTests: XCTestCase {
+    // `fpe2` is unsigned fixed-point 14.2: 14 integer bits, 2 fractional
+    // bits, so raw = value * 4 (issue #193). Before the fix this case
+    // divided by 256 (the `sp78` scale), understating Intel fan RPM by 64x.
     func testFpe2Conversion() {
         let dataType = smcEncodeKey("fpe2")
-        let bytes: [UInt8] = [0x01, 0x00]
+        let bytes: [UInt8] = [0x00, 0x04] // 4 / 4 = 1.0
         let result = smcConvertValue(dataType: dataType, bytes: bytes)
         XCTAssertEqual(result, 1.0, accuracy: 0.01)
     }
 
     func testFpe2FractionalPart() {
         let dataType = smcEncodeKey("fpe2")
-        let bytes: [UInt8] = [0x00, 0x80]
+        let bytes: [UInt8] = [0x00, 0x02] // 2 / 4 = 0.5
         let result = smcConvertValue(dataType: dataType, bytes: bytes)
         XCTAssertEqual(result, 0.5, accuracy: 0.01)
+    }
+
+    /// Real firmware example from issue #193: an Intel fan reporting 6000 RPM
+    /// encodes as raw 24000 (0x5DC0) at the 14.2 fixed-point scale. The old
+    /// `/256` decode would have understated this as 93.75 RPM (a 64x error).
+    func testFpe2DecodesRealFirmwareFanRPM() {
+        let dataType = smcEncodeKey("fpe2")
+        let result = smcConvertValue(dataType: dataType, bytes: [0x5D, 0xC0])
+        XCTAssertEqual(result, 6000.0, accuracy: 0.01)
     }
 
     func testFpe2InsufficientBytesReturnsZero() {

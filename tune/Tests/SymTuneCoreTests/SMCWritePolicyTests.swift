@@ -14,9 +14,10 @@ final class SMCWritePolicyTests: XCTestCase {
         ]
     }
 
-    // Helper to generate fpe2 bytes for SMC
+    // Helper to generate fpe2 bytes for SMC.
+    // `fpe2` is unsigned fixed-point 14.2: raw = value * 4 (issue #193).
     private func fpe2Bytes(_ value: Double) -> [UInt8] {
-        let raw = UInt16((value * 256).rounded())
+        let raw = UInt16((value * 4).rounded())
         return [UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF)]
     }
 
@@ -97,6 +98,33 @@ final class SMCWritePolicyTests: XCTestCase {
         // 0.1 * 100 = 10, floored to minRPM (20)
         let flooredTarget = try SMCWritePolicy.targetRPM(fraction: 0.1, fanIndex: 0, smc: smc)
         XCTAssertEqual(flooredTarget, 20.0, accuracy: 0.01)
+    }
+
+    /// Pins `SMCWritePolicy.targetRPM` against real Intel firmware byte
+    /// encoding (not the self-consistent `fpe2Bytes` helper above), so a
+    /// future regression that reintroduces an asymmetric fpe2 decode/encode
+    /// pair would be caught here even if it kept `fpe2Bytes` in sync with
+    /// itself. `F0Mx` = 6000 RPM as the real 14.2 fixed-point SMC would
+    /// report it (0x5DC0, issue #193); the physical target RPM for a given
+    /// fraction must be the same value the write path would have produced
+    /// once both the decode and encode bugs are fixed together.
+    func testTargetRPMPinnedAgainstRealFirmwareEncoding() throws {
+        let fpe2 = smcEncodeKey("fpe2")
+        let conn = FakeSMCConnection(isOpen: true, keys: [
+            "F0Mx": FakeSMCKeyResult(dataType: fpe2, bytes: [0x5D, 0xC0]), // 6000 RPM
+            "F0Mn": FakeSMCKeyResult(dataType: fpe2, bytes: [0x00, 0x00])  // 0 RPM
+        ])
+        let smc = SMCService(connection: conn)
+
+        let target = try SMCWritePolicy.targetRPM(fraction: 0.5, fanIndex: 0, smc: smc)
+        XCTAssertEqual(target, 3000.0, accuracy: 0.01)
+
+        // Writing that target back must round-trip to the same real-firmware
+        // bytes (3000 * 4 = 12000 = 0x2EE0), confirming the physical RPM
+        // delivered to hardware is unchanged by the fix.
+        XCTAssertTrue(smc.writeKeyValue("F0Tg", value: target, dataType: "fpe2"))
+        let written = conn.writtenKeys.first { $0.key == "F0Tg" }
+        XCTAssertEqual(written?.bytes, [0x2E, 0xE0])
     }
 
     func testRequireThermalHeadroom() throws {

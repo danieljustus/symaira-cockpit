@@ -28,11 +28,15 @@ func smcConvertValue(dataType: UInt32, bytes: [UInt8]) -> Double {
 
     switch typeStr {
     case "fpe2":
-        // Float with exponent bias 2 — standard for temperature sensors.
-        // High byte = integer part, low byte = fractional part (1/256).
+        // Unsigned fixed-point 14.2 (2 bytes, big-endian): 14 integer bits
+        // followed by 2 fractional bits, so the raw register value is the
+        // physical value times 4. Used for Intel fan RPM registers. The
+        // `/256` divisor this case used to have is actually the `sp78`
+        // layout below — using it here understated Intel fan RPM by 64x
+        // (issue #193).
         guard bytes.count >= 2 else { return 0 }
         let raw = UInt16(bytes[0]) << 8 | UInt16(bytes[1])
-        return Double(raw) / 256.0
+        return Double(raw) / 4.0
 
     case "flt ":
         // IEEE 754 float, 4 bytes, *little-endian* — unlike the integer and
@@ -623,14 +627,18 @@ public struct SMCService: Sendable {
     }
 
     /// Write a value to an SMC key, encoding as the specified data type.
-    /// Supported types: `fpe2` (Intel temperature/fan), `flt ` (Apple Silicon
-    /// fan RPM), `ui8 `, `ui16`, `ui32`.
+    /// Supported types: `fpe2` (Intel fan RPM, unsigned 14.2 fixed-point),
+    /// `flt ` (Apple Silicon fan RPM), `ui8 `, `ui16`, `ui32`.
     public func writeKeyValue(_ key: String, value: Double, dataType: String = "fpe2") -> Bool {
         let typeUInt = smcEncodeKey(dataType)
         let bytes: [UInt8]
         switch dataType {
         case "fpe2":
-            let raw = UInt16((value * 256.0).rounded())
+            // Unsigned fixed-point 14.2 — mirrors the decode in
+            // `smcConvertValue` (issue #193). `value * 4` keeps the 16-bit
+            // register valid up to 16383 RPM, comfortably above real fan
+            // maxima; the old `* 256` scale overflowed above 255.
+            let raw = UInt16((value * 4.0).rounded())
             bytes = [UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF)]
         case "flt ":
             // Little-endian, mirroring the read path in `smcConvertValue`.
