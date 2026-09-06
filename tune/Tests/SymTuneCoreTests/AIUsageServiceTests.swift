@@ -191,6 +191,9 @@ final class SymBrainUsageClientTests: XCTestCase {
         XCTAssertEqual(service.credentialSources().first?.source, "keyring")
     }
 
+    /// A missing binary must not throw at the UI boundary — and it must not
+    /// hide behind the generic message either. An unresolvable `symbrain` is
+    /// the one failure the user can actually fix, so the row names it.
     func testMissingBinaryBecomesUnavailableRowsInsteadOfAThrownUIError() async throws {
         let service = AIUsageService(client: SymBrainUsageClient(
             runner: MissingRunner(), environment: [:], credentialReference: { _ in nil }
@@ -198,6 +201,28 @@ final class SymBrainUsageClientTests: XCTestCase {
 
         let results = await service.usageAll()
         XCTAssertEqual(results.count, SymBrainUsageProvider.catalog().count)
-        XCTAssertTrue(results.allSatisfy { $0.snapshot == nil && $0.error == "AI usage unavailable." })
+        XCTAssertTrue(results.allSatisfy { $0.snapshot == nil })
+        XCTAssertTrue(results.allSatisfy { $0.error == "symbrain is not installed" })
+    }
+
+    /// Other runtime failures still reach the card, each naming its own cause
+    /// rather than collapsing into one indistinguishable string.
+    func testRuntimeFailureSurfacesItsOwnCause() async throws {
+        let service = AIUsageService(client: SymBrainUsageClient(
+            runner: RecordingRunner(
+                output: SymBrainCommandResult(
+                    standardOutput: Data("not json".utf8),
+                    standardError: Data(),
+                    terminationStatus: 0
+                ),
+                recorder: Recorder()
+            ),
+            environment: [:],
+            credentialReference: { _ in nil }
+        ))
+
+        let results = await service.usageAll()
+        XCTAssertEqual(results.count, SymBrainUsageProvider.catalog().count)
+        XCTAssertTrue(results.allSatisfy { $0.error == "symbrain usage returned invalid JSON" })
     }
 }

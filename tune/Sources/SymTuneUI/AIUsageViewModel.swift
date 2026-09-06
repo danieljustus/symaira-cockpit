@@ -51,6 +51,9 @@ final class AIUsageViewModel {
     private var historyBuffers: [String: MetricsRingBuffer] = [:]
     private var lastSuccessAt: [String: Date] = [:]
     private var refreshTask: Task<Void, Never>?
+    /// Guards against overlapping fetches — the refresh loop and the card's
+    /// refresh button can both fire while a report is still in flight.
+    private var isRefreshing = false
 
     init(controller: TuneController, preferences: AIUsagePreferences) {
         self.controller = controller
@@ -65,7 +68,7 @@ final class AIUsageViewModel {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.refresh()
+                await self.refresh()
                 let interval = self.preferences.refreshInterval
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
@@ -79,20 +82,29 @@ final class AIUsageViewModel {
 
     /// One immediate refresh (also used right after preference changes).
     func refreshNow() {
-        refresh()
+        Task { await refresh() }
     }
 
     // MARK: - Fetch
 
-    private func refresh() {
+    private func refresh() async {
         let enabled = preferences.enabledProviders
         guard !enabled.isEmpty else {
             rows = []
             updateStatusItem()
             return
         }
-        // aiUsageReport blocks; run it off the main actor.
-        let report = controller.aiUsageReport()
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        // `usageAll()` is nonisolated and wraps a subprocess that can take
+        // seconds, so awaiting it runs the fetch on the cooperative pool and
+        // leaves the popover interactive. The old code called the controller's
+        // synchronous bridge, which parked the main thread on a semaphore for
+        // the whole `symbrain` call.
+        let service = controller.aiUsageService
+        let report = await service.usageAll()
         let enabledResults = report.filter { enabled.contains($0.providerID) }
         let now = Date()
 
