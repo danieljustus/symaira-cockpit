@@ -17,6 +17,7 @@ set -euo pipefail
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
+REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
 APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
@@ -66,7 +67,7 @@ sed \
   -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
-if ACTOOL="$(xcrun --find actool 2>/dev/null)"; then
+if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; then
   ICON_BUILD_DIR="$APP_PATH/Contents/Resources/.AppIcon-compiled"
   mkdir -p "$ICON_BUILD_DIR"
   "$ACTOOL" \
@@ -78,8 +79,11 @@ if ACTOOL="$(xcrun --find actool 2>/dev/null)"; then
     "$ICON_SOURCE"
   cp "$ICON_BUILD_DIR/Assets.car" "$APP_PATH/Contents/Resources/Assets.car"
   rm -rf "$ICON_BUILD_DIR"
+elif [[ "$REQUIRE_COMPILED_ICON" == "true" ]]; then
+  printf 'Release requires an Xcode 26+ actool that supports .icon; actool is unavailable.\n' >&2
+  exit 1
 else
-  printf 'Warning: actool unavailable; keeping the approved ICNS fallback only.\\n' >&2
+  printf 'Warning: actool unavailable; keeping the approved ICNS fallback only.\n' >&2
 fi
 
 printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"

@@ -80,16 +80,27 @@ jobs:
   # ---------------------------------------------------------------------------
   release-macos-app:
     name: Signed and notarized Symaira Cockpit.app
-    runs-on: macos-latest
+    runs-on: macos-15
     environment: release
     needs: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Select toolchain
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.0'
+
+      - name: Verify Xcode toolchain
         run: |
-          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
-            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version)"
+          echo "$XCODE_VERSION"
+          XCODE_MAJOR="${XCODE_VERSION#Xcode }"
+          XCODE_MAJOR="${XCODE_MAJOR%%.*}"
+          if ! [[ "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || (( XCODE_MAJOR < 26 )); then
+            echo "::error::Expected Xcode 26 or newer, got: $XCODE_VERSION"
+            exit 1
           fi
 
       - name: Resolve version from tag
@@ -132,9 +143,9 @@ jobs:
           CODE_SIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
         run: |
           set -euo pipefail
-          ./scripts/build-app.sh
+          REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
           test -d "build/app/Symaira Cockpit.app"
-          ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
+          REQUIRE_COMPILED_ICON=true ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
 
       - name: Verify app reports the release version
         run: |
