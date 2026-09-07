@@ -1,0 +1,29 @@
+# Code owners for symaira-cockpit.
+#
+# GitHub matches the LAST matching pattern, so the broad fallback comes first
+# and the narrower, higher-risk paths override it below.
+#
+# The ruleset deliberately does NOT require code-owner review: this is a
+# single-maintainer repository, and GitHub does not count the author's own
+# approval, so requiring it would block every PR. This file documents
+# ownership and routes review requests; it becomes load-bearing as soon as a
+# second maintainer exists.
+
+*                                                   @danieljustus
+
+# Privileged elevation. A change here decides which binary runs as root behind
+# the administrator prompt, and how state written by that root process is
+# de-escalated back to the user.
+/tune/Sources/SymTuneCore/PrivilegedElevation.swift  @danieljustus
+/tune/Sources/SymTuneCore/StateFilePermissions.swift @danieljustus
+/history/Sources/SymCockpitHistory/PrivilegedExecutableResolver.swift @danieljustus
+
+# Release and CI. These publish signed, notarized artifacts and bump the
+# Homebrew tap; they also hold the gates that decide whether anything else is
+# allowed to ship.
+/.github/workflows/                                  @danieljustus
+/Makefile                                            @danieljustus
+/scripts/                                            @danieljustus
+
+# Security policy.
+/SECURITY.md                                         @danieljustus
