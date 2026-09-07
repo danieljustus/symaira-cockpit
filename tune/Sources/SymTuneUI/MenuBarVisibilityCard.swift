@@ -22,6 +22,9 @@ struct MenuBarVisibilityCard: View {
     /// Whether any AI-usage provider is switched on at all; the menu-bar
     /// toggle for it is meaningless otherwise and says so.
     let hasEnabledAIProviders: Bool
+    /// The notch HUD's switch, or `nil` in a host that does not offer it (the
+    /// standalone Tune app). Issue #224.
+    var notch: NotchHUDPreferences?
 
     @State private var saveError: String?
 
@@ -40,6 +43,10 @@ struct MenuBarVisibilityCard: View {
             Divider().overlay(SymairaTheme.borderGlass)
 
             aiUsageRow
+
+            if let notch {
+                notchRow(notch)
+            }
 
             if let saveError {
                 Text(saveError)
@@ -227,6 +234,50 @@ struct MenuBarVisibilityCard: View {
                 // Stored in UserDefaults by AIUsagePreferences itself, so
                 // there is nothing to write to config.toml here.
                 aiUsage.menuBarEnabled = newValue
+            }
+        }
+    }
+
+    /// The notch HUD lives beside the menu-bar switches because it is the same
+    /// decision — where the readout appears — even though it draws its own
+    /// surface. On a Mac without a camera cutout there is nowhere to put it,
+    /// and the row says that instead of offering a switch that does nothing.
+    private func notchRow(_ notch: NotchHUDPreferences) -> some View {
+        let available = NotchHUDController.isAvailable
+
+        return HStack(spacing: SymairaSpacing.medium) {
+            Image(systemName: "rectangle.topthird.inset.filled")
+                .symairaText(.caption)
+                .frame(width: 18)
+                .foregroundStyle(
+                    notch.enabled && available
+                        ? SymairaTheme.goldPrimary
+                        : SymairaTheme.textMuted
+                )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Notch HUD")
+                    .symairaText(.body)
+                    .foregroundStyle(available ? SymairaTheme.textPrimary : SymairaTheme.textMuted)
+                Text(available
+                    ? "A readout around the camera cutout; hover to expand"
+                    : "This display has no camera cutout")
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textMuted)
+            }
+
+            Spacer(minLength: SymairaSpacing.small)
+
+            // No sampling of its own — the HUD renders the metrics that are
+            // already being polled — so it sits under the "Menu bar" column.
+            Color.clear.frame(width: 64, height: 1)
+
+            switchCell(
+                isOn: notch.enabled,
+                help: "Show the metrics around the camera cutout as well",
+                disabled: !available
+            ) { newValue in
+                notch.enabled = newValue
             }
         }
     }

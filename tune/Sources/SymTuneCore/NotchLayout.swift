@@ -1,0 +1,164 @@
+import CoreGraphics
+import Foundation
+
+/// The measurements the notch HUD needs from one display.
+///
+/// Kept free of AppKit so the geometry is testable without a screen: the
+/// controller reads `NSScreen.frame`, `safeAreaInsets.top` and the two
+/// `auxiliaryTop*Area` rectangles once and hands the numbers over.
+///
+/// Coordinates are the global (bottom-left origin) space `NSScreen.frame` and
+/// `NSWindow.setFrame` both use, so a frame computed here can be applied to a
+/// panel unchanged.
+public struct NotchScreenMetrics: Equatable, Sendable {
+    /// The display's full frame, in global screen coordinates.
+    public var frame: CGRect
+    /// Height of the menu bar strip — `NSScreen.safeAreaInsets.top`. Zero on a
+    /// display without a notch.
+    public var menuBarHeight: CGFloat
+    /// Width of the usable strip left of the cutout
+    /// (`NSScreen.auxiliaryTopLeftArea?.width`); `nil` when the display has no
+    /// cutout.
+    public var leftAuxiliaryWidth: CGFloat?
+    /// Width of the usable strip right of the cutout
+    /// (`NSScreen.auxiliaryTopRightArea?.width`); `nil` when the display has
+    /// no cutout.
+    public var rightAuxiliaryWidth: CGFloat?
+
+    public init(
+        frame: CGRect,
+        menuBarHeight: CGFloat,
+        leftAuxiliaryWidth: CGFloat?,
+        rightAuxiliaryWidth: CGFloat?
+    ) {
+        self.frame = frame
+        self.menuBarHeight = menuBarHeight
+        self.leftAuxiliaryWidth = leftAuxiliaryWidth
+        self.rightAuxiliaryWidth = rightAuxiliaryWidth
+    }
+}
+
+/// Where the notch HUD's panel goes, collapsed and expanded.
+///
+/// The camera cutout has no pixels — nothing can be drawn *in* it. The Dynamic
+/// Island effect comes from a black, bottom-rounded panel drawn *around and
+/// below* the cutout, so the two read as one shape. That makes the geometry the
+/// whole trick, and the reason it lives here, in a pure enum with tests, rather
+/// than inline in the controller:
+///
+/// - The panel always spans the cutout plus a **shoulder** on each side. The
+///   shoulders are the only place collapsed content can appear.
+/// - The shoulders are clamped: they are carved out of the strips that hold the
+///   frontmost app's menu titles (left) and everyone's status items (right),
+///   and macOS offers no way to learn what is already there. A bounded shoulder
+///   keeps the overlap to the pixels immediately beside the cutout, which are
+///   the least likely to be occupied.
+/// - Expanded, the panel is centred on the **cutout**, not on the screen, and
+///   clamped inside the display.
+public enum NotchLayout {
+    /// Shoulder width per side the HUD asks for when there is room.
+    public static let preferredShoulder: CGFloat = 86
+    /// Below this the shoulders cannot hold a readout, so the HUD stays off.
+    public static let minimumShoulder: CGFloat = 30
+    /// Share of one auxiliary strip the HUD is willing to take. The rest is
+    /// left to the menu titles and status items that live there.
+    public static let shoulderShareOfAuxiliary: CGFloat = 0.4
+    /// Width the expanded card asks for.
+    public static let preferredExpandedWidth: CGFloat = 440
+    /// Content height below the menu bar strip when expanded.
+    public static let preferredExpandedHeight: CGFloat = 196
+    /// Space kept between the expanded card and the screen edges.
+    public static let screenMargin: CGFloat = 12
+
+    /// Width of the camera cutout, or `nil` when the display has none.
+    ///
+    /// A notched display reports both auxiliary areas and a non-zero safe-area
+    /// inset; the cutout is what is left of the width between them. Anything
+    /// that fails those checks — every external display, every Mac mini, every
+    /// pre-2021 MacBook — has no notch and gets no HUD.
+    public static func notchWidth(_ metrics: NotchScreenMetrics) -> CGFloat? {
+        guard metrics.menuBarHeight > 0,
+              metrics.frame.width > 0,
+              let left = metrics.leftAuxiliaryWidth,
+              let right = metrics.rightAuxiliaryWidth,
+              left > 0, right > 0
+        else { return nil }
+
+        let width = metrics.frame.width - left - right
+        guard width > 0 else { return nil }
+        return width
+    }
+
+    /// Whether a HUD can be placed on this display at all.
+    public static func supportsHUD(_ metrics: NotchScreenMetrics) -> Bool {
+        collapsedFrame(metrics) != nil
+    }
+
+    /// Shoulder width per side: the preferred width, capped by the share of the
+    /// narrower auxiliary strip the HUD may claim. `nil` when what remains is
+    /// too small to render into.
+    public static func shoulderWidth(_ metrics: NotchScreenMetrics) -> CGFloat? {
+        guard notchWidth(metrics) != nil,
+              let left = metrics.leftAuxiliaryWidth,
+              let right = metrics.rightAuxiliaryWidth
+        else { return nil }
+
+        let budget = min(left, right) * shoulderShareOfAuxiliary
+        let shoulder = min(preferredShoulder, budget)
+        guard shoulder >= minimumShoulder else { return nil }
+        return shoulder
+    }
+
+    /// The collapsed panel: the cutout plus one shoulder on each side, filling
+    /// the menu bar strip.
+    public static func collapsedFrame(_ metrics: NotchScreenMetrics) -> CGRect? {
+        guard let notch = notchWidth(metrics),
+              let shoulder = shoulderWidth(metrics),
+              let left = metrics.leftAuxiliaryWidth
+        else { return nil }
+
+        return CGRect(
+            x: metrics.frame.minX + left - shoulder,
+            y: metrics.frame.maxY - metrics.menuBarHeight,
+            width: notch + shoulder * 2,
+            height: metrics.menuBarHeight
+        )
+    }
+
+    /// The expanded card: centred on the cutout, hanging from the top edge,
+    /// never narrower than the collapsed panel and never past the screen
+    /// margins.
+    public static func expandedFrame(
+        _ metrics: NotchScreenMetrics,
+        contentHeight: CGFloat = preferredExpandedHeight
+    ) -> CGRect? {
+        guard let collapsed = collapsedFrame(metrics),
+              let notch = notchWidth(metrics),
+              let left = metrics.leftAuxiliaryWidth
+        else { return nil }
+
+        let available = max(collapsed.width, metrics.frame.width - screenMargin * 2)
+        let width = min(max(preferredExpandedWidth, collapsed.width), available)
+        let height = min(
+            metrics.menuBarHeight + max(0, contentHeight),
+            metrics.frame.height
+        )
+
+        let cutoutCentre = metrics.frame.minX + left + notch / 2
+        let lowerBound = metrics.frame.minX + screenMargin
+        let upperBound = metrics.frame.maxX - screenMargin - width
+        // A screen too narrow for the margins would invert the bounds; the
+        // cutout's own centring is the better answer there than a clamp that
+        // pins the card to a nonsensical edge.
+        let x = upperBound >= lowerBound
+            ? min(max(cutoutCentre - width / 2, lowerBound), upperBound)
+            : cutoutCentre - width / 2
+
+        return CGRect(
+            x: x,
+            y: metrics.frame.maxY - height,
+            width: width,
+            height: height
+        )
+    }
+}
