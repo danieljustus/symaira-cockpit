@@ -138,8 +138,9 @@ cutout it draws the readout around the notch and expands into a small panel
 when you hover it — the metrics, Keep Awake, the fan profile, and a way into
 the panel or the window. It is off by default, additional to the status item
 rather than a replacement for it, and the switch explains itself instead of
-appearing when the display has no cutout. It follows the menu bar: while a
-full-screen app hides that, the HUD is hidden with it.
+appearing when the display has no cutout. It stays put across spaces and over
+full-screen apps, and it never takes focus: clicking it does not pull the app
+in front of what you were working in.
 
 `⌘1`–`⌘4` switch sections, `⌘R` refreshes the one you are looking at, `⌘,`
 opens preferences. Scope and Operate filter their lists from a single search

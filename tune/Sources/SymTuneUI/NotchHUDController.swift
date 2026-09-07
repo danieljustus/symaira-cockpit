@@ -18,6 +18,11 @@ final class NotchHUDPanel: NSPanel {
         )
         isFloatingPanel = true
         level = .statusBar
+        // Buttons in a SwiftUI hosting view only respond in a window that can
+        // become key. `.nonactivatingPanel` keeps that from activating the app,
+        // so the HUD can be clicked without pulling the accessory app forward.
+        becomesKeyOnlyIfNeeded = true
+        acceptsMouseMovedEvents = true
         // Present on every space, on the active space's screen, and not
         // swallowed when another app goes full screen — the menu bar strip is
         // exactly where a full-screen app expects to find overlays.
@@ -35,8 +40,21 @@ final class NotchHUDPanel: NSPanel {
         // which is a worse surprise than appearing in them.
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
+    /// Key, so its controls work; never main, so it does not take over the
+    /// app's window state.
     override var canBecomeMain: Bool { false }
+}
+
+/// The HUD's content view.
+///
+/// A click into a window of an app that is not frontmost is normally swallowed:
+/// AppKit spends it on bringing the window forward and never delivers it to the
+/// control under the pointer. The HUD belongs to an accessory app that is
+/// almost never frontmost, so without this every button in it would need two
+/// clicks — which reads exactly like a button that does not work.
+private final class NotchHUDHostingView: NSHostingView<NotchHUDView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Owns the notch HUD: its panel, the screen it belongs to, and the hover that
@@ -52,8 +70,9 @@ final class NotchHUDController: NSObject {
     private let preferences: PreferencesManager
 
     private var panel: NotchHUDPanel?
-    private var hosting: NSHostingView<NotchHUDView>?
-    private var trackingArea: NSTrackingArea?
+    private var hosting: NotchHUDHostingView?
+    private var globalPointerMonitor: Any?
+    private var localPointerMonitor: Any?
     private var isExpanded = false
     /// Cancels a pending collapse when the pointer comes back.
     private var collapseWork: DispatchWorkItem?
@@ -152,12 +171,12 @@ final class NotchHUDController: NSObject {
         if let hosting {
             hosting.rootView = view
         } else {
-            let host = NSHostingView(rootView: view)
+            let host = NotchHUDHostingView(rootView: view)
             let panel = NotchHUDPanel(contentRect: collapsed)
             panel.contentView = host
             self.hosting = host
             self.panel = panel
-            installTracking(on: host)
+            startPointerMonitoring()
             panel.orderFrontRegardless()
         }
 
@@ -167,10 +186,7 @@ final class NotchHUDController: NSObject {
     private func teardown() {
         collapseWork?.cancel()
         collapseWork = nil
-        if let hosting, let trackingArea {
-            hosting.removeTrackingArea(trackingArea)
-        }
-        trackingArea = nil
+        stopPointerMonitoring()
         panel?.orderOut(nil)
         panel = nil
         hosting = nil
@@ -199,32 +215,65 @@ final class NotchHUDController: NSObject {
 
     // MARK: - Hover
 
-    /// `.activeAlways` because the HUD has to react while another app is
-    /// frontmost — which is the normal case for an accessory app.
-    private func installTracking(on view: NSView) {
-        let area = NSTrackingArea(
-            rect: .zero,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        view.addTrackingArea(area)
-        trackingArea = area
+    /// Hover is driven by event monitors rather than an `NSTrackingArea`.
+    ///
+    /// A tracking area only sees mouse-moved events that AppKit delivers to the
+    /// window, and for a background accessory app over another app's window
+    /// those never arrive — which is precisely the situation the HUD lives in.
+    /// A global monitor sees the pointer wherever it is; the local one covers
+    /// the case where this app *is* frontmost, because a global monitor does
+    /// not fire for its own process.
+    ///
+    /// Mouse-moved monitoring needs no Accessibility grant. Both handlers do
+    /// nothing but a rectangle containment test.
+    private func startPointerMonitoring() {
+        guard globalPointerMonitor == nil else { return }
+        globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.mouseMoved]
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pointerMoved() }
+        }
+        localPointerMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved]
+        ) { [weak self] event in
+            MainActor.assumeIsolated { self?.pointerMoved() }
+            return event
+        }
     }
 
-    /// Not an override: the tracking area's owner receives these informally,
-    /// and `NSObject` declares neither.
-    @objc func mouseEntered(with event: NSEvent) {
-        collapseWork?.cancel()
-        collapseWork = nil
-        setExpanded(true)
+    private func stopPointerMonitoring() {
+        if let globalPointerMonitor { NSEvent.removeMonitor(globalPointerMonitor) }
+        if let localPointerMonitor { NSEvent.removeMonitor(localPointerMonitor) }
+        globalPointerMonitor = nil
+        localPointerMonitor = nil
     }
 
-    @objc func mouseExited(with event: NSEvent) {
-        // Delayed, so the pointer crossing the cutout does not collapse a HUD
-        // the user is on their way into.
+    /// Expand while the pointer is over the panel, collapse once it leaves.
+    ///
+    /// The test is against the panel's own frame, so it follows the panel
+    /// through the expansion instead of holding the collapsed strip as the hot
+    /// zone — moving down into the card keeps it open.
+    private func pointerMoved() {
+        guard let panel else { return }
+        if panel.frame.contains(NSEvent.mouseLocation) {
+            collapseWork?.cancel()
+            collapseWork = nil
+            setExpanded(true)
+        } else if isExpanded {
+            scheduleCollapse()
+        }
+    }
+
+    /// Delayed, so the pointer crossing the cutout — where it is briefly
+    /// outside the collapsed strip — does not collapse a HUD the user is on
+    /// their way into.
+    private func scheduleCollapse() {
+        guard collapseWork == nil else { return }
         let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { self?.setExpanded(false) }
+            MainActor.assumeIsolated {
+                self?.collapseWork = nil
+                self?.setExpanded(false)
+            }
         }
         collapseWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.collapseDelay, execute: work)

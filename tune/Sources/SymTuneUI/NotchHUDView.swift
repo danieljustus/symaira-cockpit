@@ -122,8 +122,11 @@ struct NotchHUDView: View {
                 Color.clear
             }
         }
-        .frame(width: shoulderWidth, alignment: alignment)
+        // Padding inside the fixed width, not around it: the shoulder's width
+        // is what `NotchLayout` budgeted from the menu bar strip, and padding
+        // applied outside the frame would quietly spend 12pt more per side.
         .padding(.horizontal, 6)
+        .frame(width: shoulderWidth, alignment: alignment)
     }
 
     // MARK: - Expanded card
