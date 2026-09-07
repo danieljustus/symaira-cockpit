@@ -122,6 +122,21 @@ live in the repo environment `release`.
 - `operate` needs Accessibility and Screen Recording permissions; `tune`'s SMC
   writes (fans, charge limits) need `sudo`. TCC grants are per-binary, so the
   GUI bundle needs its own — the Operate section asks for them.
+- The GUI elevates through `osascript`'s `do shell script … with administrator
+  privileges`. Resolve the binary for that path only with
+  `BoundedProcessRunner.resolvePrivilegedExecutablePath`, which requires the
+  binary and every parent directory to be root-owned and not group- or
+  other-writable. Do not widen it to the unprivileged fallback search: it
+  includes `~/.symaira/bin` and the Homebrew prefixes, which are user-writable
+  on a normal Mac, and a binary planted there would be authenticated into root
+  by the user's own password prompt. This means GUI fan control requires a
+  root-owned install (e.g. `/usr/local/bin`); the README documents the
+  trade-off. Unprivileged `BoundedProcessRunner.run` resolution for `symbrain`
+  and `symvault` deliberately keeps the wide search.
+- Anything the elevated child writes must be told where to write. It runs under
+  `osascript`, which sets no `SUDO_*` variables, so pass `--data-dir` (as the
+  fan governor already passes `--state`) and restore ownership from the
+  directory's owner via `StateFilePermissions`, never from `SUDO_UID` alone.
 
 Cross-repo conventions live in the workspace `AGENTS.md` and `ECOSYSTEM.md`,
 which are not part of this repository.
