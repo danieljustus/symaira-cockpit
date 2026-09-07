@@ -71,6 +71,10 @@ struct MainStatusView: View {
     /// Popover or embedded — see ``TunePanelChrome``.
     var chrome: TunePanelChrome = .popover
 
+    /// The notch HUD's switch, surfaced next to the menu-bar switches in the
+    /// embedded chrome. Nil in a host that does not offer the HUD (issue #224).
+    var notchPreferences: NotchHUDPreferences? = nil
+
     var body: some View {
         switch chrome {
         case .popover:
@@ -149,7 +153,8 @@ struct MainStatusView: View {
                     preferences: preferencesManager,
                     aiUsage: aiUsageModel.preferences,
                     model: model,
-                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty
+                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
+                    notch: notchPreferences
                 )
             }
 

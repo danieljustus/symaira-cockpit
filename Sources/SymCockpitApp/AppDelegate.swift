@@ -47,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.fallbackIconTitle = "SC"
         statusBar.preferencesWindowTitle = "Symaira Cockpit Preferences"
         statusBar.keepAwakeAssertionReason = "Symaira Cockpit"
+        // The notch HUD is a cockpit surface: offered here, off until the user
+        // switches it on in the window's menu-bar card (issue #224). The
+        // standalone Tune app leaves this alone and is unaffected.
+        statusBar.isNotchHUDOffered = true
         self.statusBarController = statusBar
 
         let window = CockpitWindowController(

@@ -30,6 +30,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private var preferencesWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
+    /// The notch HUD and its switch (issue #224). Both exist unconditionally —
+    /// the preference has to be readable to be rendered — but the HUD only
+    /// runs once a host opts in via ``isNotchHUDOffered`` **and** the user
+    /// turns it on.
+    let notchPreferences = NotchHUDPreferences()
+    private lazy var notchController = NotchHUDController(
+        model: model,
+        preferences: preferencesManager
+    )
+
     /// Last title rendered into the status button, to skip redundant updates.
     private var renderedSegments: [StatusItemSegment]?
     /// Whether the button currently shows the icon fallback.
@@ -89,6 +99,18 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// (`pmset -g assertions`).
     public var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
+    /// Whether this host offers the notch HUD.
+    ///
+    /// The standalone Tune app leaves it `false`, so its menu bar behaves
+    /// exactly as before; `SymCockpitApp` sets it, which surfaces the switch
+    /// in the cockpit window and lets the HUD run when the switch is on.
+    public var isNotchHUDOffered: Bool = false {
+        didSet {
+            guard isNotchHUDOffered != oldValue else { return }
+            syncNotchHUD()
+        }
+    }
+
     private let updateVersionProvider: () -> String
 
     /// The status item uses the family version in the standalone Tune app and
@@ -123,6 +145,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
             }
         }
+        notchController.openPanel = { [weak self] in self?.togglePopover() }
+        // Forwarded rather than copied: the host assigns ``onOpenCockpit``
+        // after construction, and a copy taken here would always be nil.
+        notchController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
+        observeNotchPreference()
         model.start()
         aiUsageModel.start()
         checkForUpdatesOnLaunch()
@@ -185,6 +212,22 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// The switch applies live, in both directions.
+    private func observeNotchPreference() {
+        notchPreferences.$enabled
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncNotchHUD() }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Run the HUD exactly while the host offers it and the user wants it.
+    private func syncNotchHUD() {
+        notchController.openCockpitTitle = openCockpitTitle
+        notchController.setEnabled(isNotchHUDOffered && notchPreferences.enabled)
     }
 
     // MARK: - Status item rendering
@@ -333,7 +376,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             panelVersion: updateVersionProvider(),
             keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
-            chrome: chrome
+            chrome: chrome,
+            notchPreferences: isNotchHUDOffered ? notchPreferences : nil
         )
     }
 

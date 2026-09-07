@@ -111,6 +111,13 @@ live in the repo environment `release`.
   library (`tune/Sources/SymTuneUI/`), consumed by both `SymTuneApp` and the
   cockpit GUI. `tune/project.yml` mirrors that split for the XcodeGen build —
   keep both in sync when adding files.
+- **The notch HUD is opt-in and isolated.** `NotchLayout` (SymTuneCore) holds
+  the geometry and is unit-tested; `NotchHUDController`/`NotchHUDView`
+  (SymTuneUI) hold the panel and its rendering. It runs only when the host sets
+  `StatusBarController.isNotchHUDOffered` (SymCockpitApp does, SymTuneApp does
+  not) *and* the user switches it on, and it renders from the shared
+  `TuneViewModel` — no second metrics pipeline. Keep it removable: it draws
+  over the menu bar, which is the part of macOS most likely to change.
 - **Env prefixes stay per family**: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.
 - XDG paths: `~/.config/<tool>/`, `~/.cache/<tool>/`, `~/.local/share/<tool>/`.
 - Exit codes: `0` ok · `1` error · `2` usage/config · `3` permission ·

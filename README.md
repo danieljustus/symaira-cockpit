@@ -133,6 +133,14 @@ item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 (show it), with a live preview of the result. Changes hit the menu bar
 immediately and are written to `config.toml`, so they survive a relaunch.
 
+The same card carries the optional **Notch HUD**: on a MacBook with a camera
+cutout it draws the readout around the notch and expands into a small panel
+when you hover it — the metrics, Keep Awake, the fan profile, and a way into
+the panel or the window. It is off by default, additional to the status item
+rather than a replacement for it, and the switch explains itself instead of
+appearing when the display has no cutout. It follows the menu bar: while a
+full-screen app hides that, the HUD is hidden with it.
+
 `⌘1`–`⌘4` switch sections, `⌘R` refreshes the one you are looking at, `⌘,`
 opens preferences. Scope and Operate filter their lists from a single search
 box, cards fold away and remember it, and long lists scroll inside their card
