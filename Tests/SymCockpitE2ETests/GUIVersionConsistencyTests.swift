@@ -70,4 +70,21 @@ final class GUIVersionConsistencyTests: XCTestCase {
         )
         XCTAssertFalse(releaseWorkflow.contains("Sources/symcockpit/main.swift"))
     }
+
+    func testApprovedAppIconIsBundledAndGuarded() throws {
+        let plist = try read("Sources/SymCockpitApp/Info.plist")
+        let buildScript = try read("scripts/build-app.sh")
+        let smokeScript = try read("scripts/smoke-app.sh")
+        let guardScript = try read("scripts/verify-app-icon.sh")
+        let checksums = try read("assets/branding/AppIcon.sha256")
+
+        XCTAssertTrue(plist.contains("<string>AppIcon</string>"))
+        XCTAssertTrue(plist.contains("<string>AppIcon.icns</string>"))
+        XCTAssertTrue(buildScript.contains("AppIcon.icon"))
+        XCTAssertTrue(buildScript.contains("AppIcon.icns"))
+        XCTAssertTrue(smokeScript.contains("verify-app-icon.sh"))
+        XCTAssertTrue(guardScript.contains("diff -qr"))
+        XCTAssertTrue(guardScript.contains("CFBundleIconName"))
+        XCTAssertTrue(checksums.contains("16f21fb7156b6278840293db2a3cebba2137649072171b035df501ca49074b7d"))
+    }
 }

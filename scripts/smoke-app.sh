@@ -39,6 +39,8 @@ EXECUTABLE="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
   exit 1
 }
 
+"$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify-app-icon.sh" "$APP_PATH"
+
 SIGNATURE_INFO=$(codesign --display --verbose=2 "$APP_PATH" 2>&1 || true)
 if grep -q '^Signature=adhoc$' <<<"$SIGNATURE_INFO"; then
   printf '%s\n' 'Bundle smoke check: ad-hoc unsigned build (expected outside release).'

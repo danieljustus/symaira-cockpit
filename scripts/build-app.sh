@@ -22,6 +22,12 @@ BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
 
 cd "$(dirname "$0")/.."
+REPO_ROOT="$(pwd)"
+if [[ "$OUTPUT_DIR" != /* ]]; then
+  OUTPUT_DIR="$REPO_ROOT/$OUTPUT_DIR"
+fi
+ICON_SOURCE="$REPO_ROOT/assets/branding/AppIcon.icon"
+ICNS_SOURCE="$REPO_ROOT/assets/branding/AppIcon.icns"
 
 COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)".*/\1/p' Sources/SymCockpitVersion/CockpitVersion.swift)"
 [[ -n "$COCKPIT_VERSION" ]] || {
@@ -29,7 +35,7 @@ COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)
   exit 1
 }
 
-BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION")
+BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:-2}")
 if [[ "$UNIVERSAL" == "1" ]]; then
   BUILD_ARGS+=(--arch arm64 --arch x86_64)
 fi
@@ -47,6 +53,8 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+cp -R "$ICON_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icon"
+cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icns"
 
 # The Info.plist template carries Xcode's build-setting placeholders so it can
 # also be consumed by an Xcode target later; substitute them here.
@@ -58,7 +66,25 @@ sed \
   -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
+if ACTOOL="$(xcrun --find actool 2>/dev/null)"; then
+  ICON_BUILD_DIR="$APP_PATH/Contents/Resources/.AppIcon-compiled"
+  mkdir -p "$ICON_BUILD_DIR"
+  "$ACTOOL" \
+    --compile "$ICON_BUILD_DIR" \
+    --platform macosx \
+    --minimum-deployment-target "${DEPLOYMENT_TARGET:-15.0}" \
+    --app-icon AppIcon \
+    --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
+    "$ICON_SOURCE"
+  cp "$ICON_BUILD_DIR/Assets.car" "$APP_PATH/Contents/Resources/Assets.car"
+  rm -rf "$ICON_BUILD_DIR"
+else
+  printf 'Warning: actool unavailable; keeping the approved ICNS fallback only.\\n' >&2
+fi
+
 printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
+
+"$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify-app-icon.sh" "$APP_PATH"
 
 # macOS keys both TCC grants (Accessibility, Screen Recording) and Keychain
 # ACL decisions ("Always Allow") to the bundle's code signature. An ad-hoc

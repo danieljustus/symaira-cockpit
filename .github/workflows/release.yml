@@ -134,6 +134,7 @@ jobs:
           set -euo pipefail
           ./scripts/build-app.sh
           test -d "build/app/Symaira Cockpit.app"
+          ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
 
       - name: Verify app reports the release version
         run: |
