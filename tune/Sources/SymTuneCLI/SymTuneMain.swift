@@ -68,6 +68,12 @@ AGENTS
   version [--check-for-updates] | help
 
   --check-for-updates    Check GitHub for a newer version (writes notices to stderr, waits up to ~5s).
+
+GLOBAL OPTIONS
+  --data-dir <path>      Read and write state (history, restore records,
+                         profiles) under <path> instead of the XDG default.
+                         The GUI passes this when it elevates, because the
+                         privileged child cannot infer the calling user.
 """
 
 func emitJSON<T: Encodable>(_ value: T) throws {
@@ -513,13 +519,41 @@ private func runBatteryLimitSubcommand(_ rest: [String], controller: TuneControl
     }
 }
 
+/// Extracts a global `--data-dir <path>` from anywhere in the argument list.
+///
+/// The GUI elevates through `osascript`, which sets none of the `SUDO_*`
+/// variables the state layer used to infer the calling user from, so the root
+/// child could not tell whose data directory to write. Passing it explicitly
+/// removes the inference, exactly as `--state` already does for the fan
+/// governor. Returns the remaining arguments unchanged for the command parsers.
+func extractDataDir(_ args: [String]) throws -> (URL?, [String]) {
+    guard let index = args.firstIndex(of: "--data-dir") else { return (nil, args) }
+    let valueIndex = args.index(after: index)
+    guard valueIndex < args.endIndex else {
+        throw TuneError.usage("--data-dir: expected a path")
+    }
+    var rest = args
+    rest.removeSubrange(index...valueIndex)
+    return (URL(fileURLWithPath: args[valueIndex], isDirectory: true), rest)
+}
+
 func runMain(_ cliArgs: [String]) -> Int32 {
-    guard let command = cliArgs.first else {
+    let dataDirOverride: URL?
+    let args: [String]
+    do {
+        (dataDirOverride, args) = try extractDataDir(cliArgs)
+    } catch let error as TuneError {
+        emitErr("symtune: \(error.description)")
+        return error.exitCode
+    } catch {
+        return handleNonTuneError(error)
+    }
+    guard let command = args.first else {
         emit(usage)
         return ExitCode.ok.rawValue
     }
-    let rest = Array(cliArgs.dropFirst(1))
-    let controller = TuneController(config: ConfigPaths().loadConfig())
+    let rest = Array(args.dropFirst(1))
+    let controller = TuneController(config: ConfigPaths().loadConfig(), dataDir: dataDirOverride)
 
     let result: Int32
     do {

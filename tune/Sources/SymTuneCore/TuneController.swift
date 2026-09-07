@@ -105,9 +105,21 @@ public final class TuneController: Sendable {
             return result.terminationStatus == 0
         }
         self.privilegedFanSet = privilegedFanSet ?? { fraction in
-            try PrivilegedElevation.runSymCockpit([
-                "tune", "fan", "set", PrivilegedElevation.shellFormat(fraction)
-            ])
+            // Pass the caller's data directory explicitly: the elevated child
+            // runs under osascript, which sets no SUDO_* variables, so it
+            // cannot otherwise tell whose history and restore records these
+            // are. An older installed symcockpit rejects the unknown flag, so
+            // fall back to the previous invocation for one release cycle
+            // rather than failing the fan write outright.
+            let value = PrivilegedElevation.shellFormat(fraction)
+            do {
+                try PrivilegedElevation.runSymCockpit([
+                    "tune", "fan", "set", value, "--data-dir", resolvedDataDir.path
+                ])
+            } catch let error as PrivilegedElevation.ElevationError {
+                guard case .failed(let message) = error, message.contains("--data-dir") else { throw error }
+                try PrivilegedElevation.runSymCockpit(["tune", "fan", "set", value])
+            }
         }
         self.privilegedFanGovernor = privilegedFanGovernor ?? { stateURL in
             try PrivilegedElevation.runSymCockpitDetached([

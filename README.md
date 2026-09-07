@@ -49,6 +49,36 @@ into `/usr/local/bin`.
 > Gatekeeper's quarantine does not apply; after a manual download you need to
 > clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
 
+### Fan control from the GUI needs a root-owned install
+
+Changing fan speed from the menu bar app runs `symcockpit` as root behind
+macOS's administrator prompt. The app therefore refuses to elevate a binary
+that anything other than root can replace, and names the exact reason when it
+does:
+
+```
+refusing to run /opt/homebrew/bin/symcockpit as an administrator: it is owned
+by daniel, not root. … Install it in a root-owned location such as
+/usr/local/bin.
+```
+
+Homebrew's prefix does not qualify on Apple Silicon: `/opt/homebrew` is owned
+by the installing user and `/opt/homebrew/bin` is group-writable, so anyone who
+can write there could have their own binary authenticated into root by your
+password prompt. The same applies to `~/.symaira/bin`.
+
+To use fan control from the GUI, install the binary somewhere only root can
+write:
+
+```bash
+sudo install -o root -g wheel -m 755 "$(brew --prefix)/bin/symcockpit" /usr/local/bin/symcockpit
+```
+
+Everything else — the CLI, the MCP servers, Scope, Operate, and reading Tune's
+sensors — works from any install location. Only elevation is restricted, and
+`sudo symcockpit tune fan set …` from a terminal is unaffected, because there
+you name the binary yourself.
+
 ## Quick start
 
 ```console

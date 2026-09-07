@@ -19,6 +19,7 @@ import SymCockpitHistory
 public enum PrivilegedElevation: Sendable {
     public enum ElevationError: Error, Sendable, CustomStringConvertible, Equatable {
         case executableUnavailable
+        case untrustedExecutable(String)
         case cancelledByUser
         case failed(String)
 
@@ -27,11 +28,36 @@ public enum PrivilegedElevation: Sendable {
             case .executableUnavailable:
                 return "the symcockpit CLI is not installed; install it with "
                     + "`brew install danieljustus/tap/symcockpit` to enable this from the app"
+            case .untrustedExecutable(let reason):
+                return reason
             case .cancelledByUser:
                 return "cancelled — administrator password was not provided"
             case .failed(let message):
                 return message
             }
+        }
+    }
+
+    /// Resolves `symcockpit` and refuses it unless the binary and every
+    /// directory above it are root-owned and not group- or other-writable.
+    ///
+    /// The escaping in this file is already careful — `quoted form of` plus
+    /// ``appleScriptStringLiteral`` — so the weakness was never *how* the
+    /// command line is assembled but *which* binary gets selected. The shared
+    /// resolver searches `PATH` and then a fallback list that includes
+    /// `$HOME/.symaira/bin` and the Homebrew prefixes, several of which are
+    /// writable without root on a normal Mac. An attacker with code execution
+    /// as the user could drop a `symcockpit` there; the next fan change from
+    /// the GUI would show the ordinary administrator prompt, and the user
+    /// would authenticate that binary into root.
+    private static func resolveTrustedSymCockpit() throws -> String {
+        do {
+            return try BoundedProcessRunner.resolvePrivilegedExecutablePath("symcockpit")
+        } catch let error as PrivilegedExecutableError {
+            if case .notFound = error {
+                throw ElevationError.executableUnavailable
+            }
+            throw ElevationError.untrustedExecutable(error.description)
         }
     }
 
@@ -48,9 +74,7 @@ public enum PrivilegedElevation: Sendable {
         _ arguments: [String],
         timeoutSeconds: TimeInterval = 120
     ) throws -> Data {
-        guard let binaryPath = BoundedProcessRunner.resolveExecutablePath("symcockpit") else {
-            throw ElevationError.executableUnavailable
-        }
+        let binaryPath = try resolveTrustedSymCockpit()
 
         let quotedParts = ([binaryPath] + arguments).map {
             "(quoted form of \(appleScriptStringLiteral($0)))"
@@ -95,9 +119,7 @@ public enum PrivilegedElevation: Sendable {
     /// Arguments are quoted exactly as in `runSymCockpit`; the only unquoted
     /// text is the fixed redirection-and-background suffix assembled here.
     public static func runSymCockpitDetached(_ arguments: [String]) throws {
-        guard let binaryPath = BoundedProcessRunner.resolveExecutablePath("symcockpit") else {
-            throw ElevationError.executableUnavailable
-        }
+        let binaryPath = try resolveTrustedSymCockpit()
 
         let quotedParts = ([binaryPath] + arguments).map {
             "(quoted form of \(appleScriptStringLiteral($0)))"
