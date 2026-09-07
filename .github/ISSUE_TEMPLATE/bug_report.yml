@@ -1,0 +1,84 @@
+name: Bug report
+description: Something in the CLI, an MCP server, or the menu bar app behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do **not** use this form for security
+        vulnerabilities — see [the security policy](https://github.com/danieljustus/symaira-cockpit/blob/main/SECURITY.md)
+        for the private channels.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      description: The same code ships behind three front ends, and they fail differently.
+      options:
+        - CLI (symcockpit ...)
+        - MCP server (symcockpit ... serve)
+        - Menu bar app / cockpit window
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area?
+      options:
+        - tune (thermals, power, display)
+        - scope (ports, containers, MCP inventory)
+        - operate (interface automation)
+        - history
+        - Install / update / release artifacts
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Version
+      description: Output of `symcockpit version`. For a GUI-only problem, the version shown in the app's About panel.
+      render: shell
+      placeholder: symcockpit 0.6.0 — tune 0.9.3, operate 0.6.1, scope 0.4.1
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and hardware
+      description: "`sw_vers -productVersion` and the chip. Apple Silicon and Intel differ in the SMC and install paths."
+      placeholder: "26.1, Apple M3 Pro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or clicks. Include the full command line where relevant.
+      placeholder: |
+        1. Run `symcockpit scope ports suggest`
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+      description: Paste any error output. Redact credentials and personal paths.
+    validations:
+      required: true
+
+  - type: input
+    id: install
+    attributes:
+      label: How was it installed?
+      description: Homebrew formula, Homebrew cask, DMG, release tarball, or built from source. Relevant for anything involving elevation.
+      placeholder: brew install danieljustus/tap/symcockpit
+    validations:
+      required: false

@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a capability or a change in behavior.
+labels: ["feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you hit, not the solution you have in mind. That usually leads somewhere better.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area?
+      options:
+        - tune (thermals, power, display)
+        - scope (ports, containers, MCP inventory)
+        - operate (interface automation)
+        - history
+        - CLI output contract / JSON shape
+        - MCP / agent integration
+        - Menu bar app / cockpit window
+        - Packaging, install, release
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should happen? A concrete command line or UI change is more useful than a general direction.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What did you try instead?
+      description: Existing commands, other tools, or workarounds — and where they fall short.
+    validations:
+      required: false
