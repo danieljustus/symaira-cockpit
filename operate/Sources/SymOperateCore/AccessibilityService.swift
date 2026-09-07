@@ -304,6 +304,28 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         return [axApp]
     }
 
+    /// Everything ``buildNode(element:depth:maxDepth:remainingNodes:cache:)``
+    /// reads off one element, in the order the batched Accessibility call wants
+    /// them. Fetching the set costs one round trip into the target application;
+    /// reading them one by one costs one round trip each.
+    private static let nodeAttributes: [String] = [
+        kAXRoleAttribute,
+        kAXSubroleAttribute,
+        kAXTitleAttribute,
+        kAXDescriptionAttribute,
+        kAXIdentifierAttribute,
+        kAXValueAttribute,
+        kAXHelpAttribute,
+        kAXPositionAttribute,
+        kAXSizeAttribute,
+        kAXEnabledAttribute,
+    ]
+
+    /// The same set plus the children, for nodes that are not at the depth
+    /// limit — the descent needs them, and they ride along in the same trip.
+    private static let nodeAttributesWithChildren: [String] =
+        nodeAttributes + [kAXChildrenAttribute]
+
     private func buildNode(
         element: AXUIElement,
         depth: Int,
@@ -314,16 +336,23 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         guard remainingNodes > 0 else { return nil }
         remainingNodes -= 1
 
+        let descends = depth < maxDepth
+        let attributes = descends ? Self.nodeAttributesWithChildren : Self.nodeAttributes
+        let values = AXAttributeBag(element: element, attributes: attributes)
+
         let id = UUID().uuidString
-        let role = axCopyString(element, attribute: kAXRoleAttribute)
-        let subrole = axCopyString(element, attribute: kAXSubroleAttribute)
-        let title = axCopyString(element, attribute: kAXTitleAttribute)
-        let label = axCopyString(element, attribute: kAXDescriptionAttribute) ?? axCopyString(element, attribute: kAXIdentifierAttribute)
-        let value = axStringify(axCopyAttribute(element, attribute: kAXValueAttribute))
-        let nodeDescription = axCopyString(element, attribute: kAXHelpAttribute)
-        let frame = axCopyFrame(element)
+        let role = values.string(kAXRoleAttribute)
+        let subrole = values.string(kAXSubroleAttribute)
+        let title = values.string(kAXTitleAttribute)
+        let label = values.string(kAXDescriptionAttribute) ?? values.string(kAXIdentifierAttribute)
+        let value = axStringify(values.value(kAXValueAttribute))
+        let nodeDescription = values.string(kAXHelpAttribute)
+        let frame = axFrame(
+            position: values.value(kAXPositionAttribute),
+            size: values.value(kAXSizeAttribute)
+        )
         let actions = axCopyActionNames(element)
-        let enabled = axBoolify(axCopyAttribute(element, attribute: kAXEnabledAttribute))
+        let enabled = axBoolify(values.value(kAXEnabledAttribute))
 
         cache[id] = ResolvedElement(
             element: element,
@@ -337,7 +366,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         )
 
         let children: [UINode]
-        if depth < maxDepth, let rawChildren = axCopyElements(element, attribute: kAXChildrenAttribute) {
+        if descends, let rawChildren = values.elements(kAXChildrenAttribute) {
             children = rawChildren.compactMap {
                 buildNode(element: $0, depth: depth + 1, maxDepth: maxDepth, remainingNodes: &remainingNodes, cache: &cache)
             }
@@ -360,21 +389,38 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         )
     }
 
+    /// The text-bearing attributes ``searchText(in:needle:remainingDepth:seen:maxNodes:)``
+    /// compares against, batched for the same reason the node walk batches its own.
+    private static let searchAttributes: [String] = [
+        kAXTitleAttribute,
+        kAXDescriptionAttribute,
+        kAXHelpAttribute,
+        kAXValueAttribute,
+    ]
+
+    private static let searchAttributesWithChildren: [String] =
+        searchAttributes + [kAXChildrenAttribute]
+
     internal func searchText(in element: AXUIElement, needle: String, remainingDepth: Int, seen: inout Int, maxNodes: Int) -> Bool {
         seen += 1
         if seen > maxNodes { return false }
+        let descends = remainingDepth > 0
+        let values = AXAttributeBag(
+            element: element,
+            attributes: descends ? Self.searchAttributesWithChildren : Self.searchAttributes
+        )
         let haystacks = [
-            axCopyString(element, attribute: kAXTitleAttribute),
-            axCopyString(element, attribute: kAXDescriptionAttribute),
-            axCopyString(element, attribute: kAXHelpAttribute),
-            axStringify(axCopyAttribute(element, attribute: kAXValueAttribute)),
+            values.string(kAXTitleAttribute),
+            values.string(kAXDescriptionAttribute),
+            values.string(kAXHelpAttribute),
+            axStringify(values.value(kAXValueAttribute)),
         ].compactMap { $0?.lowercased() }
 
         if haystacks.contains(where: { $0.contains(needle) }) {
             return true
         }
 
-        guard remainingDepth > 0, let children = axCopyElements(element, attribute: kAXChildrenAttribute) else {
+        guard descends, let children = values.elements(kAXChildrenAttribute) else {
             return false
         }
 
