@@ -74,8 +74,11 @@ if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; th
     --compile "$ICON_BUILD_DIR" \
     --platform macosx \
     --target-device mac \
-    --minimum-deployment-target "${DEPLOYMENT_TARGET:-15.0}" \
+    --minimum-deployment-target 26.0 \
     --app-icon AppIcon \
+    --include-all-app-icons \
+    --enable-on-demand-resources NO \
+    --development-region en \
     --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
     "$ICON_SOURCE"
   cp "$ICON_BUILD_DIR/Assets.car" "$APP_PATH/Contents/Resources/Assets.car"
