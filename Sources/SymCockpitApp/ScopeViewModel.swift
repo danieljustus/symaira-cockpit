@@ -62,13 +62,16 @@ final class ScopeViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // Discovery is filesystem-only and synchronous; ports and containers
-        // shell out, so they run concurrently rather than back to back.
+        // All four of these shell out to external binaries — discovery runs
+        // `symbrain harness list` through the synchronous BoundedProcessRunner,
+        // so it must leave the main actor like the other three or it blocks the
+        // window for that call's timeout budget on every refresh.
+        async let discoveryResult = Task.detached { MCPDiscovery.discover() }.value
         async let portsResult: [SymScopeCore.Port] = (try? await PortService.listListening()) ?? []
         async let containersResult = ContainerService.list()
         async let daemonsResult = DaemonService.list(all: includeApple)
 
-        let (discovered, notes) = MCPDiscovery.discover()
+        let (discovered, notes) = await discoveryResult
         let listening = await portsResult
         let (containerList, cNotes) = await containersResult
         let (daemonList, dNotes) = await daemonsResult
