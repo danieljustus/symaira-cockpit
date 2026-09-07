@@ -8,17 +8,23 @@ public struct BoundedProcessResult: Sendable {
     public let standardError: Data
     public let terminationStatus: Int32
     public let timedOut: Bool
+    /// True when the child produced more than the run's output budget and the
+    /// captured bytes were cut short. `output` is then a prefix, so callers
+    /// must not parse it as a complete document.
+    public let truncated: Bool
 
     public init(
         standardOutput: Data,
         standardError: Data,
         terminationStatus: Int32,
-        timedOut: Bool
+        timedOut: Bool,
+        truncated: Bool = false
     ) {
         self.standardOutput = standardOutput
         self.standardError = standardError
         self.terminationStatus = terminationStatus
         self.timedOut = timedOut
+        self.truncated = truncated
     }
 
     public var output: String {
@@ -55,6 +61,12 @@ public enum BoundedProcessRunnerError: Error, LocalizedError, Sendable, Equatabl
 /// output and standard error are drained concurrently while the child is
 /// running.
 public enum BoundedProcessRunner {
+    /// Default ceiling on the bytes captured from a child's standard output
+    /// and standard error, each. The timeout bounds how long a child runs; it
+    /// does not bound how much a wedged or misbehaving child can write into
+    /// this process's memory within that budget.
+    public static let defaultMaximumOutputBytes = 8 * 1024 * 1024
+
     /// Resolves `executable` to an absolute path using the same PATH-then-
     /// fallback search ``run(executable:arguments:timeoutSeconds:environment:standardInput:)``
     /// uses internally, without spawning anything. Callers that need to embed
@@ -73,7 +85,8 @@ public enum BoundedProcessRunner {
         arguments: [String] = [],
         timeoutSeconds: TimeInterval = 3,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        standardInput: Data? = nil
+        standardInput: Data? = nil,
+        maximumOutputBytes: Int = defaultMaximumOutputBytes
     ) throws -> BoundedProcessResult {
         guard let executablePath = resolve(executable, environment: environment) else {
             throw BoundedProcessRunnerError.executableUnavailable(executable)
@@ -104,8 +117,8 @@ public enum BoundedProcessRunner {
         let processGroupID = process.processIdentifier
         let hasDedicatedProcessGroup = setpgid(processGroupID, processGroupID) == 0
 
-        let outputCollector = DataCollector()
-        let errorCollector = DataCollector()
+        let outputCollector = DataCollector(limit: maximumOutputBytes)
+        let errorCollector = DataCollector(limit: maximumOutputBytes)
         let readerGroup = DispatchGroup()
         readerGroup.enter()
         readerGroup.enter()
@@ -171,7 +184,8 @@ public enum BoundedProcessRunner {
             standardOutput: outputCollector.value,
             standardError: errorCollector.value,
             terminationStatus: process.terminationStatus,
-            timedOut: timedOut
+            timedOut: timedOut,
+            truncated: outputCollector.truncated || errorCollector.truncated
         )
     }
 
@@ -180,7 +194,8 @@ public enum BoundedProcessRunner {
         arguments: [String] = [],
         timeoutSeconds: TimeInterval = 3,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        standardInput: Data? = nil
+        standardInput: Data? = nil,
+        maximumOutputBytes: Int = defaultMaximumOutputBytes
     ) async throws -> BoundedProcessResult {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
@@ -190,7 +205,8 @@ public enum BoundedProcessRunner {
                         arguments: arguments,
                         timeoutSeconds: timeoutSeconds,
                         environment: environment,
-                        standardInput: standardInput
+                        standardInput: standardInput,
+                        maximumOutputBytes: maximumOutputBytes
                     ))
                 } catch {
                     continuation.resume(throwing: error)
@@ -268,20 +284,47 @@ public enum BoundedProcessRunner {
     }
 }
 
+/// Accumulates a child's output up to a fixed byte budget. Past the budget the
+/// surplus is dropped rather than buffered, so a child that writes without
+/// bound within its time budget cannot grow this process's memory without
+/// bound. Dropping is recorded so callers can refuse to parse a partial
+/// document instead of silently misreading a cut-off one.
 private final class DataCollector: @unchecked Sendable {
     private let lock = NSLock()
     private var data = Data()
+    private var didTruncate = false
+    private let limit: Int
+
+    init(limit: Int) {
+        self.limit = max(0, limit)
+    }
 
     func append(_ data: Data) {
         lock.lock()
-        self.data.append(data)
-        lock.unlock()
+        defer { lock.unlock() }
+        let remaining = limit - self.data.count
+        guard remaining > 0 else {
+            if !data.isEmpty { didTruncate = true }
+            return
+        }
+        if data.count <= remaining {
+            self.data.append(data)
+        } else {
+            self.data.append(data.prefix(remaining))
+            didTruncate = true
+        }
     }
 
     var value: Data {
         lock.lock()
         defer { lock.unlock() }
         return data
+    }
+
+    var truncated: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return didTruncate
     }
 }
 
