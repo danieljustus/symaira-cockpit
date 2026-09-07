@@ -60,6 +60,31 @@ jobs:
         # built `symcockpit` binary — `swift test` there runs them.
         run: swift test
 
+  # Compile the shipped .icon with the release Xcode before a tag can reach
+  # the GUI release path. The regular Swift matrix does not exercise actool.
+  icon-compile:
+    name: app icon compile
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.4.1'
+      - name: Verify Xcode toolchain
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version)"
+          echo "$XCODE_VERSION"
+          XCODE_MAJOR="${XCODE_VERSION#Xcode }"
+          XCODE_MAJOR="${XCODE_MAJOR%%.*}"
+          if ! [[ "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || (( XCODE_MAJOR < 26 )); then
+            echo "::error::Expected Xcode 26 or newer, got: $XCODE_VERSION" >&2
+            exit 1
+          fi
+      - name: Compile and inspect native icon
+        run: ./scripts/test-app-icon.sh
+
   # The release workflow gates on `make test`. That gate is only real if a
   # failing package makes the recipe exit non-zero, so assert it on every
   # change. Runs on macos-latest to exercise the same make as the release job;
@@ -106,13 +131,13 @@ jobs:
           # one bundle per test target, while plain `swift build` writes to
           # .build/<triple>/debug/ with one combined <Package>PackageTests
           # bundle — this must work under either.
-          binaries=""
+          binaries=()
           while IFS= read -r b; do
             name=$(basename "$b" .xctest)
             if [ -x "$b/Contents/MacOS/$name" ]; then
-              binaries="$binaries $b/Contents/MacOS/$name"
+              binaries+=("$b/Contents/MacOS/$name")
             else
-              binaries="$binaries $b"
+              binaries+=("$b")
             fi
           done < <(find .build -iname "*.xctest" -type d)
           profdata=$(find .build -iname "default.profdata" | head -1)
@@ -125,6 +150,6 @@ jobs:
           {
             echo "### Coverage — ${{ matrix.pkg }}"
             echo '```'
-            xcrun llvm-cov report $binaries -instr-profile "$profdata"
+            xcrun llvm-cov report "${binaries[@]}" -instr-profile "$profdata"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -17,11 +17,18 @@ set -euo pipefail
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
+REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
 APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
 
 cd "$(dirname "$0")/.."
+REPO_ROOT="$(pwd)"
+if [[ "$OUTPUT_DIR" != /* ]]; then
+  OUTPUT_DIR="$REPO_ROOT/$OUTPUT_DIR"
+fi
+ICON_SOURCE="$REPO_ROOT/assets/branding/AppIcon.icon"
+ICNS_SOURCE="$REPO_ROOT/assets/branding/AppIcon.icns"
 
 COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)".*/\1/p' Sources/SymCockpitVersion/CockpitVersion.swift)"
 [[ -n "$COCKPIT_VERSION" ]] || {
@@ -29,7 +36,7 @@ COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)
   exit 1
 }
 
-BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION")
+BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:-2}")
 if [[ "$UNIVERSAL" == "1" ]]; then
   BUILD_ARGS+=(--arch arm64 --arch x86_64)
 fi
@@ -47,6 +54,8 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+cp -R "$ICON_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icon"
+cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icns"
 
 # The Info.plist template carries Xcode's build-setting placeholders so it can
 # also be consumed by an Xcode target later; substitute them here.
@@ -58,7 +67,32 @@ sed \
   -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
+if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; then
+  ICON_BUILD_DIR="$APP_PATH/Contents/Resources/.AppIcon-compiled"
+  mkdir -p "$ICON_BUILD_DIR"
+  "$ACTOOL" \
+    --compile "$ICON_BUILD_DIR" \
+    --platform macosx \
+    --target-device mac \
+    --minimum-deployment-target 26.0 \
+    --app-icon AppIcon \
+    --include-all-app-icons \
+    --enable-on-demand-resources NO \
+    --development-region en \
+    --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
+    "$ICON_SOURCE" < /dev/null
+  cp "$ICON_BUILD_DIR/Assets.car" "$APP_PATH/Contents/Resources/Assets.car"
+  rm -rf "$ICON_BUILD_DIR"
+elif [[ "$REQUIRE_COMPILED_ICON" == "true" ]]; then
+  printf 'Release requires an Xcode 26+ actool that supports .icon; actool is unavailable.\n' >&2
+  exit 1
+else
+  printf 'Warning: actool unavailable; keeping the approved ICNS fallback only.\n' >&2
+fi
+
 printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
+
+"$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify-app-icon.sh" "$APP_PATH"
 
 # macOS keys both TCC grants (Accessibility, Screen Recording) and Keychain
 # ACL decisions ("Always Allow") to the bundle's code signature. An ad-hoc
