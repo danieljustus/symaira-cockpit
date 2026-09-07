@@ -131,13 +131,13 @@ jobs:
           # one bundle per test target, while plain `swift build` writes to
           # .build/<triple>/debug/ with one combined <Package>PackageTests
           # bundle — this must work under either.
-          binaries=""
+          binaries=()
           while IFS= read -r b; do
             name=$(basename "$b" .xctest)
             if [ -x "$b/Contents/MacOS/$name" ]; then
-              binaries="$binaries $b/Contents/MacOS/$name"
+              binaries+=("$b/Contents/MacOS/$name")
             else
-              binaries="$binaries $b"
+              binaries+=("$b")
             fi
           done < <(find .build -iname "*.xctest" -type d)
           profdata=$(find .build -iname "default.profdata" | head -1)
@@ -150,6 +150,6 @@ jobs:
           {
             echo "### Coverage — ${{ matrix.pkg }}"
             echo '```'
-            xcrun llvm-cov report $binaries -instr-profile "$profdata"
+            xcrun llvm-cov report "${binaries[@]}" -instr-profile "$profdata"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

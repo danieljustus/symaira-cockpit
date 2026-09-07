@@ -73,6 +73,7 @@ if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; th
   "$ACTOOL" \
     --compile "$ICON_BUILD_DIR" \
     --platform macosx \
+    --target-device mac \
     --minimum-deployment-target "${DEPLOYMENT_TARGET:-15.0}" \
     --app-icon AppIcon \
     --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
