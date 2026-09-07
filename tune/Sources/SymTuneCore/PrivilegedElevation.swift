@@ -50,10 +50,17 @@ public enum PrivilegedElevation: Sendable {
     /// as the user could drop a `symcockpit` there; the next fan change from
     /// the GUI would show the ordinary administrator prompt, and the user
     /// would authenticate that binary into root.
-    private static func resolveTrustedSymCockpit() throws -> String {
+    static func resolveTrustedSymCockpit(
+        resolve: () throws -> String = {
+            try BoundedProcessRunner.resolvePrivilegedExecutablePath("symcockpit")
+        }
+    ) throws -> String {
         do {
-            return try BoundedProcessRunner.resolvePrivilegedExecutablePath("symcockpit")
+            return try resolve()
         } catch let error as PrivilegedExecutableError {
+            // A missing binary is an install problem the user already knows how
+            // to fix; an untrustworthy one needs its exact failing condition
+            // carried through, or the refusal is indistinguishable from a bug.
             if case .notFound = error {
                 throw ElevationError.executableUnavailable
             }
