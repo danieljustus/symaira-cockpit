@@ -80,7 +80,7 @@ if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; th
     --enable-on-demand-resources NO \
     --development-region en \
     --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
-    "$ICON_SOURCE"
+    "$ICON_SOURCE" < /dev/null
   cp "$ICON_BUILD_DIR/Assets.car" "$APP_PATH/Contents/Resources/Assets.car"
   rm -rf "$ICON_BUILD_DIR"
 elif [[ "$REQUIRE_COMPILED_ICON" == "true" ]]; then
