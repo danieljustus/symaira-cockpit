@@ -162,7 +162,9 @@ public enum PortService: Sendable {
         return out.sorted { $0.port < $1.port }
     }
 
-    private static func isPortOpen(_ port: Int) -> Bool {
+    /// Probes a loopback TCP port. Internal rather than private so the
+    /// descriptor-safety regression test can drive it directly.
+    static func isPortOpen(_ port: Int) -> Bool {
         let socketFD = Darwin.socket(AF_INET, SOCK_STREAM, 0)
         guard socketFD >= 0 else { return true }
         defer { Darwin.close(socketFD) }
@@ -175,8 +177,10 @@ public enum PortService: Sendable {
                 Darwin.connect(socketFD, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        if rc == 0 { Darwin.close(socketFD); return true }
-        Darwin.close(socketFD)
-        return false
+        // The `defer` above owns this descriptor. Closing it here as well
+        // would leave a closed fd number that the kernel immediately reuses
+        // for the next open in this process, and the deferred close would
+        // then destroy that unrelated descriptor.
+        return rc == 0
     }
 }
