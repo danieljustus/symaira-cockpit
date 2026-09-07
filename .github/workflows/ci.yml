@@ -64,13 +64,13 @@ jobs:
   # the GUI release path. The regular Swift matrix does not exercise actool.
   icon-compile:
     name: app icon compile
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Select Xcode 26
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: '26.0'
+          xcode-version: '26.6'
       - name: Verify Xcode toolchain
         run: |
           set -euo pipefail
