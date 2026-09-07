@@ -17,21 +17,19 @@ export DEVELOPER_DIR = $(TOOLCHAIN)
 
 ## build: Build all packages
 build:
-	@for p in $(PACKAGES); do \
-		if [ -d "$$p" ]; then \
-			echo "==> build $$p"; \
-			cd $$p && swift build && cd ..; \
-		fi; \
-	done
+	@rc=0; for p in $(PACKAGES); do \
+		[ -d "$$p" ] || continue; \
+		echo "==> build $$p"; \
+		( cd $$p && swift build ) || rc=1; \
+	done; exit $$rc
 
 ## test: Test all packages
 test:
-	@for p in $(PACKAGES); do \
-		if [ -d "$$p" ]; then \
-			echo "==> test $$p"; \
-			cd $$p && swift test && cd ..; \
-		fi; \
-	done
+	@rc=0; for p in $(PACKAGES); do \
+		[ -d "$$p" ] || continue; \
+		echo "==> test $$p"; \
+		( cd $$p && swift test ) || rc=1; \
+	done; exit $$rc
 
 ## build-app: Assemble the GUI bundle (build/app/Symaira Cockpit.app)
 build-app:
