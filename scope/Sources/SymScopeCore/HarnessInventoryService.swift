@@ -151,8 +151,12 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
         if let projectDir {
             arguments += ["--project", projectDir]
         }
+        // Truncated output is a prefix of a JSON document, so decoding it can
+        // only produce a partial or wrong inventory. Treat it as a decode
+        // failure so the caller reports its actionable note instead.
         guard let result = try? BoundedProcessRunner.run(executable: path, arguments: arguments),
               !result.timedOut,
+              !result.truncated,
               result.terminationStatus == 0 else {
             return nil
         }
@@ -169,6 +173,7 @@ public final class SymBrainHarnessService: HarnessInventoryProviding, @unchecked
                   timeoutSeconds: 30
               ),
               !result.timedOut,
+              !result.truncated,
               result.terminationStatus == 0,
               let report = try? JSONDecoder().decode(HarnessHealthReport.self, from: result.standardOutput) else {
             return nil
