@@ -71,9 +71,10 @@ struct MainStatusView: View {
     /// Popover or embedded — see ``TunePanelChrome``.
     var chrome: TunePanelChrome = .popover
 
-    /// The notch HUD's switch, surfaced next to the menu-bar switches in the
-    /// embedded chrome. Nil in a host that does not offer the HUD (issue #224).
-    var notchPreferences: NotchHUDPreferences? = nil
+    /// Where the readout appears, surfaced next to the menu-bar switches in
+    /// the embedded chrome. Nil in a host that offers no choice because it has
+    /// no notch HUD (issues #224, #251).
+    var readoutPreferences: ReadoutSurfacePreferences? = nil
 
     var body: some View {
         switch chrome {
@@ -154,7 +155,7 @@ struct MainStatusView: View {
                     aiUsage: aiUsageModel.preferences,
                     model: model,
                     hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                    notch: notchPreferences
+                    readout: readoutPreferences
                 )
             }
 

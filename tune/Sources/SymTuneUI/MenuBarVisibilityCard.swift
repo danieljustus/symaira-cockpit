@@ -22,9 +22,9 @@ struct MenuBarVisibilityCard: View {
     /// Whether any AI-usage provider is switched on at all; the menu-bar
     /// toggle for it is meaningless otherwise and says so.
     let hasEnabledAIProviders: Bool
-    /// The notch HUD's switch, or `nil` in a host that does not offer it (the
-    /// standalone Tune app). Issue #224.
-    var notch: NotchHUDPreferences?
+    /// Where the readout appears, or `nil` in a host that offers no choice
+    /// because it has no notch HUD (the standalone Tune app). Issues #224, #251.
+    var readout: ReadoutSurfacePreferences?
 
     @State private var saveError: String?
 
@@ -44,8 +44,9 @@ struct MenuBarVisibilityCard: View {
 
             aiUsageRow
 
-            if let notch {
-                notchRow(notch)
+            if let readout {
+                Divider().overlay(SymairaTheme.borderGlass)
+                surfaceRow(readout)
             }
 
             if let saveError {
@@ -238,47 +239,59 @@ struct MenuBarVisibilityCard: View {
         }
     }
 
-    /// The notch HUD lives beside the menu-bar switches because it is the same
-    /// decision — where the readout appears — even though it draws its own
-    /// surface. On a Mac without a camera cutout there is nowhere to put it,
-    /// and the row says that instead of offering a switch that does nothing.
-    private func notchRow(_ notch: NotchHUDPreferences) -> some View {
+    /// Where the readout appears — one surface, not two.
+    ///
+    /// The menu-bar status item and the notch HUD show the same numbers, so
+    /// running both put the same readout on screen twice. This is the same
+    /// decision the switches above make — what the readout shows — one level
+    /// up: where it shows it. On a Mac without a camera cutout there is nowhere
+    /// to put the HUD, and the row says that instead of offering a choice that
+    /// does nothing.
+    private func surfaceRow(_ readout: ReadoutSurfacePreferences) -> some View {
         let available = NotchHUDController.isAvailable
 
-        return HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: "rectangle.topthird.inset.filled")
-                .symairaText(.caption)
-                .frame(width: 18)
-                .foregroundStyle(
-                    notch.enabled && available
-                        ? SymairaTheme.goldPrimary
-                        : SymairaTheme.textMuted
-                )
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Notch HUD")
-                    .symairaText(.body)
-                    .foregroundStyle(available ? SymairaTheme.textPrimary : SymairaTheme.textMuted)
-                Text(available
-                    ? "A readout around the camera cutout; hover to expand"
-                    : "This display has no camera cutout")
+        return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+            HStack(spacing: SymairaSpacing.medium) {
+                Image(systemName: readout.surface == .notch && available
+                    ? "rectangle.topthird.inset.filled"
+                    : "menubar.rectangle")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .frame(width: 18)
+                    .foregroundStyle(SymairaTheme.goldPrimary)
+
+                Text("Show in")
+                    .symairaText(.body)
+                    .foregroundStyle(SymairaTheme.textPrimary)
+
+                Spacer(minLength: SymairaSpacing.small)
+
+                Picker("", selection: Binding(
+                    get: { readout.surface },
+                    set: { readout.surface = $0 }
+                )) {
+                    Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
+                    Text(ReadoutSurface.notch.displayName).tag(ReadoutSurface.notch)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 140)
+                .disabled(!available)
+                .opacity(available ? 1 : 0.5)
+                .help("Where the live readout appears — one surface at a time")
             }
 
-            Spacer(minLength: SymairaSpacing.small)
+            Text(surfaceCaption(readout.surface, available: available))
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
-            // No sampling of its own — the HUD renders the metrics that are
-            // already being polled — so it sits under the "Menu bar" column.
-            Color.clear.frame(width: 64, height: 1)
-
-            switchCell(
-                isOn: notch.enabled,
-                help: "Show the metrics around the camera cutout as well",
-                disabled: !available
-            ) { newValue in
-                notch.enabled = newValue
-            }
+    private func surfaceCaption(_ surface: ReadoutSurface, available: Bool) -> String {
+        guard available else { return "This display has no camera cutout" }
+        return switch surface {
+        case .menuBar: "The status item in the menu bar"
+        case .notch: "A readout around the camera cutout; hover to expand"
         }
     }
 

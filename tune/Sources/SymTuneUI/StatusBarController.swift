@@ -30,11 +30,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private var preferencesWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
-    /// The notch HUD and its switch (issue #224). Both exist unconditionally —
-    /// the preference has to be readable to be rendered — but the HUD only
-    /// runs once a host opts in via ``isNotchHUDOffered`` **and** the user
-    /// turns it on.
-    let notchPreferences = NotchHUDPreferences()
+    /// Where the readout appears, and the HUD that renders one of the two
+    /// choices (issues #224, #251). Both exist unconditionally — the preference
+    /// has to be readable to be rendered — but the notch is only reachable once
+    /// a host opts in via ``isNotchHUDOffered``.
+    let readoutPreferences = ReadoutSurfacePreferences()
     private lazy var notchController = NotchHUDController(
         model: model,
         preferences: preferencesManager
@@ -99,15 +99,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// (`pmset -g assertions`).
     public var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
-    /// Whether this host offers the notch HUD.
+    /// Whether this host offers the notch as a readout surface.
     ///
     /// The standalone Tune app leaves it `false`, so its menu bar behaves
-    /// exactly as before; `SymCockpitApp` sets it, which surfaces the switch
-    /// in the cockpit window and lets the HUD run when the switch is on.
+    /// exactly as before and the choice never appears; `SymCockpitApp` sets it,
+    /// which surfaces the picker in the cockpit window and lets the HUD run
+    /// when the notch is selected.
     public var isNotchHUDOffered: Bool = false {
         didSet {
             guard isNotchHUDOffered != oldValue else { return }
-            syncNotchHUD()
+            syncReadoutSurface()
         }
     }
 
@@ -149,7 +150,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // Forwarded rather than copied: the host assigns ``onOpenCockpit``
         // after construction, and a copy taken here would always be nil.
         notchController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
-        observeNotchPreference()
+        observeReadoutSurface()
         model.start()
         aiUsageModel.start()
         checkForUpdatesOnLaunch()
@@ -214,20 +215,48 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             .store(in: &cancellables)
     }
 
-    /// The switch applies live, in both directions.
-    private func observeNotchPreference() {
-        notchPreferences.$enabled
+    /// The picker applies live, in both directions: one surface comes down as
+    /// the other goes up, without a relaunch.
+    private func observeReadoutSurface() {
+        readoutPreferences.$surface
             .dropFirst()
             .sink { [weak self] _ in
-                Task { @MainActor in self?.syncNotchHUD() }
+                Task { @MainActor in self?.syncReadoutSurface() }
             }
             .store(in: &cancellables)
+
+        // A display arriving, leaving or being rearranged can take the cutout
+        // with it. Without this, closing the lid on an external monitor would
+        // leave the status item hidden and the HUD unbuildable — the app with
+        // no visible surface at all.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
-    /// Run the HUD exactly while the host offers it and the user wants it.
-    private func syncNotchHUD() {
+    @objc private func screenParametersChanged() {
+        MainActor.assumeIsolated { syncReadoutSurface() }
+    }
+
+    /// Show exactly one surface: the status item or the notch HUD.
+    ///
+    /// The stored choice is resolved against what this Mac can actually render,
+    /// so a `.notch` preference on a display without a cutout still leaves the
+    /// status item in place rather than hiding the only way back to the
+    /// preference.
+    private func syncReadoutSurface() {
+        let notchAvailable = isNotchHUDOffered && NotchHUDController.isAvailable
+        let effective = ReadoutSurfaceDefaults.effective(
+            readoutPreferences.surface,
+            notchAvailable: notchAvailable
+        )
+
         notchController.openCockpitTitle = openCockpitTitle
-        notchController.setEnabled(isNotchHUDOffered && notchPreferences.enabled)
+        notchController.setEnabled(effective == .notch)
+        statusItem.isVisible = effective == .menuBar
     }
 
     // MARK: - Status item rendering
@@ -377,7 +406,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome,
-            notchPreferences: isNotchHUDOffered ? notchPreferences : nil
+            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil
         )
     }
 
