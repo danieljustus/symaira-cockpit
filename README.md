@@ -12,7 +12,7 @@ capabilities you have in the shell.
 [![Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?label=release)](https://github.com/danieljustus/symaira-cockpit/releases)
 [![Coverage](https://img.shields.io/badge/coverage-CI%20tracked-informational)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/danieljustus/symaira-cockpit)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey.svg)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
 
 ![Symaira Cockpit](docs/assets/social-preview.png)
@@ -305,7 +305,7 @@ symcockpit version --json
 
 ## Requirements
 
-- macOS 15 or newer, Apple Silicon or Intel
+- macOS 26 or newer, Apple Silicon or Intel
 - Container inventory: a running Docker engine (optional)
 - Fan and charge-limit control: access to the Apple SMC — not every model and
   not every macOS build permits it, and `tune sensors` will tell you

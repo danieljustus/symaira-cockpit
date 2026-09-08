@@ -40,7 +40,7 @@ thermals/brightness/power.**
 - **Safety-guarded.** Refuses destructive controls and secure text fields; never
   automate passwords or permission dialogs without explicit confirmation.
 - **Native macOS.** Built with AppKit, Accessibility, and ScreenCaptureKit for
-  reliable performance on macOS 15+.
+  reliable performance on macOS 26+.
 
 ## Install
 
@@ -65,7 +65,7 @@ symoperate doctor
 
 ## Requirements
 
-- macOS 15+
+- macOS 26+
 - `Accessibility` and `Screen Recording` permissions for the host process
 
 ## Build

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 // symcockpit — the unified entrypoint for the cockpit tool family.
@@ -6,9 +6,10 @@ import PackageDescription
 let package = Package(
     name: "symcockpit",
     platforms: [
-        // operate targets macOS 15 (ScreenCaptureKit APIs); the dispatcher
-        // inherits the highest of its dependencies.
-        .macOS(.v15),
+        // The whole family targets macOS 26: the GUI's docked HUD is built
+        // on the Liquid Glass APIs, and a split deployment target is not
+        // expressible in SwiftPM — platforms are per package, not per target.
+        .macOS(.v26),
     ],
     products: [
         .executable(name: "symcockpit", targets: ["symcockpit"]),
