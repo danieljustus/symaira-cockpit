@@ -43,6 +43,11 @@ compatibility, but only `symcockpit` is the shipped CLI binary. `history/`
 is the odd one out: no CLI, no MCP server, just a library that `tune/` and
 `operate/` depend on by path. It is built and tested with the rest.
 
+`DeterministicReplayCodec` is future replay groundwork, not a live production
+feature: it currently has no production caller, and its checks are not a
+release-enforced replay boundary. Once a replay surface exists, the codec is
+intended to become the safety boundary for that surface.
+
 ## Build and test
 
 Run the complete workspace checks with the repository Makefile:

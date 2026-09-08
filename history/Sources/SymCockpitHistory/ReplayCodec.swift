@@ -66,6 +66,10 @@ public typealias ReplayRecording = DeterministicReplayRecording
 
 /// Encodes canonical history as a deterministic, privacy-aware replay envelope.
 ///
+/// This is future replay groundwork, not a live production boundary: the codec
+/// currently has no production caller. Once a replay surface exists, it is
+/// intended to be the safety boundary for that surface.
+///
 /// The codec is deliberately pure. It does not read files, consult the running
 /// desktop, or post input. Replay execution must perform fresh target and
 /// precondition checks before each returned event is acted upon.
