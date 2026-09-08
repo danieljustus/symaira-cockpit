@@ -83,9 +83,18 @@ public final class ScreenService: ScreenServiceProtocol {
         guard let target = windowInfo(for: windowID) else {
             throw AutomationError.notFound("Window \(windowID) was not found.")
         }
+        let windowBounds = CGRect(
+            x: target.bounds.x,
+            y: target.bounds.y,
+            width: target.bounds.width,
+            height: target.bounds.height
+        )
         return try capture(
-            displayID: CGMainDisplayID(),
-            bounds: CGRect(x: target.bounds.x, y: target.bounds.y, width: target.bounds.width, height: target.bounds.height),
+            // Report the display the window actually sits on. The capture no
+            // longer depends on it, but a snapshot that always claimed the main
+            // display was wrong for every window on a secondary screen.
+            displayID: Self.displayContaining(windowBounds),
+            bounds: windowBounds,
             maxDimension: maxDimension,
             windowID: windowID,
             windowOwnerPID: target.ownerPID,
@@ -120,12 +129,20 @@ public final class ScreenService: ScreenServiceProtocol {
 
         cleanupOldSnapshots()
 
+        // A window capture returns an image of the window alone, so the rect the
+        // snapshot advertises — and that `SnapshotTransform` maps image points
+        // back into — must be the window's frame rather than the display.
+        let mappedBounds = Self.snapshotBounds(
+            requested: bounds,
+            capturedWindowFrame: windowID == nil ? nil : captureResult.contentRect
+        )
+
         let imageSize = SizeValue(width: Double(scaled.width), height: Double(scaled.height))
         let rectValue = RectValue(
-            x: bounds.origin.x,
-            y: bounds.origin.y,
-            width: bounds.size.width,
-            height: bounds.size.height
+            x: mappedBounds.origin.x,
+            y: mappedBounds.origin.y,
+            width: mappedBounds.size.width,
+            height: mappedBounds.size.height
         )
         let transform = SnapshotTransform(displayID: displayID, displayBounds: rectValue, imageSize: imageSize)
         return Snapshot(
@@ -140,6 +157,37 @@ public final class ScreenService: ScreenServiceProtocol {
             debugImagePath: debugPath,
             transform: transform
         )
+    }
+
+    /// The screen rectangle a snapshot describes.
+    ///
+    /// For a display capture this is the requested display rect. For a window
+    /// capture it is the frame of the window that was actually captured, so the
+    /// advertised rect and the returned image cover the same area and
+    /// ``SnapshotTransform`` maps between them correctly. A zero frame — which
+    /// ScreenCaptureKit can hand back — would collapse every mapped coordinate
+    /// onto one point, so the caller's resolved bounds stay the safer answer.
+    ///
+    /// Internal rather than private so the geometry can be tested without a
+    /// Screen Recording grant.
+    static func snapshotBounds(requested: CGRect, capturedWindowFrame: CGRect?) -> CGRect {
+        guard let capturedWindowFrame, !capturedWindowFrame.isEmpty else { return requested }
+        return capturedWindowFrame
+    }
+
+    /// The display whose bounds contain `rect`, falling back to the main display
+    /// when the lookup fails or the rect is off-screen.
+    static func displayContaining(_ rect: CGRect) -> CGDirectDisplayID {
+        var matching: UInt32 = 0
+        guard CGGetDisplaysWithRect(rect, 0, nil, &matching) == .success, matching > 0 else {
+            return CGMainDisplayID()
+        }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(matching))
+        guard CGGetDisplaysWithRect(rect, matching, &ids, &matching) == .success,
+              let first = ids.first, matching > 0 else {
+            return CGMainDisplayID()
+        }
+        return first
     }
 
     @discardableResult
@@ -214,21 +262,34 @@ public final class ScreenService: ScreenServiceProtocol {
                     throw AutomationError.notFound("Window \(windowID) not found in ScreenCaptureKit.")
                 }
 
-                guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) else {
-                    throw AutomationError.unavailable("Main display not found for window capture.")
-                }
-
-                let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [window])
+                // Isolate the window itself. The display-based filter this used
+                // to build captured the *whole* display instead: with an empty
+                // `excludingApplications` list nothing is excluded, and
+                // `exceptingWindows` only re-includes windows whose owning
+                // application appears in that exclusion list — so naming the
+                // target window there had no effect at all. Scoping a capture to
+                // one window is the only control this API offers over what
+                // leaves the machine, and it silently returned every other
+                // application's window plus the desktop and dock.
+                //
+                // `desktopIndependentWindow` also makes the capture independent
+                // of which display the window is on, which removes the previous
+                // hardcoded main-display lookup.
+                let filter = SCContentFilter(desktopIndependentWindow: window)
                 let config = SCStreamConfiguration()
                 config.pixelFormat = kCVPixelFormatType_32BGRA
                 config.showsCursor = false
 
-                let (image, rect) = try await SCScreenshotManager.captureImage(
+                let (image, _) = try await SCScreenshotManager.captureImage(
                     contentFilter: filter,
                     configuration: config
                 )
                 box.value = image
-                rectBox.value = rect
+                // The window's frame in screen points — the rectangle the
+                // captured image actually covers. The sample buffer's own
+                // content rect is in pixel coordinates within the captured
+                // surface, so it cannot be mapped back to the screen.
+                rectBox.value = window.frame
             } catch {
                 errorBox.value = error
             }

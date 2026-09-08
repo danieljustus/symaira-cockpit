@@ -246,4 +246,64 @@ final class AccessibilityServiceTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Snapshot cache bookkeeping (issue #241)
+
+    private func snapshotFixture(id: String) -> Snapshot {
+        let bounds = RectValue(x: 0, y: 0, width: 1440, height: 900)
+        return Snapshot(
+            id: id,
+            createdAt: "2026-09-08T00:00:00Z",
+            imageBase64PNG: String(repeating: "A", count: 1024),
+            imageSize: SizeValue(width: 1440, height: 900),
+            displayBounds: bounds,
+            displayID: 1,
+            transform: SnapshotTransform(
+                displayID: 1,
+                displayBounds: bounds,
+                imageSize: SizeValue(width: 1440, height: 900)
+            )
+        )
+    }
+
+    func testStoreSnapshotAloneStaysWithinTheCacheBound() {
+        // `storeSnapshot` runs before the Accessibility query. When that query
+        // throws — no Accessibility grant, dead window, no frontmost app — the
+        // walk never registers the id, so an unbounded cache would hold a full
+        // screenshot per failed call for the lifetime of the process.
+        let service = AccessibilityService()
+
+        for index in 0..<(service.maxCacheSnapshots + 5) {
+            service.storeSnapshot(snapshotFixture(id: "snapshot_\(index)"), for: "snapshot_\(index)")
+        }
+
+        XCTAssertLessThanOrEqual(service.snapshotCache.count, service.maxCacheSnapshots)
+        XCTAssertLessThanOrEqual(service.cacheOrder.count, service.maxCacheSnapshots)
+    }
+
+    func testStoreSnapshotEvictsTheOldestEntryFirst() {
+        let service = AccessibilityService()
+
+        for index in 0..<(service.maxCacheSnapshots + 1) {
+            service.storeSnapshot(snapshotFixture(id: "snapshot_\(index)"), for: "snapshot_\(index)")
+        }
+
+        XCTAssertNil(service.cachedSnapshot(for: "snapshot_0"), "the oldest snapshot should have been evicted")
+        XCTAssertNotNil(
+            service.cachedSnapshot(for: "snapshot_\(service.maxCacheSnapshots)"),
+            "the newest snapshot must still be resident"
+        )
+    }
+
+    func testASnapshotRegisteredTwiceOccupiesOneCacheSlot() {
+        // The successful path stores the snapshot and then walks the tree, which
+        // registers the same id a second time. It must not consume two slots.
+        let service = AccessibilityService()
+        let id = "snapshot_shared"
+
+        service.storeSnapshot(snapshotFixture(id: id), for: id)
+        service.storeSnapshot(snapshotFixture(id: id), for: id)
+
+        XCTAssertEqual(service.cacheOrder.filter { $0 == id }.count, 1)
+    }
 }

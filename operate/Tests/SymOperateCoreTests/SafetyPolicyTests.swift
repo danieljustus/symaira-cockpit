@@ -758,4 +758,53 @@ extension SafetyPolicyTests {
             contains: "destructive"
         )
     }
+
+
+    // MARK: - Grantable permission surface (issue #242)
+
+    func testAdvertisedFlagNamesAreExactlyTheEnforcedOnes() {
+        // Every advertised flag must change behaviour when granted or withheld.
+        // `destructive_action` and `secure_field_access` never did: destructive
+        // targets and secure text fields are refused unconditionally, so naming
+        // them here told operators they had a control they did not have.
+        XCTAssertEqual(
+            PermissionFlags.allFlagNames,
+            ["capture", "input", "app_control", "menu_action", "policy_modify"]
+        )
+    }
+
+    func testAllIsTheSetOfAdvertisedFlags() {
+        XCTAssertEqual(
+            PermissionFlags.all,
+            [.capture, .input, .appControl, .menuAction, .policyModify]
+        )
+    }
+
+    func testRetiredGrantNamesAreAcceptedButGrantNothing() throws {
+        // An existing --grant value or ~/.config/symoperate/policy.json may still
+        // list the retired names. Rejecting them would stop the server from
+        // starting, so they are accepted and ignored instead.
+        let permissions = try StartupPolicy.parseGrantNames(
+            ["capture", "destructive_action", "secure_field_access"]
+        )
+        XCTAssertEqual(permissions, .capture)
+    }
+
+    func testUnknownGrantNameIsStillRejected() {
+        XCTAssertThrowsError(try StartupPolicy.parseGrantNames(["capture", "nonsense"])) { error in
+            guard case AutomationError.invalidArgument(let message) = error else {
+                return XCTFail("Expected invalidArgument, got \(error)")
+            }
+            XCTAssertTrue(message.contains("nonsense"), message)
+        }
+    }
+
+    func testRetiredGrantNamesCannotBeRequestedThroughSetPolicy() {
+        // PermissionFlags.parse drops them, so a client sending the old full list
+        // narrows to the advertised flags instead of tripping the widen guard.
+        XCTAssertEqual(
+            PermissionFlags.parse(names: ["capture", "destructive_action", "secure_field_access"]),
+            .capture
+        )
+    }
 }

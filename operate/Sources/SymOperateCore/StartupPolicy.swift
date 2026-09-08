@@ -47,10 +47,17 @@ public enum StartupPolicy {
 
     /// Parses canonical permission names, rejecting typos rather than silently
     /// starting with a broader grant than the operator requested.
+    ///
+    /// Names in ``PermissionFlags/retiredGrantNames`` are the one exception:
+    /// they were advertised as grantable while gating nothing, so an existing
+    /// `--grant` value or policy file may still list them. Refusing those would
+    /// stop the server from starting over a permission that never had an
+    /// effect, so they are accepted and contribute nothing to the grant.
     public static func parseGrantNames(_ names: [String]) throws -> PermissionFlags {
         var permissions = PermissionFlags()
         for name in names {
             let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if PermissionFlags.retiredGrantNames.contains(normalized.lowercased()) { continue }
             guard !normalized.isEmpty, let flag = PermissionFlags.flag(named: normalized) else {
                 throw AutomationError.invalidArgument("Unknown grant permission '\(name)'.")
             }

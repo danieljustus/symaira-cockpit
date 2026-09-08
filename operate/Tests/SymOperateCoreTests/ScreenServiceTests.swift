@@ -125,4 +125,69 @@ final class ScreenServiceTests: XCTestCase {
             "Screen capture failed: stream error"
         )
     }
+
+    // MARK: - Window-scoped capture geometry (issue #240)
+
+    func testWindowSnapshotDescribesTheCapturedWindowRectNotTheDisplay() {
+        // A window capture returns an image of the window alone, so the rect the
+        // snapshot advertises must be the window's own frame — not the display
+        // rect the caller happened to pass in.
+        let display = CGRect(x: 0, y: 0, width: 3456, height: 2234)
+        let window = CGRect(x: 400, y: 220, width: 1200, height: 800)
+
+        XCTAssertEqual(
+            ScreenService.snapshotBounds(requested: display, capturedWindowFrame: window),
+            window
+        )
+    }
+
+    func testDisplaySnapshotKeepsTheRequestedDisplayBounds() {
+        // The display path passes no window frame; its bounds stay untouched.
+        let display = CGRect(x: 0, y: 0, width: 3456, height: 2234)
+
+        XCTAssertEqual(
+            ScreenService.snapshotBounds(requested: display, capturedWindowFrame: nil),
+            display
+        )
+    }
+
+    func testEmptyCapturedWindowFrameFallsBackToTheRequestedBounds() {
+        // ScreenCaptureKit can hand back a zero frame; an empty rect would make
+        // every mapped coordinate collapse onto a single point, so the caller's
+        // resolved bounds remain the safer answer.
+        let display = CGRect(x: 0, y: 0, width: 3456, height: 2234)
+
+        XCTAssertEqual(
+            ScreenService.snapshotBounds(requested: display, capturedWindowFrame: .zero),
+            display
+        )
+    }
+
+    func testTransformMapsImageCentreToWindowCentreForAWindowSnapshot() {
+        // The acceptance check for #240: with the image and the advertised rect
+        // both describing the window, the centre of the image maps back to the
+        // centre of the window on screen. Before the fix the image covered the
+        // whole display while the rect described the window, so this landed far
+        // from the window's real centre.
+        let display = CGRect(x: 0, y: 0, width: 3456, height: 2234)
+        let window = CGRect(x: 400, y: 220, width: 1200, height: 800)
+
+        let bounds = ScreenService.snapshotBounds(requested: display, capturedWindowFrame: window)
+        let rectValue = RectValue(
+            x: bounds.origin.x,
+            y: bounds.origin.y,
+            width: bounds.size.width,
+            height: bounds.size.height
+        )
+        // A window-sized capture, downscaled by maxDimension the way capture() does.
+        let imageSize = SizeValue(width: 1200 / 2, height: 800 / 2)
+        let transform = SnapshotTransform(displayID: 1, displayBounds: rectValue, imageSize: imageSize)
+
+        let centre = transform.imageToDisplay(
+            point: PointValue(x: imageSize.width / 2, y: imageSize.height / 2)
+        )
+
+        XCTAssertEqual(centre.x, window.midX, accuracy: 0.0001)
+        XCTAssertEqual(centre.y, window.midY, accuracy: 0.0001)
+    }
 }
