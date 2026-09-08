@@ -9,7 +9,7 @@ options:
 packages:
   symaira-appkit:
     url: https://github.com/danieljustus/symaira-appkit.git
-    exactVersion: 0.14.0
+    exactVersion: 0.14.2
   history:
     path: ../history
 
