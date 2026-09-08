@@ -31,6 +31,67 @@ private struct FixtureFileSystem: DaemonFileSystemReading {
     }
 }
 
+/// Records how many collectors were inside at the same time.
+///
+/// Each caller waits until `expected` of them have arrived, so a genuinely
+/// concurrent implementation reaches the mark deterministically rather than by
+/// luck. A serial one cannot: each caller waits out the grace period alone,
+/// the peak stays at one, and the assertion fails instead of the suite hanging.
+/// Once the mark has been reached the gate latches open, so stragglers do not
+/// pay the grace period on a passing run.
+private final class ConcurrencyWitness: @unchecked Sendable {
+    private let lock = NSLock()
+    private let gate = DispatchSemaphore(value: 0)
+    private let expected: Int
+    private var active = 0
+    private var highWater = 0
+    private var latched = false
+
+    init(expected: Int) {
+        self.expected = expected
+    }
+
+    func witness() {
+        lock.lock()
+        active += 1
+        highWater = max(highWater, active)
+        let reached = active >= expected
+        if reached { latched = true }
+        let open = latched
+        lock.unlock()
+
+        if reached {
+            for _ in 0..<expected { gate.signal() }
+        } else if !open {
+            _ = gate.wait(timeout: .now() + 1)
+        }
+
+        lock.lock()
+        active -= 1
+        lock.unlock()
+    }
+
+    var peak: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return highWater
+    }
+}
+
+private struct WitnessingCommandRunner: DaemonCommandRunning {
+    let outputs: [String: String]
+    let witness: ConcurrencyWitness
+
+    func run(executable: String, arguments: [String]) throws -> String {
+        witness.witness()
+        let key = ([executable] + arguments).joined(separator: " ")
+        guard let output = outputs[key] else {
+            throw DaemonCommandError.nonZero(127)
+        }
+        return output
+    }
+}
+
 final class DaemonParserTests: XCTestCase {
     func testParseLaunchctlList() {
         let output = """
@@ -138,6 +199,48 @@ final class DaemonParserTests: XCTestCase {
         let health = DaemonService.health(rows)
         XCTAssertFalse(health[0].healthy)
         XCTAssertTrue(health[1].healthy)
+    }
+
+    func testCollectorsRunConcurrentlyRatherThanWaitingOutBrew() async {
+        // `brew services list` is a Ruby process and is roughly 95% of this
+        // call's wall time. launchd's inventory, the plist scan and the port
+        // inventory do not depend on it, so they have to run beside it rather
+        // than after it. The witness makes that structural rather than timed:
+        // it only lets callers through once two of them are inside at once.
+        let witness = ConcurrencyWitness(expected: 2)
+        let runner = WitnessingCommandRunner(
+            outputs: [
+                "/bin/launchctl list": "PID Status Label\n55 0 com.example.worker\n",
+                "/bin/launchctl list system": "",
+                "/opt/homebrew/bin/brew services list":
+                    "Name Status User File\nredis started daniel ~/Library/LaunchAgents/homebrew.mxcl.redis.plist\n",
+            ],
+            witness: witness
+        )
+        let fileSystem = FixtureFileSystem(
+            directories: [:],
+            files: [:],
+            executables: ["/opt/homebrew/bin/brew"]
+        )
+        let service = DaemonService(
+            commandRunner: runner,
+            fileSystem: fileSystem,
+            portProvider: {
+                witness.witness()
+                return []
+            },
+            homeDirectory: "/fixture/home"
+        )
+
+        let (rows, notes) = await service.list()
+
+        XCTAssertGreaterThanOrEqual(
+            witness.peak, 2,
+            "launchd, Homebrew and the port inventory must overlap, not run one after another"
+        )
+        // The merged result is unchanged by running the collectors together.
+        XCTAssertEqual(rows.map(\.label).sorted(), ["com.example.worker", "homebrew.mxcl.redis"])
+        XCTAssertTrue(notes.isEmpty, "a healthy fixture degrades nowhere: \(notes)")
     }
 
     func testHealthPrefersLivePIDOverHistoricalExitStatus() {
