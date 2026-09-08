@@ -1,7 +1,7 @@
 import AppKit
 
 // A spike, not a product: intercept the brightness keys, log what arrives, and
-// draw a stand-in HUD. It never changes the actual display brightness.
+// draw a stand-in HUD. `--dry-run` is the mode that never changes brightness.
 //
 //   --tap hid|session|annotated   where to insert the tap (default: hid)
 //   --observe                     do not swallow the event (native HUD stays)
