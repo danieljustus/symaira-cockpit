@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import SymairaTheme
 
@@ -333,19 +334,38 @@ struct CockpitRefreshButton: View {
 }
 
 /// The filter box above a long list.
+///
+/// The whole of Scope and Operate hangs off this one control, so it carries
+/// the same keyboard and accessibility affordances the rest of the window
+/// does: ⌘F puts the caret in it, Escape empties it, and the focused state is
+/// drawn rather than left to a bare caret. ⌘F is owned by Edit ▸ Find in
+/// ``AppDelegate`` and reaches whichever field is on screen through
+/// ``Notification/Name/cockpitFocusSectionFilter``; Overview and Tune have no
+/// filter, so there it does nothing.
 struct CockpitSearchField: View {
     let placeholder: String
     @Binding var text: String
+
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: SymairaSpacing.small) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(SymairaTheme.textMuted)
+                // Decoration: the field next to it already says "filter".
+                .accessibilityHidden(true)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(SymairaTypography.callout)
                 .foregroundStyle(SymairaTheme.textPrimary)
+                .focused($isFocused)
+                // A plain TextField inside custom chrome does not hand its
+                // placeholder to the accessibility layer, so the field reached
+                // VoiceOver as an unnamed text box. Name it explicitly.
+                .accessibilityLabel(placeholder)
+                .help("\(placeholder) (⌘F)")
+                .onExitCommand { text = "" }
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -355,6 +375,10 @@ struct CockpitSearchField: View {
                         .foregroundStyle(SymairaTheme.textMuted)
                 }
                 .buttonStyle(.plain)
+                // Without this the symbol's own name wins and the button
+                // announces as "Close" — which reads as dismissing the window,
+                // not as emptying the filter.
+                .accessibilityLabel("Clear filter")
                 .help("Clear")
             }
         }
@@ -366,8 +390,16 @@ struct CockpitSearchField: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: SymairaRadius.control, style: .continuous)
-                .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+                .stroke(isFocused ? SymairaTheme.goldPrimary : SymairaTheme.borderGlass, lineWidth: 1)
         )
+        // ⌘F arrives as Edit ▸ Find rather than through the sidebar's invisible
+        // `keyboardShortcut` button (⌘1…⌘4). A menu item is the discoverable
+        // half of the same shortcut: it shows up in the menu bar and in the
+        // Keyboard Shortcuts settings pane, which an invisible binding never
+        // does, and Find is where a Mac user looks for it.
+        .onReceive(NotificationCenter.default.publisher(for: .cockpitFocusSectionFilter)) { _ in
+            isFocused = true
+        }
     }
 }
 
@@ -449,4 +481,11 @@ struct CockpitSectionScroll<Content: View>: View {
         }
         .padding(.bottom, SymairaSpacing.xSmall)
     }
+}
+
+extension Notification.Name {
+    /// Posted by Edit ▸ Find (⌘F) in ``AppDelegate``. Whichever section filter
+    /// is on screen takes the caret; Overview and Tune have none, so there it
+    /// is a no-op.
+    static let cockpitFocusSectionFilter = Notification.Name("com.symaira.cockpit.focusSectionFilter")
 }
