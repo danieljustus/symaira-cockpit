@@ -461,6 +461,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             maxHeight: maxHeight,
             chrome: chrome,
             readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            hudDockPreferences: isNotchHUDOffered ? hudDockPreferences : nil,
             brightnessKeyPreferences: isBrightnessKeyHandlingOffered
                 ? brightnessKeyPreferences
                 : nil,
