@@ -28,12 +28,12 @@ buildable while only `symcockpit` is released.
 
 `history/` is not a family: it has no CLI, no MCP server and no `AGENTS.md`
 of its own. It is a plain SPM package that `tune/` and `operate/` depend on
-by path, and it holds the privacy boundary for everything the tool persists
-— `SecretRedactor` at the output boundary and `ReplayCodec`, which decides
-which recorded actions are safe to replay. It is built and tested with the
-other packages (`PACKAGES` in the `Makefile`, both matrices in
-`.github/workflows/ci.yml`), so a regression in that boundary cannot reach a
-release unobserved.
+by path. It holds the live privacy boundary for everything the tool persists:
+`SecretRedactor` sits at the output boundary. `ReplayCodec` will decide which
+recorded actions are safe to replay once a replay surface exists; it currently
+has no production caller. The package is built and tested with the other
+packages (`PACKAGES` in the `Makefile`, both matrices in
+`.github/workflows/ci.yml`).
 
 ## Build & Test
 
