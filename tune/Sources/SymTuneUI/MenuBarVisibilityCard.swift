@@ -248,7 +248,10 @@ struct MenuBarVisibilityCard: View {
     /// to put the HUD, and the row says that instead of offering a choice that
     /// does nothing.
     private func surfaceRow(_ readout: ReadoutSurfacePreferences) -> some View {
-        let available = NotchHUDController.isAvailable
+        // The HUD is offered on every display now that it can sit on a screen
+        // edge; only the cutout itself needs the hardware, and that is the
+        // dock picker's problem rather than this one's.
+        let available = true
 
         return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
             HStack(spacing: SymairaSpacing.medium) {
@@ -270,7 +273,7 @@ struct MenuBarVisibilityCard: View {
                     set: { readout.surface = $0 }
                 )) {
                     Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
-                    Text(ReadoutSurface.notch.displayName).tag(ReadoutSurface.notch)
+                    Text("HUD").tag(ReadoutSurface.notch)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -288,10 +291,10 @@ struct MenuBarVisibilityCard: View {
     }
 
     private func surfaceCaption(_ surface: ReadoutSurface, available: Bool) -> String {
-        guard available else { return "This display has no camera cutout" }
+        guard available else { return "This display cannot show the HUD" }
         return switch surface {
         case .menuBar: "The status item in the menu bar"
-        case .notch: "A readout around the camera cutout; hover to expand"
+        case .notch: "A floating readout; hover to expand, drag to move it"
         }
     }
 
