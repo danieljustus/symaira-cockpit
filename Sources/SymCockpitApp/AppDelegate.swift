@@ -101,6 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.openPreferences()
     }
 
+    /// Edit ▸ Find (⌘F): hand the caret to the section filter on screen.
+    @MainActor
+    @objc private func focusSectionFilter() {
+        NotificationCenter.default.post(name: .cockpitFocusSectionFilter, object: nil)
+    }
+
     /// A minimal main menu, so the standard editing shortcuts reach the text
     /// fields in Preferences and the cockpit window has a keyboard route.
     ///
@@ -156,6 +162,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(NSMenuItem.separator())
+
+        // ⌘F for the Scope/Operate filter. It hangs off the menu rather than
+        // off an invisible `keyboardShortcut` button in the view (the trick
+        // the sidebar uses for ⌘1…⌘4) so that the shortcut is discoverable:
+        // a menu item appears in the menu bar and in the Keyboard Shortcuts
+        // settings pane, and Find is where a Mac user looks for it.
+        let findItem = NSMenuItem(
+            title: "Find",
+            action: #selector(focusSectionFilter),
+            keyEquivalent: "f"
+        )
+        findItem.target = self
+        editMenu.addItem(findItem)
 
         NSApp.mainMenu = mainMenu
     }
