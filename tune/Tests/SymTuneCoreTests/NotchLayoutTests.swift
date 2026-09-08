@@ -83,7 +83,7 @@ final class NotchLayoutTests: XCTestCase {
         // Act
         let shoulder = NotchLayout.shoulderWidth(metrics)
 
-        // Assert: 40% of 100pt, not the preferred 86pt — the rest of the strip
+        // Assert: 40% of 100pt, not the preferred width — the rest of the strip
         // belongs to the menu titles and status items already there.
         XCTAssertEqual(shoulder, 40)
     }

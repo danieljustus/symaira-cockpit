@@ -386,6 +386,37 @@ final class HUDDockController: NSObject {
 
     // MARK: - Actions
 
+    /// Where a panel opened from the HUD should hang: the HUD's resting shape,
+    /// in the stage's own coordinates, plus the edge it should hang off.
+    ///
+    /// The HUD is the *only* surface on screen while it is the chosen readout
+    /// — the status item is hidden — so a panel anchored to the status button
+    /// has nothing to attach to. Anchoring it here instead is what makes the
+    /// panel come out of the shape the user just clicked: below the cutout for
+    /// the notch dock, sideways out of the sliver for an edge dock.
+    ///
+    /// The *collapsed* frame is the anchor, not the expanded one, because the
+    /// HUD collapses as the panel opens — anchoring to the card that is about
+    /// to disappear would leave the panel floating in a gap.
+    func panelAnchor() -> (view: NSView, rect: NSRect, edge: NSRectEdge)? {
+        guard let panel,
+              let hosting,
+              let screen = Self.hostScreen()
+        else { return nil }
+        let metrics = Self.screenMetrics(screen)
+        guard let dock = HUDDockLayout.effective(dockPreferences.dock, on: metrics),
+              let frame = HUDDockLayout.collapsedFrame(dock, on: metrics)
+        else { return nil }
+
+        let rect = hosting.convert(panel.convertFromScreen(frame), from: nil)
+        let edge: NSRectEdge = switch dock {
+        case .notch: .minY
+        case .left: .maxX
+        case .right: .minX
+        }
+        return (hosting, rect, edge)
+    }
+
     private func handleOpenPanel() {
         collapse()
         openPanel()

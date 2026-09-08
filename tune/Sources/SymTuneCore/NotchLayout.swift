@@ -57,7 +57,15 @@ public struct NotchScreenMetrics: Equatable, Sendable {
 ///   clamped inside the display.
 public enum NotchLayout {
     /// Shoulder width per side the HUD asks for when there is room.
-    public static let preferredShoulder: CGFloat = 86
+    ///
+    /// Deliberately snug. Every point of shoulder is a point taken from the
+    /// menu titles on the left and the status items on the right, and the right
+    /// side is the only one an app can claim back (see the spacer status item
+    /// in `StatusBarController`) — so the width is set by what a readout
+    /// actually needs, not by what looks comfortable. A long value like
+    /// `485.0 GB` fits at this width; anything longer scales down rather than
+    /// widening the panel.
+    public static let preferredShoulder: CGFloat = 64
     /// Below this the shoulders cannot hold a readout, so the HUD stays off.
     public static let minimumShoulder: CGFloat = 30
     /// Share of one auxiliary strip the HUD is willing to take. The rest is

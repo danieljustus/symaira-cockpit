@@ -166,44 +166,44 @@ struct HUDDockView: View {
     /// material is beautiful and it is the wrong material for something whose
     /// whole job is to disappear into a black border.
     private var edge: some View {
-        ZStack {
-            Color.black
+        Group {
             if isExpanded {
                 edgeCard
+            } else {
+                Color.clear
             }
         }
-        .clipShape(edgeShape)
-        .overlay(
-            // Only the inward edges are drawn. A line along the screen edge
-            // would trace the outline of a window, which is the one thing this
-            // must never look like.
-            edgeShape.strokeBorder(
-                isExpanded ? SymairaTheme.borderGlass : Color.clear,
-                lineWidth: 1
-            )
-        )
+        .background {
+            Color.black
+                .clipShape(edgeShape)
+                .overlay(
+                    // Only the inward edges are drawn. A line along the screen
+                    // edge would trace the outline of a window, which is the
+                    // one thing this must never look like.
+                    edgeShape.strokeBorder(
+                        isExpanded ? SymairaTheme.borderGlass : Color.clear,
+                        lineWidth: 1
+                    )
+                )
+                // Room for the flare, taken from outside the frame rather than
+                // out of the card's own height.
+                .padding(.vertical, -HUDBezel.cornerRadius)
+        }
     }
 
-    /// Rounded on the inward side only, square where it meets the screen edge.
+    /// Flared into the display's frame on the outward side, rounded on the
+    /// inward one.
     ///
-    /// The square side is what makes it stick: a shape rounded on all four
-    /// corners has a visible gap of desktop between it and the bezel, however
-    /// flush its frame is.
-    private var edgeShape: UnevenRoundedRectangle {
-        let radius: CGFloat = isExpanded ? SymairaRadius.panel : 5
-        return dock.isRightEdge
-            ? UnevenRoundedRectangle(
-                topLeadingRadius: radius,
-                bottomLeadingRadius: radius,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 0
-            )
-            : UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: radius,
-                topTrailingRadius: radius
-            )
+    /// Both ends of the side that lies along the screen edge run out into the
+    /// frame instead of stopping at a right angle — the same treatment the
+    /// notch dock gets at the top of the display, for the same reason. See
+    /// ``HUDBezelShape``.
+    private var edgeShape: HUDBezelShape {
+        HUDBezelShape(
+            anchor: dock.isRightEdge ? .trailing : .leading,
+            flare: HUDBezel.cornerRadius,
+            innerRadius: isExpanded ? SymairaRadius.panel : 5
+        )
     }
 
     /// Expanded: every monitored metric, not just the ones that fit on the
