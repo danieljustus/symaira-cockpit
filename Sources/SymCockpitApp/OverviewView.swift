@@ -77,7 +77,7 @@ struct OverviewView: View {
                 }
             }
 
-            Text("⌘1–⌘4 switch sections · ⌘R refreshes · right-click the menu-bar icon for this window, preferences and quit.")
+            Text("⌘1–⌘4 switch sections · ⌘R refreshes · ⌘F filters Scope and Operate · right-click the menu-bar icon for this window, preferences and quit.")
                 .font(SymairaTypography.caption)
                 .foregroundStyle(SymairaTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)

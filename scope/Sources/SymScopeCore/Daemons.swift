@@ -323,15 +323,27 @@ public struct DaemonService: Sendable {
             var records: [LaunchctlRecord] = []
             var notes: [String] = []
             // Both domains go through one collector: they are two ~4 ms calls,
-            // and keeping them in order keeps their notes in order too.
-            for (domain, arguments) in [("user", ["list"]), ("system", ["list", "system"])] {
-                do {
-                    let output = try commandRunner.run(executable: "/bin/launchctl", arguments: arguments)
-                    records += Self.parseLaunchctlList(output, domain: domain)
-                } catch {
-                    notes.append("launchctl \(domain) unavailable: \(error.localizedDescription)")
-                }
+            // and keeping them in order keeps their notes in order too. They do
+            // not share an invocation, though — `launchctl list` takes an
+            // optional *label*, so `launchctl list system` looks up a job called
+            // "system", fails with exit 113, and leaves every
+            // /Library/LaunchDaemons entry to fall through to "not-loaded".
+            // `launchctl print system` reads the domain unprivileged and carries
+            // the same PID/status/label triples.
+            do {
+                let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["list"])
+                records += Self.parseLaunchctlList(output, domain: "user")
+            } catch {
+                notes.append("launchctl user unavailable: \(error.localizedDescription)")
             }
+
+            do {
+                let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["print", "system"])
+                records += Self.parseLaunchctlPrintServices(output, domain: "system")
+            } catch {
+                notes.append("launchctl system unavailable: \(error.localizedDescription)")
+            }
+
             return (records, notes)
         }
     }
@@ -416,6 +428,44 @@ public struct DaemonService: Sendable {
             let status = fields[1] == "-" ? nil : Int(fields[1])
             return LaunchctlRecord(label: fields[2], pid: pid, lastExitStatus: status, domain: domain)
         }
+    }
+
+    /// Parses the `services = { … }` block of `launchctl print <domain>`.
+    ///
+    /// The columns match `launchctl list` — PID, last exit status, label — with
+    /// two differences: an unloaded job carries PID `0` rather than `-`, and the
+    /// status column may hold a non-numeric annotation such as `(pe)`. Sibling
+    /// blocks (`attractive services`, `disabled services`) are shaped
+    /// differently and must not be read as service rows, so parsing stops at the
+    /// block's closing brace.
+    public static func parseLaunchctlPrintServices(_ output: String, domain: String) -> [LaunchctlRecord] {
+        var records: [LaunchctlRecord] = []
+        var insideServices = false
+
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            guard insideServices else {
+                if trimmed == "services = {" { insideServices = true }
+                continue
+            }
+            if trimmed == "}" { break }
+
+            let fields = trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            guard fields.count >= 3, !fields[2].isEmpty else { continue }
+            // PID 0 means "loaded, not running" here — the same state
+            // `launchctl list` spells `-`.
+            let pid = Int(fields[0]).flatMap { $0 > 0 ? $0 : nil }
+            records.append(
+                LaunchctlRecord(
+                    label: fields[2],
+                    pid: pid,
+                    lastExitStatus: Int(fields[1]),
+                    domain: domain
+                )
+            )
+        }
+
+        return records
     }
 
     /// Parses `brew services list` output: Name, Status, User, File.

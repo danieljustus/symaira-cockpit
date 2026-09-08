@@ -16,9 +16,19 @@ public enum BatterySourceResult: Sendable, Equatable {
 public struct BatteryProperties: Sendable, Equatable {
     public let isCharging: Bool?
     public let externalConnected: Bool?
+    /// Design capacity in milliamp-hours.
     public let designCapacity: Int?
+    /// Full-charge capacity in milliamp-hours.
     public let rawMaxCapacity: Int?
+    /// Present charge in milliamp-hours.
     public let rawCurrentCapacity: Int?
+    /// State of charge where the model reports it as a percentage directly.
+    ///
+    /// Kept apart from the milliamp-hour pair because the two disagree: macOS
+    /// calls this battery 100 % charged while its milliamp-hour figures give
+    /// 5466 / 5701 ≈ 96 %. The percentage is what the user is shown elsewhere,
+    /// so it wins where the hardware supplies one.
+    public let chargePercent: Int?
     public let cycleCount: Int?
     /// Temperature in centidegrees (divide by 100.0 for Celsius).
     public let temperatureCentidegrees: Int?
@@ -29,6 +39,7 @@ public struct BatteryProperties: Sendable, Equatable {
         designCapacity: Int? = nil,
         rawMaxCapacity: Int? = nil,
         rawCurrentCapacity: Int? = nil,
+        chargePercent: Int? = nil,
         cycleCount: Int? = nil,
         temperatureCentidegrees: Int? = nil
     ) {
@@ -37,6 +48,7 @@ public struct BatteryProperties: Sendable, Equatable {
         self.designCapacity = designCapacity
         self.rawMaxCapacity = rawMaxCapacity
         self.rawCurrentCapacity = rawCurrentCapacity
+        self.chargePercent = chargePercent
         self.cycleCount = cycleCount
         self.temperatureCentidegrees = temperatureCentidegrees
     }
@@ -122,15 +134,45 @@ public struct HardwareBatterySource: BatterySource, Sendable {
             return readPowerSourcesFallback()
         }
 
-        return .success(BatteryProperties(
+        return .success(Self.properties(fromRegistry: props))
+    }
+
+    /// Maps one `AppleSmartBattery` property dictionary onto ``BatteryProperties``.
+    ///
+    /// Pure and `internal` so the key mapping — the part that differs between
+    /// Mac generations — is unit-testable without an IORegistry node.
+    static func properties(fromRegistry props: [String: Any]) -> BatteryProperties {
+        // Intel reports MaxCapacity/CurrentCapacity in milliamp-hours and also
+        // exposes the AppleRaw* pair. Apple Silicon reports those same two keys
+        // as PERCENTAGES and keeps the milliamp-hour figures one level down, in
+        // BatteryData. Reading them the Intel way turned a 6249 mAh battery
+        // into "100 mAh" and left health uncomputable.
+        let batteryData = props["BatteryData"] as? [String: Any]
+
+        let designCapacity = (props["DesignCapacity"] as? Int)
+            ?? (batteryData?["DesignCapacity"] as? Int)
+        let topLevelMaxCapacity = props["MaxCapacity"] as? Int
+
+        // A full-charge capacity of at most 100 next to a design capacity in
+        // the thousands is a percentage, not a milliamp-hour reading.
+        let topLevelIsPercentage = topLevelMaxCapacity.map {
+            $0 <= 100 && (designCapacity ?? 0) > 100
+        } ?? false
+
+        return BatteryProperties(
             isCharging: props["IsCharging"] as? Bool,
             externalConnected: props["ExternalConnected"] as? Bool,
-            designCapacity: props["DesignCapacity"] as? Int,
-            rawMaxCapacity: (props["AppleRawMaxCapacity"] as? Int) ?? (props["MaxCapacity"] as? Int),
-            rawCurrentCapacity: (props["AppleRawCurrentCapacity"] as? Int) ?? (props["CurrentCapacity"] as? Int),
+            designCapacity: designCapacity,
+            rawMaxCapacity: (props["AppleRawMaxCapacity"] as? Int)
+                ?? (batteryData?["NominalChargeCapacity"] as? Int)
+                ?? (topLevelIsPercentage ? nil : topLevelMaxCapacity),
+            rawCurrentCapacity: (props["AppleRawCurrentCapacity"] as? Int)
+                ?? (batteryData?["RemainingCapacity"] as? Int)
+                ?? (topLevelIsPercentage ? nil : props["CurrentCapacity"] as? Int),
+            chargePercent: topLevelIsPercentage ? props["CurrentCapacity"] as? Int : nil,
             cycleCount: props["CycleCount"] as? Int,
             temperatureCentidegrees: props["Temperature"] as? Int
-        ))
+        )
     }
 
     private func readPowerSourcesFallback() -> BatterySourceResult {
@@ -155,12 +197,21 @@ public struct HardwareBatterySource: BatterySource, Sendable {
             let currentCapacity = dict["Current Capacity"] as? Int
             let cycleCount = dict["Cycle Count"] as? Int
 
+            // IOPowerSources reports a percentage pair (max is 100), never
+            // milliamp-hours, so there is no capacity to publish here — only a
+            // state of charge.
+            var chargePercent: Int?
+            if let maxCapacity, maxCapacity > 0, let currentCapacity {
+                chargePercent = Int((Double(currentCapacity) / Double(maxCapacity) * 100).rounded())
+            }
+
             return .success(BatteryProperties(
                 isCharging: isCharging,
                 externalConnected: externalConnected,
                 designCapacity: nil, // Not exposed by public IOPowerSources
-                rawMaxCapacity: maxCapacity,
-                rawCurrentCapacity: currentCapacity,
+                rawMaxCapacity: nil, // ditto — the pair above is a percentage
+                rawCurrentCapacity: nil,
+                chargePercent: chargePercent,
                 cycleCount: cycleCount,
                 temperatureCentidegrees: nil // Not exposed by public IOPowerSources
             ))

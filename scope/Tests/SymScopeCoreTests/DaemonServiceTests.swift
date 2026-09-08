@@ -148,7 +148,7 @@ final class DaemonParserTests: XCTestCase {
             - 7 com.example.failed
             99 0 com.apple.WindowServer
             """,
-            "/bin/launchctl list system": "",
+            "/bin/launchctl print system": "",
             "/opt/homebrew/bin/brew services list": """
             Name Status User File
             redis started daniel ~/Library/LaunchAgents/homebrew.mxcl.redis.plist
@@ -211,7 +211,7 @@ final class DaemonParserTests: XCTestCase {
         let runner = WitnessingCommandRunner(
             outputs: [
                 "/bin/launchctl list": "PID Status Label\n55 0 com.example.worker\n",
-                "/bin/launchctl list system": "",
+                "/bin/launchctl print system": "",
                 "/opt/homebrew/bin/brew services list":
                     "Name Status User File\nredis started daniel ~/Library/LaunchAgents/homebrew.mxcl.redis.plist\n",
             ],
@@ -265,7 +265,7 @@ final class DaemonParserTests: XCTestCase {
     func testMissingHomebrewIsOnlyANote() async {
         let runner = FixtureCommandRunner(outputs: [
             "/bin/launchctl list": "PID Status Label\n- 0 com.example.worker\n",
-            "/bin/launchctl list system": "",
+            "/bin/launchctl print system": "",
         ])
         let fileSystem = FixtureFileSystem(directories: [:], files: [:], executables: [])
         let service = DaemonService(
@@ -291,6 +291,148 @@ final class DaemonParserTests: XCTestCase {
         let conflicts = ConflictDetector.detect(ports, daemons: daemons)
 
         XCTAssertTrue(conflicts[0].holders.contains { $0.contains("com.example.worker") })
+    }
+
+    /// `launchctl print system` is the only unprivileged way to enumerate the
+    /// system domain. Its `services = { … }` block carries the same
+    /// PID / status / label triples as `launchctl list`, with two differences
+    /// that matter: a PID of `0` means "loaded but not running" (where
+    /// `launchctl list` prints `-`), and the status column can hold a
+    /// non-numeric annotation such as `(pe)`.
+    func testParseLaunchctlPrintServices() {
+        let output = """
+        system = {
+        \tactive count = 1035
+        \tservices = {
+        \t\t       0      - \tcom.apple.rpmuxd
+        \t\t       0   (pe) \tcom.apple.kernelmanager_helper
+        \t\t     627      - \tcom.objective-see.blockblock
+        \t\t    2931    255 \tcom.cloudflare.cloudflared
+        \t\t       0      0 \tcom.microsoft.autoupdate.helper
+        \t}
+        \tattractive services = {
+        \t\tcom.apple.MessagesBlastDoorService
+        \t}
+        \tdisabled services = {
+        \t\t"com.apple.ftpd" => disabled
+        \t}
+        }
+        """
+
+        let records = DaemonService.parseLaunchctlPrintServices(output, domain: "system")
+
+        XCTAssertEqual(records, [
+            LaunchctlRecord(label: "com.apple.rpmuxd", pid: nil, lastExitStatus: nil, domain: "system"),
+            LaunchctlRecord(label: "com.apple.kernelmanager_helper", pid: nil, lastExitStatus: nil, domain: "system"),
+            LaunchctlRecord(label: "com.objective-see.blockblock", pid: 627, lastExitStatus: nil, domain: "system"),
+            LaunchctlRecord(label: "com.cloudflare.cloudflared", pid: 2931, lastExitStatus: 255, domain: "system"),
+            LaunchctlRecord(label: "com.microsoft.autoupdate.helper", pid: nil, lastExitStatus: 0, domain: "system"),
+        ], "only the `services` block is parsed — the sibling blocks must not leak in")
+    }
+
+    /// Regression for #231: a running LaunchDaemon was reported `not-loaded`
+    /// with no PID, because the system domain was probed with
+    /// `launchctl list system` — an invocation `launchctl` rejects (it takes a
+    /// label, not a domain) with exit 113. The fixture runner throws for any
+    /// command it does not know, which is exactly what the real one did.
+    func testSystemDomainDaemonsAreReportedRunning() async {
+        let runner = FixtureCommandRunner(outputs: [
+            "/bin/launchctl list": "PID Status Label\n",
+            "/bin/launchctl print system": """
+            system = {
+            \tservices = {
+            \t\t     627      - \tcom.objective-see.blockblock
+            \t\t    2931    255 \tcom.cloudflare.cloudflared
+            \t\t       0      0 \tcom.microsoft.autoupdate.helper
+            \t}
+            }
+            """,
+        ])
+        let fileSystem = FixtureFileSystem(
+            directories: [
+                "/fixture/home/Library/LaunchAgents": [],
+                "/Library/LaunchAgents": [],
+                "/Library/LaunchDaemons": [
+                    "com.objective-see.blockblock.plist",
+                    "com.cloudflare.cloudflared.plist",
+                    "com.microsoft.autoupdate.helper.plist",
+                ],
+            ],
+            files: [
+                "/Library/LaunchDaemons/com.objective-see.blockblock.plist":
+                    Self.plistData(["Label": "com.objective-see.blockblock", "RunAtLoad": true]),
+                "/Library/LaunchDaemons/com.cloudflare.cloudflared.plist":
+                    Self.plistData(["Label": "com.cloudflare.cloudflared", "KeepAlive": true]),
+                "/Library/LaunchDaemons/com.microsoft.autoupdate.helper.plist":
+                    Self.plistData(["Label": "com.microsoft.autoupdate.helper"]),
+            ],
+            executables: []
+        )
+        let service = DaemonService(
+            commandRunner: runner,
+            fileSystem: fileSystem,
+            portProvider: { [] },
+            homeDirectory: "/fixture/home"
+        )
+
+        let (rows, _) = await service.list()
+        let byLabel = Dictionary(uniqueKeysWithValues: rows.map { ($0.label, $0) })
+
+        let blockblock = try! XCTUnwrap(byLabel["com.objective-see.blockblock"])
+        XCTAssertEqual(blockblock.state, "running", "a system daemon with a live PID is running, not not-loaded")
+        XCTAssertEqual(blockblock.pid, 627)
+        XCTAssertEqual(blockblock.domain, "system")
+        XCTAssertEqual(blockblock.runAtLoad, true, "the plist merge must still apply to the launchd row")
+
+        let cloudflared = try! XCTUnwrap(byLabel["com.cloudflare.cloudflared"])
+        XCTAssertEqual(cloudflared.state, "running")
+        XCTAssertEqual(cloudflared.lastExitStatus, 255, "the failure signal must survive")
+
+        let helper = try! XCTUnwrap(byLabel["com.microsoft.autoupdate.helper"])
+        XCTAssertEqual(helper.state, "loading", "loaded but not running is not the same as not-loaded")
+        XCTAssertNil(helper.pid)
+
+        let health = Dictionary(
+            uniqueKeysWithValues: DaemonService.health(rows).map { ($0.label, $0) }
+        )
+        XCTAssertTrue(health["com.objective-see.blockblock"]!.healthy)
+        XCTAssertFalse(
+            health["com.objective-see.blockblock"]!.notes.contains { $0.contains("inactive by design") },
+            "a running daemon must not be described as inactive by design"
+        )
+    }
+
+    /// When the system domain cannot be read at all, the plists on disk are
+    /// still listed — but the failure has to be visible in `notes` rather than
+    /// silently presented as "not loaded".
+    func testUnreadableSystemDomainIsReportedAsANote() async {
+        let runner = FixtureCommandRunner(outputs: ["/bin/launchctl list": "PID Status Label\n"])
+        let fileSystem = FixtureFileSystem(
+            directories: [
+                "/fixture/home/Library/LaunchAgents": [],
+                "/Library/LaunchAgents": [],
+                "/Library/LaunchDaemons": ["com.example.daemon.plist"],
+            ],
+            files: [
+                "/Library/LaunchDaemons/com.example.daemon.plist":
+                    Self.plistData(["Label": "com.example.daemon"]),
+            ],
+            executables: []
+        )
+        let service = DaemonService(
+            commandRunner: runner,
+            fileSystem: fileSystem,
+            portProvider: { [] },
+            homeDirectory: "/fixture/home"
+        )
+
+        let (rows, notes) = await service.list()
+
+        XCTAssertEqual(rows.map(\.label), ["com.example.daemon"])
+        XCTAssertTrue(
+            notes.contains { $0.contains("launchctl system unavailable") },
+            "an unreadable system domain must be surfaced, not swallowed: \(notes)"
+        )
     }
 
     private static func plistData(_ values: [String: Any]) -> Data {
