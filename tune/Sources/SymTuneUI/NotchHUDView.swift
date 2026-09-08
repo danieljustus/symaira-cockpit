@@ -38,16 +38,23 @@ struct NotchHUDView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(background)
-        .clipShape(shape)
-        .overlay(
-            // Only the bottom edge is drawn: the top edge is the physical
-            // bezel, and a line there would give the illusion away.
-            shape.strokeBorder(
-                isExpanded ? SymairaTheme.borderGlass : Color.clear,
-                lineWidth: 1
-            )
-        )
+        .background {
+            background
+                .clipShape(shape)
+                .overlay(
+                    // Only the bottom edge is drawn: the top edge is the
+                    // physical bezel, and a line there would give the illusion
+                    // away.
+                    shape.strokeBorder(
+                        isExpanded ? SymairaTheme.borderGlass : Color.clear,
+                        lineWidth: 1
+                    )
+                )
+                // The flare lives outside the frame the readouts were laid out
+                // in. Negative padding is what buys it that room without
+                // taking a single point away from the shoulders.
+                .padding(.horizontal, -HUDBezel.cornerRadius)
+        }
         .animation(SymairaTheme.transitionSmooth, value: isExpanded)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Notch HUD")
@@ -55,14 +62,18 @@ struct NotchHUDView: View {
 
     // MARK: - Shape and fill
 
-    /// Square at the top so the panel meets the bezel, rounded at the bottom so
-    /// it reads as one shape with the cutout above it.
-    private var shape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: isExpanded ? SymairaRadius.panel : 10,
-            bottomTrailingRadius: isExpanded ? SymairaRadius.panel : 10,
-            topTrailingRadius: 0
+    /// Flared into the bezel at the top, rounded at the bottom so it reads as
+    /// one shape with the cutout above it.
+    ///
+    /// The top corners are concave — see ``HUDBezelShape``. Square ones there
+    /// were what made the strip look like a black rectangle someone had pushed
+    /// against the top of the screen; convex ones would have been worse, since
+    /// they close the outline off entirely.
+    private var shape: HUDBezelShape {
+        HUDBezelShape(
+            anchor: .top,
+            flare: HUDBezel.cornerRadius,
+            innerRadius: isExpanded ? SymairaRadius.panel : HUDBezel.cornerRadius
         )
     }
 
@@ -124,8 +135,8 @@ struct NotchHUDView: View {
         }
         // Padding inside the fixed width, not around it: the shoulder's width
         // is what `NotchLayout` budgeted from the menu bar strip, and padding
-        // applied outside the frame would quietly spend 12pt more per side.
-        .padding(.horizontal, 6)
+        // applied outside the frame would quietly spend 8pt more per side.
+        .padding(.horizontal, 4)
         .frame(width: shoulderWidth, alignment: alignment)
     }
 

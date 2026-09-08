@@ -17,6 +17,26 @@ import SymairaUpdateCheck
 @MainActor
 public final class StatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem: NSStatusItem
+    /// An empty status item that exists only to hold the notch HUD's right
+    /// shoulder open.
+    ///
+    /// Status items are laid out from the right, and the last of them ends up
+    /// directly beside the cutout — underneath the HUD. Nothing lets an app
+    /// tell the menu bar to keep clear of a region, but a status item of the
+    /// shoulder's width occupies it, and everything else is laid out around it.
+    /// So the space is claimed the only way the menu bar understands: by
+    /// putting something in it.
+    ///
+    /// Created lazily, because an app that never turns the HUD on should not
+    /// register a status item at all.
+    private lazy var shoulderSpacer: NSStatusItem = {
+        let item = NSStatusBar.system.statusItem(withLength: 0)
+        item.button?.isEnabled = false
+        item.button?.setAccessibilityLabel("Symaira HUD reserved space")
+        item.isVisible = false
+        return item
+    }()
+    private var hasShoulderSpacer = false
     private let popover = NSPopover()
     private let controller: TuneController
     private let preferencesManager: PreferencesManager
@@ -170,7 +190,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
             }
         }
-        hudController.openPanel = { [weak self] in self?.togglePopover() }
+        hudController.openPanel = { [weak self] in self?.togglePanelFromHUD() }
         // Forwarded rather than copied: the host assigns ``onOpenCockpit``
         // after construction, and a copy taken here would always be nil.
         hudController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
@@ -293,6 +313,31 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         hudController.openCockpitTitle = openCockpitTitle
         hudController.setEnabled(effective == .notch)
         statusItem.isVisible = effective == .menuBar
+        syncShoulderSpacer(active: effective == .notch)
+    }
+
+    /// Hold the right shoulder's width open while the notch HUD is up, and give
+    /// it back the moment it comes down.
+    ///
+    /// Only the notch dock needs this. The edge docks sit against the left and
+    /// right sides of the display, where the menu bar's own content does not
+    /// reach.
+    private func syncShoulderSpacer(active: Bool) {
+        let width: CGFloat? = {
+            guard active, hudDockPreferences.dock == .notch, let screen = HUDDockController.hostScreen()
+            else { return nil }
+            return NotchLayout.shoulderWidth(HUDDockController.screenMetrics(screen))
+        }()
+
+        guard let width else {
+            // Never touch the spacer if it was never needed: reading the lazy
+            // property is what registers the status item.
+            if hasShoulderSpacer { shoulderSpacer.isVisible = false }
+            return
+        }
+        hasShoulderSpacer = true
+        shoulderSpacer.length = width
+        shoulderSpacer.isVisible = true
     }
 
     /// The choice applies live, in both directions: switching back to the
@@ -538,20 +583,49 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // The menu bar may have moved to a different-sized display since
-            // the last open, so re-derive the height budget before showing.
-            let screen = button.window?.screen ?? NSScreen.main
-            popoverHosting?.rootView = makeStatusView(
-                maxHeight: Self.availableContentHeight(for: screen)
-            )
-            // Show first, then activate: activating an LSUIElement app before
-            // the popover is anchored can misplace the popover window.
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
-            // Switch the model to the interactive tier (faster cadence, full
-            // sensor set) now that the panel is on screen.
-            model.setDetailVisible(true)
+            showPopover(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+
+    /// The HUD's own way into the panel.
+    ///
+    /// The HUD is only ever the readout surface while the status item is
+    /// hidden, and `NSPopover` anchored to a hidden status button has nothing
+    /// to attach to — it simply never appears, which is what the HUD's "Panel"
+    /// button used to do (issue #254). Anchoring to the HUD instead both fixes
+    /// that and is the behaviour the button implies: the panel comes out of
+    /// the shape that was clicked.
+    ///
+    /// Falls back to the status item when the stage is not on screen, so the
+    /// action is never a dead end.
+    private func togglePanelFromHUD() {
+        guard let anchor = hudController.panelAnchor() else {
+            togglePopover()
+            return
+        }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            showPopover(relativeTo: anchor.rect, of: anchor.view, preferredEdge: anchor.edge)
+        }
+    }
+
+    /// Show the shared panel popover against an anchor, whichever surface it
+    /// came from.
+    private func showPopover(relativeTo rect: NSRect, of view: NSView, preferredEdge: NSRectEdge) {
+        // The menu bar may have moved to a different-sized display since
+        // the last open, so re-derive the height budget before showing.
+        let screen = view.window?.screen ?? NSScreen.main
+        popoverHosting?.rootView = makeStatusView(
+            maxHeight: Self.availableContentHeight(for: screen)
+        )
+        // Show first, then activate: activating an LSUIElement app before
+        // the popover is anchored can misplace the popover window.
+        popover.show(relativeTo: rect, of: view, preferredEdge: preferredEdge)
+        NSApp.activate(ignoringOtherApps: true)
+        // Switch the model to the interactive tier (faster cadence, full
+        // sensor set) now that the panel is on screen.
+        model.setDetailVisible(true)
     }
 
     /// Open the Preferences window.
