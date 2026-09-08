@@ -393,7 +393,7 @@ final class HUDDockLayoutTests: XCTestCase {
         XCTAssertTrue(HUDDock.allCases.contains(.notch))
     }
 
-    // MARK: - The peek stage (issue #255)
+    // MARK: - The peek stage
 
     /// Peeking has to be visibly bigger than parked on every dock, or the
     /// pointer arriving produces no feedback at all.

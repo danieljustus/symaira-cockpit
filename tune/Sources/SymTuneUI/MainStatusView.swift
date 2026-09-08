@@ -79,7 +79,7 @@ struct MainStatusView: View {
     /// the same hosts that offer no HUD.
     var hudDockPreferences: HUDDockPreferences? = nil
     /// What the HUD shows, and how far it has to be open before it does.
-    /// `nil` in the same hosts as the two above (issue #255).
+    /// `nil` in the same hosts as the two above.
     var hudItemPreferences: HUDItemPreferences? = nil
 
     /// Who answers the brightness keys, and the tap behind the choice. Nil in

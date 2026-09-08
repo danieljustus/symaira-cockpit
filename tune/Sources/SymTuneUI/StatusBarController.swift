@@ -58,9 +58,9 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// Where the HUD is parked. Owned here rather than by the controller so the
     /// preferences UI can bind to it whether or not the HUD is currently up.
     let hudDockPreferences = HUDDockPreferences()
-    /// What the HUD shows, and how far it has to be open before it does
-    /// (issue #255). Owned here for the same reason the dock is: the settings
-    /// card binds to it whether or not the HUD is currently up.
+    /// What the HUD shows, and how far it has to be open before it does.
+    /// Owned here for the same reason the dock is: the settings card binds to
+    /// it whether or not the HUD is currently up.
     let hudItemPreferences = HUDItemPreferences()
     private lazy var hudController = HUDDockController(
         model: model,

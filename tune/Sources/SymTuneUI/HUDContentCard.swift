@@ -2,7 +2,7 @@ import SwiftUI
 import SymairaTheme
 import SymTuneCore
 
-/// What the HUD shows, where, and when (issue #255).
+/// What the HUD shows, where, and when.
 ///
 /// Three decisions per readout, and they are genuinely three: **on or off**,
 /// **which side** it sits on, and **how far the HUD has to be open** before it

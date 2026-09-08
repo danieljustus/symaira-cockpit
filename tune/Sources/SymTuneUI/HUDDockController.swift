@@ -330,8 +330,8 @@ final class HUDDockController: NSObject {
 
     /// The pointer arriving is worth a ``HUDPresentation/peek`` and no more.
     ///
-    /// This is the change #255 is really about. Hovering used to throw the
-    /// whole card open, which meant the HUD could not be passed — every trip
+    /// This is what the three stages are really for. Hovering used to throw
+    /// the whole card open, which meant the HUD could not be passed — every trip
     /// across the top of the screen unfolded it over whatever was underneath.
     /// A peek answers the glance that hovering actually is, and the card now
     /// costs a click.

@@ -2,7 +2,7 @@ import SwiftUI
 import SymTuneCore
 import SymairaTheme
 
-/// The notch HUD's content (issues #224, #255).
+/// The notch HUD's content (issue #224).
 ///
 /// Three states in one view, because they share the top strip: parked is the
 /// strip alone, peeking is the same strip with wider shoulders and a few points
