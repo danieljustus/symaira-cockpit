@@ -29,6 +29,16 @@ All notable changes to this project are documented here. The format is based on
   table and silently drops an active boost or warmth shift.
 
 ### Added
+- **The HUD can be moved.** What used to be a readout fixed around the camera
+  cutout now sits in any of seven docks — the notch, or either screen edge at
+  one of three heights — and is dragged between them directly. A drop that
+  lands near no dock springs back, so an accidental drag costs nothing. The
+  position is also a picker in Preferences: dragging should be the fast way to
+  move it, not the only way.
+- **The HUD works on displays that have no camera cutout.** Docked to an edge it
+  needs no notch, which brings it to Mac minis, external monitors and MacBooks
+  running with the lid shut for the first time. A stored notch position is not
+  silently relocated on those displays — that choice stays the user's to make.
 - **AI usage now runs through the published `symbrain usage --output json` contract.** The cockpit decodes the canonical report once, uses symbrain's configured/auth status in Preferences, and keeps API-key entry/storage in the macOS Keychain. A missing `symbrain` binary, failed command, or malformed report is rendered as unavailable without a UI error dialog.
 - `symtune ai-usage` and the read-only MCP `get_ai_usage` tool remain available through their existing normalized per-provider result shape. Unavailable runtime data is returned as secret-free unavailable rows, preserving callers while the provider-specific HTTP clients are removed.
 - **Top Processes**: which processes are using the most CPU or memory, one click
@@ -42,6 +52,20 @@ All notable changes to this project are documented here. The format is based on
   limited to the headroom the display grants.
 
 ### Changed
+- **BREAKING: requires macOS 26 or newer.** The docked HUD is built on APIs that
+  do not exist before it, and SwiftPM declares a deployment target per *package*,
+  not per target — so the GUI could not move without the CLI moving with it.
+  `symcockpit` therefore refuses to install below macOS 26.
+- **The HUD no longer moves its own window.** Its panel now covers the display
+  and stays put, and everything that moves is content animating inside it.
+  Animating an `NSWindow` frame splits the geometry and the content across two
+  timelines that do not agree, which is why the old expansion stuttered; with
+  one timeline, springs and interrupted gestures come for free.
+- An edge-docked HUD is drawn as an extension of the display's frame: black,
+  flush with the edge, square on that side and rounded only inward. Parked, it
+  is a thin sliver — the strip that reacts to the pointer is wider than the
+  sliver that is drawn, so it opens when the pointer reaches the screen edge
+  rather than having to be aimed at.
 - Popover layout: a live CPU / memory / thermal strip under the title and two
   labelled groups (controls, system) instead of one long card stack.
 - Popover performance: each polled value is read inside the smallest view that

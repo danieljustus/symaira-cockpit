@@ -35,9 +35,13 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// has to be readable to be rendered — but the notch is only reachable once
     /// a host opts in via ``isNotchHUDOffered``.
     let readoutPreferences = ReadoutSurfacePreferences()
-    private lazy var notchController = NotchHUDController(
+    /// Where the HUD is parked. Owned here rather than by the controller so the
+    /// preferences UI can bind to it whether or not the HUD is currently up.
+    let hudDockPreferences = HUDDockPreferences()
+    private lazy var hudController = HUDDockController(
         model: model,
-        preferences: preferencesManager
+        preferences: preferencesManager,
+        dockPreferences: hudDockPreferences
     )
 
     /// Who answers the brightness keys, and the tap that answers them when the
@@ -166,10 +170,10 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
             }
         }
-        notchController.openPanel = { [weak self] in self?.togglePopover() }
+        hudController.openPanel = { [weak self] in self?.togglePopover() }
         // Forwarded rather than copied: the host assigns ``onOpenCockpit``
         // after construction, and a copy taken here would always be nil.
-        notchController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
+        hudController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
         observeReadoutSurface()
         observeBrightnessKeyHandling()
         model.start()
@@ -246,6 +250,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             }
             .store(in: &cancellables)
 
+        // Moving the HUD can change whether it is renderable at all — dragging
+        // it off the cutout onto a screen edge is what makes it available on a
+        // Mac that has no cutout — so the surface is resolved again.
+        hudDockPreferences.$dock
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncReadoutSurface() }
+            }
+            .store(in: &cancellables)
+
         // A display arriving, leaving or being rearranged can take the cutout
         // with it. Without this, closing the lid on an external monitor would
         // leave the status item hidden and the HUD unbuildable — the app with
@@ -269,14 +283,15 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// status item in place rather than hiding the only way back to the
     /// preference.
     private func syncReadoutSurface() {
-        let notchAvailable = isNotchHUDOffered && NotchHUDController.isAvailable
+        let notchAvailable = isNotchHUDOffered
+            && HUDDockController.isAvailable(dock: hudDockPreferences.dock)
         let effective = ReadoutSurfaceDefaults.effective(
             readoutPreferences.surface,
             notchAvailable: notchAvailable
         )
 
-        notchController.openCockpitTitle = openCockpitTitle
-        notchController.setEnabled(effective == .notch)
+        hudController.openCockpitTitle = openCockpitTitle
+        hudController.setEnabled(effective == .notch)
         statusItem.isVisible = effective == .menuBar
     }
 
@@ -446,6 +461,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             maxHeight: maxHeight,
             chrome: chrome,
             readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            hudDockPreferences: isNotchHUDOffered ? hudDockPreferences : nil,
             brightnessKeyPreferences: isBrightnessKeyHandlingOffered
                 ? brightnessKeyPreferences
                 : nil,

@@ -25,6 +25,10 @@ struct MenuBarVisibilityCard: View {
     /// Where the readout appears, or `nil` in a host that offers no choice
     /// because it has no notch HUD (the standalone Tune app). Issues #224, #251.
     var readout: ReadoutSurfacePreferences?
+    /// Where the HUD is parked, when this host offers the HUD at all. Paired
+    /// with ``readout``: the surface picker says *whether* the HUD shows, this
+    /// says *where*.
+    var hudDock: HUDDockPreferences?
 
     @State private var saveError: String?
 
@@ -47,6 +51,9 @@ struct MenuBarVisibilityCard: View {
             if let readout {
                 Divider().overlay(SymairaTheme.borderGlass)
                 surfaceRow(readout)
+                if let hudDock, readout.surface == .notch {
+                    dockRow(hudDock)
+                }
             }
 
             if let saveError {
@@ -248,7 +255,10 @@ struct MenuBarVisibilityCard: View {
     /// to put the HUD, and the row says that instead of offering a choice that
     /// does nothing.
     private func surfaceRow(_ readout: ReadoutSurfacePreferences) -> some View {
-        let available = NotchHUDController.isAvailable
+        // The HUD is offered on every display now that it can sit on a screen
+        // edge; only the cutout itself needs the hardware, and that is the
+        // dock picker's problem rather than this one's.
+        let available = true
 
         return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
             HStack(spacing: SymairaSpacing.medium) {
@@ -270,7 +280,7 @@ struct MenuBarVisibilityCard: View {
                     set: { readout.surface = $0 }
                 )) {
                     Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
-                    Text(ReadoutSurface.notch.displayName).tag(ReadoutSurface.notch)
+                    Text("HUD").tag(ReadoutSurface.notch)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -288,10 +298,53 @@ struct MenuBarVisibilityCard: View {
     }
 
     private func surfaceCaption(_ surface: ReadoutSurface, available: Bool) -> String {
-        guard available else { return "This display has no camera cutout" }
+        guard available else { return "This display cannot show the HUD" }
         return switch surface {
         case .menuBar: "The status item in the menu bar"
-        case .notch: "A readout around the camera cutout; hover to expand"
+        case .notch: "A floating readout; hover to expand, drag to move it"
+        }
+    }
+
+    /// Where the HUD is parked.
+    ///
+    /// The same seven positions a drag can reach, offered as a list too — a
+    /// gesture is the fast way to move the HUD, not the only way, and a
+    /// position that can only be reached by dragging is unreachable with a
+    /// trackpad the user cannot use.
+    ///
+    /// The notch entry is disabled rather than hidden on a display without a
+    /// cutout: hiding it would leave a MacBook user who is temporarily on an
+    /// external monitor wondering where their setting went.
+    private func dockRow(_ hudDock: HUDDockPreferences) -> some View {
+        let notchAvailable = HUDDockController.isAvailable(dock: .notch)
+
+        return HStack(spacing: SymairaSpacing.medium) {
+            Image(systemName: "rectangle.3.group")
+                .symairaText(.caption)
+                .frame(width: 18)
+                .foregroundStyle(SymairaTheme.goldPrimary)
+
+            Text("Position")
+                .symairaText(.body)
+                .foregroundStyle(SymairaTheme.textPrimary)
+
+            Spacer(minLength: SymairaSpacing.small)
+
+            Picker("", selection: Binding(
+                get: { hudDock.dock },
+                set: { hudDock.dock = $0 }
+            )) {
+                Text(HUDDock.notch.displayName)
+                    .tag(HUDDock.notch)
+                    .disabled(!notchAvailable)
+                Divider()
+                ForEach(HUDDock.edgeCases, id: \.storageKey) { dock in
+                    Text(dock.displayName).tag(dock)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 190)
+            .help("Where the HUD sits — or just drag it there")
         }
     }
 

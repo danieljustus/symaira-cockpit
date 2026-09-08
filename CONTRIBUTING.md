@@ -6,7 +6,7 @@ families, plus the `SymCockpitApp` menu-bar GUI.
 
 ## Prerequisites
 
-- macOS 15 or newer
+- macOS 26 or newer
 - Swift 6 and Xcode 26.4 or newer
 - A checkout of this repository
 

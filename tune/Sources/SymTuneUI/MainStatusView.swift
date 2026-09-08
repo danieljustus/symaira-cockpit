@@ -75,6 +75,9 @@ struct MainStatusView: View {
     /// the embedded chrome. Nil in a host that offers no choice because it has
     /// no notch HUD (issues #224, #251).
     var readoutPreferences: ReadoutSurfacePreferences? = nil
+    /// Where the HUD is parked; paired with ``readoutPreferences`` and `nil` in
+    /// the same hosts that offer no HUD.
+    var hudDockPreferences: HUDDockPreferences? = nil
 
     /// Who answers the brightness keys, and the tap behind the choice. Nil in
     /// a host that does not offer the takeover (issue #250).
@@ -165,7 +168,8 @@ struct MainStatusView: View {
                     aiUsage: aiUsageModel.preferences,
                     model: model,
                     hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                    readout: readoutPreferences
+                    readout: readoutPreferences,
+                    hudDock: hudDockPreferences
                 )
             }
 

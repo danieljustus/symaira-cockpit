@@ -63,7 +63,7 @@ DEPLOYMENT_TARGET="$(sed -n 's/.*\.macOS(\.v\([0-9]*\)).*/\1.0/p' Package.swift 
 sed \
   -e "s|\$(EXECUTABLE_NAME)|$PRODUCT|g" \
   -e "s|\$(PRODUCT_BUNDLE_IDENTIFIER)|$BUNDLE_ID|g" \
-  -e "s|\$(MACOSX_DEPLOYMENT_TARGET)|${DEPLOYMENT_TARGET:-15.0}|g" \
+  -e "s|\$(MACOSX_DEPLOYMENT_TARGET)|${DEPLOYMENT_TARGET:-26.0}|g" \
   -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
