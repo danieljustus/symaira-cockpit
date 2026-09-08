@@ -68,6 +68,26 @@ public enum NotchLayout {
     public static let preferredShoulder: CGFloat = 64
     /// Below this the shoulders cannot hold a readout, so the HUD stays off.
     public static let minimumShoulder: CGFloat = 30
+    /// Shoulder width the HUD grows to while the pointer is on it.
+    ///
+    /// Nearly double the resting width, which is what buys the peek a second
+    /// readout per side. The overlap it costs is borrowed rather than taken:
+    /// it lasts as long as the pointer is there, and the pointer being there is
+    /// itself evidence the user is not reading the menu titles underneath.
+    public static let preferredPeekShoulder: CGFloat = 116
+    /// Share of one auxiliary strip the *peeking* HUD may take.
+    ///
+    /// Larger than ``shoulderShareOfAuxiliary`` for the reason above, and still
+    /// short of the whole strip: the app's own menu title sits at the far left,
+    /// and covering it even briefly is disorienting.
+    public static let peekShareOfAuxiliary: CGFloat = 0.78
+    /// How far the peeking HUD hangs below the menu bar strip.
+    ///
+    /// Small, and not content: the readouts stay centred in the menu bar strip
+    /// where they were. This is silhouette alone — the few points of drop that
+    /// let the bottom corners round visibly, which is what makes the shape read
+    /// as having swollen rather than as having been swapped.
+    public static let peekDrop: CGFloat = 9
     /// Share of one auxiliary strip the HUD is willing to take. The rest is
     /// left to the menu titles and status items that live there.
     public static let shoulderShareOfAuxiliary: CGFloat = 0.4
@@ -130,6 +150,39 @@ public enum NotchLayout {
             y: metrics.frame.maxY - metrics.menuBarHeight,
             width: notch + shoulder * 2,
             height: metrics.menuBarHeight
+        )
+    }
+
+    /// Shoulder width while the HUD is peeking, or `nil` when the display
+    /// cannot host the HUD at all.
+    ///
+    /// Never narrower than the resting shoulder: on a display whose auxiliary
+    /// strips are tight, the peek simply does not grow rather than shrinking
+    /// the readouts that were already there.
+    public static func peekShoulderWidth(_ metrics: NotchScreenMetrics) -> CGFloat? {
+        guard let resting = shoulderWidth(metrics),
+              let left = metrics.leftAuxiliaryWidth,
+              let right = metrics.rightAuxiliaryWidth
+        else { return nil }
+
+        let budget = min(left, right) * peekShareOfAuxiliary
+        return max(resting, min(preferredPeekShoulder, budget))
+    }
+
+    /// The peeking panel: the collapsed one with wider shoulders and a few
+    /// points of drop below the menu bar strip.
+    public static func peekFrame(_ metrics: NotchScreenMetrics) -> CGRect? {
+        guard let notch = notchWidth(metrics),
+              let shoulder = peekShoulderWidth(metrics),
+              let left = metrics.leftAuxiliaryWidth
+        else { return nil }
+
+        let height = metrics.menuBarHeight + peekDrop
+        return CGRect(
+            x: metrics.frame.minX + left - shoulder,
+            y: metrics.frame.maxY - height,
+            width: notch + shoulder * 2,
+            height: height
         )
     }
 

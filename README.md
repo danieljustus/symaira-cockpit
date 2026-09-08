@@ -144,10 +144,17 @@ switching to Standard removes the interception immediately.
 
 The same card carries **Show in**, which picks *where* the readout appears —
 the menu bar or the notch, one at a time rather than both at once. On a MacBook
-with a camera cutout, **Notch** draws the readout around the notch and expands
-into a small panel when you hover it — the metrics, Keep Awake, the fan
-profile, and a way into the panel or the window — and hides the status item
-while it runs. The menu bar is the default, the choice explains itself instead
+with a camera cutout, **Notch** draws the readout around the notch and hides
+the status item while it runs. It opens in two steps rather than one: the
+pointer reaching it widens the shoulders for a readout or two more, and a click
+unfolds the full card — every readout you placed there, plus a way into the
+panel or the window. A second click, or moving away, puts it back. Dragged, it
+resists and stretches for a moment before it comes off the bezel, and springs
+back if you let go near nothing.
+
+**HUD content** below it decides what is on the HUD: per readout, whether it
+appears, which side it sits on, and how far the HUD has to be open before it
+does. It applies as you change it. The menu bar is the default, the choice explains itself instead
 of appearing when the display has no cutout, and a display without one always
 gets the status item back, so the app is never left with nothing on screen. The
 HUD stays put across spaces and over full-screen apps, and it never takes

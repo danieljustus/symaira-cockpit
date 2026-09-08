@@ -7,56 +7,49 @@ import SymairaTheme
 /// The view is handed the *display's* geometry and works out where the HUD goes
 /// itself, rather than being sized to fit a window that was moved for it. That
 /// inversion is the point: because position and size are ordinary SwiftUI
-/// values, moving between docks, expanding and being dragged are all one
+/// values, moving between docks, opening and being dragged are all one
 /// animatable change instead of three mechanisms.
 ///
 /// Two shapes live here, and both are black on purpose. In the cutout the HUD
 /// is horizontal and square-topped so it fuses with the bezel — that is
-/// ``NotchHUDView``, kept exactly as it was. On a screen edge it is a thin
-/// vertical sliver, flush with the display's frame and rounded only on the
-/// inward side, that unfolds into a card when the pointer reaches it.
+/// ``NotchHUDView``. On a screen edge it is a thin vertical sliver, flush with
+/// the display's frame and rounded only on the inward side, that swells and
+/// then unfolds into a card.
 ///
 /// Neither is decoration around a window. Both are pretending to be part of the
 /// machine, which is the whole reason they work.
 @MainActor
 struct HUDDockView: View {
     let model: TuneViewModel
-    @ObservedObject var preferences: PreferencesManager
+    let itemLayout: HUDItemLayout
 
     /// The display the stage covers, in global screen coordinates.
     let metrics: NotchScreenMetrics
     let dock: HUDDock
-    let isExpanded: Bool
+    let presentation: HUDPresentation
 
     let notchWidth: CGFloat
-    let shoulderWidth: CGFloat
     let menuBarHeight: CGFloat
 
     let openPanel: () -> Void
     let openCockpit: () -> Void
     let openCockpitTitle: String
+    /// A click on the HUD's own surface — not on a control inside the card.
+    let onToggle: () -> Void
 
     /// Both report a point in **global screen coordinates**, so the controller
     /// can hand it straight to `HUDDockLayout.nearestDock(to:on:)`.
     let onDragChanged: (CGPoint) -> Void
     let onDragEnded: (CGPoint) -> Void
 
-    /// Where the drag has got to, relative to where it started. Reset by
-    /// SwiftUI the instant the gesture ends, which is what makes the HUD spring
-    /// back to its dock rather than sticking where it was dropped.
-    @GestureState private var dragTranslation: CGSize = .zero
+    /// What the drag is doing to the HUD's position and shape.
+    ///
+    /// Reset by SwiftUI the instant the gesture ends, which — together with the
+    /// spring below — is what makes the HUD snap back to its dock rather than
+    /// stick where it was dropped. See ``HUDDragPhysics``.
+    @GestureState private var drag: HUDDragState = .resting
 
     private static let stageSpace = "symaira.hud.stage"
-
-    /// The single spring every movement uses.
-    ///
-    /// One curve for expanding, docking and dropping, because the HUD should
-    /// feel like one object with one weight. Slightly underdamped, so it
-    /// settles with the small overshoot that reads as physical rather than
-    /// mechanical.
-    private var motion: Animation {
-        .spring(response: 0.42, dampingFraction: 0.78)
-    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -66,10 +59,20 @@ struct HUDDockView: View {
 
             hud
                 .frame(width: target.width, height: target.height)
+                // Applied before `.position`, and anchored at the edge the HUD
+                // is parked against, so the stretch peels the shape away from
+                // the bezel instead of scaling it about its own middle.
+                .scaleEffect(drag.stretch, anchor: stretchAnchor)
                 .position(x: target.midX, y: target.midY)
-                .offset(dragTranslation)
-                .animation(motion, value: dock)
-                .animation(motion, value: isExpanded)
+                .offset(drag.offset)
+                .animation(HUDMotion.dock, value: dock)
+                .animation(presentationMotion, value: presentation)
+                // Two curves for one value: while the gesture is live the HUD
+                // tracks the pointer, and the moment it is released the same
+                // property springs home. Choosing the animation from
+                // `drag.isActive` is what lets one modifier do both.
+                .animation(drag.isActive ? HUDMotion.track : HUDMotion.release, value: drag.offset)
+                .animation(drag.isActive ? HUDMotion.track : HUDMotion.release, value: drag.stretch)
         }
         .frame(width: metrics.frame.width, height: metrics.frame.height, alignment: .topLeading)
         .coordinateSpace(.named(Self.stageSpace))
@@ -83,16 +86,44 @@ struct HUDDockView: View {
     /// what SwiftUI lays out in, while `HUDDockLayout` answers in the
     /// bottom-left global space `NSScreen` uses.
     private var target: CGRect {
-        let global = (isExpanded
-            ? HUDDockLayout.expandedFrame(dock, on: metrics)
-            : HUDDockLayout.collapsedFrame(dock, on: metrics))
-            ?? .zero
+        let global = HUDDockLayout.frame(
+            dock,
+            on: metrics,
+            presentation: presentation,
+            contentHeight: HUDDockLayout.expandedContentHeight(for: itemLayout, dock: dock)
+        ) ?? .zero
         return CGRect(
             x: global.minX - metrics.frame.minX,
             y: metrics.frame.maxY - global.maxY,
             width: global.width,
             height: global.height
         )
+    }
+
+    /// Shoulder width for the presentation being drawn. Only the notch dock has
+    /// shoulders; the edge docks answer zero and never ask.
+    private var shoulderWidth: CGFloat {
+        let width = switch presentation {
+        case .collapsed, .expanded: NotchLayout.shoulderWidth(metrics)
+        case .peek: NotchLayout.peekShoulderWidth(metrics)
+        }
+        return width ?? 0
+    }
+
+    /// The edge the HUD is attached to, and therefore the point a stretch must
+    /// hold still.
+    private var stretchAnchor: UnitPoint {
+        switch dock {
+        case .notch: .top
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+
+    /// Opening the card is a longer gesture than peeking, and using one curve
+    /// for both made the peek feel slow.
+    private var presentationMotion: Animation {
+        presentation == .expanded ? HUDMotion.expand : HUDMotion.peek
     }
 
     /// Stage coordinates back to the global screen space the controller and
@@ -112,14 +143,15 @@ struct HUDDockView: View {
             if dock == .notch {
                 NotchHUDView(
                     model: model,
-                    preferences: preferences,
+                    itemLayout: itemLayout,
                     notchWidth: notchWidth,
                     shoulderWidth: shoulderWidth,
                     menuBarHeight: menuBarHeight,
-                    isExpanded: isExpanded,
+                    presentation: presentation,
                     openPanel: openPanel,
                     openCockpit: openCockpit,
-                    openCockpitTitle: openCockpitTitle
+                    openCockpitTitle: openCockpitTitle,
+                    onToggle: onToggle
                 )
             } else {
                 edge
@@ -137,10 +169,12 @@ struct HUDDockView: View {
 
     private var dragGesture: some Gesture {
         // A few points of slack, so a click on a button in the expanded card is
-        // still a click and not a one-pixel drag that dismisses it.
+        // still a click and not a one-pixel drag that dismisses it. It is also
+        // what keeps the tap gesture on the strip usable: below this distance
+        // the drag never starts, so the click is unambiguous.
         DragGesture(minimumDistance: 6, coordinateSpace: .named(Self.stageSpace))
-            .updating($dragTranslation) { value, state, _ in
-                state = value.translation
+            .updating($drag) { value, state, _ in
+                state = HUDDragPhysics.resolve(translation: value.translation, dock: dock)
             }
             .onChanged { value in
                 onDragChanged(globalPoint(value.location))
@@ -152,8 +186,8 @@ struct HUDDockView: View {
 
     // MARK: - Edge dock
 
-    /// The edge HUD: a black sliver flush with the display's frame, which
-    /// unfolds inward into a card.
+    /// The edge HUD: a black sliver flush with the display's frame, which swells
+    /// under the pointer and unfolds inward into a card.
     ///
     /// It is drawn the way the notch dock is drawn, and for the same reason.
     /// The notch HUD has to be black because it is pretending to be the camera
@@ -161,16 +195,17 @@ struct HUDDockView: View {
     /// bezel. In both cases the illusion dies the moment the fill is anything a
     /// display frame could not be — a glass pill parked near the edge reads as
     /// a small window, not as part of the machine.
-    ///
-    /// Which is why an earlier pass at this using Liquid Glass was wrong: the
-    /// material is beautiful and it is the wrong material for something whose
-    /// whole job is to disappear into a black border.
     private var edge: some View {
         Group {
-            if isExpanded {
-                edgeCard
-            } else {
+            switch presentation {
+            case .collapsed:
+                // Nothing fits in seven points, and the sliver's job parked is
+                // to be mistaken for the bezel anyway.
                 Color.clear
+            case .peek:
+                edgePeek
+            case .expanded:
+                edgeCard
             }
         }
         .background {
@@ -181,7 +216,7 @@ struct HUDDockView: View {
                     // edge would trace the outline of a window, which is the
                     // one thing this must never look like.
                     edgeShape.strokeBorder(
-                        isExpanded ? SymairaTheme.borderGlass : Color.clear,
+                        presentation == .expanded ? SymairaTheme.borderGlass : Color.clear,
                         lineWidth: 1
                     )
                 )
@@ -189,6 +224,10 @@ struct HUDDockView: View {
                 // out of the card's own height.
                 .padding(.vertical, -HUDBezel.cornerRadius)
         }
+        // The sliver is the click target, in every state — the same role the
+        // strip plays for the notch dock.
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onToggle)
     }
 
     /// Flared into the display's frame on the outward side, rounded on the
@@ -199,36 +238,55 @@ struct HUDDockView: View {
     /// notch dock gets at the top of the display, for the same reason. See
     /// ``HUDBezelShape``.
     private var edgeShape: HUDBezelShape {
-        HUDBezelShape(
+        let innerRadius: CGFloat = switch presentation {
+        case .collapsed: 5
+        case .peek: SymairaRadius.control
+        case .expanded: SymairaRadius.panel
+        }
+        return HUDBezelShape(
             anchor: dock.isRightEdge ? .trailing : .leading,
             flare: HUDBezel.cornerRadius,
-            innerRadius: isExpanded ? SymairaRadius.panel : 5
+            innerRadius: innerRadius
         )
     }
 
-    /// Expanded: every monitored metric, not just the ones that fit on the
-    /// pill — the point of expanding is to see what did not.
+    /// Peeking: the items the user put at the hover stage, stacked in a column
+    /// narrow enough that the sliver still reads as part of the frame.
+    ///
+    /// Both sides' items appear here. The left/right split is about the notch's
+    /// two shoulders and the card's two columns; an edge dock has one narrow
+    /// strip, and dropping half the user's choices on the floor because they
+    /// picked the "wrong" side would be a trap.
+    private var edgePeek: some View {
+        VStack(spacing: 6) {
+            ForEach(HUDItemResolver.values(for: itemLayout.items(at: .peek), model: model)) { item in
+                HUDCompactItem(item: item)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .animation(HUDMotion.peek, value: presentation)
+    }
+
+    /// Expanded: every item the user placed, plus the actions.
     private var edgeCard: some View {
         VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-            ForEach(model.metricRows) { row in
-                HStack(spacing: SymairaSpacing.small) {
-                    Image(systemName: row.id.statusItemSymbol)
-                        .symairaText(.caption)
-                        .frame(width: 16)
-                        .foregroundStyle(SymairaTheme.goldPrimary)
-                    Text(row.title)
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textSecondary)
-                    Spacer(minLength: SymairaSpacing.small)
-                    Text(row.current)
-                        .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+            let left = HUDItemResolver.values(for: itemLayout.items(on: .left, at: .expanded), model: model)
+            let right = HUDItemResolver.values(for: itemLayout.items(on: .right, at: .expanded), model: model)
+
+            if left.isEmpty && right.isEmpty {
+                HUDEmptyState(hasEnabledItems: itemLayout.hasItems(at: .expanded))
+            } else {
+                // One column, not two: the edge card is 288 points wide, and
+                // splitting that leaves neither side room for a label and a
+                // number on one line.
+                VStack(spacing: 4) {
+                    ForEach(left + right) { item in
+                        HUDCardRow(item: item)
+                    }
                 }
-            }
-            if model.metricRows.isEmpty {
-                Text("No metric is being monitored")
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
             }
 
             Divider().overlay(SymairaTheme.borderGlass)

@@ -134,13 +134,25 @@ live in the repo environment `release`.
   stored choice through `ReadoutSurfaceDefaults.effective` — a `.notch`
   preference on a display without a cutout has to leave the status item
   visible, or the app has no surface and no way back to its own preferences.
-- **The notch HUD is opt-in and isolated.** `NotchLayout` (SymTuneCore) holds
-  the geometry and is unit-tested; `NotchHUDController`/`NotchHUDView`
-  (SymTuneUI) hold the panel and its rendering. It runs only when the host sets
+- **The HUD is opt-in and isolated.** Everything that can be decided without a
+  screen lives in SymTuneCore and is unit-tested: `NotchLayout` and
+  `HUDDockLayout` (geometry for all seven docks and all three presentations),
+  `HUDDragPhysics` (how it comes off the bezel), `HUDItemLayout` (what it shows,
+  where, and from which stage). `HUDDockController`/`HUDDockView`/`NotchHUDView`
+  (SymTuneUI) hold the stage panel and its rendering and should contain no rules
+  of their own. It runs only when the host sets
   `StatusBarController.isNotchHUDOffered` (SymCockpitApp does, SymTuneApp does
-  not) *and* the user picks the notch surface, and it renders from the shared
+  not) *and* the user picks the HUD surface, and it renders from the shared
   `TuneViewModel` — no second metrics pipeline. Keep it removable: it draws
   over the menu bar, which is the part of macOS most likely to change.
+- **The HUD opens in three steps, and the shoulders are a hard budget.**
+  `HUDPresentation` is ordered (`collapsed < peek < expanded`) and an item is
+  drawn once the HUD has reached the stage it was placed at — that comparison is
+  the visibility rule, and it belongs in `HUDItemLayout` and nowhere else. The
+  shoulders never render past `.peek`: their width is carved out of the menu
+  titles and the status items either side of the cutout, and a card-length value
+  there renders as a clipped fragment. Hover earns the peek; only a click opens
+  the card.
 - **Env prefixes stay per family**: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.
 - XDG paths: `~/.config/<tool>/`, `~/.cache/<tool>/`, `~/.local/share/<tool>/`.
 - Exit codes: `0` ok · `1` error · `2` usage/config · `3` permission ·
