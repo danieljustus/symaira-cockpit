@@ -1,5 +1,13 @@
 # BrightnessHUDProbe
 
+> **Shipped.** The feature this spike answered lives in the app now: the
+> Display card's *Brightness keys* row, `BrightnessKeyController` and
+> `BrightnessHUDPanel` in `tune/Sources/SymTuneUI/`, `BrightnessKeyStep` in
+> `tune/Sources/SymTuneCore/` (issue #250). This probe is kept as the standalone
+> rig — `--observe`, `--dry-run` and `--tap` are things the shipped feature has
+> no switches for, and they are what makes a tap question answerable in
+> isolation.
+
 Ein Spike, kein Feature. Beantwortet zwei Fragen auf dieser Maschine:
 
 1. Kann ein `CGEventTap` die F1/F2-Events **schlucken**, so dass der native

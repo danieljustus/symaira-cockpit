@@ -111,11 +111,34 @@ live in the repo environment `release`.
   library (`tune/Sources/SymTuneUI/`), consumed by both `SymTuneApp` and the
   cockpit GUI. `tune/project.yml` mirrors that split for the XcodeGen build —
   keep both in sync when adding files.
+- **The brightness keys are opt-in and default to macOS.**
+  `BrightnessKeyHandling` / `BrightnessKeyStep` (SymTuneCore) hold the
+  preference and the step arithmetic and are unit-tested;
+  `BrightnessKeyController` (SymTuneUI) owns the `CGEventTap` at
+  `.cghidEventTap` and `BrightnessHUDPanel` the stand-in HUD. It runs only when
+  the host sets `StatusBarController.isBrightnessKeyHandlingOffered`
+  (SymCockpitApp does, SymTuneApp does not) *and* the user picks it, and the
+  write goes through `TuneController.applyBuiltinBrightness` — the slider's
+  path, so the config bounds and the history log apply to a key press too. Four
+  properties are load-bearing: every non-brightness aux key is passed through,
+  a tap disabled by timeout or user input is re-enabled (that is how this class
+  of feature dies quietly), `IsSecureEventInputEnabled()` hands the keys back
+  untouched, and the tap is torn down on disable *and* in `deinit` — a tap that
+  outlives its owner still swallows F1.
+- **The readout has one surface at a time.** `ReadoutSurface` (SymTuneCore)
+  is the choice — menu bar or notch — with the migration off the #224 boolean
+  and the availability fallback as pure, unit-tested functions;
+  `ReadoutSurfacePreferences` (SymTuneUI) stores it under the grandfathered
+  `com.symaira.symtune` keys. `StatusBarController.syncReadoutSurface()` is the
+  only place that decides which surface runs, and it must keep resolving the
+  stored choice through `ReadoutSurfaceDefaults.effective` — a `.notch`
+  preference on a display without a cutout has to leave the status item
+  visible, or the app has no surface and no way back to its own preferences.
 - **The notch HUD is opt-in and isolated.** `NotchLayout` (SymTuneCore) holds
   the geometry and is unit-tested; `NotchHUDController`/`NotchHUDView`
   (SymTuneUI) hold the panel and its rendering. It runs only when the host sets
   `StatusBarController.isNotchHUDOffered` (SymCockpitApp does, SymTuneApp does
-  not) *and* the user switches it on, and it renders from the shared
+  not) *and* the user picks the notch surface, and it renders from the shared
   `TuneViewModel` — no second metrics pipeline. Keep it removable: it draws
   over the menu bar, which is the part of macOS most likely to change.
 - **Env prefixes stay per family**: `SYMTUNE_*`, `SYMOPERATE_*`, `SYMSCOPE_*`.

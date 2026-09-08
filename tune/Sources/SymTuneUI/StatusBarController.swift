@@ -30,15 +30,22 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private var preferencesWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
-    /// The notch HUD and its switch (issue #224). Both exist unconditionally —
-    /// the preference has to be readable to be rendered — but the HUD only
-    /// runs once a host opts in via ``isNotchHUDOffered`` **and** the user
-    /// turns it on.
-    let notchPreferences = NotchHUDPreferences()
+    /// Where the readout appears, and the HUD that renders one of the two
+    /// choices (issues #224, #251). Both exist unconditionally — the preference
+    /// has to be readable to be rendered — but the notch is only reachable once
+    /// a host opts in via ``isNotchHUDOffered``.
+    let readoutPreferences = ReadoutSurfacePreferences()
     private lazy var notchController = NotchHUDController(
         model: model,
         preferences: preferencesManager
     )
+
+    /// Who answers the brightness keys, and the tap that answers them when the
+    /// user picks this app (issue #250). Like the readout surface, the
+    /// preference is always readable; the tap only ever runs in a host that
+    /// offers it via ``isBrightnessKeyHandlingOffered``.
+    let brightnessKeyPreferences = BrightnessKeyPreferences()
+    private lazy var brightnessKeyController = BrightnessKeyController(controller: controller)
 
     /// Last title rendered into the status button, to skip redundant updates.
     private var renderedSegments: [StatusItemSegment]?
@@ -99,15 +106,29 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// (`pmset -g assertions`).
     public var keepAwakeAssertionReason: String = "SymairaTune menu bar"
 
-    /// Whether this host offers the notch HUD.
+    /// Whether this host offers the notch as a readout surface.
     ///
     /// The standalone Tune app leaves it `false`, so its menu bar behaves
-    /// exactly as before; `SymCockpitApp` sets it, which surfaces the switch
-    /// in the cockpit window and lets the HUD run when the switch is on.
+    /// exactly as before and the choice never appears; `SymCockpitApp` sets it,
+    /// which surfaces the picker in the cockpit window and lets the HUD run
+    /// when the notch is selected.
     public var isNotchHUDOffered: Bool = false {
         didSet {
             guard isNotchHUDOffered != oldValue else { return }
-            syncNotchHUD()
+            syncReadoutSurface()
+        }
+    }
+
+    /// Whether this host offers to take over the brightness keys.
+    ///
+    /// The standalone Tune app leaves it `false` — intercepting a hardware key
+    /// needs an Accessibility grant keyed to a stable code signature, which the
+    /// shipped cockpit bundle has and an ad-hoc build does not. `SymCockpitApp`
+    /// sets it, which surfaces the choice next to the brightness slider.
+    public var isBrightnessKeyHandlingOffered: Bool = false {
+        didSet {
+            guard isBrightnessKeyHandlingOffered != oldValue else { return }
+            syncBrightnessKeyHandling()
         }
     }
 
@@ -149,7 +170,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // Forwarded rather than copied: the host assigns ``onOpenCockpit``
         // after construction, and a copy taken here would always be nil.
         notchController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
-        observeNotchPreference()
+        observeReadoutSurface()
+        observeBrightnessKeyHandling()
         model.start()
         aiUsageModel.start()
         checkForUpdatesOnLaunch()
@@ -214,20 +236,66 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             .store(in: &cancellables)
     }
 
-    /// The switch applies live, in both directions.
-    private func observeNotchPreference() {
-        notchPreferences.$enabled
+    /// The picker applies live, in both directions: one surface comes down as
+    /// the other goes up, without a relaunch.
+    private func observeReadoutSurface() {
+        readoutPreferences.$surface
             .dropFirst()
             .sink { [weak self] _ in
-                Task { @MainActor in self?.syncNotchHUD() }
+                Task { @MainActor in self?.syncReadoutSurface() }
+            }
+            .store(in: &cancellables)
+
+        // A display arriving, leaving or being rearranged can take the cutout
+        // with it. Without this, closing the lid on an external monitor would
+        // leave the status item hidden and the HUD unbuildable — the app with
+        // no visible surface at all.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    @objc private func screenParametersChanged() {
+        MainActor.assumeIsolated { syncReadoutSurface() }
+    }
+
+    /// Show exactly one surface: the status item or the notch HUD.
+    ///
+    /// The stored choice is resolved against what this Mac can actually render,
+    /// so a `.notch` preference on a display without a cutout still leaves the
+    /// status item in place rather than hiding the only way back to the
+    /// preference.
+    private func syncReadoutSurface() {
+        let notchAvailable = isNotchHUDOffered && NotchHUDController.isAvailable
+        let effective = ReadoutSurfaceDefaults.effective(
+            readoutPreferences.surface,
+            notchAvailable: notchAvailable
+        )
+
+        notchController.openCockpitTitle = openCockpitTitle
+        notchController.setEnabled(effective == .notch)
+        statusItem.isVisible = effective == .menuBar
+    }
+
+    /// The choice applies live, in both directions: switching back to the
+    /// system tears the tap down rather than waiting for a relaunch.
+    private func observeBrightnessKeyHandling() {
+        brightnessKeyPreferences.$handling
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncBrightnessKeyHandling() }
             }
             .store(in: &cancellables)
     }
 
-    /// Run the HUD exactly while the host offers it and the user wants it.
-    private func syncNotchHUD() {
-        notchController.openCockpitTitle = openCockpitTitle
-        notchController.setEnabled(isNotchHUDOffered && notchPreferences.enabled)
+    private func syncBrightnessKeyHandling() {
+        brightnessKeyController.setEnabled(
+            isBrightnessKeyHandlingOffered
+                && brightnessKeyPreferences.handling == .cockpit
+        )
     }
 
     // MARK: - Status item rendering
@@ -377,7 +445,13 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome,
-            notchPreferences: isNotchHUDOffered ? notchPreferences : nil
+            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            brightnessKeyPreferences: isBrightnessKeyHandlingOffered
+                ? brightnessKeyPreferences
+                : nil,
+            brightnessKeyController: isBrightnessKeyHandlingOffered
+                ? brightnessKeyController
+                : nil
         )
     }
 

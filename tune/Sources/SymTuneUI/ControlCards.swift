@@ -12,6 +12,14 @@ struct DisplayControlsCard: View {
     let controller: TuneController
     let model: TuneViewModel
 
+    /// Who answers the brightness keys, or `nil` in a host that does not offer
+    /// the takeover (the standalone Tune app). Issue #250.
+    var brightnessKeys: BrightnessKeyPreferences?
+    var brightnessKeyController: BrightnessKeyController?
+
+    /// Why the takeover is not working, when it is switched on but blocked.
+    @State private var impediment: BrightnessKeyController.Impediment?
+
     private var isEDRCapable: Bool {
         model.displays.contains { $0.edrCapable }
     }
@@ -64,6 +72,89 @@ struct DisplayControlsCard: View {
             }
         }
         .cardStyle()
+    }
+
+    // MARK: - Brightness keys
+
+    /// Who answers F1/F2 — macOS or this app.
+    ///
+    /// It sits under the brightness slider because it is the same control seen
+    /// from the keyboard, and it defaults to the system: taking over a hardware
+    /// key is a thing to ask for, never a thing to inherit from an update.
+    /// Switching to this app needs an Accessibility grant, so the row explains
+    /// the block and offers the way to clear it rather than silently doing
+    /// nothing.
+    @ViewBuilder
+    private func brightnessKeyRow(_ preferences: BrightnessKeyPreferences) -> some View {
+        VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+            HStack(spacing: SymairaSpacing.medium) {
+                Image(systemName: "keyboard")
+                    .symairaText(.caption)
+                    .frame(width: 18)
+                    .foregroundStyle(SymairaTheme.goldPrimary)
+
+                Text("Brightness keys")
+                    .symairaText(.body)
+                    .foregroundStyle(SymairaTheme.textPrimary)
+
+                Spacer(minLength: SymairaSpacing.small)
+
+                Picker("", selection: Binding(
+                    get: { preferences.handling },
+                    set: { preferences.handling = $0 }
+                )) {
+                    Text(BrightnessKeyHandling.system.displayName)
+                        .tag(BrightnessKeyHandling.system)
+                    Text(BrightnessKeyHandling.cockpit.displayName)
+                        .tag(BrightnessKeyHandling.cockpit)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 160)
+                .help("Who answers F1 and F2 — macOS, or this app with its own HUD")
+            }
+
+            if preferences.handling == .cockpit, let impediment {
+                impedimentNote(impediment)
+            }
+        }
+        .onAppear { impediment = brightnessKeyController?.impediment }
+        .task(id: preferences.handling) {
+            // The controller reaches the grant asynchronously — it keeps
+            // retrying while the user is still in System Settings — so the row
+            // follows it rather than reading once.
+            brightnessKeyController?.onImpedimentChanged = { impediment = $0 }
+            impediment = brightnessKeyController?.impediment
+        }
+    }
+
+    @ViewBuilder
+    private func impedimentNote(_ impediment: BrightnessKeyController.Impediment) -> some View {
+        switch impediment {
+        case .accessibilityNotGranted:
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Needs Accessibility to see the keys before macOS does")
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: SymairaSpacing.small) {
+                    Button("Grant\u{2026}") {
+                        BrightnessKeyController.requestAccessibilityGrant()
+                    }
+                    Button("Open Settings") {
+                        BrightnessKeyController.openAccessibilitySettings()
+                    }
+                }
+                .buttonStyle(.link)
+                .symairaText(.caption)
+            }
+        case .noBuiltInDisplay:
+            // External panels are driven over DDC/CI, which this does not do.
+            Text("No built-in display to control")
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTheme.warning)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: - Beyond-normal brightness
