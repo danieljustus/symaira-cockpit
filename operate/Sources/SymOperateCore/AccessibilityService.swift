@@ -38,7 +38,9 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
     internal var nodesCache: [String: [UINode]] = [:]
     internal var snapshotCache: [String: Snapshot] = [:]
     internal var cacheOrder: [String] = []
-    private let maxCacheSnapshots = 20
+    /// Internal, like the caches it bounds, so the eviction tests can assert
+    /// against the real limit instead of a copy of it.
+    let maxCacheSnapshots = 20
     internal var testFocusedRoleOverride: String?
 
     // Polling cache: avoids full AX walks when the frontmost PID hasn't changed
@@ -47,6 +49,27 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
     internal var pollingAbsentTexts: Set<String> = []
 
     public init() {}
+
+    /// Puts `snapshotID` under the cache bound, evicting the oldest entries
+    /// first when it is full.
+    ///
+    /// Every cache write goes through here. `storeSnapshot` used to write
+    /// straight into `snapshotCache` without registering the id, and the only
+    /// registration lived at the end of the Accessibility walk — so whenever
+    /// that walk threw (no Accessibility grant, an unresolvable owner process,
+    /// a window that disappeared), the stored snapshot became unreachable for
+    /// eviction and its base64 PNG stayed in memory for the lifetime of the
+    /// process. Screen Recording and Accessibility are independent grants, so a
+    /// server holding only the first leaked one screenshot per query.
+    ///
+    /// Idempotent: an id that is already registered keeps its position, so a
+    /// snapshot that passes through both `storeSnapshot` and `queryNodes`
+    /// occupies one slot rather than two.
+    private func register(snapshotID: String) {
+        guard !cacheOrder.contains(snapshotID) else { return }
+        evictIfNeeded()
+        cacheOrder.append(snapshotID)
+    }
 
     private func evictIfNeeded() {
         guard cacheOrder.count >= maxCacheSnapshots else { return }
@@ -112,10 +135,9 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
         var remaining = maxNodes
         var cache: [String: ResolvedElement] = [:]
         let nodes = roots.compactMap { buildNode(element: $0, depth: 0, maxDepth: maxDepth, remainingNodes: &remaining, cache: &cache) }
-        evictIfNeeded()
+        register(snapshotID: snapshotID)
         elementCache[snapshotID] = cache
         nodesCache[snapshotID] = nodes
-        cacheOrder.append(snapshotID)
         return nodes
     }
 
@@ -161,6 +183,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol {
     }
 
     public func storeSnapshot(_ snapshot: Snapshot, for snapshotID: String) {
+        register(snapshotID: snapshotID)
         snapshotCache[snapshotID] = snapshot
     }
 
