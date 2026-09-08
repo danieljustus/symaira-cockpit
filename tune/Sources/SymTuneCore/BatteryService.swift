@@ -50,8 +50,11 @@ public struct BatteryService: Sendable {
                 health = Int((Double(rawMax) / Double(design) * 100).rounded())
             }
 
-            var percent: Int?
-            if let rawMax = props.rawMaxCapacity, rawMax > 0, let rawCurrent = props.rawCurrentCapacity {
+            // A percentage straight from the hardware wins: on Apple Silicon the
+            // milliamp-hour pair says 5466/5701 ≈ 96 % for a battery macOS —
+            // and `pmset -g batt` — call 100 % charged.
+            var percent = props.chargePercent.map { SafetyPolicy.clamp($0, 0, 100) }
+            if percent == nil, let rawMax = props.rawMaxCapacity, rawMax > 0, let rawCurrent = props.rawCurrentCapacity {
                 percent = SafetyPolicy.clamp(Int((Double(rawCurrent) / Double(rawMax) * 100).rounded()), 0, 100)
             }
 
