@@ -66,18 +66,26 @@ final class ScopeViewModel: ObservableObject {
         // `symbrain harness list` through the synchronous BoundedProcessRunner,
         // so it must leave the main actor like the other three or it blocks the
         // window for that call's timeout budget on every refresh.
+        //
+        // One port inventory, shared. This view and `DaemonService` both want
+        // it — the daemon rows are annotated with the ports their PID holds —
+        // and letting the service collect its own ran `lsof` a second time
+        // every 15 seconds, for a list this refresh then overwrote anyway.
+        let portsTask = Task.detached { (try? await PortService.listListening()) ?? [] }
         async let discoveryResult = Task.detached { MCPDiscovery.discover() }.value
-        async let portsResult: [SymScopeCore.Port] = (try? await PortService.listListening()) ?? []
         async let containersResult = ContainerService.list()
-        async let daemonsResult = DaemonService.list(all: includeApple)
+        async let daemonsResult = DaemonService(
+            portProvider: { await portsTask.value }
+        ).list(all: includeApple)
 
         let (discovered, notes) = await discoveryResult
-        let listening = await portsResult
+        let listening = await portsTask.value
         let (containerList, cNotes) = await containersResult
         let (daemonList, dNotes) = await daemonsResult
 
         ports = listening.sorted { $0.port < $1.port }
-        daemons = DaemonService.annotatePorts(daemonList, ports: listening)
+        // Already annotated by `DaemonService.list`, from this very inventory.
+        daemons = daemonList
         conflicts = ConflictDetector.detect(listening, daemons: daemons)
         containers = containerList
         containerNotes = cNotes

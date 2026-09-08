@@ -212,28 +212,26 @@ public struct DaemonService: Sendable {
         await DaemonService().list(all: all)
     }
 
+    /// Four collectors, none of which depends on another: launchd's own
+    /// inventory, the plist directories, Homebrew's service list and the port
+    /// inventory. They used to run one after another, which meant the whole
+    /// call waited out `brew services list` — a Ruby process that is roughly
+    /// 95% of the wall time here — and only then started on the rest. Running
+    /// them together makes everything else effectively free.
+    ///
+    /// The merge order afterwards is unchanged and still sequential, because it
+    /// is not independent: plist data merges into the launchd rows, and the
+    /// Homebrew pass merges into the result of both.
     public func list(all: Bool = false) async -> ([Daemon], [String]) {
+        async let launchctlCollector = collectLaunchctlRecords()
+        async let plistCollector = collectPlistRecords()
+        async let brewCollector = collectBrewServices()
+        async let portCollector = collectPorts()
+
         var notes: [String] = []
-        var launchctlRecords: [LaunchctlRecord] = []
 
-        do {
-            let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["list"])
-            launchctlRecords += Self.parseLaunchctlList(output, domain: "user")
-        } catch {
-            notes.append("launchctl user unavailable: \(error.localizedDescription)")
-        }
-
-        // The system domain needs `print`, not `list`: `launchctl list` takes an
-        // optional *label*, so `launchctl list system` looks up a job called
-        // "system", fails with exit 113, and leaves every /Library/LaunchDaemons
-        // entry to fall through to "not-loaded". `launchctl print system` reads
-        // the domain unprivileged and carries the same PID/status/label triples.
-        do {
-            let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["print", "system"])
-            launchctlRecords += Self.parseLaunchctlPrintServices(output, domain: "system")
-        } catch {
-            notes.append("launchctl system unavailable: \(error.localizedDescription)")
-        }
+        let (launchctlRecords, launchctlNotes) = await launchctlCollector
+        notes += launchctlNotes
 
         var rows = launchctlRecords.map { record in
             Daemon(
@@ -245,73 +243,159 @@ public struct DaemonService: Sendable {
             )
         }
 
-        for directory in Self.plistDirectories(home: homeDirectory) {
-            let domain = directory.hasSuffix("LaunchDaemons") ? "system" : "user"
-            for filename in fileSystem.directoryContents(atPath: directory) where filename.hasSuffix(".plist") {
-                let path = (directory as NSString).appendingPathComponent(filename)
-                guard let data = fileSystem.data(atPath: path) else {
-                    notes.append("plist unreadable: \(path)")
-                    continue
-                }
-                guard let plist = Self.parsePlist(data, path: path, domain: domain) else {
-                    notes.append("plist malformed: \(path)")
-                    continue
-                }
-                if let index = rows.firstIndex(where: { $0.label == plist.label && $0.domain == plist.domain }) {
-                    rows[index].keepAlive = plist.keepAlive
-                    rows[index].runAtLoad = plist.runAtLoad
-                    rows[index].notes = Self.mergeNotes(rows[index].notes, plist.notes)
-                    rows[index].origin = Self.preferredOrigin(rows[index].origin, plist.origin)
-                } else {
-                    rows.append(
-                        Daemon(
-                            label: plist.label,
-                            state: "not-loaded",
-                            domain: plist.domain,
-                            origin: plist.origin,
-                            keepAlive: plist.keepAlive,
-                            runAtLoad: plist.runAtLoad,
-                            notes: plist.notes
-                        )
+        let (plistRecords, plistNotes) = await plistCollector
+        notes += plistNotes
+
+        for plist in plistRecords {
+            if let index = rows.firstIndex(where: { $0.label == plist.label && $0.domain == plist.domain }) {
+                rows[index].keepAlive = plist.keepAlive
+                rows[index].runAtLoad = plist.runAtLoad
+                rows[index].notes = Self.mergeNotes(rows[index].notes, plist.notes)
+                rows[index].origin = Self.preferredOrigin(rows[index].origin, plist.origin)
+            } else {
+                rows.append(
+                    Daemon(
+                        label: plist.label,
+                        state: "not-loaded",
+                        domain: plist.domain,
+                        origin: plist.origin,
+                        keepAlive: plist.keepAlive,
+                        runAtLoad: plist.runAtLoad,
+                        notes: plist.notes
                     )
-                }
+                )
             }
         }
 
-        let brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
-        guard let brew = brewPaths.first(where: { fileSystem.isExecutableFile(atPath: $0) }) else {
-            notes.append("homebrew: brew CLI not found; service inventory unavailable")
-            return Self.finalize(rows, all: all, ports: await loadPorts(notes: &notes), notes: notes)
+        let (brewRecords, brewNotes) = await brewCollector
+        notes += brewNotes
+
+        for service in brewRecords {
+            let candidates = [service.label, service.name, "homebrew.mxcl.\(service.name)"]
+            if let index = rows.firstIndex(where: { candidates.contains($0.label) }) {
+                rows[index].origin = "brew"
+                rows[index].notes = Self.mergeNotes(rows[index].notes, service.status == "started" ? [] : ["homebrew status: \(service.status)"])
+                if rows[index].state == "not-loaded", service.status == "started" {
+                    rows[index].state = "loading"
+                }
+            } else {
+                let state = service.status == "started" ? "loading" : "not-loaded"
+                rows.append(
+                    Daemon(
+                        label: service.label,
+                        state: state,
+                        domain: "user",
+                        origin: "brew",
+                        notes: service.status == "started" ? [] : ["homebrew status: \(service.status)"]
+                    )
+                )
+            }
         }
 
-        do {
-            let output = try commandRunner.run(executable: brew, arguments: ["services", "list"])
-            for service in Self.parseBrewServices(output) {
-                let candidates = [service.label, service.name, "homebrew.mxcl.\(service.name)"]
-                if let index = rows.firstIndex(where: { candidates.contains($0.label) }) {
-                    rows[index].origin = "brew"
-                    rows[index].notes = Self.mergeNotes(rows[index].notes, service.status == "started" ? [] : ["homebrew status: \(service.status)"])
-                    if rows[index].state == "not-loaded", service.status == "started" {
-                        rows[index].state = "loading"
+        let (ports, portNotes) = await portCollector
+        notes += portNotes
+
+        return Self.finalize(rows, all: all, ports: ports, notes: notes)
+    }
+
+    // MARK: - Collectors
+
+    /// Runs blocking work off the Swift concurrency pool.
+    ///
+    /// `commandRunner` and `fileSystem` are synchronous by design — the shared
+    /// `BoundedProcessRunner` waits for the child to exit — so running several
+    /// of them at once must not occupy the cooperative pool's fixed number of
+    /// threads. This is the same hop `BoundedProcessRunner.runAsync` makes for
+    /// a single command; the collectors need it because they now overlap.
+    private static func offCooperativePool<T: Sendable>(
+        _ work: @escaping @Sendable () -> T
+    ) async -> T {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: work())
+            }
+        }
+    }
+
+    private func collectLaunchctlRecords() async -> ([LaunchctlRecord], [String]) {
+        let commandRunner = self.commandRunner
+        return await Self.offCooperativePool {
+            var records: [LaunchctlRecord] = []
+            var notes: [String] = []
+            // Both domains go through one collector: they are two ~4 ms calls,
+            // and keeping them in order keeps their notes in order too. They do
+            // not share an invocation, though — `launchctl list` takes an
+            // optional *label*, so `launchctl list system` looks up a job called
+            // "system", fails with exit 113, and leaves every
+            // /Library/LaunchDaemons entry to fall through to "not-loaded".
+            // `launchctl print system` reads the domain unprivileged and carries
+            // the same PID/status/label triples.
+            do {
+                let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["list"])
+                records += Self.parseLaunchctlList(output, domain: "user")
+            } catch {
+                notes.append("launchctl user unavailable: \(error.localizedDescription)")
+            }
+
+            do {
+                let output = try commandRunner.run(executable: "/bin/launchctl", arguments: ["print", "system"])
+                records += Self.parseLaunchctlPrintServices(output, domain: "system")
+            } catch {
+                notes.append("launchctl system unavailable: \(error.localizedDescription)")
+            }
+
+            return (records, notes)
+        }
+    }
+
+    private func collectPlistRecords() async -> ([PlistRecord], [String]) {
+        let fileSystem = self.fileSystem
+        let homeDirectory = self.homeDirectory
+        return await Self.offCooperativePool {
+            var records: [PlistRecord] = []
+            var notes: [String] = []
+            for directory in Self.plistDirectories(home: homeDirectory) {
+                let domain = directory.hasSuffix("LaunchDaemons") ? "system" : "user"
+                for filename in fileSystem.directoryContents(atPath: directory) where filename.hasSuffix(".plist") {
+                    let path = (directory as NSString).appendingPathComponent(filename)
+                    guard let data = fileSystem.data(atPath: path) else {
+                        notes.append("plist unreadable: \(path)")
+                        continue
                     }
-                } else {
-                    let state = service.status == "started" ? "loading" : "not-loaded"
-                    rows.append(
-                        Daemon(
-                            label: service.label,
-                            state: state,
-                            domain: "user",
-                            origin: "brew",
-                            notes: service.status == "started" ? [] : ["homebrew status: \(service.status)"]
-                        )
-                    )
+                    guard let plist = Self.parsePlist(data, path: path, domain: domain) else {
+                        notes.append("plist malformed: \(path)")
+                        continue
+                    }
+                    records.append(plist)
                 }
             }
-        } catch {
-            notes.append("homebrew: brew services unavailable: \(error.localizedDescription)")
+            return (records, notes)
         }
+    }
 
-        return Self.finalize(rows, all: all, ports: await loadPorts(notes: &notes), notes: notes)
+    private func collectBrewServices() async -> ([BrewServiceRecord], [String]) {
+        let commandRunner = self.commandRunner
+        let fileSystem = self.fileSystem
+        return await Self.offCooperativePool {
+            let brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+            guard let brew = brewPaths.first(where: { fileSystem.isExecutableFile(atPath: $0) }) else {
+                return ([], ["homebrew: brew CLI not found; service inventory unavailable"])
+            }
+            do {
+                let output = try commandRunner.run(executable: brew, arguments: ["services", "list"])
+                return (Self.parseBrewServices(output), [])
+            } catch {
+                return ([], ["homebrew: brew services unavailable: \(error.localizedDescription)"])
+            }
+        }
+    }
+
+    private func collectPorts() async -> ([Port], [String]) {
+        do {
+            return (try await portProvider(), [])
+        } catch {
+            return ([], ["ports: \(error.localizedDescription)"])
+        }
     }
 
     public static func health(_ daemons: [Daemon]) -> [DaemonHealthResult] {
@@ -440,15 +524,6 @@ public struct DaemonService: Sendable {
             "/Library/LaunchAgents",
             "/Library/LaunchDaemons",
         ]
-    }
-
-    private func loadPorts(notes: inout [String]) async -> [Port] {
-        do {
-            return try await portProvider()
-        } catch {
-            notes.append("ports: \(error.localizedDescription)")
-            return []
-        }
     }
 
     private static func finalize(

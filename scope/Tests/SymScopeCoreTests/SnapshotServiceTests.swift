@@ -35,6 +35,23 @@ final class SnapshotServiceTests: XCTestCase {
         }
     }
 
+    func testBuildCollectsThePortInventoryExactlyOnce() async {
+        // Two consumers want the same list: the snapshot itself, and
+        // DaemonService, which annotates every daemon with the ports its PID
+        // holds. Collecting it twice meant a second pair of lsof children whose
+        // result was thrown away. This is the guard against that coming back —
+        // a count, not a duration, so it says the same thing on every machine.
+        let collector = PortCollectorSpy()
+
+        let snapshot = await SnapshotService.build(portReport: {
+            collector.record()
+            return ([Port(port: 8080, protocol_: "tcp", address: "127.0.0.1", pid: 4242, process: "fixture")], [])
+        })
+
+        XCTAssertEqual(collector.count, 1, "the port inventory must be collected once and shared")
+        XCTAssertEqual(snapshot.ports.map(\.port), [8080], "the snapshot reports the inventory it collected")
+    }
+
     func testBuildProducesFreshTimestampsAcrossCalls() async throws {
         let first = await SnapshotService.build()
         try await Task.sleep(nanoseconds: 1_100_000_000)
@@ -44,5 +61,23 @@ final class SnapshotServiceTests: XCTestCase {
         let firstDate = try XCTUnwrap(formatter.date(from: first.generatedAt))
         let secondDate = try XCTUnwrap(formatter.date(from: second.generatedAt))
         XCTAssertGreaterThan(secondDate, firstDate)
+    }
+}
+
+/// Counts how many times the injected port collector was asked to run.
+private final class PortCollectorSpy: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+
+    func record() {
+        lock.lock()
+        calls += 1
+        lock.unlock()
+    }
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return calls
     }
 }
