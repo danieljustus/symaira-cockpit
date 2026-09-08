@@ -545,8 +545,7 @@ public final class MCPServer: @unchecked Sendable {
                 "properties": [
                     "extra_deny_keywords": ["type": "array", "items": ["type": "string"], "description": "Additional keywords to block."],
                     "allow_keywords": ["type": "array", "items": ["type": "string"], "description": "Keywords to allow (overrides deny)."],
-                    "allow_bundle_ids": ["type": "array", "items": ["type": "string"], "description": "Bundle IDs to exempt from destructive checks."],
-                    "granted_permissions": ["type": "array", "items": ["type": "string"], "description": "Permission flag names to grant: capture, input, app_control, menu_action, destructive_action, secure_field_access, policy_modify. Replaces the current set when present."],
+                    "granted_permissions": ["type": "array", "items": ["type": "string"], "description": "Permission flag names to grant: capture, input, app_control, menu_action, policy_modify. Replaces the current set when present. Names that are not grantable are ignored."],
                 ],
             ] },
             outputSchema: nil,
@@ -573,9 +572,6 @@ public final class MCPServer: @unchecked Sendable {
                 }
                 if let allowKw = arguments["allow_keywords"] as? [String] {
                     for kw in allowKw { server.controller.actionPolicy.allowKeyword(kw) }
-                }
-                if let allowBundle = arguments["allow_bundle_ids"] as? [String] {
-                    for bid in allowBundle { server.controller.actionPolicy.allowBundleID(bid) }
                 }
                 if let requestedPermissions {
                     guard server.controller.actionPolicy.setGrantedPermissions(requestedPermissions) else {
@@ -692,7 +688,6 @@ public final class MCPServer: @unchecked Sendable {
         return PolicyPayload(
             extraDenyKeywords: Array(policy.extraDenyKeywords).sorted(),
             allowedKeywords: Array(policy.allowedKeywords).sorted(),
-            allowedBundleIDs: Array(policy.allowedBundleIDs).sorted(),
             grantedPermissions: policy.grantedPermissions.flagNames
         )
     }
@@ -945,13 +940,11 @@ private struct AnyEncodable: Encodable {
 private struct PolicyPayload: Encodable {
     let extraDenyKeywords: [String]
     let allowedKeywords: [String]
-    let allowedBundleIDs: [String]
     let grantedPermissions: [String]
 
     enum CodingKeys: String, CodingKey {
         case extraDenyKeywords
         case allowedKeywords
-        case allowedBundleIDs
         case grantedPermissions = "granted_permissions"
     }
 }

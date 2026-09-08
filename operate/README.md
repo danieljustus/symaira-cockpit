@@ -101,6 +101,16 @@ wins over the file. When neither source is present, the historical full grant
 is retained. The MCP `set_policy` tool may narrow this startup grant but cannot
 widen it. `doctor` reports the resulting `effective_grant` array.
 
+The grantable permissions are `capture`, `input`, `app_control`, `menu_action`
+and `policy_modify`. Each one gates a group of actions, so withholding it
+changes what the server will do.
+
+Destructive controls and secure text fields are refused unconditionally and are
+not permissions you grant. `destructive_action` and `secure_field_access` were
+once listed as grantable and gated nothing; they are still accepted in a
+`--grant` value or policy file so existing configurations keep starting, and
+they grant nothing.
+
 ### Terminal demo
 
 A real first-run of `symoperate doctor` on a machine where the Accessibility

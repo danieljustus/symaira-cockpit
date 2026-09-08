@@ -446,4 +446,48 @@ extension MCPServerTests {
         let exposedNames = (result["tools"] as? [[String: Any]])?.compactMap { $0["name"] as? String }
         XCTAssertEqual(exposedNames, catalogNames)
     }
+
+
+    // MARK: - Policy surface no longer advertises inert controls (issue #242)
+
+    func testSetPolicySchemaDoesNotAdvertiseABundleAllowlist() async throws {
+        let result = try await server.dispatch(method: "tools/list", params: [:])
+        let tools = result["tools"] as? [[String: Any]]
+        let setPolicy = tools?.first { $0["name"] as? String == "set_policy" }
+        let schema = setPolicy?["inputSchema"] as? [String: Any]
+        let properties = schema?["properties"] as? [String: Any]
+
+        XCTAssertNotNil(properties, "set_policy should still take arguments")
+        XCTAssertNil(
+            properties?["allow_bundle_ids"],
+            "the bundle allowlist was never consulted; it must not be advertised"
+        )
+
+        let description = (setPolicy?["description"] as? String ?? "")
+            + ((properties?["granted_permissions"] as? [String: Any])?["description"] as? String ?? "")
+        XCTAssertFalse(description.contains("destructive_action"), description)
+        XCTAssertFalse(description.contains("secure_field_access"), description)
+    }
+
+    func testPolicyPayloadDoesNotReportABundleAllowlist() async throws {
+        let result = try await server.dispatch(method: "tools/call", params: [
+            "name": "get_policy", "arguments": [:],
+        ])
+        let policy = result["structuredContent"] as? [String: Any]
+        XCTAssertNotNil(policy)
+        XCTAssertNil(policy?["allowed_bundle_ids"])
+        XCTAssertNil(policy?["allowedBundleIDs"])
+    }
+
+    func testSetPolicyIgnoresRetiredPermissionNamesInsteadOfRefusing() async throws {
+        // A client still sending the old full list must narrow to the advertised
+        // flags, not trip the "cannot widen the startup grant" guard.
+        let result = try await server.dispatch(method: "tools/call", params: [
+            "name": "set_policy",
+            "arguments": ["granted_permissions": ["capture", "destructive_action", "secure_field_access"]],
+        ])
+        XCTAssertEqual(result["isError"] as? Bool, false)
+        let policy = result["structuredContent"] as? [String: Any]
+        XCTAssertEqual(policy?["granted_permissions"] as? [String], ["capture"])
+    }
 }
