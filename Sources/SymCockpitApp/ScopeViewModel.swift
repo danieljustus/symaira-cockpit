@@ -28,6 +28,7 @@ final class ScopeViewModel: ObservableObject {
     /// Ports and containers churn on a developer machine, but not by the
     /// second; 15s keeps the list honest without turning `lsof` into a tax.
     private let refreshInterval: Duration = .seconds(15)
+    private var daemonCache = DaemonRefreshCache()
     private var pollTask: Task<Void, Never>?
 
     /// Health keys off name+client, the pair that identifies a server across
@@ -54,44 +55,53 @@ final class ScopeViewModel: ObservableObject {
     }
 
     func refreshNow(includeApple: Bool = false) {
-        Task { await refresh(includeApple: includeApple) }
+        Task { await refresh(includeApple: includeApple, forceDaemonRefresh: true) }
     }
 
-    func refresh(includeApple: Bool = false) async {
+    func refresh(includeApple: Bool = false, forceDaemonRefresh: Bool = false) async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
 
-        // All four of these shell out to external binaries — discovery runs
-        // `symbrain harness list` through the synchronous BoundedProcessRunner,
-        // so it must leave the main actor like the other three or it blocks the
-        // window for that call's timeout budget on every refresh.
-        //
-        // One port inventory, shared. This view and `DaemonService` both want
-        // it — the daemon rows are annotated with the ports their PID holds —
-        // and letting the service collect its own ran `lsof` a second time
-        // every 15 seconds, for a list this refresh then overwrote anyway.
+        // Port, container and MCP discovery remain on the 15-second cadence.
+        // Daemon discovery is the expensive launchd/Homebrew inventory, so it
+        // uses a longer cache cadence unless this is an explicit refresh.
         let portsTask = Task.detached { (try? await PortService.listListening()) ?? [] }
         async let discoveryResult = Task.detached { MCPDiscovery.discover() }.value
         async let containersResult = ContainerService.list()
-        async let daemonsResult = DaemonService(
-            portProvider: { await portsTask.value }
-        ).list(all: includeApple)
+
+        let shouldRefreshDaemons = daemonCache.beginRefresh(
+            at: Date(),
+            force: forceDaemonRefresh
+        )
+        let daemonTask: Task<([Daemon], [String]), Never>?
+        if shouldRefreshDaemons {
+            daemonTask = Task.detached {
+                await DaemonService(
+                    portProvider: { await portsTask.value }
+                ).list(all: includeApple)
+            }
+        } else {
+            daemonTask = nil
+        }
 
         let (discovered, notes) = await discoveryResult
         let listening = await portsTask.value
         let (containerList, cNotes) = await containersResult
-        let (daemonList, dNotes) = await daemonsResult
+        if let daemonTask {
+            let (daemonList, dNotes) = await daemonTask.value
+            daemonCache.update(daemons: daemonList, notes: dNotes)
+        }
+        daemonCache.annotatePorts(listening)
 
         ports = listening.sorted { $0.port < $1.port }
-        // Already annotated by `DaemonService.list`, from this very inventory.
-        daemons = daemonList
+        daemons = daemonCache.daemons
         conflicts = ConflictDetector.detect(listening, daemons: daemons)
         containers = containerList
         containerNotes = cNotes
         mcpServers = discovered.sorted { ($0.client, $0.name) < ($1.client, $1.name) }
         mcpNotes = notes
-        daemonNotes = dNotes
+        daemonNotes = daemonCache.notes
         errorMessage = nil
         lastUpdated = Date()
     }

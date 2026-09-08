@@ -13,6 +13,34 @@ private struct FixtureCommandRunner: DaemonCommandRunning {
     }
 }
 
+private final class CountingCommandRunner: DaemonCommandRunning, @unchecked Sendable {
+    let outputs: [String: String]
+    private let lock = NSLock()
+    private var invocations = 0
+
+    init(outputs: [String: String]) {
+        self.outputs = outputs
+    }
+
+    func run(executable: String, arguments: [String]) throws -> String {
+        lock.lock()
+        invocations += 1
+        lock.unlock()
+
+        let key = ([executable] + arguments).joined(separator: " ")
+        guard let output = outputs[key] else {
+            throw DaemonCommandError.nonZero(127)
+        }
+        return output
+    }
+
+    var invocationCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return invocations
+    }
+}
+
 private struct FixtureFileSystem: DaemonFileSystemReading {
     let directories: [String: [String]]
     let files: [String: Data]
@@ -433,6 +461,60 @@ final class DaemonParserTests: XCTestCase {
             notes.contains { $0.contains("launchctl system unavailable") },
             "an unreadable system domain must be surfaced, not swallowed: \(notes)"
         )
+    }
+
+    func testRefreshCacheUsesLongCadenceAndForceRefresh() async {
+        let runner = CountingCommandRunner(outputs: [
+            "/bin/launchctl list": "PID Status Label\n55 0 com.example.worker\n",
+            "/bin/launchctl print system": "",
+        ])
+        let service = DaemonService(
+            commandRunner: runner,
+            fileSystem: FixtureFileSystem(directories: [:], files: [:], executables: []),
+            portProvider: { [] },
+            homeDirectory: "/fixture/home"
+        )
+        var cache = DaemonRefreshCache()
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        var collectorInvocations = 0
+
+        // The five-minute window contains twenty 15-second UI ticks. The
+        // initial collection plus the four elapsed 60-second intervals are
+        // the only daemon collections allowed in that window.
+        for tick in 0..<20 {
+            let now = start.addingTimeInterval(TimeInterval(tick * 15))
+            if cache.beginRefresh(at: now) {
+                collectorInvocations += 1
+                let result = await service.list()
+                cache.update(daemons: result.0, notes: result.1)
+            }
+
+            cache.annotatePorts([
+                Port(
+                    port: 8_000 + tick,
+                    protocol_: "tcp",
+                    address: "127.0.0.1",
+                    pid: 55,
+                    process: "worker"
+                ),
+            ])
+        }
+
+        XCTAssertEqual(collectorInvocations, 5)
+        XCTAssertEqual(runner.invocationCount, 10, "the command spy should only see two launchd calls per collection")
+        XCTAssertEqual(cache.daemons.first?.ports, [8_019], "cached rows must be re-annotated on every port tick")
+
+        XCTAssertFalse(cache.beginRefresh(at: start.addingTimeInterval(15)))
+        XCTAssertTrue(
+            cache.beginRefresh(at: start.addingTimeInterval(15), force: true),
+            "manual refresh must bypass the daemon cache cadence"
+        )
+        collectorInvocations += 1
+        let forcedResult = await service.list()
+        cache.update(daemons: forcedResult.0, notes: forcedResult.1)
+
+        XCTAssertEqual(collectorInvocations, 6)
+        XCTAssertEqual(runner.invocationCount, 12)
     }
 
     private static func plistData(_ values: [String: Any]) -> Data {

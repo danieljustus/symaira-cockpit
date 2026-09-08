@@ -188,6 +188,49 @@ public enum DaemonCommandError: Error, LocalizedError, Sendable {
     }
 }
 
+/// Cached daemon inventory used by clients that poll more frequently than the
+/// launchd/Homebrew collectors need to run.
+///
+/// The cache deliberately owns only scheduling and the last collected rows. A
+/// caller can re-annotate those rows with a fresh port inventory on every poll
+/// without invoking any daemon collector.
+public struct DaemonRefreshCache: Sendable {
+    public static let defaultRefreshInterval: TimeInterval = 60
+
+    public let refreshInterval: TimeInterval
+    public private(set) var daemons: [Daemon] = []
+    public private(set) var notes: [String] = []
+    private var lastRefreshAt: Date?
+
+    public init(refreshInterval: TimeInterval = Self.defaultRefreshInterval) {
+        self.refreshInterval = refreshInterval
+    }
+
+    /// Marks a collection as started when the cache is stale or a caller forces
+    /// one. Recording the start time prevents a slow collector from being
+    /// started again by the next 15-second poll.
+    public mutating func beginRefresh(at now: Date, force: Bool = false) -> Bool {
+        if !force,
+           let lastRefreshAt,
+           now.timeIntervalSince(lastRefreshAt) < refreshInterval {
+            return false
+        }
+        lastRefreshAt = now
+        return true
+    }
+
+    public mutating func update(daemons: [Daemon], notes: [String]) {
+        self.daemons = daemons
+        self.notes = notes
+    }
+
+    /// Port ownership is intentionally refreshed independently of daemon
+    /// collection so conflict labels stay current on every 15-second tick.
+    public mutating func annotatePorts(_ ports: [Port]) {
+        daemons = DaemonService.annotatePorts(daemons, ports: ports)
+    }
+}
+
 /// Read-only launchd/Homebrew inventory. All process and filesystem access is
 /// injected, making parser and merge tests deterministic and safe in CI.
 public struct DaemonService: Sendable {
