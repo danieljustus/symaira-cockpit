@@ -76,6 +76,11 @@ struct MainStatusView: View {
     /// no notch HUD (issues #224, #251).
     var readoutPreferences: ReadoutSurfacePreferences? = nil
 
+    /// Who answers the brightness keys, and the tap behind the choice. Nil in
+    /// a host that does not offer the takeover (issue #250).
+    var brightnessKeyPreferences: BrightnessKeyPreferences? = nil
+    var brightnessKeyController: BrightnessKeyController? = nil
+
     var body: some View {
         switch chrome {
         case .popover:
@@ -112,7 +117,12 @@ struct MainStatusView: View {
             }
 
             if shows(.displayControls) {
-                DisplayControlsCard(controller: controller, model: model)
+                DisplayControlsCard(
+                    controller: controller,
+                    model: model,
+                    brightnessKeys: brightnessKeyPreferences,
+                    brightnessKeyController: brightnessKeyController
+                )
             }
 
             if shows(.keepAwake) {

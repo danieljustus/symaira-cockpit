@@ -133,6 +133,15 @@ item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 (show it), with a live preview of the result. Changes hit the menu bar
 immediately and are written to `config.toml`, so they survive a relaunch.
 
+The Display card's **Brightness keys** row picks who answers F1 and F2:
+**Standard** leaves them to macOS, **SymCockpit** consumes them before macOS
+sees them, sets the built-in display's brightness itself, and draws its own HUD
+— the same sixteen steps, with Shift+Option for quarter steps. macOS is the
+default; the takeover needs an Accessibility grant, and the row says so and
+offers the way to it instead of silently doing nothing. Volume and media keys
+are never touched, a focused password field hands the keys straight back, and
+switching to Standard removes the interception immediately.
+
 The same card carries **Show in**, which picks *where* the readout appears —
 the menu bar or the notch, one at a time rather than both at once. On a MacBook
 with a camera cutout, **Notch** draws the readout around the notch and expands

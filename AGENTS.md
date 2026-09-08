@@ -111,6 +111,20 @@ live in the repo environment `release`.
   library (`tune/Sources/SymTuneUI/`), consumed by both `SymTuneApp` and the
   cockpit GUI. `tune/project.yml` mirrors that split for the XcodeGen build —
   keep both in sync when adding files.
+- **The brightness keys are opt-in and default to macOS.**
+  `BrightnessKeyHandling` / `BrightnessKeyStep` (SymTuneCore) hold the
+  preference and the step arithmetic and are unit-tested;
+  `BrightnessKeyController` (SymTuneUI) owns the `CGEventTap` at
+  `.cghidEventTap` and `BrightnessHUDPanel` the stand-in HUD. It runs only when
+  the host sets `StatusBarController.isBrightnessKeyHandlingOffered`
+  (SymCockpitApp does, SymTuneApp does not) *and* the user picks it, and the
+  write goes through `TuneController.applyBuiltinBrightness` — the slider's
+  path, so the config bounds and the history log apply to a key press too. Four
+  properties are load-bearing: every non-brightness aux key is passed through,
+  a tap disabled by timeout or user input is re-enabled (that is how this class
+  of feature dies quietly), `IsSecureEventInputEnabled()` hands the keys back
+  untouched, and the tap is torn down on disable *and* in `deinit` — a tap that
+  outlives its owner still swallows F1.
 - **The readout has one surface at a time.** `ReadoutSurface` (SymTuneCore)
   is the choice — menu bar or notch — with the migration off the #224 boolean
   and the availability fallback as pure, unit-tested functions;

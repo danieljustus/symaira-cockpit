@@ -47,10 +47,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.fallbackIconTitle = "SC"
         statusBar.preferencesWindowTitle = "Symaira Cockpit Preferences"
         statusBar.keepAwakeAssertionReason = "Symaira Cockpit"
-        // The notch HUD is a cockpit surface: offered here, off until the user
-        // switches it on in the window's menu-bar card (issue #224). The
-        // standalone Tune app leaves this alone and is unaffected.
+        // The notch HUD is a cockpit surface: offered here, and picked in the
+        // window's menu-bar card, where the menu bar stays the default
+        // (issues #224, #251). The standalone Tune app leaves this alone and is
+        // unaffected.
         statusBar.isNotchHUDOffered = true
+        // Same shape for the brightness keys: offered here, answered by macOS
+        // until the user says otherwise in the display card (issue #250). This
+        // bundle is the one with a stable signature, which is what the
+        // Accessibility grant the takeover needs is keyed to.
+        statusBar.isBrightnessKeyHandlingOffered = true
         self.statusBarController = statusBar
 
         let window = CockpitWindowController(

@@ -40,6 +40,13 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         preferences: preferencesManager
     )
 
+    /// Who answers the brightness keys, and the tap that answers them when the
+    /// user picks this app (issue #250). Like the readout surface, the
+    /// preference is always readable; the tap only ever runs in a host that
+    /// offers it via ``isBrightnessKeyHandlingOffered``.
+    let brightnessKeyPreferences = BrightnessKeyPreferences()
+    private lazy var brightnessKeyController = BrightnessKeyController(controller: controller)
+
     /// Last title rendered into the status button, to skip redundant updates.
     private var renderedSegments: [StatusItemSegment]?
     /// Whether the button currently shows the icon fallback.
@@ -112,6 +119,19 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         }
     }
 
+    /// Whether this host offers to take over the brightness keys.
+    ///
+    /// The standalone Tune app leaves it `false` — intercepting a hardware key
+    /// needs an Accessibility grant keyed to a stable code signature, which the
+    /// shipped cockpit bundle has and an ad-hoc build does not. `SymCockpitApp`
+    /// sets it, which surfaces the choice next to the brightness slider.
+    public var isBrightnessKeyHandlingOffered: Bool = false {
+        didSet {
+            guard isBrightnessKeyHandlingOffered != oldValue else { return }
+            syncBrightnessKeyHandling()
+        }
+    }
+
     private let updateVersionProvider: () -> String
 
     /// The status item uses the family version in the standalone Tune app and
@@ -151,6 +171,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // after construction, and a copy taken here would always be nil.
         notchController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
         observeReadoutSurface()
+        observeBrightnessKeyHandling()
         model.start()
         aiUsageModel.start()
         checkForUpdatesOnLaunch()
@@ -257,6 +278,24 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         notchController.openCockpitTitle = openCockpitTitle
         notchController.setEnabled(effective == .notch)
         statusItem.isVisible = effective == .menuBar
+    }
+
+    /// The choice applies live, in both directions: switching back to the
+    /// system tears the tap down rather than waiting for a relaunch.
+    private func observeBrightnessKeyHandling() {
+        brightnessKeyPreferences.$handling
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncBrightnessKeyHandling() }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncBrightnessKeyHandling() {
+        brightnessKeyController.setEnabled(
+            isBrightnessKeyHandlingOffered
+                && brightnessKeyPreferences.handling == .cockpit
+        )
     }
 
     // MARK: - Status item rendering
@@ -406,7 +445,13 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome,
-            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil
+            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            brightnessKeyPreferences: isBrightnessKeyHandlingOffered
+                ? brightnessKeyPreferences
+                : nil,
+            brightnessKeyController: isBrightnessKeyHandlingOffered
+                ? brightnessKeyController
+                : nil
         )
     }
 

@@ -64,11 +64,19 @@ public struct DisplayService: Sendable {
     }
 
     /// Sets the built-in display brightness (0.0–1.0). Caller must clamp via SafetyPolicy.
+    ///
+    /// Announces the new value afterwards: Control Center and the Displays pane
+    /// are *told* about brightness changes, they do not poll, so a write
+    /// without the announcement leaves both showing the old level until
+    /// something else moves the slider.
     public func setBuiltinBrightness(_ value: Float) throws {
         let displayID = try builtinDisplayID()
         if let setBrightness = displayServicesSetBrightness {
             let result = setBrightness(displayID, value)
-            if result == 0 { return }
+            if result == 0 {
+                _ = displayServicesBrightnessChanged?(displayID, Double(value))
+                return
+            }
         }
         try iokitSetBrightness(displayID: displayID, value: value)
     }
@@ -126,6 +134,20 @@ public struct DisplayService: Sendable {
         guard let handle else { return nil }
         guard let sym = dlsym(handle, "DisplayServicesSetBrightness") else { return nil }
         return unsafeBitCast(sym, to: (@convention(c) (CGDirectDisplayID, Float) -> Int32).self)
+    }()
+
+    /// Dynamically loaded `DisplayServicesBrightnessChanged` notification hook.
+    ///
+    /// Optional in the strongest sense: a macOS release that renames it costs
+    /// a stale Control Center readout, not a failure to set brightness.
+    private nonisolated(unsafe) var displayServicesBrightnessChanged: (@convention(c) (CGDirectDisplayID, Double) -> Int32)? = {
+        let handle = dlopen(
+            "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices",
+            RTLD_NOW
+        )
+        guard let handle else { return nil }
+        guard let sym = dlsym(handle, "DisplayServicesBrightnessChanged") else { return nil }
+        return unsafeBitCast(sym, to: (@convention(c) (CGDirectDisplayID, Double) -> Int32).self)
     }()
 
     // MARK: - IOKit fallback
