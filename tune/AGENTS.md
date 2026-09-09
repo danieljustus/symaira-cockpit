@@ -1,5 +1,9 @@
 # Agent Instructions — tune (the `symcockpit tune` family)
 
+## Product boundary
+
+[PB-2026-09-09](../docs/product-boundaries.md) retains this hardware/system-tuning functionality in the independent product **Symaira Cockpit**. Operate and Scope move to Brain as optional modules. Tune/SymTune is not a target product or visible module name; the current names and commands below are transitional. Migrate the redundant CLI layer and internal targets with compatibility tests and a deprecation window. Do not move hardware control, privileged helpers or the HUD into Brain or Desktop. Existing helper/signing/permission identities and safety checks remain unchanged until explicit verified migration.
+
 Native macOS tuning tool (Swift 6 toolchain, AppKit/IOKit). CLI **and** MCP
 server: read the Mac's thermal/power/display state, and (incrementally) tune
 brightness, fans, and battery charging. Public repo, Apache-2.0 licensed. Part of the
