@@ -29,6 +29,25 @@ All notable changes to this project are documented here. The format is based on
   table and silently drops an active boost or warmth shift.
 
 ### Added
+- **The HUD has a middle state, and its contents are yours.** Hovering used to
+  throw the whole card open, which meant the HUD could not be passed — every
+  trip across the top of the screen unfolded it over whatever was underneath.
+  Now the pointer earns a *peek*: wider shoulders, a few points of drop, one or
+  two more readouts. The card costs a click, and a second click puts it away.
+- **Every readout on the HUD is placed by the user.** Per item — the four
+  metrics, battery, calendar week, Keep Awake, the fan profile — three
+  decisions: whether it appears, which side it sits on, and how far the HUD has
+  to be open before it turns up (always, on hover, or only once opened). The
+  card is under *Menu bar → HUD content*, appears only while the HUD is the
+  chosen surface, and applies live. The shipped placement is the two-readout HUD
+  that came before it, so nothing moves until you move it.
+- **The HUD stretches before it lets go.** Dragged, it now resists for the first
+  38 points — moving a fraction of the distance the pointer does, elongating
+  along the pull and necking across it, the way anything peeled off a surface
+  behaves — and only then comes free and tracks the pointer exactly. Released,
+  it snaps back with the overshoot that makes the resistance read as elasticity.
+  The arithmetic is pure and tested, including that the shape does not jump at
+  the moment it detaches.
 - **The HUD can be moved.** What used to be a readout fixed around the camera
   cutout now sits in any of seven docks — the notch, or either screen edge at
   one of three heights — and is dragged between them directly. A drop that
@@ -52,6 +71,16 @@ All notable changes to this project are documented here. The format is based on
   limited to the headroom the display grants.
 
 ### Changed
+- **The expanded HUD card is sized to what it holds.** It used to ask for a
+  fixed 196 points, which was right for the list it happened to contain and
+  wrong the moment the contents became configurable — four readouts left a third
+  of the panel as empty black.
+- **The HUD's shoulders no longer follow the menu bar's `visible` set.** They
+  have their own placement, so the notch can show what the status item does not,
+  and the choice of which readouts sit there is a decision rather than the list
+  order. They also never carry more than the peek's worth of items: a shoulder
+  fits about two readouts, and `Sleep allowed` in a space that fits `40 %` was a
+  clipped fragment of a word.
 - **BREAKING: requires macOS 26 or newer.** The docked HUD is built on APIs that
   do not exist before it, and SwiftPM declares a deployment target per *package*,
   not per target — so the GUI could not move without the CLI moving with it.

@@ -72,8 +72,8 @@ private final class HUDStageHostingView: NSHostingView<HUDDockView> {
 @MainActor
 final class HUDDockController: NSObject {
     private let model: TuneViewModel
-    private let preferences: PreferencesManager
     let dockPreferences: HUDDockPreferences
+    let itemPreferences: HUDItemPreferences
 
     private var panel: HUDStagePanel?
     private var hosting: HUDStageHostingView?
@@ -81,7 +81,8 @@ final class HUDDockController: NSObject {
     private var localPointerMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
 
-    private var isExpanded = false
+    /// How far the HUD is currently open. See ``HUDPresentation``.
+    private var presentation: HUDPresentation = .collapsed
     /// True from the first drag change until the drop lands. While it is set,
     /// the stage keeps accepting mouse events wherever the pointer goes —
     /// otherwise the drag would die the moment it left the pill.
@@ -99,19 +100,31 @@ final class HUDDockController: NSObject {
     var openCockpit: (() -> Void)?
     var openCockpitTitle: String = "Cockpit"
 
-    /// How long the pointer may be off the HUD before it collapses. Without
+    /// How long the pointer may be off the HUD before a peek closes. Without
     /// the grace period, crossing the cutout — where the pointer leaves the
     /// panel's tracking rect for a frame — collapses it mid-gesture.
-    private static let collapseDelay: TimeInterval = 0.25
+    private static let peekCollapseDelay: TimeInterval = 0.25
+
+    /// The same grace period for an *opened* HUD, which is longer on purpose.
+    ///
+    /// A peek is something the pointer did in passing and should evaporate
+    /// just as easily. The card was asked for with a click, and closing it the
+    /// instant the pointer strays — on the way to a button at its own edge,
+    /// say — reads as the HUD fighting the user.
+    private static let expandedCollapseDelay: TimeInterval = 0.5
+
+    private var collapseDelay: TimeInterval {
+        presentation == .expanded ? Self.expandedCollapseDelay : Self.peekCollapseDelay
+    }
 
     init(
         model: TuneViewModel,
-        preferences: PreferencesManager,
-        dockPreferences: HUDDockPreferences = HUDDockPreferences()
+        dockPreferences: HUDDockPreferences = HUDDockPreferences(),
+        itemPreferences: HUDItemPreferences = HUDItemPreferences()
     ) {
         self.model = model
-        self.preferences = preferences
         self.dockPreferences = dockPreferences
+        self.itemPreferences = itemPreferences
         super.init()
     }
 
@@ -157,6 +170,7 @@ final class HUDDockController: NSObject {
         isEnabled = enabled
         if enabled {
             observeDockChanges()
+            observeItemChanges()
             observeScreenChanges()
             rebuild()
         } else {
@@ -204,7 +218,7 @@ final class HUDDockController: NSObject {
         panel?.orderOut(nil)
         panel = nil
         hosting = nil
-        isExpanded = false
+        presentation = .collapsed
         isDragging = false
         hitRegion = .zero
     }
@@ -215,16 +229,16 @@ final class HUDDockController: NSObject {
         let metrics = Self.screenMetrics(screen)
         return HUDDockView(
             model: model,
-            preferences: preferences,
+            itemLayout: itemPreferences.layout,
             metrics: metrics,
             dock: dock,
-            isExpanded: isExpanded,
+            presentation: presentation,
             notchWidth: NotchLayout.notchWidth(metrics) ?? 0,
-            shoulderWidth: NotchLayout.shoulderWidth(metrics) ?? 0,
             menuBarHeight: metrics.menuBarHeight,
             openPanel: { [weak self] in self?.handleOpenPanel() },
             openCockpit: { [weak self] in self?.handleOpenCockpit() },
             openCockpitTitle: openCockpitTitle,
+            onToggle: { [weak self] in self?.toggleExpanded() },
             onDragChanged: { [weak self] point in self?.dragChanged(to: point) },
             onDragEnded: { [weak self] point in self?.dragEnded(at: point) }
         )
@@ -255,12 +269,19 @@ final class HUDDockController: NSObject {
     /// somewhere between two docks and the gesture must survive the trip.
     private func refreshHitRegion(dock: HUDDock, screen: NSScreen) {
         let metrics = Self.screenMetrics(screen)
-        // Collapsed, the reactive strip is wider than the drawn sliver — see
-        // `HUDDockLayout.edgeHoverWidth`. Expanded, the card is its own target.
-        let frame = isExpanded
-            ? HUDDockLayout.expandedFrame(dock, on: metrics)
-            : HUDDockLayout.hoverFrame(dock, on: metrics)
-        hitRegion = frame ?? .zero
+        // Parked, the reactive strip is wider than the drawn sliver — see
+        // `HUDDockLayout.edgeHoverWidth`. Open, the shape is its own target.
+        // The region only ever grows with the presentation, which is what
+        // stops the pointer that opened the HUD from falling outside it.
+        hitRegion = HUDDockLayout.interactiveFrame(
+            dock,
+            on: metrics,
+            presentation: presentation,
+            contentHeight: HUDDockLayout.expandedContentHeight(
+                for: itemPreferences.layout,
+                dock: dock
+            )
+        ) ?? .zero
         updateHitRegion(NSEvent.mouseLocation)
     }
 
@@ -307,7 +328,16 @@ final class HUDDockController: NSObject {
         localPointerMonitor = nil
     }
 
-    /// Expand while the pointer is over the HUD, collapse once it leaves.
+    /// The pointer arriving is worth a ``HUDPresentation/peek`` and no more.
+    ///
+    /// This is what the three stages are really for. Hovering used to throw
+    /// the whole card open, which meant the HUD could not be passed — every trip
+    /// across the top of the screen unfolded it over whatever was underneath.
+    /// A peek answers the glance that hovering actually is, and the card now
+    /// costs a click.
+    ///
+    /// An already-open card is never *narrowed* by the pointer: once the user
+    /// has asked for it, only leaving or clicking again closes it.
     private func pointerMoved() {
         guard panel != nil else { return }
         let pointer = NSEvent.mouseLocation
@@ -317,34 +347,53 @@ final class HUDDockController: NSObject {
         if hitRegion.contains(pointer) {
             collapseWork?.cancel()
             collapseWork = nil
-            setExpanded(true)
-        } else if isExpanded {
+            if presentation == .collapsed {
+                setPresentation(.peek)
+            }
+        } else if presentation.isOpen {
             scheduleCollapse()
         }
+    }
+
+    /// A click on the HUD's own surface: open the card, or put it away again.
+    ///
+    /// Closing lands on ``HUDPresentation/peek`` rather than on parked, because
+    /// the pointer is by definition still on the HUD — collapsing all the way
+    /// would immediately be undone by the next mouse-moved event, and the HUD
+    /// would appear to bounce.
+    private func toggleExpanded() {
+        setPresentation(presentation == .expanded ? .peek : .expanded)
     }
 
     /// Delayed, so the pointer crossing the cutout — where it is briefly
     /// outside the collapsed strip — does not collapse a HUD the user is on
     /// their way into.
+    ///
+    /// The delay is read when the work is scheduled, so a card that is open
+    /// gets the longer grace period and a peek the shorter one.
     private func scheduleCollapse() {
         guard collapseWork == nil else { return }
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
                 self?.collapseWork = nil
-                self?.setExpanded(false)
+                self?.setPresentation(.collapsed)
             }
         }
         collapseWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.collapseDelay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: work)
     }
 
-    private func setExpanded(_ expanded: Bool) {
-        guard expanded != isExpanded else { return }
-        isExpanded = expanded
-        // The expanded card shows the full metric set and reads the sensors,
-        // so the model goes to its interactive cadence while it is open — the
-        // same switch the popover makes.
-        model.setDetailVisible(expanded)
+    private func setPresentation(_ next: HUDPresentation) {
+        guard next != presentation else { return }
+        let wasExpanded = presentation == .expanded
+        presentation = next
+        // The expanded card shows every item and reads the sensors, so the
+        // model goes to its interactive cadence while it is open — the same
+        // switch the popover makes. A peek does not qualify: it is a glance at
+        // numbers that are already being sampled.
+        if wasExpanded != (next == .expanded) {
+            model.setDetailVisible(next == .expanded)
+        }
         refreshView()
     }
 
@@ -356,10 +405,10 @@ final class HUDDockController: NSObject {
             isDragging = true
             collapseWork?.cancel()
             collapseWork = nil
-            // Collapsed while travelling: an expanded card following the
-            // pointer across the screen obscures what is underneath it, and
-            // the user is choosing a place, not reading numbers.
-            setExpanded(false)
+            // Parked while travelling: an open card following the pointer
+            // across the screen obscures what is underneath it, and the user is
+            // choosing a place, not reading numbers.
+            setPresentation(.collapsed)
         }
         updateHitRegion(point)
     }
@@ -431,10 +480,21 @@ final class HUDDockController: NSObject {
     private func collapse() {
         collapseWork?.cancel()
         collapseWork = nil
-        setExpanded(false)
+        setPresentation(.collapsed)
     }
 
     // MARK: - Observation
+
+    /// The placement settings drive the HUD live, so a switch flipped in the
+    /// preferences card is visible on the notch before the user looks up.
+    private func observeItemChanges() {
+        itemPreferences.$layout
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.refreshView() }
+            }
+            .store(in: &cancellables)
+    }
 
     private func observeDockChanges() {
         dockPreferences.$dock

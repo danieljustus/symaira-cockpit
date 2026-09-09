@@ -78,6 +78,9 @@ struct MainStatusView: View {
     /// Where the HUD is parked; paired with ``readoutPreferences`` and `nil` in
     /// the same hosts that offer no HUD.
     var hudDockPreferences: HUDDockPreferences? = nil
+    /// What the HUD shows, and how far it has to be open before it does.
+    /// `nil` in the same hosts as the two above.
+    var hudItemPreferences: HUDItemPreferences? = nil
 
     /// Who answers the brightness keys, and the tap behind the choice. Nil in
     /// a host that does not offer the takeover (issue #250).
@@ -171,6 +174,15 @@ struct MainStatusView: View {
                     readout: readoutPreferences,
                     hudDock: hudDockPreferences
                 )
+
+                if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
+                    HUDContentSection(
+                        readout: readoutPreferences,
+                        dock: hudDockPreferences,
+                        items: hudItemPreferences,
+                        preferences: preferencesManager
+                    )
+                }
             }
 
             if chrome == .popover {
@@ -347,5 +359,29 @@ private struct KeepAwakeSection: View {
             )
         }
         model.refreshNow()
+    }
+}
+
+/// The HUD placement card, and the decision to show it at all.
+///
+/// A view of its own purely so the three preference objects can be held as
+/// `@ObservedObject`. They arrive at ``MainStatusView`` as optionals — the
+/// standalone Tune app has no HUD to configure — and an optional
+/// `ObservableObject` cannot be observed, so read through the parent's `var`
+/// the card would keep rendering the surface, dock and placement it was built
+/// with rather than the ones the user is changing in front of it.
+@MainActor
+private struct HUDContentSection: View {
+    @ObservedObject var readout: ReadoutSurfacePreferences
+    @ObservedObject var dock: HUDDockPreferences
+    @ObservedObject var items: HUDItemPreferences
+    @ObservedObject var preferences: PreferencesManager
+
+    var body: some View {
+        // Only while the HUD is the chosen surface. Three pickers per readout
+        // is a lot of card to show somebody who is looking at the menu bar.
+        if readout.surface == .notch {
+            HUDContentCard(items: items, preferences: preferences, dock: dock.dock)
+        }
     }
 }

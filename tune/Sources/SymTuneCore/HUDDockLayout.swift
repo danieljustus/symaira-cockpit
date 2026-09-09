@@ -129,6 +129,15 @@ public enum HUDDockLayout {
     /// draws it. The user aims at the edge of the screen — which needs no aim
     /// at all, since the pointer stops there — and the HUD opens.
     public static let edgeHoverWidth: CGFloat = 26
+    /// Visible width of a peeking edge dock.
+    ///
+    /// Wide enough for an icon and a short number, and no wider. The peek is
+    /// the sliver having swollen, not the card having opened early, so it stops
+    /// well short of ``edgeExpandedWidth``.
+    public static let edgePeekWidth: CGFloat = 62
+    /// Height of a peeking edge dock. A little taller than the parked sliver,
+    /// so growth is visible on both axes at once.
+    public static let edgePeekHeight: CGFloat = 148
     /// Width the expanded edge card asks for.
     public static let edgeExpandedWidth: CGFloat = 288
     /// Content height the expanded edge card asks for.
@@ -144,6 +153,38 @@ public enum HUDDockLayout {
     /// How close the pointer must come to a dock during a drag before it is
     /// pulled in. Generous, because the user is aiming at a region, not a point.
     public static let snapRadius: CGFloat = 160
+
+    // MARK: - Card height
+
+    /// Height of one item row in the expanded card.
+    public static let expandedRowHeight: CGFloat = 21
+    /// Everything in the card that is not an item row: the padding above and
+    /// below, the divider, and the action buttons.
+    public static let expandedChromeHeight: CGFloat = 82
+
+    /// How tall the expanded card has to be to hold `layout`'s items.
+    ///
+    /// The card used to ask for a fixed 196 points, which was right for the
+    /// list it happened to contain and wrong the moment the contents became
+    /// configurable — four readouts left a third of the panel as empty black,
+    /// and eight would have been clipped.
+    ///
+    /// It counts *placed* items rather than resolved ones, so a metric that is
+    /// switched on but not yet reporting still has its row reserved. That errs
+    /// towards a few points of slack rather than towards a card that resizes
+    /// itself every time a sensor drops out, which would be far more visible.
+    public static func expandedContentHeight(
+        for layout: HUDItemLayout,
+        dock: HUDDock
+    ) -> CGFloat {
+        let left = layout.items(on: .left, at: .expanded).count
+        let right = layout.items(on: .right, at: .expanded).count
+        // The notch card is two columns side by side, so its height is set by
+        // the taller one. An edge card is 288 points wide — too narrow to split
+        // — so it stacks everything in one column.
+        let rows = dock == .notch ? max(left, right) : left + right
+        return CGFloat(max(rows, 1)) * expandedRowHeight + expandedChromeHeight
+    }
 
     // MARK: - Availability
 
@@ -209,6 +250,50 @@ public enum HUDDockLayout {
                 onRight: true,
                 width: edgeCollapsedWidth,
                 height: edgeCollapsedHeight,
+                metrics: metrics
+            )
+        }
+    }
+
+    /// The frame for a dock at a given presentation.
+    ///
+    /// The one entry point the view and the controller both use, so that adding
+    /// a stage never means finding every caller that assumed there were two.
+    public static func frame(
+        _ dock: HUDDock,
+        on metrics: NotchScreenMetrics,
+        presentation: HUDPresentation,
+        contentHeight: CGFloat? = nil
+    ) -> CGRect? {
+        switch presentation {
+        case .collapsed: collapsedFrame(dock, on: metrics)
+        case .peek: peekFrame(dock, on: metrics)
+        case .expanded: expandedFrame(dock, on: metrics, contentHeight: contentHeight)
+        }
+    }
+
+    /// The peeking frame for a dock, or `nil` when this display cannot host it.
+    public static func peekFrame(
+        _ dock: HUDDock,
+        on metrics: NotchScreenMetrics
+    ) -> CGRect? {
+        switch dock {
+        case .notch:
+            return NotchLayout.peekFrame(metrics)
+        case let .left(slot):
+            return edgeFrame(
+                slot: slot,
+                onRight: false,
+                width: edgePeekWidth,
+                height: edgePeekHeight,
+                metrics: metrics
+            )
+        case let .right(slot):
+            return edgeFrame(
+                slot: slot,
+                onRight: true,
+                width: edgePeekWidth,
+                height: edgePeekHeight,
                 metrics: metrics
             )
         }
@@ -298,7 +383,32 @@ public enum HUDDockLayout {
         _ dock: HUDDock,
         on metrics: NotchScreenMetrics
     ) -> CGRect? {
-        guard let frame = collapsedFrame(dock, on: metrics) else { return nil }
+        interactiveFrame(dock, on: metrics, presentation: .collapsed)
+    }
+
+    /// The region the stage accepts mouse events in, for the presentation the
+    /// HUD is currently showing.
+    ///
+    /// Parked, this is ``hoverFrame(_:on:)`` — a target wider than the drawn
+    /// sliver, because seven points is not something anybody aims at. Once the
+    /// HUD is open it is the shape itself, widened by the same rule so that an
+    /// edge dock's peek does not have a *smaller* target than its resting
+    /// state did.
+    ///
+    /// It must never shrink as the HUD grows, or the pointer that opened the
+    /// HUD would find itself outside it and close it again immediately.
+    public static func interactiveFrame(
+        _ dock: HUDDock,
+        on metrics: NotchScreenMetrics,
+        presentation: HUDPresentation,
+        contentHeight: CGFloat? = nil
+    ) -> CGRect? {
+        guard let frame = frame(
+            dock,
+            on: metrics,
+            presentation: presentation,
+            contentHeight: contentHeight
+        ) else { return nil }
         guard dock.isEdge else { return frame }
         let width = max(frame.width, edgeHoverWidth)
         return CGRect(

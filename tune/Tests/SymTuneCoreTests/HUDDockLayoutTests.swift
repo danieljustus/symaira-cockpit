@@ -392,4 +392,130 @@ final class HUDDockLayoutTests: XCTestCase {
         XCTAssertEqual(HUDDock.edgeCases.count, 6)
         XCTAssertTrue(HUDDock.allCases.contains(.notch))
     }
+
+    // MARK: - The peek stage
+
+    /// Peeking has to be visibly bigger than parked on every dock, or the
+    /// pointer arriving produces no feedback at all.
+    func testPeekingIsBiggerThanParkedEverywhere() {
+        let metrics = notchedScreen()
+        for dock in HUDDock.allCases {
+            guard let parked = HUDDockLayout.collapsedFrame(dock, on: metrics),
+                  let peeking = HUDDockLayout.peekFrame(dock, on: metrics)
+            else {
+                XCTFail("\(dock.storageKey) has no frames on a notched display")
+                continue
+            }
+            XCTAssertGreaterThan(peeking.width, parked.width, "\(dock.storageKey) got no wider")
+            XCTAssertGreaterThan(peeking.height, parked.height, "\(dock.storageKey) got no taller")
+        }
+    }
+
+    /// And smaller than open, or the click that opens it would do nothing.
+    func testPeekingIsSmallerThanOpenEverywhere() {
+        let metrics = notchedScreen()
+        for dock in HUDDock.allCases {
+            guard let peeking = HUDDockLayout.peekFrame(dock, on: metrics),
+                  let open = HUDDockLayout.expandedFrame(dock, on: metrics)
+            else {
+                XCTFail("\(dock.storageKey) has no frames on a notched display")
+                continue
+            }
+            XCTAssertLessThan(peeking.width, open.width, "\(dock.storageKey) opened no wider")
+            XCTAssertLessThan(peeking.height, open.height, "\(dock.storageKey) opened no taller")
+        }
+    }
+
+    /// The peeking notch still has to be centred on the cutout and still has to
+    /// leave the app's own menu title alone at the far left.
+    func testThePeekingNotchStaysCentredOnTheCutoutAndInsideTheStrip() {
+        let metrics = notchedScreen()
+        guard let peeking = NotchLayout.peekFrame(metrics),
+              let notch = NotchLayout.notchWidth(metrics),
+              let left = metrics.leftAuxiliaryWidth
+        else { return XCTFail("no peek frame") }
+
+        let cutoutCentre = metrics.frame.minX + left + notch / 2
+        XCTAssertEqual(peeking.midX, cutoutCentre, accuracy: 0.001)
+        XCTAssertGreaterThan(peeking.minX, metrics.frame.minX, "the peek reached the screen edge")
+        XCTAssertLessThan(peeking.maxX, metrics.frame.maxX, "the peek reached the screen edge")
+        XCTAssertEqual(peeking.maxY, metrics.frame.maxY, accuracy: 0.001, "it came off the bezel")
+    }
+
+    /// On a display whose auxiliary strips are tight, the peek declines to grow
+    /// rather than shrinking the readouts already on the shoulders.
+    func testAPeekNeverNarrowsTheRestingShoulder() {
+        for width in [CGFloat(1280), 1512, 1728, 3024] {
+            let metrics = notchedScreen(width: width)
+            guard let resting = NotchLayout.shoulderWidth(metrics),
+                  let peeking = NotchLayout.peekShoulderWidth(metrics)
+            else { continue }
+            XCTAssertGreaterThanOrEqual(peeking, resting, "peek shrank the shoulder at \(width)")
+        }
+    }
+
+    /// A display with no cutout has no notch peek — the same refusal
+    /// `collapsedFrame` makes, for the same reason.
+    func testAnExternalDisplayHasNoNotchPeek() {
+        XCTAssertNil(NotchLayout.peekFrame(externalScreen()))
+        XCTAssertNil(HUDDockLayout.peekFrame(.notch, on: externalScreen()))
+        // Its edge docks still peek, which is what makes them worth having.
+        XCTAssertNotNil(HUDDockLayout.peekFrame(.right(.center), on: externalScreen()))
+    }
+
+    // MARK: - Hit testing
+
+    /// The region the stage accepts clicks in must never shrink as the HUD
+    /// grows: the pointer that opened the HUD would otherwise find itself
+    /// outside it and close it again on the next mouse-moved event.
+    func testTheInteractiveRegionOnlyEverGrows() {
+        for metrics in [notchedScreen(), externalScreen()] {
+            for dock in HUDDock.allCases {
+                guard let parked = HUDDockLayout.interactiveFrame(dock, on: metrics, presentation: .collapsed),
+                      let peeking = HUDDockLayout.interactiveFrame(dock, on: metrics, presentation: .peek),
+                      let open = HUDDockLayout.interactiveFrame(dock, on: metrics, presentation: .expanded)
+                else { continue }
+                XCTAssertTrue(peeking.contains(parked), "\(dock.storageKey): peek lost the parked region")
+                XCTAssertTrue(open.contains(peeking), "\(dock.storageKey): open lost the peeking region")
+            }
+        }
+    }
+
+    /// Seven points is not something anybody aims at, so the parked edge dock's
+    /// target stays wider than the sliver it draws — at every stage.
+    func testAnEdgeDockIsAlwaysWiderToHitThanToSee() {
+        let metrics = notchedScreen()
+        for dock in HUDDock.edgeCases {
+            for presentation in HUDPresentation.allCases {
+                guard let drawn = HUDDockLayout.frame(dock, on: metrics, presentation: presentation),
+                      let target = HUDDockLayout.interactiveFrame(dock, on: metrics, presentation: presentation)
+                else { continue }
+                XCTAssertGreaterThanOrEqual(target.width, drawn.width)
+                XCTAssertGreaterThanOrEqual(target.width, HUDDockLayout.edgeHoverWidth)
+                // Widened inward, never off the side of the display.
+                XCTAssertGreaterThanOrEqual(target.minX, metrics.frame.minX)
+                XCTAssertLessThanOrEqual(target.maxX, metrics.frame.maxX)
+            }
+        }
+    }
+
+    /// `frame(_:on:presentation:)` is the single entry point the view and the
+    /// controller use; it has to agree with the three it dispatches to.
+    func testTheFrameEntryPointAgreesWithEachStage() {
+        let metrics = notchedScreen()
+        for dock in HUDDock.allCases {
+            XCTAssertEqual(
+                HUDDockLayout.frame(dock, on: metrics, presentation: .collapsed),
+                HUDDockLayout.collapsedFrame(dock, on: metrics)
+            )
+            XCTAssertEqual(
+                HUDDockLayout.frame(dock, on: metrics, presentation: .peek),
+                HUDDockLayout.peekFrame(dock, on: metrics)
+            )
+            XCTAssertEqual(
+                HUDDockLayout.frame(dock, on: metrics, presentation: .expanded),
+                HUDDockLayout.expandedFrame(dock, on: metrics)
+            )
+        }
+    }
 }
