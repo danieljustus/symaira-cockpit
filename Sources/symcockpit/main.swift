@@ -40,6 +40,13 @@ Examples:
 
 symcockpit replaces the former symtune, symoperate and symscope binaries;
 their commands are now the family subcommands above.
+
+Most tune commands also work without the `tune` prefix (e.g. `symcockpit
+sensors` == `symcockpit tune sensors`) — `tune` itself adds no information,
+since tuning is what symcockpit is. `symcockpit tune <cmd>` keeps working
+unchanged. Exceptions, kept `tune`-prefixed only because the bare name is
+also an operate (and for `serve`, also a scope) command: doctor,
+permissions, serve, history.
 """
 
 /// The version report, in the ecosystem's `version --json` shape: a `tool`,
@@ -135,9 +142,13 @@ case "help", "--help", "-h":
     FileHandle.standardOutput.write(Data(usage.utf8))
     code = 0
 default:
-    FileHandle.standardError.write(Data("symcockpit: unknown family '\(args[0])'\n\n".utf8))
-    fputs(usage, stderr)
-    code = 2
+    if tuneDirectAliases.contains(args[0]) {
+        code = SymTuneMain.run(args)
+    } else {
+        FileHandle.standardError.write(Data("symcockpit: unknown family '\(args[0])'\n\n".utf8))
+        fputs(usage, stderr)
+        code = 2
+    }
 }
 
 exit(code)
