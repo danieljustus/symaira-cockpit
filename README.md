@@ -19,7 +19,7 @@ capabilities you have in the shell.
 
 ![Symaira Cockpit](docs/assets/social-preview.png)
 
-**Status:** Active development — v0.6.1 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
+**Status:** Active development — v0.6.2 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
 
 ## Why Cockpit
 
