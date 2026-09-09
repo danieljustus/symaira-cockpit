@@ -42,7 +42,7 @@ body:
       label: Version
       description: Output of `symcockpit version`. For a GUI-only problem, the version shown in the app's About panel.
       render: shell
-      placeholder: symcockpit 0.6.0 — tune 0.9.3, operate 0.6.1, scope 0.4.1
+      placeholder: symcockpit 0.6.2 — tune 0.9.3, operate 0.6.1, scope 0.4.1
     validations:
       required: true
 
