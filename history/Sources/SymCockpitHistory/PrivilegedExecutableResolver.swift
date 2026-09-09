@@ -53,17 +53,36 @@ extension BoundedProcessRunner {
     ///
     /// Symlinks are followed before validating, so a root-owned symlink cannot
     /// stand in for a user-writable target.
+    ///
+    /// Every candidate the search finds is examined, not just the first. On
+    /// Apple Silicon the Homebrew prefix is owned by the installing user, so a
+    /// `brew install` — the way the "not found" message itself tells people to
+    /// install — always fails this check, and `/opt/homebrew/bin` is searched
+    /// before `/usr/local/bin`. Stopping at the first hit therefore let a
+    /// refused Homebrew copy mask a properly installed root-owned one and made
+    /// the refusal unfixable by following its own advice. The refusal reported
+    /// when nothing qualifies is the first candidate's, which is the binary the
+    /// user would otherwise have run.
     public static func resolvePrivilegedExecutablePath(
         _ executable: String,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         attributes: (String) -> PrivilegedPathAttributes? = Self.attributesOfPath
     ) throws -> String {
-        guard let resolved = resolveExecutablePath(executable, environment: environment) else {
+        let candidates = resolveExecutableCandidates(executable, environment: environment)
+        guard !candidates.isEmpty else {
             throw PrivilegedExecutableError.notFound(executable: executable)
         }
-        let canonical = URL(fileURLWithPath: resolved).resolvingSymlinksInPath().path
-        try validatePrivilegedPath(canonical, attributes: attributes)
-        return canonical
+        var firstRefusal: PrivilegedExecutableError?
+        for candidate in candidates {
+            let canonical = URL(fileURLWithPath: candidate).resolvingSymlinksInPath().path
+            do {
+                try validatePrivilegedPath(canonical, attributes: attributes)
+                return canonical
+            } catch let error as PrivilegedExecutableError {
+                if firstRefusal == nil { firstRefusal = error }
+            }
+        }
+        throw firstRefusal ?? PrivilegedExecutableError.notFound(executable: executable)
     }
 
     /// Validates `path` and every ancestor directory up to `/`.
