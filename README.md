@@ -74,6 +74,11 @@ write:
 sudo install -o root -g wheel -m 755 "$(brew --prefix)/bin/symcockpit" /usr/local/bin/symcockpit
 ```
 
+The app prefers this copy for elevation and keeps using the Homebrew one for
+everything else. `brew upgrade` does not touch `/usr/local/bin`, so repeat the
+command after every upgrade — otherwise fan control silently keeps driving the
+older CLI while the rest of the app has moved on.
+
 Everything else — the CLI, the MCP servers, Scope, Operate, and reading Tune's
 sensors — works from any install location. Only elevation is restricted, and
 `sudo symcockpit tune fan set …` from a terminal is unaffected, because there

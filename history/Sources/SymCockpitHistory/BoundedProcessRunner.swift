@@ -77,7 +77,24 @@ public enum BoundedProcessRunner {
         _ executable: String,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> String? {
-        resolve(executable, environment: environment)
+        resolveCandidates(executable, environment: environment).first
+    }
+
+    /// Every location `executable` resolves to, in the same PATH-then-fallback
+    /// order, instead of only the first.
+    ///
+    /// Ordinary execution wants the first hit and nothing else. A caller that
+    /// additionally *rejects* candidates — the privileged resolver, which
+    /// requires root ownership — must be able to keep looking: `/opt/homebrew/bin`
+    /// is searched before `/usr/local/bin`, so stopping at the first hit means a
+    /// Homebrew install (user-owned on Apple Silicon, and therefore refused)
+    /// permanently masks a correctly installed root-owned binary further down
+    /// the list.
+    public static func resolveExecutableCandidates(
+        _ executable: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String] {
+        resolveCandidates(executable, environment: environment)
     }
 
     public static func run(
@@ -216,24 +233,31 @@ public enum BoundedProcessRunner {
     }
 
     private static func resolve(_ executable: String, environment: [String: String]) -> String? {
+        resolveCandidates(executable, environment: environment).first
+    }
+
+    /// All matching executables, in search order, with duplicates removed —
+    /// PATH commonly repeats a directory that the fallback list also names.
+    private static func resolveCandidates(_ executable: String, environment: [String: String]) -> [String] {
         if executable.hasPrefix("/") {
-            return FileManager.default.isExecutableFile(atPath: executable) ? executable : nil
+            return FileManager.default.isExecutableFile(atPath: executable) ? [executable] : []
         }
+        var directories: [String] = []
         if let path = environment["PATH"] {
-            for directory in path.split(separator: ":", omittingEmptySubsequences: true) {
-                let candidate = "\(directory)/\(executable)"
-                if FileManager.default.isExecutableFile(atPath: candidate) {
-                    return candidate
-                }
-            }
+            directories += path.split(separator: ":", omittingEmptySubsequences: true).map(String.init)
         }
-        for directory in fallbackDirectories(environment: environment) {
+        directories += fallbackDirectories(environment: environment)
+
+        var candidates: [String] = []
+        var seen: Set<String> = []
+        for directory in directories {
             let candidate = "\(directory)/\(executable)"
+            guard seen.insert(candidate).inserted else { continue }
             if FileManager.default.isExecutableFile(atPath: candidate) {
-                return candidate
+                candidates.append(candidate)
             }
         }
-        return nil
+        return candidates
     }
 
     /// Fixed, non-configurable install roots checked only after a PATH-based

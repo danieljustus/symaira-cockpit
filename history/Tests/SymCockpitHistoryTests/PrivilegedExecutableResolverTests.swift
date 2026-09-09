@@ -147,4 +147,69 @@ final class PrivilegedExecutableResolverTests: XCTestCase {
             "unprivileged resolution must still find a user-installed sibling CLI"
         )
     }
+
+    /// A refused earlier candidate must not mask a qualifying later one. This
+    /// is the Homebrew case: `/opt/homebrew/bin` is searched first and is
+    /// user-owned on Apple Silicon, so before the search continued past a
+    /// refusal, a root-owned `/usr/local/bin` copy was unreachable and fan
+    /// control stayed broken no matter how it was installed.
+    func testPrefersALaterRootOwnedCandidateOverAnEarlierRefusedOne() throws {
+        let root = try makeRoot()
+        var directories: [URL] = []
+        for name in ["brewbin", "rootbin"] {
+            let directory = root.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let binary = directory.appendingPathComponent("symcockpit")
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+            directories.append(directory)
+        }
+        let rootOwned = directories[1].appendingPathComponent("symcockpit").path
+
+        // Only the second candidate and its ancestors look root-owned.
+        let attributes: (String) -> PrivilegedPathAttributes? = { path in
+            let owner: uid_t = rootOwned.hasPrefix(path) ? 0 : 501
+            return PrivilegedPathAttributes(ownerUID: owner, mode: 0o755)
+        }
+
+        XCTAssertEqual(
+            try BoundedProcessRunner.resolvePrivilegedExecutablePath(
+                "symcockpit",
+                environment: ["PATH": directories.map(\.path).joined(separator: ":")],
+                attributes: attributes
+            ),
+            URL(fileURLWithPath: rootOwned).resolvingSymlinksInPath().path
+        )
+    }
+
+    /// When nothing qualifies, the reported refusal is the first candidate's —
+    /// the binary the user would otherwise have authenticated into root.
+    func testReportsTheFirstCandidatesRefusalWhenNoneQualify() throws {
+        let root = try makeRoot()
+        var directories: [URL] = []
+        for name in ["first", "second"] {
+            let directory = root.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let binary = directory.appendingPathComponent("symcockpit")
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+            directories.append(directory)
+        }
+        let first = directories[0].appendingPathComponent("symcockpit").path
+
+        XCTAssertThrowsError(
+            try BoundedProcessRunner.resolvePrivilegedExecutablePath(
+                "symcockpit",
+                environment: ["PATH": directories.map(\.path).joined(separator: ":")]
+            )
+        ) { error in
+            guard case .notOwnedByRoot(let path, _)? = error as? PrivilegedExecutableError else {
+                return XCTFail("expected notOwnedByRoot, got \(error)")
+            }
+            XCTAssertTrue(
+                first.hasPrefix(path),
+                "the refusal must name the first candidate or one of its ancestors, got \(path)"
+            )
+        }
+    }
 }

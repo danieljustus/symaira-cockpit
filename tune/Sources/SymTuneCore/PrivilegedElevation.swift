@@ -26,8 +26,9 @@ public enum PrivilegedElevation: Sendable {
         public var description: String {
             switch self {
             case .executableUnavailable:
-                return "the symcockpit CLI is not installed; install it with "
-                    + "`brew install danieljustus/tap/symcockpit` to enable this from the app"
+                return "the symcockpit CLI is not installed in a root-owned location; install it with "
+                    + "`brew install danieljustus/tap/symcockpit`, then place a root-owned copy with "
+                    + "`sudo install -o root -g wheel -m 755 \"$(brew --prefix)/bin/symcockpit\" /usr/local/bin/symcockpit`"
             case .untrustedExecutable(let reason):
                 return reason
             case .cancelledByUser:
