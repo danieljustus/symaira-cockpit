@@ -1,5 +1,7 @@
 # scope — die `symcockpit scope`-Familie
 
+> **Beschlossenes Ziel, Umsetzung ausstehend:** [PB-2026-09-09](../docs/product-boundaries.md) überführt Scope als eigenständig optionales Modul nach Brain. Die Befehle und Quellpfade unten beschreiben den aktuellen Übergangsstand. Brain ohne Scope startet keine Probes/Watcher; Scope erfordert weder Operate noch Browse oder Memory/Agent-Profil. Plattformadapter, redigierte Prozessdaten und getrennte Lese-/Schreibrechte sind Pflicht. Cockpit behält ausschließlich Hardware-/System-Tuning unter dem Namen Symaira Cockpit. Vor Entfernen der alten CLI/MCP-/GUI-Einstiege Kompatibilität und Rollback nachweisen.
+
 Port-Inventar & MCP-Discovery. Swift-Port des Go-Originals `symaira-scope`
 (repo-konsolidierung.md §6, Schritt 8 — eine Sprache im
 `symaira-cockpit`-Repo); das Ursprungs-Repo ist archiviert und die

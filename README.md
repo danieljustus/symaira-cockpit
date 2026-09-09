@@ -1,5 +1,7 @@
 # Symaira Cockpit
 
+> **Accepted product direction — implementation pending:** Cockpit remains the independent Mac hardware/system-tuning product under the sole name Symaira Cockpit; the Tune/SymTune naming layer is retired via a verified compatibility migration. Operate and Scope are retained, with target ownership moving to Brain as independently optional modules. The three-family CLI and GUI documented below remain the current implementation until compatibility, permissions and migration gates pass. See [PB-2026-09-09](docs/product-boundaries.md).
+
 **One command for your Mac: see what's running — and control what it does.**
 
 `symcockpit` is a native macOS CLI that tunes your Mac's thermals, power and

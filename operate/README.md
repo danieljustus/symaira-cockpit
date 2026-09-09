@@ -1,5 +1,7 @@
 # operate — the `symcockpit operate` family
 
+> **Accepted ownership transition, not removal:** [PB-2026-09-09](../docs/product-boundaries.md) retains Operate as an optional Brain module. The existing Cockpit entrypoint remains supported until verified migration. No Cua or Hermes replacement is mandated.
+
 > Let an AI agent see and drive your Mac — locally, over MCP.
 
 [![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)

@@ -1,5 +1,9 @@
 # Agent Instructions — operate (the `symcockpit operate` family)
 
+## Accepted ownership transition
+
+[PB-2026-09-09](../docs/product-boundaries.md) retains Operate as an optional Brain module. Its current location and commands below remain supported until migration. Do not discontinue it or mandate Cua/Hermes. Preserve native helper isolation, explicit permission grants, secure-input handling, cancellation, target binding and submitted-versus-confirmed effect semantics. The transfer must account for Cockpit GUI callers and shared history before removing any source or command.
+
 Native macOS desktop-automation MCP server (Swift 6 toolchain, AppKit /
 ApplicationServices / ScreenCaptureKit). Lets an AI agent observe and drive the
 Mac GUI: screenshots, the Accessibility tree, mouse/keyboard input, and app/

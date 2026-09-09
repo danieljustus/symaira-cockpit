@@ -1,5 +1,9 @@
 # Agent Instructions — symaira-cockpit
 
+## Current product contract
+
+[PB-2026-09-09](docs/product-boundaries.md) defines Cockpit's target as hardware/system tuning only, under the sole name Symaira Cockpit (`symcockpit`). Operate and Scope are retained and move to Brain as independently optional modules. The three-family layout below is current transitional implementation. Keep `symcockpit operate`, `symcockpit scope`, `symcockpit tune` and app integrations until tested replacements and migration instructions exist. Retire Tune/SymTune naming through an explicit command/target migration, preserving helper/signing/TCC/Keychain identities, history privacy and user data until verified cutovers. Brain owns harness inventory and Scope machine diagnostics; Cockpit owns hardware/system tuning and its sensors/HUD. No Cua replacement is mandated.
+
 **This machine.** One binary, `symcockpit`, with three families of commands:
 thermals/power (`tune`), macOS GUI automation (`operate`), and port/container/MCP
 inventory (`scope`). CLI **and** MCP server per family. macOS-only, Swift 6,
