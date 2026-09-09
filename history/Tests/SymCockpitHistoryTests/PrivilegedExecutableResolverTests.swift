@@ -26,19 +26,24 @@ final class PrivilegedExecutableResolverTests: XCTestCase {
         return root
     }
 
+    private func uniqueExecutableName() -> String {
+        "symcockpit-test-\(UUID().uuidString)"
+    }
+
     /// A real user-writable directory: the temporary directory is owned by the
     /// test user, so no fixture setup can make this look root-owned.
     func testRefusesABinaryInAUserWritableDirectory() throws {
         let root = try makeRoot()
         let binDir = root.appendingPathComponent("bin", isDirectory: true)
         try FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
-        let binary = binDir.appendingPathComponent("symcockpit")
+        let executable = uniqueExecutableName()
+        let binary = binDir.appendingPathComponent(executable)
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
 
         XCTAssertThrowsError(
             try BoundedProcessRunner.resolvePrivilegedExecutablePath(
-                "symcockpit",
+                executable,
                 environment: ["PATH": binDir.path]
             )
         ) { error in
@@ -186,20 +191,21 @@ final class PrivilegedExecutableResolverTests: XCTestCase {
     /// the binary the user would otherwise have authenticated into root.
     func testReportsTheFirstCandidatesRefusalWhenNoneQualify() throws {
         let root = try makeRoot()
+        let executable = uniqueExecutableName()
         var directories: [URL] = []
         for name in ["first", "second"] {
             let directory = root.appendingPathComponent(name, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let binary = directory.appendingPathComponent("symcockpit")
+            let binary = directory.appendingPathComponent(executable)
             try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
             directories.append(directory)
         }
-        let first = directories[0].appendingPathComponent("symcockpit").path
+        let first = directories[0].appendingPathComponent(executable).path
 
         XCTAssertThrowsError(
             try BoundedProcessRunner.resolvePrivilegedExecutablePath(
-                "symcockpit",
+                executable,
                 environment: ["PATH": directories.map(\.path).joined(separator: ":")]
             )
         ) { error in
