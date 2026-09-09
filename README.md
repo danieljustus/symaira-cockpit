@@ -210,6 +210,14 @@ Read sensors and actively change system state: brightness well past the usual
 ceiling, a dimming overlay and color temperature, fan speed, charge limit, sleep
 prevention — plus battery health, top processes and system metrics.
 
+> Most `tune` commands below also work without the `tune` prefix (e.g.
+> `symcockpit sensors`) — `tune` itself adds no information, since tuning is
+> what symcockpit is. `symcockpit tune <cmd>` keeps working unchanged; both
+> forms are equivalent. Four names stay `tune`-prefixed only, because the
+> bare name is also an `operate` command (`doctor`, `permissions`, `history`)
+> or, for `serve`, an `operate` *and* `scope` command too — see
+> `symcockpit help` for the exact list.
+
 ```bash
 symcockpit tune status                 # Health score, sensors, battery, overrides
 symcockpit tune sensors                # Thermal pressure, temperatures, fan RPM
