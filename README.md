@@ -214,9 +214,8 @@ prevention — plus battery health, top processes and system metrics.
 > `symcockpit sensors`) — `tune` itself adds no information, since tuning is
 > what symcockpit is. `symcockpit tune <cmd>` keeps working unchanged; both
 > forms are equivalent. Four names stay `tune`-prefixed only, because the
-> bare name is also an `operate` command (`doctor`, `permissions`, `history`)
-> or, for `serve`, an `operate` *and* `scope` command too — see
-> `symcockpit help` for the exact list.
+> The authoritative reviewed map, collision decisions, completion status and
+> transition-window rules are in [`docs/command-map.md`](docs/command-map.md).
 
 ```bash
 symcockpit tune status                 # Health score, sensors, battery, overrides
