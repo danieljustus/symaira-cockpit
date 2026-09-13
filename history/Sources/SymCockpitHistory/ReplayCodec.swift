@@ -166,7 +166,7 @@ public struct DeterministicReplayCodec: Sendable {
         try DeterministicReplayCodec(maximumRecords: maximumRecords, maximumBytes: maximumBytes).decode(data)
     }
 
-    private static let replayableSources: Set<String> = ["operate"]
+    private static let replayableSources: Set<String> = ["tune"]
     private static let replayableActions: Set<String> = [
         "click", "delete", "drag", "focus_app", "menu_action", "press_keys", "scroll",
         "type_text"

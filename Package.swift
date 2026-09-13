@@ -2,7 +2,7 @@
 import PackageDescription
 
 // symcockpit — the unified entrypoint for the cockpit tool family.
-// Dispatches to tune/operate/scope CLI libraries via local path dependencies.
+// Dispatches to the tune CLI library via a local path dependency.
 let package = Package(
     name: "symcockpit",
     platforms: [
@@ -13,15 +13,12 @@ let package = Package(
     ],
     products: [
         .executable(name: "symcockpit", targets: ["symcockpit"]),
-        // The GUI: one menu-bar item plus a cockpit window over all three
-        // families. Ships alongside the CLI, not instead of it.
+        // The GUI: one menu-bar item plus a tune-only cockpit window.
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.2"),
         .package(path: "tune"),
-        .package(path: "operate"),
-        .package(path: "scope"),
     ],
     targets: [
         .target(name: "SymCockpitVersion"),
@@ -30,9 +27,6 @@ let package = Package(
             dependencies: [
                 "SymCockpitVersion",
                 .product(name: "SymTuneCLI", package: "tune"),
-                .product(name: "SymOperateCLI", package: "operate"),
-                .product(name: "SymScopeCLI", package: "scope"),
-                .product(name: "SymScopeCore", package: "scope"),
                 .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
             ]
         ),
@@ -42,8 +36,6 @@ let package = Package(
                 "SymCockpitVersion",
                 .product(name: "SymTuneUI", package: "tune"),
                 .product(name: "SymTuneCore", package: "tune"),
-                .product(name: "SymScopeCore", package: "scope"),
-                .product(name: "SymOperateCore", package: "operate"),
                 .product(name: "SymairaTheme", package: "symaira-appkit"),
             ],
             exclude: ["Info.plist"],

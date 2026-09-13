@@ -2,8 +2,7 @@ import Foundation
 import XCTest
 
 /// Executable acceptance checks for the reviewed PB command map. Every call
-/// here is help/protocol-only: no hardware write, desktop action, or mutable
-/// Scope command is invoked.
+/// here is help/protocol-only and no hardware write is invoked.
 final class CommandMapAcceptanceE2ETests: XCTestCase {
     private struct Result {
         let stdout: String
@@ -61,13 +60,11 @@ final class CommandMapAcceptanceE2ETests: XCTestCase {
         }
     }
 
-    func testRetainedLegacyFamilyAndVersionAliasesRemainExecutable() throws {
-        for family in ["tune", "operate", "scope"] {
-            let result = try run([family, "--help"])
-            XCTAssertEqual(result.status, 0, family)
-            XCTAssertFalse(result.stdout.isEmpty, family)
-            XCTAssertTrue(result.stderr.isEmpty, family)
-        }
+    func testTuneFamilyAndVersionAliasesRemainExecutable() throws {
+        let result = try run(["tune", "--help"])
+        XCTAssertEqual(result.status, 0)
+        XCTAssertFalse(result.stdout.isEmpty)
+        XCTAssertTrue(result.stderr.isEmpty)
 
         let version = try run(["version"])
         for alias in ["--version", "-V"] {

@@ -28,8 +28,6 @@ body:
       label: Which area?
       options:
         - tune (thermals, power, display)
-        - scope (ports, containers, MCP inventory)
-        - operate (interface automation)
         - history
         - Install / update / release artifacts
         - Not sure
@@ -42,7 +40,7 @@ body:
       label: Version
       description: Output of `symcockpit version`. For a GUI-only problem, the version shown in the app's About panel.
       render: shell
-      placeholder: symcockpit 0.6.2 — tune 0.9.3, operate 0.6.1, scope 0.4.1
+      placeholder: symcockpit 0.6.2 — tune 0.9.3
     validations:
       required: true
 
@@ -61,7 +59,7 @@ body:
       label: Steps to reproduce
       description: Exact commands or clicks. Include the full command line where relevant.
       placeholder: |
-        1. Run `symcockpit scope ports suggest`
+        1. Run a relevant `symcockpit tune` command
         2. ...
     validations:
       required: true

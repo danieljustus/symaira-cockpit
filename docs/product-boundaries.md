@@ -31,7 +31,7 @@ A human-facing UI and an agent-facing API may coexist in any product. Data owner
 
 Optional means independently selectable, installable where appropriate, disabled without starting its workers, and permission-scoped. Browser automation runs in a worker with its own session lifecycle; native desktop automation runs in an OS-specific helper with its own permission identity. Neither native automation frameworks nor a browser runtime become prerequisites for the portable Brain core. Unsupported platforms report the capability as unavailable without breaking context, skills or profiles.
 
-Direct non-agent consumers, including Desktop web clipping, must be able to call a documented worker/CLI/API surface without running Brain memory, its gateway or an agent profile. The existing `symbrowse`, `symcockpit operate` and `symcockpit scope` entrypoints remain compatibility surfaces until a tested migration replaces them. No new CLI spelling is established by this contract.
+Direct non-agent consumers, including Desktop web clipping, must be able to call a documented worker/CLI/API surface without running Brain memory, its gateway or an agent profile. The former `symcockpit operate` and `symcockpit scope` entrypoints are removed from Cockpit; users should select the corresponding optional Brain modules. No replacement CLI spelling is established by this contract.
 
 Do not duplicate policy hops or create a loop between a module, Brain's gateway and guard. Each supported route declares its controlling policy layer and failure behavior. Governance only covers calls on that route; it is not an OS sandbox against a harness with independent shell/network access.
 

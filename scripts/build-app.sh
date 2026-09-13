@@ -3,8 +3,7 @@ set -euo pipefail
 
 # Assemble Symaira Cockpit.app from the SwiftPM product.
 #
-# The GUI has no Xcode project on purpose: its dependency graph (tune, operate,
-# scope plus symaira-appkit) is already declared once in Package.swift, and a
+# The GUI has no Xcode project on purpose: its dependency graph (tune plus symaira-appkit) is already declared once in Package.swift, and a
 # parallel XcodeGen definition would be a second place to keep in sync. SwiftPM
 # builds the executable; this script wraps it in a bundle, which is all the
 # extra structure an LSUIElement app needs.

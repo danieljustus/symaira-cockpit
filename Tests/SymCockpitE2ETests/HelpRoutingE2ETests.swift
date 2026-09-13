@@ -22,8 +22,6 @@ final class HelpRoutingE2ETests: XCTestCase {
         let surfaces: [[String]] = [
             ["--help"],
             ["tune", "--help"],
-            ["operate", "--help"],
-            ["scope", "--help"],
         ]
 
         for arguments in surfaces {
@@ -49,18 +47,6 @@ final class HelpRoutingE2ETests: XCTestCase {
         }
     }
 
-    func testScopeVersionAliasesMatchVersionOutput() throws {
-        let version = try run(["scope", "version"])
-
-        XCTAssertEqual(version.status, 0)
-        XCTAssertTrue(version.stderr.isEmpty, version.stderr)
-        for alias in ["--version", "-V"] {
-            let result = try run(["scope", alias])
-            XCTAssertEqual(result.status, 0, "scope \(alias) should exit 0")
-            XCTAssertEqual(result.stdout, version.stdout, "scope \(alias) should match scope version output")
-            XCTAssertEqual(result.stderr, version.stderr, "scope \(alias) should match scope version diagnostics")
-        }
-    }
 
     func testUnknownFamilyKeepsUsageOnStderrAndExitsTwo() throws {
         let result = try run(["unknown-family"])
@@ -71,13 +57,6 @@ final class HelpRoutingE2ETests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("Usage:"), result.stderr)
     }
 
-    func testUnknownScopeCommandKeepsUsageOnStderrAndExitsTwo() throws {
-        let result = try run(["scope", "unknown-command"])
-
-        XCTAssertEqual(result.status, 2)
-        XCTAssertTrue(result.stdout.isEmpty)
-        XCTAssertTrue(result.stderr.contains("Usage:"), result.stderr)
-    }
 
     private func run(_ arguments: [String]) throws -> ProcessResult {
         let process = Process()

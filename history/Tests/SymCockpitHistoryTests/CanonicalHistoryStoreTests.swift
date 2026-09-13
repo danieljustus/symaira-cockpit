@@ -16,7 +16,7 @@ final class CanonicalHistoryStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    func testFixtureRoundTripsTuneAndOperateRecords() throws {
+    func testFixtureRoundTripsTuneAndTuneRecords() throws {
         let fixture = Bundle.module.url(forResource: "cross-component", withExtension: "jsonl", subdirectory: "Fixtures")!
         try FileManager.default.copyItem(at: fixture, to: fileURL)
 
@@ -24,7 +24,7 @@ final class CanonicalHistoryStoreTests: XCTestCase {
         XCTAssertEqual(records.count, 2)
         XCTAssertEqual(records[0].source, "tune")
         XCTAssertEqual(records[0].action, "brightness.set")
-        XCTAssertEqual(records[1].source, "operate")
+        XCTAssertEqual(records[1].source, "tune")
         XCTAssertEqual(records[1].action, "click")
         XCTAssertEqual(records[1].payload["targets"], .object(["button": .string("left")]))
     }
@@ -42,7 +42,7 @@ final class CanonicalHistoryStoreTests: XCTestCase {
 
     func testWriterIsDeterministicVersionedAndRedactsPayload() throws {
         let event = CanonicalHistoryEvent(
-            source: "operate",
+            source: "tune",
             timestamp: "2026-08-28T10:00:00Z",
             action: "type_text",
             payload: [
