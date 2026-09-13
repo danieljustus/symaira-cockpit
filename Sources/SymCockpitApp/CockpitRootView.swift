@@ -2,18 +2,12 @@ import SwiftUI
 import SymairaTheme
 import SymTuneUI
 
-/// The cockpit window's content: a sidebar of the three families plus an
-/// overview, and the selected section on the right.
+/// The tune-only cockpit window content.
 ///
-/// Each section reads from the same source the CLI does — Tune from the shared
-/// ``StatusBarController`` model, Scope from `SymScopeCore`, Operate from
-/// `SymOperateCore` — so the window never shows a number the shell would
-/// disagree with.
+/// The Tune section reads from the same shared model as the CLI.
 @MainActor
 struct CockpitRootView: View {
     let statusBar: StatusBarController
-    @ObservedObject var scope: ScopeViewModel
-    @ObservedObject var operate: OperateViewModel
     let openPreferences: () -> Void
 
     /// The selected section survives a relaunch — a menu-bar app gets opened
@@ -60,17 +54,13 @@ struct CockpitRootView: View {
                 } label: {
                     // Named for what it actually configures (Tune's metrics,
                     // AI usage and update settings) rather than a bare
-                    // "Preferences" that reads as cockpit-wide when Scope and
-                    // Operate have no preferences of their own — the same
-                    // window this button opens is also reachable from inside
-                    // the Tune section itself, so matching labels make clear
-                    // it is the same destination rather than a different one.
+                    // This opens the same preferences surface as Tune.
                     Label("Tune Preferences", systemImage: "gearshape")
                 }
                 .help("Open Tune preferences (⌘,)")
             }
         }
-        // ⌘1…⌘4 jump straight to a section. The buttons are invisible and
+        // ⌘1…⌘2 jump straight to a section. The buttons are invisible and
         // zero-sized; they exist only to own the shortcuts, because a
         // status-bar app's main menu has nowhere natural to hang them.
         .background {
@@ -130,13 +120,9 @@ struct CockpitRootView: View {
     private var detail: some View {
         switch section {
         case .overview:
-            OverviewView(scope: scope, operate: operate, openSection: { section = $0 })
+            OverviewView(openSection: { section = $0 })
         case .tune:
             TuneSectionView(statusBar: statusBar, openPreferences: openPreferences)
-        case .scope:
-            ScopeView(model: scope)
-        case .operate:
-            OperateView(model: operate)
         }
     }
 
@@ -145,12 +131,7 @@ struct CockpitRootView: View {
     private func refreshCurrentSection() {
         switch section {
         case .overview:
-            scope.refreshNow()
-            operate.refresh()
-        case .scope:
-            scope.refreshNow()
-        case .operate:
-            operate.refresh()
+            break
         case .tune:
             break
         }
@@ -216,8 +197,6 @@ private struct CockpitSidebarRow: View {
 enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
     case overview
     case tune
-    case scope
-    case operate
 
     var id: String { rawValue }
 
@@ -225,8 +204,6 @@ enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return "Overview"
         case .tune: return "Tune"
-        case .scope: return "Scope"
-        case .operate: return "Operate"
         }
     }
 
@@ -234,8 +211,6 @@ enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return "square.grid.2x2"
         case .tune: return "slider.horizontal.3"
-        case .scope: return "network"
-        case .operate: return "cursorarrow.rays"
         }
     }
 
@@ -244,8 +219,6 @@ enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return ""
         case .tune: return "Thermals, power, display — the same panel as the menu bar"
-        case .scope: return "Ports, containers, background services, MCP servers"
-        case .operate: return "GUI automation readiness"
         }
     }
 
@@ -255,8 +228,6 @@ enum CockpitSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return nil
         case .tune: return "symcockpit tune"
-        case .scope: return "symcockpit scope"
-        case .operate: return "symcockpit operate"
         }
     }
 }

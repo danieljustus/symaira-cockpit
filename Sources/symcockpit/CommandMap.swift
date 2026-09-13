@@ -11,16 +11,13 @@ enum CockpitCommandMap {
         "restore", "profile", "fan", "battery-limit",
     ]
 
-    /// Tune commands retained behind `tune` because Operate and/or Scope own
-    /// the same spelling at the unified dispatcher boundary.
+    /// Tune commands retained behind `tune` for explicit command discovery.
     static let collidingTuneCommands: [String] = [
         "doctor", "permissions", "serve", "history",
     ]
 
-    /// Existing family spellings and version aliases. These are compatibility
-    /// surfaces, not new product names, and remain until a separately
-    /// authorized release supplies a tested migration and rollback.
-    static let legacyFamilyCommands: [String] = ["tune", "operate", "scope"]
+    /// The tune family spelling and version aliases.
+    static let legacyFamilyCommands: [String] = ["tune"]
     static let rootVersionAliases: [String] = ["version", "--version", "-V"]
 }
 

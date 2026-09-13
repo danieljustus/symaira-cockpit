@@ -1,56 +1,44 @@
 // symcockpit — unified entrypoint for the cockpit tool family.
 //
 //   symcockpit tune <command>      thermals, brightness, power
-//   symcockpit operate <command>   GUI automation (MCP server, doctor)
-//   symcockpit scope <command>     ports, containers, MCP inventory
-//   symcockpit version             all three component versions (JSON)
+//   symcockpit version             the Tune component version (JSON)
 //
-// Each subcommand delegates to the respective CLI library in the same
-// process; exit codes propagate unchanged.
+// The tune subcommand delegates to the tune CLI library in the same process.
 
 import Foundation
 import SymCockpitVersion
-import SymOperateCore
-import SymOperateCLI
-import SymScopeCLI
-import SymScopeCore
 import SymTuneCore
 import SymTuneCLI
 import SymairaUpdateCheck
 
 let usage = """
-symcockpit — this machine: observability and control
+symcockpit — this machine: hardware and system tuning
 
 Usage:
   symcockpit <family> <command> [options]
 
-Families:
-  tune       Thermals, brightness, power, battery (symtune feature set)
-  operate    GUI automation: MCP server, doctor, permissions (symoperate)
-  scope      Ports, containers, MCP inventory (symscope)
+Family:
+  tune       Thermals, brightness, power, battery
 
   version [--json] [--no-update-check]    symcockpit version plus the component versions
   --version, -V                           aliases for `symcockpit version`
   help                This text
 
 Examples:
-  symcockpit scope scan
   symcockpit tune doctor
-  symcockpit operate serve
 
-symcockpit replaces the former symtune, symoperate and symscope binaries;
-their commands are now the family subcommands above.
+symcockpit provides the tune command tree; operate and scope moved to
+Symaira Brain as optional modules. The legacy dispatcher commands are removed.
 
 Most tune commands also work without the `tune` prefix (e.g. `symcockpit
 sensors` == `symcockpit tune sensors`) — `tune` itself adds no information,
 since tuning is what symcockpit is. `symcockpit tune <cmd>` keeps working
-unchanged. Exceptions, kept `tune`-prefixed only because the bare name is
-also an operate (and for `serve`, also a scope) command: doctor,
-permissions, serve, history.
+unchanged. Exceptions remain tune-prefixed for explicitness.
+
 """
 
 /// The version report, in the ecosystem's `version --json` shape: a `tool`,
-/// its `version`, and the component families underneath.
+/// its `version`, and the Tune component underneath.
 func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> String {
     struct FamilyVersion: Encodable {
         let family: String
@@ -92,8 +80,6 @@ func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> Stri
         schemaVersion: 1,
         families: [
             FamilyVersion(family: "tune", version: TuneVersion.current, schemaVersion: nil),
-            FamilyVersion(family: "operate", version: SymOperateVersion.current, schemaVersion: nil),
-            FamilyVersion(family: "scope", version: Version.version, schemaVersion: 1),
         ],
         update: resolvedUpdate
     )
@@ -115,16 +101,12 @@ let code: Int32
 switch args[0] {
 case "tune":
     code = SymTuneMain.run(Array(args.dropFirst()))
-case "operate":
-    code = OperateMain.runWithVersionAliases(Array(args.dropFirst()))
-case "scope":
-    code = await ScopeMain.run(Array(args.dropFirst()))
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {
         print(try await cockpitVersionJSON(update: update))
     } else {
-        var line = "symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current), operate \(SymOperateVersion.current), scope \(Version.version)"
+        var line = "symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current)"
         switch update.status {
         case "available":
             if let latest = update.latestVersion { line += " — update available: \(latest)" }

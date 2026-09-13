@@ -127,7 +127,7 @@ public struct CanonicalHistoryEvent: Codable, Equatable, Sendable {
 public typealias HistoryRecord = CanonicalHistoryEvent
 
 
-/// The sole JSONL writer/reader used by tune and operate.
+/// The sole JSONL writer/reader used by tune and tune.
 public final class CanonicalHistoryStore: @unchecked Sendable {
     public let fileURL: URL
     private let maxEvents: Int

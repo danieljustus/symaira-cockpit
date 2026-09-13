@@ -14,8 +14,6 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let statusBar: StatusBarController
     private let openPreferences: () -> Void
-    private let scopeModel = ScopeViewModel()
-    private let operateModel = OperateViewModel()
 
     init(statusBar: StatusBarController, openPreferences: @escaping () -> Void) {
         self.statusBar = statusBar
@@ -31,8 +29,6 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
 
         let root = CockpitRootView(
             statusBar: statusBar,
-            scope: scopeModel,
-            operate: operateModel,
             openPreferences: openPreferences
         )
         let hosting = NSHostingController(rootView: root)
@@ -63,13 +59,10 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
         // The Tune panel in the window shares the menu bar's model; tell it a
         // panel is on screen so it polls at the interactive cadence.
         statusBar.setEmbeddedPanelVisible(true)
-        scopeModel.setVisible(true)
-        operateModel.refresh()
     }
 
     func windowWillClose(_ notification: Notification) {
         statusBar.setEmbeddedPanelVisible(false)
-        scopeModel.setVisible(false)
         // Back to a menu-bar-only app. Deferred, because dropping the policy
         // inside the close notification races the window teardown and can
         // leave a ghost Dock icon behind.

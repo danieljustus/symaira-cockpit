@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGES=(tune operate scope history)
+PACKAGES=(tune history)
 FAILING_PACKAGE="${FAILING_PACKAGE:-tune}"
 
 work="$(mktemp -d)"

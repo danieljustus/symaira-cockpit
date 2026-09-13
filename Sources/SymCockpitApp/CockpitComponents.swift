@@ -5,7 +5,7 @@ import SymairaTheme
 // MARK: - Cards
 
 /// A titled card with the cockpit's glass styling — the container every
-/// section builds out of, so Scope and Operate read like the Tune panel.
+/// section builds out of, so non-tune families read like the Tune panel.
 ///
 /// The header is the card's control strip: title, an optional count on the
 /// right of it, and whatever actions the section needs. Actions sit in the
@@ -45,7 +45,7 @@ struct CockpitCard<Content: View>: View {
 
 /// A card whose body can be folded away, with the fold remembered per card.
 ///
-/// Scope and Operate list things that range from a handful to a few dozen
+/// non-tune families list things that range from a handful to a few dozen
 /// rows. Collapsing is what keeps a section scannable: the header still
 /// carries the count, so a folded card is a one-line answer rather than a
 /// hidden one.
@@ -335,7 +335,7 @@ struct CockpitRefreshButton: View {
 
 /// The filter box above a long list.
 ///
-/// The whole of Scope and Operate hangs off this one control, so it carries
+/// The whole of non-tune families hangs off this one control, so it carries
 /// the same keyboard and accessibility affordances the rest of the window
 /// does: ⌘F puts the caret in it, Escape empties it, and the focused state is
 /// drawn rather than left to a bare caret. ⌘F is owned by Edit ▸ Find in

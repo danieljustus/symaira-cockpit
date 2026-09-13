@@ -18,7 +18,7 @@ final class ReplayCodecTests: XCTestCase {
         values["target"] = .object(target)
         values["success"] = .bool(true)
         return CanonicalHistoryEvent(
-            source: "operate",
+            source: "tune",
             timestamp: timestamp,
             action: action,
             payload: values
@@ -158,7 +158,7 @@ final class ReplayCodecTests: XCTestCase {
             "schema_version": DeterministicReplayRecording.currentSchemaVersion,
             "records": [[
                 "schema_version": CanonicalHistoryEvent.currentSchemaVersion,
-                "source": "operate",
+                "source": "tune",
                 "timestamp": timestamp,
                 "action": "click",
                 "payload": [

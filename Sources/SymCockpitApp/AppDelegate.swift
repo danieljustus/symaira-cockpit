@@ -6,7 +6,7 @@ import SymTuneUI
 /// The app is menu-bar-first: it launches as an `LSUIElement` accessory with a
 /// status item and no Dock presence, exactly like the standalone Tune app. The
 /// difference is the cockpit window behind it — opened from the status item's
-/// context menu (or Cmd+0) — which shows all three families in one place.
+/// context menu (or Cmd+0) — which shows the tune family in one place.
 ///
 /// The status item itself *is* Tune's ``StatusBarController``: same metrics
 /// pipeline, same popover, same preferences. The cockpit embeds it rather than
@@ -170,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(NSMenuItem.separator())
 
-        // ⌘F for the Scope/Operate filter. It hangs off the menu rather than
+        // ⌘F for the section filter. It hangs off the menu rather than
         // off an invisible `keyboardShortcut` button in the view (the trick
         // the sidebar uses for ⌘1…⌘4) so that the shortcut is discoverable:
         // a menu item appears in the menu bar and in the Keyboard Shortcuts

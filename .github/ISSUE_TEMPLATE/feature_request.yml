@@ -16,8 +16,6 @@ body:
       label: Which area?
       options:
         - tune (thermals, power, display)
-        - scope (ports, containers, MCP inventory)
-        - operate (interface automation)
         - history
         - CLI output contract / JSON shape
         - MCP / agent integration

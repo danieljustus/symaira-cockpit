@@ -1,8 +1,8 @@
 # Contributing to Symaira Cockpit
 
 Thanks for contributing to Symaira Cockpit. This repository ships one native
-macOS command-line binary, `symcockpit`, with `tune`, `operate`, and `scope`
-families, plus the `SymCockpitApp` menu-bar GUI.
+macOS command-line binary, `symcockpit`, with the `tune` family, plus the `SymCockpitApp` menu-bar GUI. Operate and
+Scope are optional modules in Symaira Brain, not Cockpit packages.
 
 ## Prerequisites
 
@@ -29,11 +29,6 @@ tune/                     # thermals, power, display, and Tune UI package
   Sources/SymTuneCore/    # hardware and configuration logic
   Sources/SymTuneUI/      # shared menu-bar panel
   Sources/SymTuneCLI/     # Tune command library
-operate/                  # macOS GUI automation package
-  Sources/SymOperateCore/ # Accessibility, input, app, and permission logic
-  Sources/SymOperateMCP/  # Operate MCP transport
-  Sources/SymOperateCLI/  # Operate command library
-scope/                    # ports, containers, and MCP inventory package
 history/                  # shared library: canonical history, replay codec,
                           # secret redaction, bounded subprocess runner
 ```
@@ -41,7 +36,7 @@ history/                  # shared library: canonical history, replay codec,
 The nested packages remain independently buildable for package-level
 compatibility, but only `symcockpit` is the shipped CLI binary. `history/`
 is the odd one out: no CLI, no MCP server, just a library that `tune/` and
-`operate/` depend on by path. It is built and tested with the rest.
+`tune/` depends on by path. It is built and tested with the rest.
 
 `DeterministicReplayCodec` is future replay groundwork, not a live production
 feature: it currently has no production caller, and its checks are not a
@@ -64,7 +59,7 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build --pack
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test --package-path tune
 ```
 
-Use the equivalent `operate`, `scope` or `history` path for those packages.
+Use the `history` path for the tool-agnostic history package.
 For root changes, run both commands from the repository root:
 
 ```bash
@@ -84,7 +79,7 @@ structural smoke check.
 - Do not add credential reads during object construction. The Tune package's
   `KeychainCredentials` adapter delegates to the shared keychain module, and
   `SecretRedactor` must protect error/history output at the boundary.
-- Never weaken Tune safety clamps, Operate action policy, permission checks, or
+- Never weaken Tune safety clamps, privacy checks, or
   MCP stdout purity.
 - Keep update checks pointed at the released `danieljustus/symaira-cockpit`
   repository and compare against the unified cockpit version.

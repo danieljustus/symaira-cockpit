@@ -1,24 +1,21 @@
 import SwiftUI
 import SymairaTheme
 
-/// The landing section: one card per family, each a shortcut into the section
-/// that owns it.
+/// The tune landing section and shortcut into the detailed panel.
 ///
 /// It deliberately shows no Tune metrics — those live in the menu bar, which is
 /// always visible, and duplicating them here would mean a second polling
 /// pipeline for a number the user already has.
 @MainActor
 struct OverviewView: View {
-    @ObservedObject var scope: ScopeViewModel
-    @ObservedObject var operate: OperateViewModel
     let openSection: (CockpitSection) -> Void
 
     var body: some View {
         CockpitSectionScroll(
             title: "Symaira Cockpit",
-            status: scope.lastUpdated == nil ? nil : "updated \(Self.time(scope.lastUpdated!))"
+            status: nil
         ) {
-            Text("Your Mac's thermals, ports and automation surface — the same data `symcockpit` prints, in one window. Live metrics stay in the menu bar.")
+            Text("Your Mac's thermals, power and display controls — the same data `symcockpit tune` prints, in one window. Live metrics stay in the menu bar.")
                 .font(SymairaTypography.callout)
                 .foregroundStyle(SymairaTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -29,68 +26,13 @@ struct OverviewView: View {
                     .foregroundStyle(SymairaTheme.textSecondary)
             }
 
-            CockpitNavCard(section: .scope, action: { openSection(.scope) }) {
-                HStack(alignment: .top, spacing: SymairaSpacing.large) {
-                    CockpitStat(
-                        value: String(scope.ports.count),
-                        caption: "ports",
-                        isPlaceholder: scope.lastUpdated == nil
-                    )
-                    CockpitStat(
-                        value: String(scope.conflicts.count),
-                        caption: "conflicts",
-                        tint: scope.conflicts.isEmpty ? SymairaTheme.textPrimary : SymairaTheme.warning,
-                        isPlaceholder: scope.lastUpdated == nil
-                    )
-                    CockpitStat(
-                        value: String(scope.containers.count),
-                        caption: "containers",
-                        isPlaceholder: scope.lastUpdated == nil
-                    )
-                    CockpitStat(
-                        value: String(scope.mcpServers.count),
-                        caption: "MCP servers",
-                        isPlaceholder: scope.lastUpdated == nil
-                    )
-                    CockpitStat(
-                        value: String(scope.daemons.count),
-                        caption: "daemons",
-                        isPlaceholder: scope.lastUpdated == nil
-                    )
-                }
-            }
-
-            CockpitNavCard(section: .operate, action: { openSection(.operate) }) {
-                HStack(alignment: .top, spacing: SymairaSpacing.large) {
-                    CockpitStat(
-                        value: operate.accessibilityGranted ? "granted" : "missing",
-                        caption: "accessibility",
-                        tint: operate.accessibilityGranted ? SymairaTheme.positive : SymairaTheme.critical
-                    )
-                    CockpitStat(
-                        value: operate.screenRecordingGranted ? "granted" : "missing",
-                        caption: "screen recording",
-                        tint: operate.screenRecordingGranted ? SymairaTheme.positive : SymairaTheme.critical
-                    )
-                    CockpitStat(value: String(operate.apps.count), caption: "apps")
-                    CockpitStat(value: String(operate.windows.count), caption: "windows")
-                }
-            }
-
-            Text("⌘1–⌘4 switch sections · ⌘R refreshes · ⌘F filters Scope and Operate · right-click the menu-bar icon for this window, preferences and quit.")
+            Text("⌘1–⌘2 switch sections · right-click the menu-bar icon for this window, preferences and quit.")
                 .font(SymairaTypography.caption)
                 .foregroundStyle(SymairaTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .onAppear {
-            scope.refreshNow()
-            operate.refresh()
-        }
     }
 
-    private static func time(_ date: Date) -> String {
-        date.formatted(date: .omitted, time: .standard)
-    }
 }
 
 /// An overview card that navigates. It looks like a card until the pointer is
