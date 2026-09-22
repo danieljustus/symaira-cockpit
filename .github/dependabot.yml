@@ -12,11 +12,3 @@ updates:
     directory: /tune
     schedule:
       interval: weekly
-  - package-ecosystem: swift
-    directory: /operate
-    schedule:
-      interval: weekly
-  - package-ecosystem: swift
-    directory: /scope
-    schedule:
-      interval: weekly
