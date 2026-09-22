@@ -126,7 +126,7 @@ public struct TuneConfig: Equatable, Sendable {
 
     // MARK: - Metrics preferences
 
-    /// Refresh interval in seconds. Clamped to a documented minimum of 1.0 s.
+    /// Refresh interval in seconds, finite and clamped to 1…86400 s.
     public let metricsRefreshInterval: TimeInterval
 
     /// Which metrics the service should sample.
@@ -155,8 +155,17 @@ public struct TuneConfig: Equatable, Sendable {
     /// Which cards the status popover shows.
     public let visibleCards: Set<PopoverCard>
 
-    /// Documented minimum refresh interval (seconds).
+    /// Supported polling range (seconds): at most once a second, at least once a day.
     public static let minimumRefreshInterval: TimeInterval = 1.0
+    public static let maximumRefreshInterval: TimeInterval = 86400.0
+
+    /// Validate editable text without silently clamping it to a different value.
+    public static func validatedRefreshInterval(_ text: String) -> TimeInterval? {
+        guard let value = TimeInterval(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              value.isFinite,
+              (minimumRefreshInterval...maximumRefreshInterval).contains(value) else { return nil }
+        return value
+    }
 
     /// Default metrics order.
     public static let defaultMetricOrder: [MetricIdentifier] = MetricIdentifier.allCases
@@ -203,7 +212,10 @@ public struct TuneConfig: Equatable, Sendable {
         self.chargeLimitHysteresisPercent = chargeLimitHysteresisPercent
         self.defaultProfile = defaultProfile
         self.mcpMode = mcpMode
-        self.metricsRefreshInterval = max(metricsRefreshInterval, TuneConfig.minimumRefreshInterval)
+        // Non-finite/oversized values must never reach Duration.seconds in the poller.
+        self.metricsRefreshInterval = metricsRefreshInterval.isFinite
+            ? min(max(metricsRefreshInterval, Self.minimumRefreshInterval), Self.maximumRefreshInterval)
+            : 3.0
         self.enabledMetrics = enabledMetrics
         self.visibleMetrics = visibleMetrics
         self.metricOrder = metricOrder
