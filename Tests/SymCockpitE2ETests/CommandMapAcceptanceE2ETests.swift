@@ -75,6 +75,16 @@ final class CommandMapAcceptanceE2ETests: XCTestCase {
         }
     }
 
+    func testRemovedFamiliesPrintMigrationHintAndExitFour() throws {
+        for family in ["operate", "scope"] {
+            let result = try run([family])
+            XCTAssertEqual(result.status, 4, family)
+            XCTAssertTrue(result.stdout.isEmpty, family)
+            XCTAssertTrue(result.stderr.contains("Symaira Brain"), result.stderr)
+            XCTAssertTrue(result.stderr.contains("--modules \(family)"), result.stderr)
+        }
+    }
+
     func testCompletionIsNotAdvertisedOrFalselyRouted() throws {
         for arguments in [["completion"], ["completion", "bash"], ["--completion"]] {
             let result = try run(arguments)
