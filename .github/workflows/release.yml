@@ -42,6 +42,19 @@ jobs:
       - name: Build universal binary
         run: swift build -c release --arch arm64 --arch x86_64
 
+      - name: Strip release binary
+        # swift build keeps the full symbol table: 112k symbols, more than
+        # half the shipped bytes (8.2 MB -> 3.5 MB per arch, measured on
+        # v0.6.x). Strip it, then re-apply the ad-hoc signature that arm64
+        # Mach-O needs to exec at all, and smoke-test the result.
+        run: |
+          set -euo pipefail
+          binary="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/symcockpit"
+          strip "$binary"
+          codesign --force --sign - "$binary"
+          "$binary" version
+          ls -lh "$binary"
+
       - name: Package
         id: package
         run: |
@@ -164,6 +177,15 @@ jobs:
             echo "::error::App executable version mismatch: expected 'Symaira Cockpit $VERSION', got '$OUTPUT'."
             exit 1
           fi
+
+      - name: Strip app executable
+        # Same as the CLI: drop the symbol table before the Developer ID
+        # signature below makes the bytes final. Nothing executes the app
+        # between this step and re-signing, so no interim ad-hoc signature
+        # is needed.
+        run: |
+          set -euo pipefail
+          strip "build/app/Symaira Cockpit.app/Contents/MacOS/SymCockpitApp"
 
       - name: Sign and verify app bundle
         run: |

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Release artifacts are stripped before packaging: the CLI tarball and the
+  app executable no longer ship the full Swift symbol table (112k symbols,
+  more than half the binary size). The CLI keeps an ad-hoc signature so it
+  still execs on arm64; the app is stripped before its Developer ID
+  signature.
+
 ## [0.7.0] — 2026-09-22
 
 Tune-only product cutover (PB-2026-09-09): Symaira Cockpit is now only the
