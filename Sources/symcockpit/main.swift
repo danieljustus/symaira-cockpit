@@ -123,6 +123,21 @@ case "version", "--version", "-V":
 case "help", "--help", "-h":
     FileHandle.standardOutput.write(Data(usage.utf8))
     code = 0
+case "operate", "scope":
+    // PB-2026-09-09: these families moved to Symaira Brain as optional
+    // modules. Legacy callers get a dedicated migration hint and exit 4
+    // (unsupported) instead of the generic unknown-family usage exit 2.
+    FileHandle.standardError.write(Data("""
+
+        symcockpit: '\(args[0])' moved to Symaira Brain as an optional module.
+        Install it from a Brain checkout:
+          symbrain setup --from-source <brain-checkout> --modules \(args[0])
+
+        symcockpit now ships only the tune command tree (thermals, power,
+        display, brightness). See docs/product-boundaries.md (PB-2026-09-09).
+
+        """.utf8))
+    code = 4
 default:
     if tuneDirectAliases.contains(args[0]) {
         code = SymTuneMain.run(args)
