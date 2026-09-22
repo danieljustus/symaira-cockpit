@@ -180,7 +180,13 @@ extension WriteCommand {
             valueType: .integer,
             isContinuous: true,
             mcpArgName: "percent",
-            apply: { try $0.applyChargeLimit(percent: WriteCommand.chargeLimitPercent(from: $1)) }
+            apply: { controller, value in
+                // Double(Int.max) rounds out of range; reject it before hardware I/O.
+                guard let percent = Int(exactly: value) else {
+                    throw TuneError.usage("battery-limit: percent value is not a representable integer (got \(value)).")
+                }
+                try controller.applyChargeLimit(percent: percent)
+            }
         ),
         WriteCommand(
             name: "battery-limit.clear",
@@ -210,32 +216,4 @@ extension WriteCommand {
         all.first { $0.mcpName == mcpName }
     }
 
-    // MARK: - Shared integer conversion
-
-    /// Convert the shared `Double` write value into the integer charge-limit
-    /// percent without ever trapping (issue #285).
-    ///
-    /// The CLI and the MCP server parse the percent as `Int` and widen it to
-    /// `Double` for the shared `apply` interface. `Double(Int.max)` rounds up
-    /// to exactly 2^63, which the trapping `Int(_:)` initializer rejects at
-    /// runtime — SIGTRAP killed both processes before any error response
-    /// could be produced. `Int(exactly:)` turns that into a catchable
-    /// `TuneError.usage` instead, raised before the controller is touched, so
-    /// an unrepresentable input performs no hardware I/O. Representable
-    /// values — including finite out-of-range ones — pass through unchanged
-    /// and keep the documented clamping contract of
-    /// `TuneController.applyChargeLimit`.
-    ///
-    /// - Parameter value: The shared write value (`Double`).
-    /// - Returns: The percent as `Int`, when `value` represents exactly one.
-    /// - Throws: `TuneError.usage` when `value` is non-finite, fractional, or
-    ///   otherwise not representable as `Int`.
-    public static func chargeLimitPercent(from value: Double) throws -> Int {
-        guard let percent = Int(exactly: value) else {
-            throw TuneError.usage(
-                "battery-limit: percent value is not a representable integer (got \(value))."
-            )
-        }
-        return percent
-    }
 }
