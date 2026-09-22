@@ -17,7 +17,7 @@ Tune MCP server exposes the same capabilities to AI agents.
 
 ![Symaira Cockpit](docs/assets/social-preview.png)
 
-**Status:** Active development — v0.6.2 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
+**Status:** Active development — v0.7.0 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
 
 ## Why Cockpit
 

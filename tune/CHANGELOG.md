@@ -4,7 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.3] — 2026-09-09
+
+This block shipped incrementally inside the Symaira Cockpit v0.6.x line; the
+tune component version string was not bumped after the 0.9.1 cut, so builds
+reported "tune 0.9.3" throughout (see
+https://github.com/danieljustus/symaira-cockpit/issues/278).
 
 ### Fixed
 - **Extended brightness now actually works.** The old EDR overlay created a
