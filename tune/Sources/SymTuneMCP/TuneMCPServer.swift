@@ -46,7 +46,18 @@ public final class TuneMCPServer: Sendable {
             }
             semaphore.signal()
         }
-        semaphore.wait()
+        if Thread.isMainThread {
+            // Tool handlers may synchronously dispatch AppKit work to the
+            // main queue. Keep it serviceable while the async server runs.
+            while semaphore.wait(timeout: .now()) == .timedOut {
+                if !RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05)),
+                   semaphore.wait(timeout: .now() + 0.05) == .success {
+                    break
+                }
+            }
+        } else {
+            semaphore.wait()
+        }
         if let error = errorBox.error { throw error }
     }
 
