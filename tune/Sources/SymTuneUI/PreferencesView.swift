@@ -78,7 +78,13 @@ struct PreferencesView: View {
         .frame(width: 560, height: 560)
         .background(SymairaTheme.bgDark)
         .onAppear {
-            refreshText = String(format: "%.1f", manager.metricsRefreshInterval)
+            refreshText = String(manager.metricsRefreshInterval)
+        }
+        .task(id: applyMessage) {
+            // Errors stay until corrected; a new message cancels an old success timer.
+            guard applySuccess, applyMessage != nil else { return }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            applyMessage = nil
         }
     }
 
@@ -316,6 +322,18 @@ struct PreferencesView: View {
 
     // MARK: - Refresh Interval
 
+    private var validRefreshInterval: TimeInterval? {
+        TuneConfig.validatedRefreshInterval(refreshText)
+    }
+
+    private var refreshIntervalHint: String {
+        "Enter \(Int(TuneConfig.minimumRefreshInterval))–\(Int(TuneConfig.maximumRefreshInterval)) seconds (e.g. 3.5)."
+    }
+
+    private var refreshIntervalError: String? {
+        validRefreshInterval == nil ? "Refresh interval: \(refreshIntervalHint)" : nil
+    }
+
     private var refreshIntervalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("REFRESH INTERVAL")
@@ -333,10 +351,13 @@ struct PreferencesView: View {
                     .textFieldStyle(.symaira)
                     .symairaText(.monoSmall)
                     .foregroundStyle(SymairaTheme.textPrimary)
-                    .frame(width: 50)
+                    .frame(width: 80)
+                    .accessibilityLabel("Refresh interval in seconds")
+                    .help(refreshIntervalHint)
                     .onChange(of: refreshText) { _, newValue in
-                        if let value = TimeInterval(newValue),
-                           value >= TuneConfig.minimumRefreshInterval {
+                        applyMessage = nil
+                        applySuccess = false
+                        if let value = TuneConfig.validatedRefreshInterval(newValue) {
                             manager.metricsRefreshInterval = value
                         }
                     }
@@ -375,12 +396,12 @@ struct PreferencesView: View {
                 }
             }
 
-            // Minimum interval note
+            // Keep the range visible next to the editable value.
             HStack {
                 Image(systemName: "info.circle.fill")
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTheme.textMuted)
-                Text("Minimum refresh interval is \(String(format: "%.0f", TuneConfig.minimumRefreshInterval)) second")
+                Text(refreshIntervalHint)
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTheme.textMuted)
             }
@@ -461,8 +482,8 @@ struct PreferencesView: View {
 
     private var footerView: some View {
         HStack {
-            // Apply message
-            if let message = applyMessage {
+            // Validation stays visible even when the input has scrolled out of view.
+            if let message = refreshIntervalError ?? applyMessage {
                 HStack(spacing: 4) {
                     Image(systemName: applySuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .symairaText(.caption)
@@ -470,6 +491,7 @@ struct PreferencesView: View {
                     Text(message)
                         .symairaText(.caption)
                         .foregroundStyle(applySuccess ? SymairaTheme.positive : SymairaTheme.critical)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -502,6 +524,9 @@ struct PreferencesView: View {
                     .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
             }
             .buttonStyle(.plain)
+            .disabled(validRefreshInterval == nil)
+            .opacity(validRefreshInterval == nil ? 0.45 : 1)
+            .help(refreshIntervalError ?? "Save preferences")
         }
         .padding(.horizontal, SymairaSpacing.xLarge)
         .padding(.vertical, SymairaSpacing.medium)
@@ -510,6 +535,8 @@ struct PreferencesView: View {
     // MARK: - Actions
 
     private func applyPreferences() {
+        guard let interval = validRefreshInterval else { return }
+        manager.metricsRefreshInterval = interval
         do {
             try manager.writeToConfig()
             applyMessage = "Preferences saved — changes take effect immediately."
@@ -517,11 +544,6 @@ struct PreferencesView: View {
         } catch {
             applyMessage = "Failed to save preferences: \(error.localizedDescription)"
             applySuccess = false
-        }
-
-        // Clear message after a few seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
-            applyMessage = nil
         }
     }
 }
