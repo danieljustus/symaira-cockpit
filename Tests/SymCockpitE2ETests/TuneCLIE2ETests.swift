@@ -247,14 +247,15 @@ final class SymTuneCLIE2ETests: XCTestCase {
         }
     }
 
-    /// Run `symcockpit tune` with the given arguments and return stderr (merged with stdout).
+    /// Run `symcockpit tune` with the given arguments. Successful machine
+    /// output is stdout only; the legacy deprecation notice stays on stderr.
     /// - Parameters:
     ///   - args: Arguments to pass after the `tune` family prefix.
     ///   - expectFailure: If true, the process is expected to exit with a non-zero code.
     ///   - environment: Additional environment overrides applied on top of the
     ///     parent's environment (Foundation `Process` replaces the whole
     ///     environment when set, so the parent's is copied first).
-    /// - Returns: The combined stdout+stderr output of the process.
+    /// - Returns: stdout on success, or combined stdout+stderr on failure.
     @discardableResult
     private func runCommand(
         args: [String],
@@ -297,6 +298,6 @@ final class SymTuneCLIE2ETests: XCTestCase {
                            "Process failed. args: \(args), stderr: \(errorOutput)")
         }
 
-        return combined
+        return expectFailure ? combined : output
     }
 }

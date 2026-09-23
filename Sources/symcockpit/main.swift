@@ -1,9 +1,9 @@
 // symcockpit — unified entrypoint for the cockpit tool family.
 //
-//   symcockpit tune <command>      thermals, brightness, power
+//   symcockpit <command>           thermals, brightness, power
 //   symcockpit version             the Tune component version (JSON)
 //
-// The tune subcommand delegates to the tune CLI library in the same process.
+// Direct commands and the deprecated tune prefix delegate to the same library.
 
 import Foundation
 import SymCockpitVersion
@@ -15,25 +15,25 @@ let usage = """
 symcockpit — this machine: hardware and system tuning
 
 Usage:
-  symcockpit <family> <command> [options]
+  symcockpit <command> [options]
 
-Family:
-  tune       Thermals, brightness, power, battery
+Commands:
+  sensors, battery, displays, metrics, status, processes, top
+  awake, brightness, extbright, dim, warmth, restore, profile
+  fan, battery-limit, ai-usage, doctor, permissions, history, serve
 
   version [--json] [--no-update-check]    symcockpit version plus the component versions
   --version, -V                           aliases for `symcockpit version`
   help                This text
 
 Examples:
-  symcockpit tune doctor
+  symcockpit doctor
 
 symcockpit provides the tune command tree; operate and scope moved to
 Symaira Brain as optional modules. The legacy dispatcher commands are removed.
 
-Most tune commands also work without the `tune` prefix (e.g. `symcockpit
-sensors` == `symcockpit tune sensors`) — `tune` itself adds no information,
-since tuning is what symcockpit is. `symcockpit tune <cmd>` keeps working
-unchanged. Exceptions remain tune-prefixed for explicitness.
+The legacy `symcockpit tune <command>` spelling remains available with a
+deprecation warning through Cockpit v0.9. Use direct commands instead.
 
 """
 
@@ -100,6 +100,7 @@ guard args.first != nil else {
 let code: Int32
 switch args[0] {
 case "tune":
+    FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (supported through v0.9).\n".utf8))
     code = SymTuneMain.run(Array(args.dropFirst()))
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)

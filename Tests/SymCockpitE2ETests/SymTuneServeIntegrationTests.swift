@@ -85,12 +85,25 @@ final class SymTuneServeIntegrationE2ETests: XCTestCase {
         XCTAssertEqual(child.exitCode, 0)
     }
 
+    func testDirectServeIsAnMCPRoute() throws {
+        let child = try launchServe(arguments: ["serve"])
+        defer { child.cleanupIfRunning() }
+        try child.writeFrame(#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#)
+        let response = try parseFrame(child.waitForNextFrame(timeout: frameTimeout))
+        XCTAssertEqual((response["id"] as? NSNumber)?.intValue, 1)
+        XCTAssertNil(response["error"])
+        child.closeStdin()
+        XCTAssertTrue(child.waitForExit(timeout: frameTimeout))
+        XCTAssertEqual(child.exitCode, 0)
+        XCTAssertTrue(child.stderrLines().isEmpty, "direct route must not emit a deprecation warning")
+    }
+
     // MARK: - Helpers
 
-    private func launchServe() throws -> ServeChild {
+    private func launchServe(arguments: [String] = ["tune", "serve"]) throws -> ServeChild {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symtuneBinary)
-        process.arguments = ["tune", "serve"]
+        process.arguments = arguments
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()

@@ -1,18 +1,14 @@
-// PB-2026-09-09 §4/§8: reviewed command ownership for the transitional
-// direct-command spelling. Keep this table authoritative: the dispatcher,
-// documentation, and acceptance tests must agree before any prefix retirement.
+// PB-2026-09-09 §4/§8: reviewed command ownership. Keep this table
+// authoritative: the dispatcher, documentation, and acceptance tests must
+// agree before the legacy prefix is removed.
 enum CockpitCommandMap {
-    /// Tune commands safe to expose at the root because neither retained
-    /// family owns the same command name.
+    /// Tune commands exposed at the root. Former collisions with Operate and
+    /// Scope were resolved when those families moved to Brain.
     static let directTuneCommands: [String] = [
         "sensors", "battery", "displays", "metrics", "ai-usage",
         "processes", "top",
         "status", "awake", "brightness", "extbright", "dim", "warmth",
         "restore", "profile", "fan", "battery-limit",
-    ]
-
-    /// Tune commands retained behind `tune` for explicit command discovery.
-    static let collidingTuneCommands: [String] = [
         "doctor", "permissions", "serve", "history",
     ]
 

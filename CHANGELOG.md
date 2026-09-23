@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+### Added
+- `doctor`, `permissions`, `history`, and `serve` now work directly under
+  `symcockpit`, completing the command map after Operate and Scope moved to
+  Brain (#259).
+
 ### Changed
+- The `symcockpit tune …` prefix emits a stderr deprecation warning while
+  retaining the same command behavior, including JSON/MCP stdout. It remains
+  supported through the next two minor releases (v0.8 and v0.9), with removal
+  planned for v0.10 after migration checks (#259).
 - Release artifacts are stripped before packaging: the CLI tarball and the
   app executable no longer ship the full Swift symbol table (112k symbols,
   more than half the binary size). The CLI keeps an ad-hoc signature so it
