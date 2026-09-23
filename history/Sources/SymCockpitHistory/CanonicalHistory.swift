@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// JSON values used for component-specific fields in the canonical history envelope.
@@ -129,24 +130,26 @@ public typealias HistoryRecord = CanonicalHistoryEvent
 
 /// The sole JSONL writer/reader used by tune and tune.
 public final class CanonicalHistoryStore: @unchecked Sendable {
+    private static let processLock = NSLock()
+
     public let fileURL: URL
+    private let lockFileURL: URL
     private let maxEvents: Int
-    private let lock = NSLock()
 
     public init(fileURL: URL, maxEvents: Int = 1000) {
-        self.fileURL = fileURL
+        self.fileURL = fileURL.standardizedFileURL
+        self.lockFileURL = self.fileURL.appendingPathExtension("lock")
         self.maxEvents = max(1, maxEvents)
         let manager = FileManager.default
         try? manager.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
+            at: self.fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700]
         )
-        try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fileURL.deletingLastPathComponent().path)
-        if !manager.fileExists(atPath: fileURL.path) {
-            manager.createFile(atPath: fileURL.path, contents: nil, attributes: [.posixPermissions: 0o600])
-        }
-        secureFile()
+        try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: self.fileURL.deletingLastPathComponent().path)
+        ensureFile(at: self.fileURL)
+        ensureFile(at: lockFileURL)
+        secureFiles()
     }
 
     public var isWritable: Bool {
@@ -156,55 +159,126 @@ public final class CanonicalHistoryStore: @unchecked Sendable {
     }
 
     public func append(_ event: CanonicalHistoryEvent) throws {
-        lock.lock()
-        defer { lock.unlock() }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(event.redacted())
-        var line = data
+        var line = try encoder.encode(event.redacted())
         line.append(0x0A)
-        let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: line)
-        try trimIfNeeded()
-        secureFile()
+
+        try withExclusiveAccess {
+            defer { secureFiles() }
+            ensureFile(at: fileURL)
+            try appendRecoveringTail(line)
+            try trimIfNeeded()
+        }
     }
 
     /// Reads canonical records and migrates the two legacy flat JSON shapes in memory.
     /// Invalid and unknown lines are ignored so one corrupt append cannot hide later data.
     public func read(limit: Int? = nil) throws -> [CanonicalHistoryEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let data = try? Data(contentsOf: fileURL),
-              let contents = String(data: data, encoding: .utf8) else { return [] }
-        var records: [CanonicalHistoryEvent] = []
-        for line in contents.split(whereSeparator: \.isNewline) {
-            guard let data = String(line).data(using: .utf8) else { continue }
-            if let event = try? JSONDecoder().decode(CanonicalHistoryEvent.self, from: data),
-               event.schemaVersion <= CanonicalHistoryEvent.currentSchemaVersion {
-                records.append(event)
-                continue
-            }
-            guard let value = try? HistoryJSONValue.fromJSONData(data),
-                  case .object(let payload) = value,
-                  let action = payload["action"]?.stringValue,
-                  let timestamp = payload["timestamp"]?.stringValue else { continue }
-            records.append(CanonicalHistoryEvent(source: "legacy", timestamp: timestamp, action: action, payload: payload))
+        try withExclusiveAccess {
+            guard let data = try? Data(contentsOf: fileURL) else { return [] }
+            let records = data.split(separator: 0x0A).compactMap { Self.decodeRecord(Data($0)) }
+            if let limit, limit > 0 { return Array(records.suffix(limit)) }
+            return records
         }
-        if let limit, limit > 0 { return Array(records.suffix(limit)) }
-        return records
+    }
+
+    private func withExclusiveAccess<T>(_ body: () throws -> T) throws -> T {
+        Self.processLock.lock()
+        defer { Self.processLock.unlock() }
+
+        ensureFile(at: lockFileURL)
+        secureFiles()
+        let lockHandle = try FileHandle(forUpdating: lockFileURL)
+        defer { try? lockHandle.close() }
+        var fileLock = Darwin.flock()
+        fileLock.l_type = Int16(F_WRLCK)
+        fileLock.l_whence = Int16(SEEK_SET)
+        while Darwin.fcntl(lockHandle.fileDescriptor, F_SETLKW, &fileLock) == -1 {
+            guard errno == EINTR else { throw Self.currentPOSIXError() }
+        }
+        defer {
+            var unlock = Darwin.flock()
+            unlock.l_type = Int16(F_UNLCK)
+            unlock.l_whence = Int16(SEEK_SET)
+            _ = Darwin.fcntl(lockHandle.fileDescriptor, F_SETLK, &unlock)
+        }
+        return try body()
+    }
+
+    private func appendRecoveringTail(_ line: Data) throws {
+        let handle = try FileHandle(forUpdating: fileURL)
+        defer { try? handle.close() }
+
+        let contents = try Data(contentsOf: fileURL)
+        if let lastByte = contents.last, lastByte != 0x0A {
+            let tailStart = contents.lastIndex(of: 0x0A).map { contents.index(after: $0) } ?? contents.startIndex
+            let tail = Data(contents[tailStart...])
+            if Self.decodeRecord(tail) != nil {
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data([0x0A]))
+            } else {
+                try handle.truncate(atOffset: UInt64(tailStart))
+            }
+        }
+
+        try handle.seekToEnd()
+        try handle.write(contentsOf: line)
     }
 
     private func trimIfNeeded() throws {
-        let contents = try String(contentsOf: fileURL, encoding: .utf8)
-        let lines = contents.split(whereSeparator: \.isNewline)
+        let contents = try Data(contentsOf: fileURL)
+        let lines = contents.split(separator: 0x0A)
         guard lines.count > maxEvents else { return }
-        let trimmed = lines.suffix(maxEvents).map(String.init).joined(separator: "\n") + "\n"
-        try trimmed.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        var trimmed = Data()
+        for line in lines.suffix(maxEvents) {
+            trimmed.append(contentsOf: line)
+            trimmed.append(0x0A)
+        }
+
+        let temporaryURL = fileURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(fileURL.lastPathComponent).\(UUID().uuidString).tmp")
+        let manager = FileManager.default
+        guard manager.createFile(
+            atPath: temporaryURL.path,
+            contents: trimmed,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        defer { try? manager.removeItem(at: temporaryURL) }
+        guard Darwin.rename(temporaryURL.path, fileURL.path) == 0 else {
+            throw Self.currentPOSIXError()
+        }
     }
 
-    private func secureFile() {
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+    private static func decodeRecord(_ data: Data) -> CanonicalHistoryEvent? {
+        if let event = try? JSONDecoder().decode(CanonicalHistoryEvent.self, from: data),
+           event.schemaVersion <= CanonicalHistoryEvent.currentSchemaVersion {
+            return event
+        }
+        guard let value = try? HistoryJSONValue.fromJSONData(data),
+              case .object(let payload) = value,
+              let action = payload["action"]?.stringValue,
+              let timestamp = payload["timestamp"]?.stringValue else { return nil }
+        return CanonicalHistoryEvent(source: "legacy", timestamp: timestamp, action: action, payload: payload)
+    }
+
+    private func ensureFile(at url: URL) {
+        let manager = FileManager.default
+        if !manager.fileExists(atPath: url.path) {
+            manager.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
+        }
+    }
+
+    private func secureFiles() {
+        let manager = FileManager.default
+        try? manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        try? manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: lockFileURL.path)
+    }
+
+    private static func currentPOSIXError() -> POSIXError {
+        POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
     }
 }
