@@ -23,7 +23,8 @@ final class CommandMapAcceptanceE2ETests: XCTestCase {
         "profile", "fan", "battery-limit",
     ]
 
-    private let collidingTuneCommands = ["doctor", "permissions", "serve", "history"]
+    private let formerCollisions = ["doctor", "permissions", "history"]
+    private let deprecation = "symcockpit: 'tune' is deprecated;"
 
     func testEveryReviewedDirectAliasMatchesLegacyTuneRoute() throws {
         for command in directTuneCommands {
@@ -32,39 +33,29 @@ final class CommandMapAcceptanceE2ETests: XCTestCase {
                 let legacy = try run(["tune", command, help])
                 XCTAssertEqual(direct.status, legacy.status, command)
                 XCTAssertEqual(direct.stdout, legacy.stdout, command)
-                XCTAssertEqual(direct.stderr, legacy.stderr, command)
+                XCTAssertTrue(legacy.stderr.hasPrefix(deprecation), command)
+                XCTAssertTrue(legacy.stderr.hasSuffix(direct.stderr), command)
             }
         }
     }
 
-    func testEveryCollisionRemainsNamespacedAndReachable() throws {
-        for command in collidingTuneCommands {
-            let bare = try run([command])
-            XCTAssertEqual(bare.status, 2, command)
-            XCTAssertTrue(bare.stderr.contains("unknown family"), bare.stderr)
-
-            // `history` has no help mode; parse-error evidence still proves
-            // the namespaced dispatcher reached the Tune handler.
-            if command == "history" {
-                let namespaced = try run(["tune", command, "--help"])
-                XCTAssertEqual(namespaced.status, 2, command)
-                XCTAssertTrue(namespaced.stderr.contains("history"), namespaced.stderr)
-            } else if command == "serve" {
-                // The safe stdio initialize/tools-list fixture covers serve;
-                // launching it with --help would enter its blocking loop.
-            } else {
-                let namespaced = try run(["tune", command, "--help"])
-                XCTAssertEqual(namespaced.status, 0, command)
-                XCTAssertFalse(namespaced.stdout.isEmpty, command)
-            }
+    func testFormerCollisionsHaveDirectRoutes() throws {
+        for command in formerCollisions {
+            let direct = try run([command, "--help"])
+            let legacy = try run(["tune", command, "--help"])
+            XCTAssertEqual(direct.status, legacy.status, command)
+            XCTAssertEqual(direct.stdout, legacy.stdout, command)
+            XCTAssertTrue(legacy.stderr.hasPrefix(deprecation), command)
+            XCTAssertTrue(legacy.stderr.hasSuffix(direct.stderr), command)
         }
+        // Direct `serve` is exercised by the bounded MCP stdio integration test.
     }
 
     func testTuneFamilyAndVersionAliasesRemainExecutable() throws {
         let result = try run(["tune", "--help"])
         XCTAssertEqual(result.status, 0)
         XCTAssertFalse(result.stdout.isEmpty)
-        XCTAssertTrue(result.stderr.isEmpty)
+        XCTAssertTrue(result.stderr.hasPrefix(deprecation), result.stderr)
 
         let version = try run(["version"])
         for alias in ["--version", "-V"] {

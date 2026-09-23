@@ -87,10 +87,10 @@ you name the binary yourself.
 ## Quick start
 
 ```console
-$ symcockpit tune sensors
+$ symcockpit sensors
 { "thermal_pressure": "nominal", "fans": [ { "rpm": 1980 } ], "smc_supported": true }
 
-$ symcockpit tune brightness set 0.5
+$ symcockpit brightness set 0.5
 ```
 
 ## The GUI
@@ -159,15 +159,19 @@ services the CLI calls, so the window and the shell cannot disagree. The GUI rea
 > its own grants the first time you use those features — separately from the
 > CLI, even on the same Mac.
 
-## Tune commands
+## Commands
 
-`symcockpit tune` exposes thermals, power, battery, display, fan, brightness, profiles, diagnostics and the Tune MCP server. Safe non-colliding commands also work without the `tune` prefix.
+Direct `symcockpit` commands expose thermals, power, battery, display, fan,
+brightness, profiles, diagnostics and the Tune MCP server. The old
+`symcockpit tune <command>` spelling prints a warning to stderr and remains
+supported through v0.9 (the next two minor releases, v0.8 and v0.9); migrate
+clients to the direct spelling before its planned removal in v0.10.
 
 ```text
-symcockpit tune doctor
-symcockpit tune sensors
-symcockpit tune brightness set 0.5
-symcockpit tune serve
+symcockpit doctor
+symcockpit sensors
+symcockpit brightness set 0.5
+symcockpit serve
 ```
 
 ## MCP / Agent integration
@@ -178,12 +182,12 @@ agent configuration:
 ```json
 {
   "mcpServers": {
-    "cockpit-tune": { "command": "symcockpit", "args": ["tune", "serve"] }
+    "cockpit-tune": { "command": "symcockpit", "args": ["serve"] }
   }
 }
 ```
 
-In `tune serve`, `stdout` carries JSON-RPC and nothing else; logs and
+In `serve`, `stdout` carries JSON-RPC and nothing else; logs and
 diagnostics go to `stderr`.
 
 ## Permissions and safety
