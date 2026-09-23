@@ -113,11 +113,18 @@ func runVersion(checkForUpdates: Bool) {
     _ = done.wait(timeout: .now() + 5)
 }
 
-/// Pull the first parseable Double out of the remaining args (accepts an
-/// optional leading `set`), e.g. `extbright set 1.4` or `dim 0.5`.
+/// Reject extra arguments before a command performs any side effects.
+private func rejectTrailingArguments(_ args: [String], after count: Int, command: String) throws {
+    if args.count > count {
+        throw TuneError.usage("\(command): unexpected argument '\(args[count])'")
+    }
+}
+
+/// Parse one numeric value with an optional leading `set`.
 func parseValue(_ args: [String], command: String) throws -> Double {
-    for arg in args {
-        if arg == "set" { continue }
+    let values = args.first == "set" ? Array(args.dropFirst()) : args
+    try rejectTrailingArguments(values, after: 1, command: command)
+    if let arg = values.first {
         if let value = Double(arg) { return value }
         throw TuneError.usage("\(command): unexpected argument '\(arg)'")
     }
@@ -125,8 +132,9 @@ func parseValue(_ args: [String], command: String) throws -> Double {
 }
 
 func parseInt(_ args: [String], command: String) throws -> Int {
-    for arg in args {
-        if arg == "set" { continue }
+    let values = args.first == "set" ? Array(args.dropFirst()) : args
+    try rejectTrailingArguments(values, after: 1, command: command)
+    if let arg = values.first {
         if let value = Int(arg) { return value }
         throw TuneError.usage("\(command): unexpected argument '\(arg)'")
     }
@@ -169,6 +177,7 @@ func runProfile(_ args: [String], controller: TuneController) throws {
         throw TuneError.usage("profile: expected subcommand (save, load, list, delete).")
     }
     let rest = Array(args.dropFirst())
+    try rejectTrailingArguments(rest, after: subcommand == "list" ? 0 : 1, command: "profile \(subcommand)")
 
     switch subcommand {
     case "save":
@@ -345,6 +354,7 @@ private func runWriteCommand(_ cmd: WriteCommand, rest: [String], controller: Tu
             try cmd.apply(controller, value)
         }
     } else {
+        try rejectTrailingArguments(rest, after: cmd.cliPrefix.split(separator: " ").count - 1, command: cmd.cliPrefix)
         try cmd.apply(controller, 0)
     }
     try emitJSON(ApplyResult(applied: true))
@@ -367,6 +377,7 @@ private func dispatchCommand(_ command: String, rest: [String], controller: Tune
         try runAwake(rest, controller: controller)
     case "brightness":
         if rest.first == "get" || rest.isEmpty {
+            try rejectTrailingArguments(rest, after: 1, command: "brightness get")
             let brightness = try controller.getBuiltinBrightness()
             try emitJSON(BrightnessReadback(brightness: brightness))
         } else if let cmd = writeCommandByPrefix["brightness set"] {
@@ -437,6 +448,7 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
         emit("       symtune fan profile [system|comfort|performance]")
         emit("       symtune fan governor [--state <path>]   (requires root)")
     } else if rest.first == "auto" {
+        try rejectTrailingArguments(rest, after: 1, command: "fan auto")
         try controller.restoreFanAuto()
         try emitJSON(ApplyResult(applied: true))
     } else if rest.first == "profile" {
@@ -457,6 +469,7 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
 /// prompt. A governor already running picks the change up on its next tick; if
 /// none is, this says so and how to start one.
 private func runFanProfile(_ rest: [String], controller: TuneController) throws {
+    try rejectTrailingArguments(rest, after: 1, command: "fan profile")
     guard let name = rest.first else {
         try emitJSON(FanProfileResult(
             profile: controller.activeFanProfile.rawValue,
@@ -487,11 +500,15 @@ private func runFanProfile(_ rest: [String], controller: TuneController) throws 
 /// `/var/root` and the default per-user path would resolve to the wrong file.
 private func runFanGovernor(_ rest: [String], controller: TuneController) throws {
     var stateURL = FanProfileStore.defaultURL()
-    if let index = rest.firstIndex(of: "--state") {
-        guard index + 1 < rest.count else {
+    if let first = rest.first {
+        guard first == "--state" else {
+            throw TuneError.usage("fan governor: unexpected argument '\(first)'")
+        }
+        guard rest.count > 1 else {
             throw TuneError.usage("fan governor: --state requires a path.")
         }
-        stateURL = URL(fileURLWithPath: rest[index + 1])
+        try rejectTrailingArguments(rest, after: 2, command: "fan governor")
+        stateURL = URL(fileURLWithPath: rest[1])
     }
     try controller.runFanGovernor(stateURL: stateURL)
 }

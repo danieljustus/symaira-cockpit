@@ -180,7 +180,13 @@ extension WriteCommand {
             valueType: .integer,
             isContinuous: true,
             mcpArgName: "percent",
-            apply: { try $0.applyChargeLimit(percent: Int($1)) }
+            apply: { controller, value in
+                // Double(Int.max) rounds out of range; reject it before hardware I/O.
+                guard let percent = Int(exactly: value) else {
+                    throw TuneError.usage("battery-limit: percent value is not a representable integer (got \(value)).")
+                }
+                try controller.applyChargeLimit(percent: percent)
+            }
         ),
         WriteCommand(
             name: "battery-limit.clear",
@@ -209,4 +215,5 @@ extension WriteCommand {
     public static func forMCPName(_ mcpName: String) -> WriteCommand? {
         all.first { $0.mcpName == mcpName }
     }
+
 }
