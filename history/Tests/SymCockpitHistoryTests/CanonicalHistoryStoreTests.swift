@@ -112,6 +112,12 @@ final class CanonicalHistoryStoreTests: XCTestCase {
     }
 
     func testIndependentProcessesSerializeTailRecoveryAppendAndRetention() throws {
+        let freshURL = temporaryDirectoryURL.appendingPathComponent("fresh.jsonl")
+        let freshPrefixes = ["cli-fresh", "gui-fresh", "cli-second", "gui-second"]
+        try runWorkers(prefixes: freshPrefixes, count: 10, maxEvents: 100, fileURL: freshURL, sequentially: false)
+        let freshIDs = Set(expectedWorkerIDs(prefixes: freshPrefixes, count: 10))
+        try assertHistory(at: freshURL, expectedIDs: freshIDs, allowedIDs: freshIDs, expectedCount: 40)
+
         let sequentialURL = temporaryDirectoryURL.appendingPathComponent("sequential.jsonl")
         try encodedLine(event(id: "seed")).write(to: sequentialURL)
         let sequentialPrefixes = ["cli-sequential", "gui-sequential"]

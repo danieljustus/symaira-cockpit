@@ -266,10 +266,8 @@ public final class CanonicalHistoryStore: @unchecked Sendable {
     }
 
     private func ensureFile(at url: URL) {
-        let manager = FileManager.default
-        if !manager.fileExists(atPath: url.path) {
-            manager.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
-        }
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_CREAT, 0o600)
+        if descriptor >= 0 { _ = Darwin.close(descriptor) }
     }
 
     private func secureFiles() {
