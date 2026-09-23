@@ -3,8 +3,7 @@ import XCTest
 
 /// Verifies the PB-2026-09-09 §4/§8 direct-alias layer: most `tune`
 /// commands also work at the root, without the `tune` prefix, with
-/// byte-identical output — and the four names that collide with `operate`
-/// (and, for `serve`, also `scope`) stay reachable only via `tune`.
+/// matching stdout/exit status. Legacy stderr includes a deprecation warning.
 final class TuneDirectAliasE2ETests: XCTestCase {
     private struct ProcessResult {
         let stdout: String
@@ -28,12 +27,9 @@ final class TuneDirectAliasE2ETests: XCTestCase {
         "sensors", "battery", "displays", "metrics", "ai-usage",
         "processes", "top",
         "status", "awake", "brightness", "extbright", "dim", "warmth",
-        "restore", "profile", "fan", "battery-limit",
+        "restore", "profile", "fan", "battery-limit", "doctor", "permissions", "history",
     ]
 
-    /// Collides with `operate` (and `serve` additionally with `scope`) —
-    /// must stay reachable only as `symcockpit tune <cmd>`.
-    private let collidingCommands = ["doctor", "permissions", "serve", "history"]
 
     func testDirectAliasMatchesTunePrefixedOutput() throws {
         for command in aliasedCommands {
@@ -42,22 +38,15 @@ final class TuneDirectAliasE2ETests: XCTestCase {
 
             XCTAssertEqual(direct.stdout, prefixed.stdout,
                            "symcockpit \(command) --help should match symcockpit tune \(command) --help")
-            XCTAssertEqual(direct.stderr, prefixed.stderr,
-                           "symcockpit \(command) --help diagnostics should match the tune-prefixed form")
+            XCTAssertTrue(prefixed.stderr.hasPrefix("symcockpit: 'tune' is deprecated;"),
+                          "legacy route must announce the migration for \(command)")
+            XCTAssertTrue(prefixed.stderr.hasSuffix(direct.stderr),
+                          "legacy route must retain the command diagnostics for \(command)")
             XCTAssertEqual(direct.status, prefixed.status,
                            "symcockpit \(command) --help exit code should match the tune-prefixed form")
         }
     }
 
-    func testCollidingCommandsStayTunePrefixedOnly() throws {
-        for command in collidingCommands {
-            let bare = try run([command])
-            XCTAssertEqual(bare.status, 2,
-                           "symcockpit \(command) (no family prefix) must stay an unknown-family error, not silently alias to tune")
-            XCTAssertTrue(bare.stderr.contains("unknown family"),
-                          "symcockpit \(command) should report unknown family: \(bare.stderr)")
-        }
-    }
 
     private func run(_ arguments: [String]) throws -> ProcessResult {
         let process = Process()
