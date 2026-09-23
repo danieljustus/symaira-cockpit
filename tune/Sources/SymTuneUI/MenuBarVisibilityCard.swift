@@ -146,6 +146,7 @@ struct MenuBarVisibilityCard: View {
 
             switchCell(
                 isOn: isMonitored,
+                accessibilityLabel: "Monitor \(metric.displayName)",
                 help: "Sample \(metric.displayName) for the panel and its history"
             ) { newValue in
                 if newValue {
@@ -161,6 +162,7 @@ struct MenuBarVisibilityCard: View {
 
             switchCell(
                 isOn: isVisible,
+                accessibilityLabel: "Show \(metric.displayName) in menu bar",
                 help: "Show \(metric.displayName) in the menu bar"
             ) { newValue in
                 if newValue {
@@ -198,6 +200,7 @@ struct MenuBarVisibilityCard: View {
 
             switchCell(
                 isOn: preferences.showCalendarWeek,
+                accessibilityLabel: "Show calendar week in menu bar",
                 help: "Show the current ISO-8601 calendar week in the menu bar"
             ) { newValue in
                 preferences.showCalendarWeek = newValue
@@ -236,6 +239,7 @@ struct MenuBarVisibilityCard: View {
 
             switchCell(
                 isOn: aiUsage.menuBarEnabled,
+                accessibilityLabel: "Show AI usage in menu bar",
                 help: "Append the active provider's usage to the menu bar",
                 disabled: !hasEnabledAIProviders
             ) { newValue in
@@ -351,6 +355,7 @@ struct MenuBarVisibilityCard: View {
     /// One switch under one of the two named columns.
     private func switchCell(
         isOn: Bool,
+        accessibilityLabel: String,
         help: String,
         disabled: Bool = false,
         set: @escaping (Bool) -> Void
@@ -359,6 +364,7 @@ struct MenuBarVisibilityCard: View {
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()
+            .accessibilityLabel(accessibilityLabel)
             .tint(SymairaTheme.goldPrimary)
             .frame(width: 64)
             .disabled(disabled)

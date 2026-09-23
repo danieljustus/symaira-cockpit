@@ -163,6 +163,7 @@ struct PreferencesView: View {
             }
             .toggleStyle(.switch)
             .frame(width: 80)
+            .accessibilityLabel("Show calendar week in menu bar")
             .help("Show the current ISO-8601 calendar week in the menu bar")
         }
         .padding(.horizontal, SymairaSpacing.medium)
@@ -190,6 +191,7 @@ struct PreferencesView: View {
                         .frame(width: 20, height: 14)
                 })
                 .buttonStyle(.plain)
+                .accessibilityLabel("Move \(metric.displayName) up")
                 .disabled(isFirst)
                 .opacity(isFirst ? 0.3 : 0.8)
                 .foregroundStyle(SymairaTheme.textSecondary)
@@ -200,6 +202,7 @@ struct PreferencesView: View {
                         .frame(width: 20, height: 14)
                 })
                 .buttonStyle(.plain)
+                .accessibilityLabel("Move \(metric.displayName) down")
                 .disabled(isLast)
                 .opacity(isLast ? 0.3 : 0.8)
                 .foregroundStyle(SymairaTheme.textSecondary)
@@ -235,6 +238,7 @@ struct PreferencesView: View {
             }
             .toggleStyle(.switch)
             .frame(width: 100)
+            .accessibilityLabel("Monitor \(metric.displayName)")
 
             // Show/hide toggle
             Toggle(isOn: Binding(
@@ -256,6 +260,7 @@ struct PreferencesView: View {
             }
             .toggleStyle(.switch)
             .frame(width: 80)
+            .accessibilityLabel("Show \(metric.displayName) in menu bar")
             .disabled(!isEnabled)
         }
 
