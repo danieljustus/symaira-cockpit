@@ -35,8 +35,8 @@ history/                  # shared library: canonical history, replay codec,
 
 The nested packages remain independently buildable for package-level
 compatibility, but only `symcockpit` is the shipped CLI binary. `history/`
-is the odd one out: no CLI, no MCP server, just a library that `tune/` and
-`tune/` depends on by path. It is built and tested with the rest.
+is the odd one out: no CLI, no MCP server, just a library that `tune/`
+depends on by path. It is built and tested with the rest.
 
 `DeterministicReplayCodec` is future replay groundwork, not a live production
 feature: it currently has no production caller, and its checks are not a
