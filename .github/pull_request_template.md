@@ -27,7 +27,7 @@ Closes #
 
 <!--
 Paste what you actually ran and what it returned. `make test` covers
-tune/operate/scope/history; the root package's E2E suite needs a separate
+tune/history; the root package's E2E suite needs a separate
 `swift test` at the repo root, and the GUI bundle needs `make build-app`.
 -->
 

@@ -49,16 +49,16 @@ reported to the project owner, **danieljustus**, who maintains the reporting
 and enforcement contacts for this project. Reports are reviewed and enforced
 by the project owner.
 
-Use the same channels as the [Security Policy](.github/SECURITY.md) — do not
+Use the same channels as the [Security Policy](../SECURITY.md) — do not
 invent or guess contact details:
 
 - **GitHub Private Vulnerability Reporting** (preferred for confidential
   reports): use the "Report a vulnerability" button on the
-  [Security tab](https://github.com/danieljustus/symaira-tune/security).
+  [Security tab](https://github.com/danieljustus/symaira-cockpit/security).
 - **Email**: the maintainer's address listed on the
   [GitHub profile](https://github.com/danieljustus).
 - For non-confidential concerns, you may also open a
-  [GitHub issue](https://github.com/danieljustus/symaira-tune/issues).
+  [GitHub issue](https://github.com/danieljustus/symaira-cockpit/issues).
 
 All reports will be reviewed and investigated promptly and fairly.
 Confidentiality will be respected.

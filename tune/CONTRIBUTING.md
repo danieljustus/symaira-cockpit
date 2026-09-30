@@ -13,8 +13,8 @@ By participating in this project you agree to abide by the
 1. **Clone the repo**:
 
    ```bash
-   git clone https://github.com/danieljustus/symaira-tune.git
-   cd symaira-tune
+   git clone https://github.com/danieljustus/symaira-cockpit.git
+   cd symaira-cockpit/tune
    ```
 
 2. **Build**:
@@ -99,6 +99,6 @@ make smoke-app
 
 ## Questions?
 
-Open a [Discussion](https://github.com/danieljustus/symaira-tune/discussions)
+Open a [Discussion](https://github.com/danieljustus/symaira-cockpit/discussions)
 if you have questions before starting work. For security vulnerabilities,
-follow the [Security Policy](.github/SECURITY.md) — do not open a public issue.
+follow the [Security Policy](../SECURITY.md) — do not open a public issue.

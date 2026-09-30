@@ -126,9 +126,9 @@ signed by that same team. The mandatory client-authentication contract requires:
   `runtime`.
 
 The helper must refuse the connection when any check fails. These requirements
-are blocking acceptance criteria on the helper roadmap item
-([`docs/roadmap.md`](docs/roadmap.md)) and are part of the `SMCHelperProtocol`
-contract itself.
+are blocking acceptance criteria on the helper roadmap item (kept in the
+repo-local `docs/roadmap.md`, which is intentionally not tracked) and are part
+of the `SMCHelperProtocol` contract itself.
 
 ## Write-path matrix
 
