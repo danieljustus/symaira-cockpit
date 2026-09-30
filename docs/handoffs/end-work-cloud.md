@@ -9,6 +9,7 @@ Continue the code and integration work from the published repository, without ne
 - Base code commit before this document/checkpoint: `a04f14134692951305f3495935e9882ac2f43220`.
 - Working directory for every command below: the checked-out repository root.
 - Publication does not authorize a merge, release, tag, destructive cleanup or paid service.
+- Continuation draft PR: #299. Keep it draft until its code/acceptance gates are independently satisfied.
 
 Retain the existing product code without declaring native accessibility acceptance complete. macOS control-level VoiceOver/keyboard testing and compatibility migration remain explicit integration gates.
 
@@ -71,7 +72,14 @@ Prepublication secret-pattern/outgoing-history scans succeeded for the selected 
 
 No new source code was changed on this branch; the fresh remote-clone command results will be recorded below.
 
-Fresh remote-clone verification: pending publication and replay. Target cloud runtime, permissions, secrets and network gates: **not checked**.
+Fresh remote-clone verification was executed locally on macOS at published checkpoint `ca6607960411f5ddf95308328188e480d69bc0f6`. The repository was cloned directly from GitHub, without copied worktree files, stashes or source/configuration overrides. The following scoped command chain exited **0**:
+
+```sh
+swift package resolve
+swift test
+```
+
+Rust compilation used two jobs, disabled dev/test debug info and a distinct build-output directory for each variant. Those output directories contained no required source or fixture inputs. Package manager dependency caches were allowed; application state and credentials were not supplied. This verifies repository-contained inputs and these scoped checks, not every product test or native acceptance criterion. Final documentation changes do not change the tested source; the published final HEAD must still be verified before continuation. Target cloud runtime, permissions, secrets and network gates: **not checked**.
 
 ## Copyable continuation request
 
