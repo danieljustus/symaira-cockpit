@@ -112,16 +112,28 @@ make run-app                         # …and launches it
 
 Symaira Cockpit lives in the menu bar, with a live readout and a compact
 control panel one click away. Open the window from the panel or the status
-item's context menu to go straight to the controls: no landing page, module
-sidebar or section switching. Controls and system readings sit side by side
-in a wide window and stack in a narrow one. Both surfaces use the same model
-and cards, and closing the window leaves the menu bar running.
+item's context menu to go straight to the controls. A collapsible sidebar
+jumps to Overview, Display, Power & cooling, Activity, or Menu bar & HUD
+inside one mounted panel; it does not switch modules or discard draft values.
+Narrow windows use an icon rail, while wide windows place the power and
+cooling cards side by side. Both surfaces use the same model and cards, and
+closing the window leaves the menu bar running.
 
-Expand **Menu bar & HUD** below the controls to customize the readout without
+Jump to **Menu bar & HUD** to customize the readout without
 leaving the panel. Its **Menu bar** card is the quick way to change the status
 item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 (show it), with a live preview of the result. Changes hit the menu bar
 immediately and are written to `config.toml`, so they survive a relaunch.
+
+Display and fan controls use native sliders with rounded rails, guide dots
+and light circular knobs in the existing dark/gold palette. Display values
+remain continuous; the fan slider selects **Standard**, **Cool**, or **Max**,
+not arbitrary RPM. Existing temperature curves and administrator permission
+checks still apply. Missing readings are labelled as loading rather than
+reported as healthy measurements.
+
+For hardware-isolated design previews in Xcode, see the
+[workspace design and preview guide](docs/ui-workspace.md).
 
 The Display card's **Brightness keys** row picks who answers F1 and F2:
 **Standard** leaves them to macOS, **SymCockpit** consumes them before macOS

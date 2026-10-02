@@ -38,7 +38,7 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .visible
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
-        window.setContentSize(NSSize(width: 940, height: 640))
+        window.setContentSize(NSSize(width: 1080, height: 760))
         window.contentMinSize = NSSize(width: 620, height: 520)
         // Closing the window must not deallocate it out from under the
         // delegate; `show()` reuses the same instance.

@@ -88,7 +88,6 @@ struct MainStatusView: View {
     var brightnessKeyController: BrightnessKeyController? = nil
 
     @State private var usesColumns = false
-    @State private var isReadoutExpanded = false
 
     var body: some View {
         switch chrome {
@@ -118,18 +117,36 @@ struct MainStatusView: View {
                     openCockpitRow(onOpenCockpit)
                 }
             }
-            LiveSummaryStrip(model: model)
+            if chrome == .embedded {
+                VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                    Text("This Mac")
+                        .symairaText(.title, respectsForeground: false)
+                        .foregroundStyle(SymairaTheme.textPrimary)
+                    Text("Display, power & cooling")
+                        .symairaText(.callout, respectsForeground: false)
+                        .foregroundStyle(SymairaTheme.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .id(TuneWorkspaceAnchor.overview)
+            }
+            LiveSummaryStrip(model: model, isExpanded: chrome == .embedded)
+            if chrome == .embedded && shows(.systemStatus) {
+                SystemStatusSection(model: model)
+            }
 
             // Never hidden: an available update is the one thing the user has
             // not opted out of seeing.
             UpdateNotificationView(updateChecker: updateChecker)
 
-            groupsLayout {
+            VStack(spacing: chrome == .embedded ? SymairaSpacing.section : SymairaSpacing.medium) {
                 if showsAnyControl || chrome == .embedded {
                     controlCards
                 }
-                if showsAnySystem {
+                if showsAnySystem || chrome == .embedded {
                     systemCards
+                }
+                if chrome == .embedded {
+                    readoutCards
                 }
             }
 
@@ -139,11 +156,16 @@ struct MainStatusView: View {
         }
         .padding(chrome == .popover ? SymairaSpacing.medium : 0)
         .frame(maxWidth: chrome == .popover ? 320 : .infinity)
+        // The canvas is always dark; adaptive typography and native controls
+        // must not inherit light appearance and draw dark ink on it.
+        .preferredColorScheme(.dark)
+        .tint(SymairaTheme.goldPrimary)
+        .environment(\.tunePanelChrome, chrome)
     }
 
     /// AnyLayout preserves each card's state when resizing between columns
     /// and a stack; changing view branches would reset duration and drag state.
-    private var groupsLayout: AnyLayout {
+    private var powerLayout: AnyLayout {
         if chrome == .embedded && usesColumns {
             return AnyLayout(HStackLayout(alignment: .top, spacing: SymairaSpacing.large))
         }
@@ -151,58 +173,53 @@ struct MainStatusView: View {
     }
 
     private var controlCards: some View {
-        VStack(spacing: SymairaSpacing.medium) {
-            if showsAnyControl {
-                GroupLabel("CONTROLS")
-            }
-            if shows(.displayControls) {
-                DisplayControlsCard(
-                    controller: controller,
-                    model: model,
-                    brightnessKeys: brightnessKeyPreferences,
-                    brightnessKeyController: brightnessKeyController
-                )
-            }
-            if shows(.keepAwake) {
-                KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
-            }
-            if shows(.fanControl, hardwareAvailable: hasFans) {
-                FanControlCard(controller: controller, model: model)
-            }
-            if chrome == .embedded {
-                DisclosureGroup("Menu bar & HUD", isExpanded: $isReadoutExpanded) {
-                    VStack(spacing: SymairaSpacing.medium) {
-                        MenuBarVisibilityCard(
-                            preferences: preferencesManager,
-                            aiUsage: aiUsageModel.preferences,
-                            model: model,
-                            hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                            readout: readoutPreferences,
-                            hudDock: hudDockPreferences
-                        )
-                        if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
-                            HUDContentSection(
-                                readout: readoutPreferences,
-                                dock: hudDockPreferences,
-                                items: hudItemPreferences,
-                                preferences: preferencesManager
-                            )
-                        }
-                    }
-                    .padding(.top, SymairaSpacing.small)
+        VStack(spacing: chrome == .embedded ? SymairaSpacing.section : SymairaSpacing.medium) {
+            VStack(spacing: SymairaSpacing.medium) {
+                GroupLabel(chrome == .embedded ? "Display" : "CONTROLS")
+                if shows(.displayControls) {
+                    DisplayControlsCard(
+                        controller: controller,
+                        model: model,
+                        brightnessKeys: brightnessKeyPreferences,
+                        brightnessKeyController: brightnessKeyController
+                    )
                 }
-                .symairaText(.subheading)
-                .foregroundStyle(SymairaTheme.textSecondary)
-                .tint(SymairaTheme.goldPrimary)
+                if chrome == .embedded && shows(.displays) {
+                    DisplaysSection(model: model)
+                }
+                if chrome == .embedded && !shows(.displayControls) && !shows(.displays) {
+                    hiddenCardsNote("Display cards are hidden in Preferences.")
+                }
             }
+            .id(TuneWorkspaceAnchor.display)
+
+            VStack(spacing: SymairaSpacing.medium) {
+                if chrome == .embedded {
+                    GroupLabel("Power & cooling")
+                }
+                powerLayout {
+                    if shows(.keepAwake) {
+                        KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    if shows(.fanControl, hardwareAvailable: hasFans) {
+                        FanControlCard(controller: controller, model: model)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                }
+                if chrome == .embedded && !shows(.keepAwake) && !shows(.fanControl, hardwareAvailable: hasFans) {
+                    hiddenCardsNote("Power controls are hidden or unavailable. Choose cards in Preferences.")
+                }
+            }
+            .id(TuneWorkspaceAnchor.power)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var systemCards: some View {
         VStack(spacing: SymairaSpacing.medium) {
-            GroupLabel("SYSTEM")
-            if shows(.systemStatus) {
+            GroupLabel(chrome == .embedded ? "Activity" : "SYSTEM")
+            if chrome == .popover && shows(.systemStatus) {
                 SystemStatusSection(model: model)
             }
             if shows(.topProcesses) {
@@ -214,11 +231,50 @@ struct MainStatusView: View {
             if shows(.metricsHistory) {
                 MetricsHistorySection(model: model)
             }
-            if shows(.displays) {
+            if chrome == .popover && shows(.displays) {
                 DisplaysSection(model: model)
+            }
+            if chrome == .embedded && !shows(.topProcesses) && !shows(.metricsHistory) && aiUsageModel.rows.isEmpty {
+                hiddenCardsNote("Activity cards are hidden in Preferences.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .id(TuneWorkspaceAnchor.activity)
+    }
+
+    private var readoutCards: some View {
+        VStack(spacing: SymairaSpacing.medium) {
+            GroupLabel("Menu bar & HUD")
+            MenuBarVisibilityCard(
+                preferences: preferencesManager,
+                aiUsage: aiUsageModel.preferences,
+                model: model,
+                hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
+                readout: readoutPreferences,
+                hudDock: hudDockPreferences
+            )
+            if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
+                HUDContentSection(
+                    readout: readoutPreferences,
+                    dock: hudDockPreferences,
+                    items: hudItemPreferences,
+                    preferences: preferencesManager
+                )
+            }
+        }
+        .id(TuneWorkspaceAnchor.readout)
+    }
+
+    private func hiddenCardsNote(_ text: String) -> some View {
+        HStack {
+            Text(text)
+                .symairaText(.callout, respectsForeground: false)
+                .foregroundStyle(SymairaTheme.textSecondary)
+            Spacer()
+            Button("Preferences…", action: openPreferences)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .cardStyle()
     }
 
     // MARK: - Card visibility
@@ -288,16 +344,17 @@ struct MainStatusView: View {
 /// A quiet divider-with-a-name between the two halves of the panel.
 private struct GroupLabel: View {
     let title: String
+    @Environment(\.tunePanelChrome) private var chrome
 
     init(_ title: String) { self.title = title }
 
     var body: some View {
         HStack(spacing: SymairaSpacing.small) {
             Text(title)
-                .symairaText(.sectionLabel)
-                .foregroundStyle(SymairaTheme.goldSecondary.opacity(0.8))
+                .symairaText(chrome == .embedded ? .heading : .sectionLabel, respectsForeground: false)
+                .foregroundStyle(chrome == .embedded ? SymairaTheme.textPrimary : SymairaTheme.goldSecondary)
             Rectangle()
-                .fill(SymairaTheme.goldPrimary.opacity(0.12))
+                .fill(SymairaTheme.borderGlass)
                 .frame(height: 1)
         }
         .padding(.horizontal, SymairaSpacing.xSmall)

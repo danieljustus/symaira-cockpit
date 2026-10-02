@@ -11,6 +11,7 @@ import SymTuneCore
 struct DisplayControlsCard: View {
     let controller: TuneController
     let model: TuneViewModel
+    @Environment(\.tunePanelChrome) private var chrome
 
     /// Who answers the brightness keys, or `nil` in a host that does not offer
     /// the takeover (the standalone Tune app). Issue #250.
@@ -25,7 +26,7 @@ struct DisplayControlsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+        VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.xLarge : SymairaSpacing.small) {
             TuneSliderRow(
                 title: "Screen Brightness",
                 systemImage: "sun.max.fill",
@@ -253,13 +254,9 @@ struct FanControlCard: View {
                     }
                 }
 
-                Picker("", selection: profileBinding) {
-                    ForEach(FanProfile.ordered, id: \.self) { profile in
-                        Text(profile.displayName).tag(profile)
-                    }
+                FanProfileSliderRow(profile: selectedProfile, isEnabled: !isAwaitingAuthorization) { profile in
+                    profileBinding.wrappedValue = profile
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
 
                 Text(selectedProfile.summary)
                     .symairaText(.caption)

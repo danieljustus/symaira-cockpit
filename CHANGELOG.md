@@ -6,12 +6,19 @@
 - `doctor`, `permissions`, `history`, and `serve` now work directly under
   `symcockpit`, completing the command map after Operate and Scope moved to
   Brain (#259).
+- Hardware-isolated Debug SwiftUI previews reuse the production components
+  with labelled fixtures and local-state-only controls (#310).
 
 ### Changed
-- The GUI opens directly into the shared tuning panel, without an Overview,
-  module sidebar or section shortcuts. Wide windows place controls beside
-  system readings; narrow windows stack them. Menu-bar/HUD customization
-  folds below the controls, and the toolbar has one Preferences action (#307).
+- The GUI opens directly into the shared tuning panel inside a quiet,
+  collapsible workspace. In-page shortcuts preserve draft values; narrow
+  windows use an icon rail, and the Symaira dark/gold palette is unchanged
+  (#307, #311).
+- Display and fan sliders use rounded rails, guide dots and light circular
+  knobs. Display ranges remain continuous and fan detents retain the existing
+  Standard, Cool and Max temperature curves and permission checks (#311).
+- Status cards use readable labels, accessible control names and explicit
+  loading states instead of reporting missing readings as healthy (#309).
 - The `symcockpit tune …` prefix emits a stderr deprecation warning while
   retaining the same command behavior, including JSON/MCP stdout. It remains
   supported through the next two minor releases (v0.8 and v0.9), with removal

@@ -22,6 +22,7 @@ struct CenterAnchoredSliderRow: View {
     /// Set when the positive half cannot do anything on this display.
     var maximumDisabledNote: String?
     let onCommit: (Double) -> Void
+    @Environment(\.tunePanelChrome) private var chrome
 
     @State private var localPosition: Double?
     @State private var isDragging = false
@@ -29,14 +30,15 @@ struct CenterAnchoredSliderRow: View {
     private var displayed: Double { localPosition ?? position }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             HStack {
                 Label(title, systemImage: systemImage)
-                    .symairaText(.caption)
+                    .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                     .foregroundStyle(SymairaTheme.textSecondary)
                 Spacer()
                 Text(format(displayed))
-                    .symairaText(.monoSmall)
+                    .symairaText(chrome == .embedded ? .body : .monoSmall, respectsForeground: false)
+                    .monospacedDigit()
                     .foregroundStyle(
                         abs(displayed) < 0.005
                             ? SymairaTheme.textMuted
@@ -44,27 +46,30 @@ struct CenterAnchoredSliderRow: View {
                     )
             }
 
-            ZStack(alignment: .center) {
-                // The centre detent, drawn behind the track: the one position
-                // that means "symtune is doing nothing to this display".
-                Rectangle()
-                    .fill(SymairaTheme.goldPrimary.opacity(0.35))
-                    .frame(width: 1, height: 12)
-
-                Slider(
-                    value: Binding(
-                        get: { displayed },
-                        set: { localPosition = snapToCentre($0) }
-                    ),
-                    in: BeyondNormalBrightness.positionRange,
-                    onEditingChanged: { editing in
-                        isDragging = editing
-                        guard !editing, let final = localPosition else { return }
-                        onCommit(final)
+            EffortSlider(
+                value: Binding(
+                    get: { displayed },
+                    set: {
+                        // Only pointer drags snap near centre. Snapping a
+                        // small keyboard step would trap the control at 0.
+                        let next = isDragging ? snapToCentre($0) : $0
+                        localPosition = next
+                        if !isDragging { onCommit(next) }
                     }
-                )
-                .tint(SymairaTheme.goldPrimary)
-            }
+                ),
+                range: BeyondNormalBrightness.positionRange,
+                tickCount: 5,
+                label: title,
+                valueDescription: format(displayed),
+                onEditingChanged: { editing in
+                    isDragging = editing
+                    guard !editing, let final = localPosition else { return }
+                    onCommit(final)
+                }
+            )
+            .frame(height: SymairaMetrics.minimumControlHeight)
+            .accessibilityLabel(title)
+            .accessibilityValue(format(displayed))
 
             HStack {
                 Text(minimumLabel)

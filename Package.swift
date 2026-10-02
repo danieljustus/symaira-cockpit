@@ -47,6 +47,7 @@ let package = Package(
             name: "SymCockpitE2ETests",
             dependencies: [
                 .product(name: "SymTuneCore", package: "tune"),
+                .product(name: "SymTuneUI", package: "tune"),
             ]
         ),
     ],

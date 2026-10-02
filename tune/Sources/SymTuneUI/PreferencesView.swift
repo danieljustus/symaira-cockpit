@@ -77,6 +77,8 @@ struct PreferencesView: View {
         }
         .frame(width: 560, height: 560)
         .background(SymairaTheme.bgDark)
+        .preferredColorScheme(.dark)
+        .tint(SymairaTheme.goldPrimary)
         .onAppear {
             refreshText = String(manager.metricsRefreshInterval)
         }
@@ -94,8 +96,8 @@ struct PreferencesView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Preferences")
-                    .symairaText(.heading)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .symairaText(.title, respectsForeground: false)
+                    .foregroundStyle(SymairaTheme.textPrimary)
                 Text("System Metrics")
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTheme.textSecondary)
