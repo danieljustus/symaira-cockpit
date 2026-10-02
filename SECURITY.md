@@ -1,8 +1,8 @@
 # Security Policy
 
-Symaira Cockpit is a native macOS tool that can inspect local system state,
-access configured credentials for usage reporting, and (when explicitly used)
-drive graphical applications. Please report vulnerabilities responsibly.
+Symaira Cockpit is a native macOS hardware/system-tuning tool for thermals,
+power, display and system metrics, with optional usage reports from Symaira
+Brain. Please report vulnerabilities responsibly.
 
 ## Reporting a vulnerability
 
@@ -25,16 +25,24 @@ Please do not include live credentials or other private data in a report.
 
 ## Credential handling
 
-The Tune family uses `KeychainCredentials` as its adapter over the shared
-`SymairaKeychain` module. Provider usage code resolves credentials lazily from
-its configured source, environment, or the macOS Keychain as appropriate. The
-`SecretRedactor` helper is the final output boundary for error and history text;
-credential-shaped material must not be written verbatim to logs or persisted
-history.
+Provider usage is fetched through `symbrain usage`. `SymBrainUsageProvider`
+construction is metadata-only and must not read credentials. For Cockpit-managed
+credentials, `SymVaultCredentialStore.reference(for:)` supplies opaque
+`symvault://` URIs; `symbrain` resolves them, not Cockpit.
+
+Explicit credential saves send values to `symvault` through standard input,
+never command arguments. One-shot legacy migration reads through
+`KeychainCredentials` and deletes the old Keychain item only after the SymVault
+write succeeds. Normal usage launches do not perform that migration.
+
+`SecretRedactor`, in the `history` package, is the final output boundary for
+error and history text; credential-shaped material must not be written verbatim
+to logs or persisted history.
 
 When reviewing credential-related changes:
 
-- Keep Keychain access behind `KeychainCredentials`.
+- Keep provider construction free of credential I/O and usage references opaque.
+- Keep legacy Keychain migration behind `KeychainCredentials`.
 - Route error/history output through `SecretRedactor`.
 - Add regression tests without committing provider-format secrets.
 - Report suspected exposure immediately through the private channels above.
@@ -50,7 +58,8 @@ When reviewing credential-related changes:
 
 ## Security boundaries
 
-- Operate action policy rejects destructive and secure-field automation.
+- Operate and Scope are optional Symaira Brain modules, not Cockpit security
+  boundaries or capabilities.
 - MCP `serve` modes keep stdout reserved for JSON-RPC frames.
 - Tune writes are clamped through its safety policy and restored on teardown.
 - Update checking is optional network access; the product otherwise operates
