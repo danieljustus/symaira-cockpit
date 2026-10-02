@@ -2,34 +2,34 @@
 
 ## Goal and immutable starting point
 
-Continue the code and integration work from the published repository, without needing a local chat, private reports or installed agent skills.
+Continue the code and integration work from the published repository, without needing a local chat, private reports or installed agent skills. This handoff was refreshed on 2026-10-02; its historical checkpoint remains available in Git history.
 
 - GitHub repository: `danieljustus/symaira-cockpit`.
-- Branch: `handoff/20260930-cloud`.
+- Canonical continuation branch: `main`. Historical checkpoint branch: `handoff/20260930-cloud`.
 - Base code commit before this document/checkpoint: `a04f14134692951305f3495935e9882ac2f43220`.
 - Working directory for every command below: the checked-out repository root.
 - Publication does not authorize a merge, release, tag, destructive cleanup or paid service.
-- Continuation draft PR: #299. Keep it draft until its code/acceptance gates are independently satisfied.
+- Continuation PR: #299. Its current diff is documentation only; verify that diff and required checks independently from product acceptance.
 
-Retain the existing product code without declaring native accessibility acceptance complete. macOS control-level VoiceOver/keyboard testing and compatibility migration remain explicit integration gates.
+Retain the existing product code without declaring native accessibility acceptance complete. The product owner explicitly approved integrating the label-only correction in #293 after required CI, with native keyboard/VoiceOver operation retained as the open, deferred follow-up #305. Compatibility-prefix removal remains future work for Cockpit v0.10 in #259.
 
 ## Requirements, decisions and next task
 
-Perform real macOS VoiceOver and keyboard control-level acceptance and verify naming/permission migration before promoting any pending product changes. A cloud Linux build cannot substitute for native acceptance.
+The embedded Tune `0.10.0` source correction is merged through #306 at `fda578a39fff96f99185e008ad6ea4ba6f093080`. The actual compiled CLI report and dated changelog agree; #278 remains open until the next Cockpit release artifact is published and verified. The published Cockpit v0.7.0 artifacts are unchanged. Schedule native keyboard/VoiceOver acceptance separately through #305; do not start VoiceOver, raise windows or inject foreground keys during the owner's active desktop use. The outstanding native checks are deferred, not passed. A cloud Linux build cannot substitute for native acceptance.
 
 Keep products and their optional modules standalone. Preserve exact dependency pins, snake_case contracts, data integrity, authorization and MCP stdout discipline. Keep frozen fixture evidence and original Oracle ancestry unchanged until an explicit preservation design is accepted. Do not rewrite history, force-push, bypass branch protection, delete unique work, close unproven issues or reinterpret a passing subset as complete acceptance.
 
-- No existing candidate PR was recorded for the selected code base.
+- PR #293 is merged as `818a2937992dbcd55bb932ab6d2a96cbafa52f1a`, closing the label-correction scope of #282. Its four required checks and local root/Tune/history builds/tests passed. AX names and native operation evidence are distinct; #305 preserves the missing operation checks.
 
 ## Setup and scoped verification
 
-Clone the existing public repository, checkout `handoff/20260930-cloud`, verify its current remote HEAD, and read this file before making changes. Never substitute another branch or silently mix the alternatives.
+Clone the existing public repository, checkout `main`, verify its current remote HEAD, and read this file before making changes. Historical-checkpoint reproduction must use its recorded commit separately, not silently mix source variants.
 
 ```sh
-git clone --branch handoff/20260930-cloud https://github.com/danieljustus/symaira-cockpit.git
+git clone --branch main https://github.com/danieljustus/symaira-cockpit.git
 cd symaira-cockpit
 git rev-parse HEAD
-git ls-remote --exit-code origin refs/heads/handoff/20260930-cloud
+git ls-remote --exit-code origin refs/heads/main
 git status --porcelain=v1 -uall
 ```
 
@@ -70,7 +70,7 @@ Native GUI/Keychain/Touch ID, signing, notarization, and real user-permission be
 
 Prepublication secret-pattern/outgoing-history scans succeeded for the selected base. Exact WIP path/byte comparison is required for checkpoint variants. Product-acceptance and target-cloud runtime are **not checked** by these records.
 
-No new source code was changed on this branch; the fresh remote-clone command results will be recorded below.
+The current diff against `main` changes only this handoff. The following fresh-clone record is historical evidence for its recorded checkpoint, not a claim about a later HEAD.
 
 Fresh remote-clone verification was executed locally on macOS at published checkpoint `ca6607960411f5ddf95308328188e480d69bc0f6`. The repository was cloned directly from GitHub, without copied worktree files, stashes or source/configuration overrides. The following scoped command chain exited **0**:
 
@@ -79,8 +79,8 @@ swift package resolve
 swift test
 ```
 
-Rust compilation used two jobs, disabled dev/test debug info and a distinct build-output directory for each variant. Those output directories contained no required source or fixture inputs. Package manager dependency caches were allowed; application state and credentials were not supplied. This verifies repository-contained inputs and these scoped checks, not every product test or native acceptance criterion. Final documentation changes do not change the tested source; the published final HEAD must still be verified before continuation. Target cloud runtime, permissions, secrets and network gates: **not checked**.
+The commands recorded for this Swift repository are the scoped Swift commands above; generic Rust build limits do not describe a Cockpit test result. Package manager dependency caches were allowed; application state and credentials were not supplied. This verifies repository-contained inputs and these scoped checks, not every product test or native acceptance criterion. The published final HEAD must still be verified before continuation. Target cloud runtime, permissions, secrets and network gates: **not checked**.
 
 ## Copyable continuation request
 
-Work in `danieljustus/symaira-cockpit` on `handoff/20260930-cloud`. Verify the exact remote HEAD given by the final publication record, read `docs/handoffs/end-work-cloud.md`, run the setup and scoped checks, then: Perform real macOS VoiceOver and keyboard control-level acceptance and verify naming/permission migration before promoting any pending product changes. A cloud Linux build cannot substitute for native acceptance. Respect all preservation and integration gates above.
+Work in `danieljustus/symaira-cockpit` on `main`. Verify the current remote HEAD, read `docs/handoffs/end-work-cloud.md`, and run the setup and scoped checks before further edits. The Tune source correction is merged; #278 still requires publication and verification of the next Cockpit release artifact. Retain the compatibility warning through v0.9 and track its v0.10 removal in #259. Native keyboard/VoiceOver acceptance is the owner-approved deferred follow-up #305, not a passed result. Do not interrupt active desktop use. Respect all preservation and integration gates above.
