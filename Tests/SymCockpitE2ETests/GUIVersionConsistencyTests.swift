@@ -28,6 +28,19 @@ final class GUIVersionConsistencyTests: XCTestCase {
         return String(text[group])
     }
 
+    func testEmbeddedTuneVersionMatchesLatestDatedChangelogEntry() throws {
+        let version = try XCTUnwrap(firstMatch(
+            #"public static let current = "([^"]+)""#,
+            in: read("tune/Sources/SymTuneCore/Version.swift")
+        ))
+        let changelogVersion = try XCTUnwrap(firstMatch(
+            #"(?m)^## \[([0-9]+\.[0-9]+\.[0-9]+)\] [^\n]*[0-9]{4}-[0-9]{2}-[0-9]{2}\r?$"#,
+            in: read("tune/CHANGELOG.md")
+        ))
+        XCTAssertEqual(version, changelogVersion,
+                       "the embedded component identity must match its latest dated baseline")
+    }
+
     func testSharedSourceFeedsDispatcherAndGUI() throws {
         let shared = try read("Sources/SymCockpitVersion/CockpitVersion.swift")
         let dispatcher = try read("Sources/symcockpit/main.swift")
