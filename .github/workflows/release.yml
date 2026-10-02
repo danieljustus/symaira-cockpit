@@ -381,7 +381,7 @@ jobs:
             # macOS-only (AppKit/IOKit/Accessibility/ScreenCaptureKit), so there is no
             # Linux leg to split on, and \`swift build --arch arm64 --arch x86_64\`
             # produces a single artifact for both Macs.
-            depends_on macos: :sonoma
+            depends_on macos: :tahoe
 
             url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/symcockpit_#{version}_darwin_universal.tar.gz"
             sha256 "${TAR_SHA256}"
@@ -425,7 +425,7 @@ jobs:
               regex(/Symaira-Cockpit-(\d+(?:\.\d+)*)-macos\.dmg/i)
             end
 
-            depends_on macos: :sonoma
+            depends_on macos: :tahoe
 
             app "Symaira Cockpit.app"
 
