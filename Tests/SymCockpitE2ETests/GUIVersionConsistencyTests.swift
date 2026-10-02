@@ -71,6 +71,23 @@ final class GUIVersionConsistencyTests: XCTestCase {
         XCTAssertFalse(releaseWorkflow.contains("Sources/symcockpit/main.swift"))
     }
 
+    func testHomebrewRequirementsMatchMacOS26DeploymentTarget() throws {
+        for manifest in ["Package.swift", "tune/Package.swift", "history/Package.swift"] {
+            XCTAssertEqual(
+                try firstMatch(#"\.macOS\(\.v([0-9]+)\)"#, in: read(manifest)),
+                "26",
+                "update the Homebrew requirements when the deployment target changes"
+            )
+        }
+        let workflow = try read(".github/workflows/release.yml")
+        XCTAssertEqual(
+            workflow.components(separatedBy: "depends_on macos: :tahoe").count - 1,
+            2,
+            "both the formula and cask must require macOS 26 Tahoe"
+        )
+        XCTAssertFalse(workflow.contains("depends_on macos: :sonoma"))
+    }
+
     func testApprovedAppIconIsBundledAndGuarded() throws {
         let plist = try read("Sources/SymCockpitApp/Info.plist")
         let buildScript = try read("scripts/build-app.sh")
