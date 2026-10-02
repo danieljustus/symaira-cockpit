@@ -7,10 +7,11 @@ import SymTuneCore
 /// The panel background shared by every card in the status popover.
 struct CardStyle: ViewModifier {
     var borderColor: Color = SymairaTheme.borderGlass
+    @Environment(\.tunePanelChrome) private var chrome
 
     func body(content: Content) -> some View {
         content
-            .padding(SymairaSpacing.medium)
+            .padding(chrome == .embedded ? SymairaSpacing.xLarge : SymairaSpacing.medium)
             .background(SymairaTheme.bgCard)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
             .overlay(
@@ -63,38 +64,55 @@ struct StatusHeaderView: View {
 @MainActor
 struct LiveSummaryStrip: View {
     let model: TuneViewModel
+    var isExpanded = false
 
     var body: some View {
         HStack(spacing: SymairaSpacing.small) {
-            chip("cpu", "cpu.fill", cpuText)
-            chip("ram", "memorychip.fill", memoryText)
-            chip("thermal", "thermometer.medium", thermalText, tint: thermalColor)
+            chip("cpu", label: "CPU", symbol: "cpu.fill", text: cpuText)
+            chip("ram", label: "Memory", symbol: "memorychip.fill", text: memoryText)
+            chip("thermal", label: "Thermal", symbol: "thermometer.medium", text: thermalText, tint: thermalColor)
         }
-        .padding(.horizontal, SymairaSpacing.xSmall)
+        .padding(.horizontal, isExpanded ? 0 : SymairaSpacing.xSmall)
     }
 
     private func chip(
         _ id: String,
-        _ symbol: String,
-        _ text: String,
+        label: String,
+        symbol: String,
+        text: String,
         tint: Color = SymairaTheme.goldPrimary
     ) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: isExpanded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             Image(systemName: symbol)
-                .font(.system(size: 9))
+                .font(isExpanded ? SymairaTypography.heading : .system(size: 9))
                 .foregroundStyle(tint)
-            Text(text)
-                .symairaText(.monoSmall)
-                .foregroundStyle(SymairaTheme.textPrimary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                if isExpanded {
+                    Text(label)
+                        .symairaText(.caption, respectsForeground: false)
+                        .foregroundStyle(SymairaTheme.textSecondary)
+                }
+                Text(text)
+                    .symairaText(isExpanded ? .heading : .monoSmall, respectsForeground: false)
+                    .monospacedDigit()
+                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
         }
-        .padding(.horizontal, SymairaSpacing.small)
-        .padding(.vertical, 3)
+        .padding(.horizontal, isExpanded ? SymairaSpacing.large : SymairaSpacing.small)
+        .padding(.vertical, isExpanded ? SymairaSpacing.medium : 3)
+        .frame(maxWidth: isExpanded ? .infinity : nil, alignment: .leading)
         .background(SymairaTheme.bgCard)
         .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
         .overlay(
             RoundedRectangle(cornerRadius: SymairaRadius.control)
                 .stroke(SymairaTheme.borderGlass, lineWidth: 1)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(text)
         .accessibilityIdentifier(id)
     }
 
@@ -119,6 +137,7 @@ struct LiveSummaryStrip: View {
     }
 
     private var thermalColor: Color {
+        guard model.sensors != nil else { return SymairaTheme.textMuted }
         switch thermalText.lowercased() {
         case "nominal": return SymairaTheme.positive
         case "fair": return SymairaTheme.warning
@@ -175,6 +194,11 @@ struct StatusFooterView: View {
 struct SystemStatusCard: View, Equatable {
     let battery: BatteryReport?
     let sensors: SensorReport?
+    @Environment(\.tunePanelChrome) private var chrome
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.battery == rhs.battery && lhs.sensors == rhs.sensors
+    }
 
     var body: some View {
         VStack(spacing: SymairaSpacing.small - 2) {
@@ -190,7 +214,7 @@ struct SystemStatusCard: View, Equatable {
                     .foregroundStyle(SymairaTheme.goldPrimary)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(batteryState)
-                        .symairaText(.caption)
+                        .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                         .foregroundStyle(SymairaTheme.textPrimary)
                     Text(batteryDetails)
                         .symairaText(.caption)
@@ -206,10 +230,10 @@ struct SystemStatusCard: View, Equatable {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text("Thermal:")
-                            .symairaText(.caption)
+                            .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                             .foregroundStyle(SymairaTheme.textPrimary)
-                        Text(sensors?.thermalPressure ?? "nominal")
-                            .symairaText(.caption)
+                        Text(sensors?.thermalPressure ?? "Loading…")
+                            .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                             .foregroundStyle(thermalColor)
                     }
                     if let details = sensorDetails {
@@ -238,7 +262,8 @@ struct SystemStatusCard: View, Equatable {
     }
 
     private var batteryState: String {
-        guard let battery, battery.present else { return "No Battery Detected" }
+        guard let battery else { return "Loading battery…" }
+        guard battery.present else { return "No Battery Detected" }
         let capacity = battery.currentCapacityPercent.map { "\($0)%" } ?? "Unknown"
         let state: String
         if battery.charging == true {
@@ -252,7 +277,8 @@ struct SystemStatusCard: View, Equatable {
     }
 
     private var batteryDetails: String {
-        guard let battery, battery.present else { return "Desktop Mac" }
+        guard let battery else { return "Waiting for a reading" }
+        guard battery.present else { return "Desktop Mac" }
         let health = battery.healthPercent.map { "\($0)% Health" } ?? ""
         let cycles = battery.cycleCount.map { "\($0) Cycles" } ?? ""
         let separator = !health.isEmpty && !cycles.isEmpty ? " · " : ""
@@ -260,7 +286,8 @@ struct SystemStatusCard: View, Equatable {
     }
 
     private var thermalColor: Color {
-        switch (sensors?.thermalPressure ?? "nominal").lowercased() {
+        guard let sensors else { return SymairaTheme.textMuted }
+        switch sensors.thermalPressure.lowercased() {
         case "nominal": return SymairaTheme.positive
         case "fair": return SymairaTheme.warning
         default: return SymairaTheme.critical

@@ -9,13 +9,9 @@ struct CockpitRootView: View {
     let openPreferences: () -> Void
 
     var body: some View {
-        ScrollView {
+        CockpitWorkspaceView(version: CockpitAppVersion.current, openPreferences: openPreferences) {
             statusBar.tunePanel(chrome: .embedded)
-                .padding(SymairaSpacing.xLarge)
-                .frame(maxWidth: 1100, alignment: .topLeading)
-                .frame(maxWidth: .infinity, alignment: .top)
         }
-        .background(SymairaTheme.bgDark)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: openPreferences) {

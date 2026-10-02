@@ -15,10 +15,13 @@ struct TuneSliderRow: View {
     let value: Double
     let range: ClosedRange<Double>
     var isEnabled: Bool = true
+    var tickCount = 6
+    var snapsToTicks = false
     /// Formats the trailing readout. Defaults to a percentage.
     var format: (Double) -> String = { "\(Int($0 * 100))%" }
     /// Called when the drag ends, with the final value.
     let onCommit: (Double) -> Void
+    @Environment(\.tunePanelChrome) private var chrome
 
     /// Non-nil once the user has touched the slider, until the model catches up.
     @State private var localValue: Double?
@@ -35,17 +38,18 @@ struct TuneSliderRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             HStack {
                 Label(title, systemImage: systemImage)
-                    .symairaText(.caption)
+                    .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                     .foregroundStyle(labelColor)
                 Spacer()
                 Text(format(displayedValue))
-                    .symairaText(.monoSmall)
+                    .symairaText(chrome == .embedded ? .body : .monoSmall, respectsForeground: false)
+                    .monospacedDigit()
                     .foregroundStyle(readoutColor)
             }
-            Slider(
+            EffortSlider(
                 value: Binding(
                     get: { displayedValue },
                     set: {
@@ -55,15 +59,21 @@ struct TuneSliderRow: View {
                         }
                     }
                 ),
-                in: range,
+                range: range,
+                tickCount: tickCount,
+                snapsToTicks: snapsToTicks,
+                isEnabled: isEnabled,
+                label: title,
+                valueDescription: format(displayedValue),
                 onEditingChanged: { editing in
                     isDragging = editing
                     guard !editing, let final = localValue else { return }
                     onCommit(final)
                 }
             )
-            .tint(SymairaTheme.goldPrimary)
-            .disabled(!isEnabled)
+            .frame(height: SymairaMetrics.minimumControlHeight)
+            .accessibilityLabel(title)
+            .accessibilityValue(format(displayedValue))
         }
         .onChange(of: value) { _, _ in
             // Adopt an externally applied value, but never fight an active drag.

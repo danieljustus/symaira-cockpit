@@ -21,6 +21,7 @@ struct KeepAwakeCard: View {
     let presets: [(label: String, seconds: TimeInterval?)]
     /// Called when the start/end button is pressed.
     let onToggle: () -> Void
+    @Environment(\.tunePanelChrome) private var chrome
 
     var body: some View {
         VStack(spacing: SymairaSpacing.small) {
@@ -43,34 +44,36 @@ struct KeepAwakeCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                // Duration picker
+            HStack(spacing: SymairaSpacing.small) {
+                Text("Duration")
+                    .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
+                    .foregroundStyle(SymairaTheme.textSecondary)
+                Spacer()
                 Picker("Duration", selection: $durationIndex) {
                     ForEach(0..<presets.count, id: \.self) { i in
                         Text(presets[i].label).tag(i)
                     }
                 }
                 .labelsHidden()
-                .frame(maxWidth: .infinity)
-                .disabled(!isInteractive)
-
-                // Display sleep toggle
-                Toggle(isOn: $preventDisplaySleep) {
-                    Text("Display")
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
-                }
-                .toggleStyle(.switch)
                 .disabled(!isInteractive)
             }
+
+            Toggle("Keep display awake", isOn: $preventDisplaySleep)
+                .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
+                .foregroundStyle(SymairaTheme.textSecondary)
+                .toggleStyle(.switch)
+                .disabled(!isInteractive)
+                .accessibilityLabel("Keep display awake")
+                .help("The Mac stays awake during the session. Enable this to also prevent display sleep.")
 
             // Start / End button
             Button(action: onToggle) {
                 Text(active ? "End Session" : "Start Session")
-                    .symairaText(.caption)
+                    .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
                     .foregroundStyle(active ? SymairaTheme.critical : SymairaTheme.bgDark)
                     .padding(.horizontal, SymairaSpacing.large)
                     .padding(.vertical, SymairaSpacing.small)
+                    .frame(minHeight: SymairaMetrics.minimumControlHeight)
                     .background(active ? SymairaTheme.critical.opacity(0.15) : SymairaTheme.goldPrimary)
                     .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
             }
