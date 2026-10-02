@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-10-02
+
+Component baseline prepared for the next Symaira Cockpit release. The date
+records source preparation, not a standalone Tune release or a change to
+the already-published Cockpit v0.7.0 artifacts.
+
+### Changed
+- The embedded Tune component now identifies itself as `0.10.0`, distinct
+  from the archived standalone Tune `0.9.3` release (#278). CLI version
+  reports keep the same schema and read this identity from `TuneVersion`.
+- The extended-brightness and HUD feature baseline documented below is
+  retained; historical `0.9.3` provenance is not rewritten.
+
+### Fixed
+- Preferences metric switches and reorder controls, plus Menu Bar Visibility
+  switches, have target-specific accessibility names (#282, #293). Native
+  keyboard/VoiceOver operation remains the deferred follow-up #305.
+
 ## [0.9.3] — 2026-09-09
 
 This block shipped incrementally inside the Symaira Cockpit v0.6.x line; the
