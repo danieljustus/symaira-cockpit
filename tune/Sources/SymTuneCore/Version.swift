@@ -1,9 +1,8 @@
 import Foundation
 
-/// Single source of truth for the tool version. Kept in sync with the git tag
-/// on release (`v<version>`); release builds override this value via the
-/// `SYMTUNE_VERSION` environment variable so the binary always reports the tag
-/// it was built from.
+/// Single source of truth for the embedded Tune component baseline.
+/// This identity is independent of the Cockpit release tag and is read
+/// directly by component version reports, without an environment override.
 public enum TuneVersion: Sendable {
-    public static let current = "0.9.3"
+    public static let current = "0.10.0"
 }
