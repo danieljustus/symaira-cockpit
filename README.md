@@ -95,7 +95,7 @@ $ symcockpit brightness set 0.5
 
 ## The GUI
 
-The Tune controls, in a window — for the moments a glance beats a command.
+Your Mac's display, power and cooling controls in one window.
 
 ```bash
 brew install --cask danieljustus/tap/symcockpit
@@ -110,15 +110,15 @@ make build-app                       # builds build/app/Symaira Cockpit.app
 make run-app                         # …and launches it
 ```
 
-Symaira Cockpit lives in the menu bar. The status item is Tune's: the live
-readout you configure in Preferences, with the full control panel one click
-away. Right-click it for the cockpit window, which adds
+Symaira Cockpit lives in the menu bar, with a live readout and a compact
+control panel one click away. Open the window from the panel or the status
+item's context menu to go straight to the controls: no landing page, module
+sidebar or section switching. Controls and system readings sit side by side
+in a wide window and stack in a narrow one. Both surfaces use the same model
+and cards, and closing the window leaves the menu bar running.
 
-- **Overview** — a tune-only landing page,
-- **Tune** — the same control panel the menu bar shows, off the same model,
-  plus per-metric switches for what the status item displays.
-
-The Tune section's **Menu bar** card is the quick way to change the status
+Expand **Menu bar & HUD** below the controls to customize the readout without
+leaving the panel. Its **Menu bar** card is the quick way to change the status
 item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 (show it), with a live preview of the result. Changes hit the menu bar
 immediately and are written to `config.toml`, so they survive a relaunch.
@@ -150,7 +150,8 @@ gets the status item back, so the app is never left with nothing on screen. The
 HUD stays put across spaces and over full-screen apps, and it never takes
 focus: clicking it does not pull the app in front of what you were working in.
 
-`⌘1`–`⌘2` switch sections and `⌘,` opens preferences.
+`⌘0` opens the window and `⌘,` opens preferences. The toolbar's gear opens
+the same preferences window.
 
 Nothing in the window has its own logic: every number comes from the same core
 services the CLI calls, so the window and the shell cannot disagree. The GUI reads and configures Tune settings through the same core services as the CLI.

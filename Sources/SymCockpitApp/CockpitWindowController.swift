@@ -35,13 +35,11 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
 
         let window = NSWindow(contentViewController: hosting)
         window.title = "Symaira Cockpit"
-        // The toolbar draws the current section's name centred; leaving the
-        // window title on as well printed two titles side by side.
-        window.titleVisibility = .hidden
+        window.titleVisibility = .visible
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.setContentSize(NSSize(width: 940, height: 640))
-        window.contentMinSize = NSSize(width: 780, height: 520)
+        window.contentMinSize = NSSize(width: 620, height: 520)
         // Closing the window must not deallocate it out from under the
         // delegate; `show()` reuses the same instance.
         window.isReleasedWhenClosed = false

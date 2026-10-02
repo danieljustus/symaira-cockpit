@@ -6,11 +6,11 @@ import SymTuneUI
 /// The app is menu-bar-first: it launches as an `LSUIElement` accessory with a
 /// status item and no Dock presence, exactly like the standalone Tune app. The
 /// difference is the cockpit window behind it — opened from the status item's
-/// context menu (or Cmd+0) — which shows the tune family in one place.
+/// context menu (or Cmd+0) — with direct access to the tuning controls.
 ///
 /// The status item itself *is* Tune's ``StatusBarController``: same metrics
 /// pipeline, same popover, same preferences. The cockpit embeds it rather than
-/// running a second one, so the menu-bar readout and the window's Tune tab can
+/// running a second one, so the menu-bar readout and the window can
 /// never drift apart.
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -107,12 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.openPreferences()
     }
 
-    /// Edit ▸ Find (⌘F): hand the caret to the section filter on screen.
-    @MainActor
-    @objc private func focusSectionFilter() {
-        NotificationCenter.default.post(name: .cockpitFocusSectionFilter, object: nil)
-    }
-
     /// A minimal main menu, so the standard editing shortcuts reach the text
     /// fields in Preferences and the cockpit window has a keyboard route.
     ///
@@ -168,20 +162,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        editMenu.addItem(NSMenuItem.separator())
-
-        // ⌘F for the section filter. It hangs off the menu rather than
-        // off an invisible `keyboardShortcut` button in the view (the trick
-        // the sidebar uses for ⌘1…⌘4) so that the shortcut is discoverable:
-        // a menu item appears in the menu bar and in the Keyboard Shortcuts
-        // settings pane, and Find is where a Mac user looks for it.
-        let findItem = NSMenuItem(
-            title: "Find",
-            action: #selector(focusSectionFilter),
-            keyEquivalent: "f"
-        )
-        findItem.target = self
-        editMenu.addItem(findItem)
 
         NSApp.mainMenu = mainMenu
     }

@@ -23,15 +23,15 @@ import SymairaUpdateCheck
 /// Where the panel is being rendered.
 ///
 /// The popover is a 320pt window hanging off the menu bar; the cockpit is a
-/// resizable window with its own title, sidebar and footer. The cards are the
+/// resizable window with its own title and scrolling. The cards are the
 /// same in both — what differs is the chrome around them, and a panel that
 /// carries its popover chrome into a window reads as an embedded popover
 /// rather than as part of the window.
 public enum TunePanelChrome: Sendable {
     /// Fixed-width column with the app header and the preferences footer.
     case popover
-    /// Fills its container; the host window supplies title, footer and
-    /// scrolling. Adds the menu-bar visibility card, which the popover leaves
+    /// Fills its container; the host window supplies title and scrolling.
+    /// Adds menu-bar/HUD customization, which the popover leaves
     /// to the Preferences window for want of vertical space.
     case embedded
 }
@@ -87,6 +87,9 @@ struct MainStatusView: View {
     var brightnessKeyPreferences: BrightnessKeyPreferences? = nil
     var brightnessKeyController: BrightnessKeyController? = nil
 
+    @State private var usesColumns = false
+    @State private var isReadoutExpanded = false
+
     var body: some View {
         switch chrome {
         case .popover:
@@ -101,6 +104,9 @@ struct MainStatusView: View {
             // and nesting a second scroll view inside its own would trap the
             // wheel over half the page.
             cards
+                .onGeometryChange(for: Bool.self) { geometry in
+                    geometry.size.width >= 740
+                } action: { usesColumns = $0 }
         }
     }
 
@@ -118,70 +124,12 @@ struct MainStatusView: View {
             // not opted out of seeing.
             UpdateNotificationView(updateChecker: updateChecker)
 
-            if showsAnyControl {
-                GroupLabel("CONTROLS")
-            }
-
-            if shows(.displayControls) {
-                DisplayControlsCard(
-                    controller: controller,
-                    model: model,
-                    brightnessKeys: brightnessKeyPreferences,
-                    brightnessKeyController: brightnessKeyController
-                )
-            }
-
-            if shows(.keepAwake) {
-                KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
-            }
-
-            if shows(.fanControl, hardwareAvailable: hasFans) {
-                FanControlCard(controller: controller, model: model)
-            }
-
-            GroupLabel("SYSTEM")
-
-            if shows(.topProcesses) {
-                TopProcessesCard(model: processesModel)
-            }
-
-            if shows(.systemStatus) {
-                SystemStatusSection(model: model)
-            }
-
-            // AI usage meters for the enabled providers (no card when none
-            // are enabled — an all-off preference set shows nothing).
-            if !aiUsageModel.rows.isEmpty {
-                AIUsageCardView(model: aiUsageModel)
-            }
-
-            if shows(.metricsHistory) {
-                MetricsHistorySection(model: model)
-            }
-
-            if shows(.displays) {
-                DisplaysSection(model: model)
-            }
-
-            if chrome == .embedded {
-                // No GroupLabel here: the card carries its own "MENU BAR"
-                // heading, and the two together read as a stutter.
-                MenuBarVisibilityCard(
-                    preferences: preferencesManager,
-                    aiUsage: aiUsageModel.preferences,
-                    model: model,
-                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                    readout: readoutPreferences,
-                    hudDock: hudDockPreferences
-                )
-
-                if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
-                    HUDContentSection(
-                        readout: readoutPreferences,
-                        dock: hudDockPreferences,
-                        items: hudItemPreferences,
-                        preferences: preferencesManager
-                    )
+            groupsLayout {
+                if showsAnyControl || chrome == .embedded {
+                    controlCards
+                }
+                if showsAnySystem {
+                    systemCards
                 }
             }
 
@@ -191,6 +139,86 @@ struct MainStatusView: View {
         }
         .padding(chrome == .popover ? SymairaSpacing.medium : 0)
         .frame(maxWidth: chrome == .popover ? 320 : .infinity)
+    }
+
+    /// AnyLayout preserves each card's state when resizing between columns
+    /// and a stack; changing view branches would reset duration and drag state.
+    private var groupsLayout: AnyLayout {
+        if chrome == .embedded && usesColumns {
+            return AnyLayout(HStackLayout(alignment: .top, spacing: SymairaSpacing.large))
+        }
+        return AnyLayout(VStackLayout(spacing: SymairaSpacing.medium))
+    }
+
+    private var controlCards: some View {
+        VStack(spacing: SymairaSpacing.medium) {
+            if showsAnyControl {
+                GroupLabel("CONTROLS")
+            }
+            if shows(.displayControls) {
+                DisplayControlsCard(
+                    controller: controller,
+                    model: model,
+                    brightnessKeys: brightnessKeyPreferences,
+                    brightnessKeyController: brightnessKeyController
+                )
+            }
+            if shows(.keepAwake) {
+                KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
+            }
+            if shows(.fanControl, hardwareAvailable: hasFans) {
+                FanControlCard(controller: controller, model: model)
+            }
+            if chrome == .embedded {
+                DisclosureGroup("Menu bar & HUD", isExpanded: $isReadoutExpanded) {
+                    VStack(spacing: SymairaSpacing.medium) {
+                        MenuBarVisibilityCard(
+                            preferences: preferencesManager,
+                            aiUsage: aiUsageModel.preferences,
+                            model: model,
+                            hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
+                            readout: readoutPreferences,
+                            hudDock: hudDockPreferences
+                        )
+                        if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
+                            HUDContentSection(
+                                readout: readoutPreferences,
+                                dock: hudDockPreferences,
+                                items: hudItemPreferences,
+                                preferences: preferencesManager
+                            )
+                        }
+                    }
+                    .padding(.top, SymairaSpacing.small)
+                }
+                .symairaText(.subheading)
+                .foregroundStyle(SymairaTheme.textSecondary)
+                .tint(SymairaTheme.goldPrimary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var systemCards: some View {
+        VStack(spacing: SymairaSpacing.medium) {
+            GroupLabel("SYSTEM")
+            if shows(.systemStatus) {
+                SystemStatusSection(model: model)
+            }
+            if shows(.topProcesses) {
+                TopProcessesCard(model: processesModel)
+            }
+            if !aiUsageModel.rows.isEmpty {
+                AIUsageCardView(model: aiUsageModel)
+            }
+            if shows(.metricsHistory) {
+                MetricsHistorySection(model: model)
+            }
+            if shows(.displays) {
+                DisplaysSection(model: model)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     // MARK: - Card visibility
@@ -231,6 +259,11 @@ struct MainStatusView: View {
 
     private var showsAnyControl: Bool {
         shows(.displayControls) || shows(.keepAwake) || shows(.fanControl, hardwareAvailable: hasFans)
+    }
+
+    private var showsAnySystem: Bool {
+        shows(.systemStatus) || shows(.topProcesses) || shows(.metricsHistory)
+            || shows(.displays) || !aiUsageModel.rows.isEmpty
     }
 
     /// Whether this Mac reports any fan. `nil` sensors means "not read yet",

@@ -8,6 +8,10 @@
   Brain (#259).
 
 ### Changed
+- The GUI opens directly into the shared tuning panel, without an Overview,
+  module sidebar or section shortcuts. Wide windows place controls beside
+  system readings; narrow windows stack them. Menu-bar/HUD customization
+  folds below the controls, and the toolbar has one Preferences action (#307).
 - The `symcockpit tune …` prefix emits a stderr deprecation warning while
   retaining the same command behavior, including JSON/MCP stdout. It remains
   supported through the next two minor releases (v0.8 and v0.9), with removal
