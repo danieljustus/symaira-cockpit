@@ -704,11 +704,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
 
     /// The very same cards the popover shows, dressed for another window.
     ///
-    /// `SymCockpitApp` puts this into its Tune section, so the cockpit window
+    /// `SymCockpitApp` uses this as its main content, so the cockpit window
     /// and the menu-bar popover render identical cards off one shared
     /// ``TuneViewModel`` — no second polling pipeline, no divergent UI. The
     /// ``TunePanelChrome/embedded`` chrome drops the popover's fixed width,
-    /// header and footer, which the host window provides itself.
+    /// header and footer; the host window supplies the title and preferences.
     public func tunePanel(
         chrome: TunePanelChrome = .embedded,
         maxHeight: CGFloat = 900
