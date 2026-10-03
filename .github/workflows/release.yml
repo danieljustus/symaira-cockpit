@@ -374,7 +374,8 @@ jobs:
           class Symcockpit < Formula
             desc "This machine: thermals, power, display and system tuning"
             homepage "https://github.com/danieljustus/symaira-cockpit"
-            version "${VERSION}"
+            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v${VERSION}/symcockpit_${VERSION}_darwin_universal.tar.gz"
+            sha256 "${TAR_SHA256}"
             license "Apache-2.0"
 
             # One universal binary rather than per-arch archives: symcockpit is
@@ -382,9 +383,6 @@ jobs:
             # Linux leg to split on, and \`swift build --arch arm64 --arch x86_64\`
             # produces a single artifact for both Macs.
             depends_on macos: :tahoe
-
-            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/symcockpit_#{version}_darwin_universal.tar.gz"
-            sha256 "${TAR_SHA256}"
 
             def install
               bin.install "symcockpit"
@@ -410,6 +408,8 @@ jobs:
           set -euo pipefail
           mkdir -p homebrew-tap/Casks
           cat > homebrew-tap/Casks/symcockpit.rb <<EOF
+          # frozen_string_literal: true
+
           cask "symcockpit" do
             version "${VERSION}"
             sha256 "${DMG_SHA256}"
@@ -436,7 +436,9 @@ jobs:
           end
           EOF
 
-      - name: Commit and push formula and cask
+      - name: Publish formula and cask through a pull request
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           cd homebrew-tap
@@ -447,5 +449,27 @@ jobs:
             echo "No changes to commit"
             exit 0
           fi
+          branch="homebrew/symcockpit-${VERSION}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
           git commit -m "Bump symcockpit to v${VERSION}"
-          git push
+          git push --set-upstream origin "$branch"
+          head=$(git rev-parse HEAD)
+          pr=$(gh pr create --repo danieljustus/homebrew-tap \
+            --base main --head "$branch" \
+            --title "Bump symcockpit to v${VERSION}" \
+            --body "Update CLI and GUI from the published Cockpit v${VERSION} assets and their exact SHA-256 checksums.")
+          gh pr merge "$pr" --repo danieljustus/homebrew-tap \
+            --squash --auto --match-head-commit "$head"
+          for ((attempt = 0; attempt < 60; attempt++)); do
+            state=$(gh pr view "$pr" --repo danieljustus/homebrew-tap --json state --jq .state)
+            if [ "$state" = MERGED ]; then
+              exit 0
+            fi
+            if [ "$state" = CLOSED ]; then
+              echo "::error::Homebrew update PR was closed without merging: $pr"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::Homebrew update is still pending required checks: $pr"
+          exit 1
