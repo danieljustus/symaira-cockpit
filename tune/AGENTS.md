@@ -14,38 +14,49 @@ Symaira family — see `../AGENTS.md` for repo-wide conventions and
 
 ```bash
 swift build                # all targets
-swift test                 # unit tests (no GUI / no hardware writes required)
+swift test                 # unit/CLI tests; see the hardware-isolation note below
 make coverage              # line/region coverage for the library targets
 swift run -q symtune doctor   # package-local executable; shipped as `symcockpit tune doctor`
 ```
 
-**Coverage scope:** `make coverage` reports `SymTuneCore` and `SymTuneMCP` only.
-The `symtune` executable is *not* instrumented — its tests spawn the built
-binary, so `Sources/symtune/*` is absent from the report rather than counted
-as uncovered. Logic that should be measured therefore belongs in a library
-target (see `Sources/SymTuneCore/ProcessListingPresentation.swift` for the
-pattern: the CLI keeps argument plumbing and I/O, the core owns the
-decisions); the same applies to `SymTuneApp`, which has no test target at
-all.
+**Coverage scope:** `make coverage` exports the package's instrumented test
+bundles and excludes test, generated and dependency sources. `SymTuneCLITests`
+depends on `SymTuneCLI`, so that library is measured alongside `SymTuneCore`
+and `SymTuneMCP`. The thin `Sources/symtune/*` executable entry point and
+`SymTuneApp`/`SymTuneUI` are not linked into these package-local test bundles;
+absent files are not the same as measured, uncovered lines. Root integration
+tests and release-baseline reports have a wider scope that includes GUI and
+executable code. Compare percentages only with the same scope and denominator;
+never exclude low-coverage production code to improve a percentage.
+
+**Hardware-isolation note:** legacy `WriteSurfaceTests` still construct the
+default hardware display adapter (issue #316). HOME/XDG isolation does not
+prevent physical display writes. New unit tests must inject the existing
+`DisplayWriteService` mock; real-device acceptance must be separate and opt-in.
 
 Local toolchain note: if the Command Line Tools `swift` is broken (dyld errors),
-build with the Xcode(-beta) toolchain:
+build with the full Xcode toolchain:
 
 ```bash
-DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build
 ```
 
 ## Module Layout (SPM, dependency direction enforced by target deps)
 
 ```
-symtune (executable)  →  SymTuneMCP  →  SymTuneCore
+symtune (package-local executable)  →  SymTuneCLI  →  SymTuneMCP  →  SymTuneCore
+SymTuneApp                         →  SymTuneUI   →  SymTuneCore
 ```
 
 - `SymTuneCore` — all logic. Services (`SensorService`, `BatteryService`,
   `DisplayService`, `PowerService`, `SMCService`), models, config, errors, and
   `SafetyPolicy`. No MCP/CLI concerns here. Only target allowed to touch IOKit.
 - `SymTuneMCP` — stdio JSON-RPC/MCP transport. Talks to `TuneController` only.
-- `symtune` — thin CLI: arg routing, JSON output, `serve` wiring.
+- `SymTuneCLI` — shared CLI library: arg routing, JSON output, `serve` wiring.
+  Both the root `symcockpit` dispatcher and the package-local executable use it.
+- `symtune` — package-local compatibility entry point, not a shipped CLI product.
+- `SymTuneUI` — shared tuning panel and menu-bar UI, also embedded by
+  `SymCockpitApp`; `SymTuneApp` is the package-local app host.
 
 `TuneController` is the single facade. CLI and MCP never call services directly.
 
@@ -87,9 +98,13 @@ symtune (executable)  →  SymTuneMCP  →  SymTuneCore
 - **Honest capabilities**: never pretend a feature works. Unbuilt features throw
   `.notImplemented`; hardware/tier-gated ones throw `.unsupported`. `doctor`
   reports the truth per capability (`available` + `tier`).
-- **Public/pro boundary**: no billing/tenant/cloud code here. SMC-write features
-  (fan, charge limit) belong behind the privileged Pro helper — implement the
-  core capability here first, then let the private repo consume it.
+- **Public core boundary**: no billing/tenant/cloud code or Pro tier here.
+  Fan control and charge limiting are public Apache-2.0 core capabilities.
+  SMC writes still require root authorization, safety-policy clamps and thermal
+  protection; preserve the existing rollback and system-restoration paths.
+  Any future privileged helper is an optional public convenience, not a paywall
+  or private-repository dependency. Preserve existing helper identities and the
+  root-owned executable checks described in `../AGENTS.md`.
 - **Zero stdout pollution in `serve`**: stdout carries only newline-delimited
   JSON-RPC frames (MCP spec stdio framing, via `SymairaMCP`). All logs go to stderr.
 - **No third-party SPM dependencies** without a strong reason — system frameworks
@@ -99,7 +114,8 @@ symtune (executable)  →  SymTuneMCP  →  SymTuneCore
 
 ## Conventions (ecosystem)
 
-- Binary: `symtune`. Paths: `~/.config/symtune/`, `~/.cache/symtune/`,
+- Shipped binary: `symcockpit`; `symtune` is package-local compatibility only.
+  Existing paths: `~/.config/symtune/`, `~/.cache/symtune/`,
   `~/.local/share/symtune/` (see `ConfigPaths`). Env prefix: `SYMTUNE_*`.
 - Exit codes: `0` ok · `1` error · `2` usage/config · `3` permission ·
   `4` unsupported/not-implemented (`ExitCode`).
