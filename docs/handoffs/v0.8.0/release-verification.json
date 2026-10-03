@@ -1,0 +1,156 @@
+{
+  "result": "verified",
+  "tag": "v0.8.0",
+  "commit": "1cfac18e5612b620d3fe15cb1965072bdba620e1",
+  "release_url": "https://github.com/danieljustus/symaira-cockpit/releases/tag/v0.8.0",
+  "assets": {
+    "Symaira-Cockpit-0.8.0-macos.dmg": "589e87a087991a4e72b1055d6457d91b3e3eb57a7e31976726351ecc36ec4a9e",
+    "Symaira-Cockpit-0.8.0.zip": "35624923be762e496911d0601d718b4bc9db5ab85aeedb2f04001f5f5e04c490",
+    "checksums.txt": "a384365d28042901c811ee4f475929202948c097bd53665f91dd0af11c9d2126",
+    "symcockpit_0.8.0_darwin_universal.tar.gz": "7980495fa68a50db515125534dd139551a1beb2f54141aaffd5af6bc19a15d2f"
+  },
+  "cli_version": {
+    "families": [
+      {
+        "family": "tune",
+        "version": "0.10.0"
+      }
+    ],
+    "schema_version": 1,
+    "tool": "symcockpit",
+    "update": {
+      "status": "skipped",
+      "update_available": false
+    },
+    "version": "0.8.0"
+  },
+  "app_version": "0.8.0",
+  "bundle_id": "com.symaira.cockpit",
+  "distribution": [
+    {
+      "channel": "Formula",
+      "path": "Formula/symcockpit.rb",
+      "version": "0.8.0",
+      "version_source": "url",
+      "sha256": "7980495fa68a50db515125534dd139551a1beb2f54141aaffd5af6bc19a15d2f",
+      "file_sha": "a745f6a49a62cbee7aed97bc1a82c0af1cbf3fa2"
+    },
+    {
+      "channel": "Cask",
+      "path": "Casks/symcockpit.rb",
+      "version": "0.8.0",
+      "version_source": "stanza",
+      "sha256": "589e87a087991a4e72b1055d6457d91b3e3eb57a7e31976726351ecc36ec4a9e",
+      "file_sha": "2760ef3115833697c2bd3929dbfc8167f447889a"
+    }
+  ],
+  "hardware_writes": false,
+  "installed": false,
+  "verified_at": "2026-10-03T08:16:07.800829+00:00",
+  "source_main": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+  "main_ci": "https://github.com/danieljustus/symaira-cockpit/actions/runs/37107794540",
+  "tests": {
+    "tests": 984,
+    "skipped": 1,
+    "failures": 0
+  },
+  "coverage_percent": 51.38402589680914,
+  "coverage_delta_pp": 0.4872542746489188,
+  "fix_prs": [
+    317,
+    318,
+    320
+  ],
+  "homebrew_pr": "https://github.com/danieljustus/homebrew-tap/pull/39",
+  "closed_issues": [
+    313,
+    314,
+    278,
+    319
+  ],
+  "original_release_workflow": "homebrew failed; recovered through verified normal tap PR",
+  "native_acceptance": "#305 remains owner-deferred",
+  "dmg_branding": {
+    "background": true,
+    "applications_drop_link": true,
+    "compiled_app_icon": true,
+    "custom_volume_icon": false,
+    "issue": "https://github.com/danieljustus/symaira-cockpit/issues/321"
+  },
+  "cleanup": {
+    "status": "preserved-out-of-scope",
+    "reason": "Older branches/worktrees are not continuation dependencies and remain untouched; no global main-only cleanup is part of this handoff.",
+    "residue": [
+      {
+        "branch": "feat/cockpit-naming-20260911",
+        "reason": "conflicting or unique effective changes; preserved"
+      },
+      {
+        "branch": "fix/embedded-tune-version-278",
+        "reason": "conflicting or unique effective changes; preserved"
+      },
+      {
+        "branch": "handoff/20260930-cloud",
+        "reason": "conflicting or unique effective changes; preserved"
+      }
+    ],
+    "worktrees": [
+      {
+        "worktree": ".",
+        "HEAD": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+        "branch": "refs/heads/main",
+        "dirty": false
+      },
+      {
+        "worktree": ".worktrees/a11y-pr293-20261002",
+        "HEAD": "fe7eda02fe4b2c4e69c37afc05c0c89dbc5d9834",
+        "branch": "refs/heads/fix/a11y-pr293-20261002",
+        "dirty": false
+      },
+      {
+        "worktree": ".worktrees/blocker-lane-20260930",
+        "HEAD": "a04f14134692951305f3495935e9882ac2f43220",
+        "branch": "refs/heads/fix/blocker-lane-20260930",
+        "dirty": false
+      },
+      {
+        "worktree": ".worktrees/cloud-20260930-cloud",
+        "HEAD": "7169441f800b5f5f26d2f531516e309770469d80",
+        "branch": "refs/heads/handoff/20260930-cloud",
+        "dirty": false
+      },
+      {
+        "worktree": ".worktrees/handoff-pr299-20261002",
+        "HEAD": "ee1c25e0ac224e35dd36a66f59ab0d58fb6c1ff7",
+        "branch": "refs/heads/docs/handoff-pr299-20261002",
+        "dirty": false
+      },
+      {
+        "worktree": ".worktrees/tune-version-278-20261002",
+        "HEAD": "184d3c49ee67305751a7f5f7d3e2f588a2a24da1",
+        "branch": "refs/heads/fix/embedded-tune-version-278",
+        "dirty": false
+      }
+    ],
+    "local_branches": [
+      "agent/preferences-a11y-sweep-20260923",
+      "docs/handoff-pr299-20261002",
+      "feat/cockpit-naming-20260911",
+      "fix/a11y-pr293-20261002",
+      "fix/blocker-lane-20260930",
+      "fix/embedded-tune-version-278",
+      "handoff/20260930-cloud",
+      "main",
+      "release/v0.8.0"
+    ],
+    "remote_branches": [
+      "refs/heads/main"
+    ]
+  },
+  "repositories": {
+    "cockpit_base": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+    "tap_merge": "b4ab24ca78e6ec526adcc8d82b5f9b97d34ddc51",
+    "tap_pr_head": "090f52444c6905b8d31389735c650207ea2daf11",
+    "tap_pr_ref": "refs/pull/39/head"
+  }
+}

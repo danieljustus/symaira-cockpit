@@ -1,0 +1,96 @@
+{
+  "cockpit": {
+    "repo": "danieljustus/symaira-cockpit",
+    "base": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+    "prs": [
+      {
+        "number": 312,
+        "source_ref": "refs/pull/312/head",
+        "source_sha": "bc8f5068bd9e3323342ddf80cdd256b469cdc107",
+        "merge_sha": "fc920fb9aaa56a2c3c96277bdd0e9d298355a2b9",
+        "state": "MERGED",
+        "url": "https://github.com/danieljustus/symaira-cockpit/pull/312"
+      },
+      {
+        "number": 317,
+        "source_ref": "refs/pull/317/head",
+        "source_sha": "849ec4054d85f69f9a9dfb94da71687b717e39e9",
+        "merge_sha": "75d761ffcd9f87e5e70f79b4db69359b06a1955e",
+        "state": "MERGED",
+        "url": "https://github.com/danieljustus/symaira-cockpit/pull/317"
+      },
+      {
+        "number": 318,
+        "source_ref": "refs/pull/318/head",
+        "source_sha": "ec9d7503bdeece0e258fa2908726a12ca7f2e77b",
+        "merge_sha": "1cfac18e5612b620d3fe15cb1965072bdba620e1",
+        "state": "MERGED",
+        "url": "https://github.com/danieljustus/symaira-cockpit/pull/318"
+      },
+      {
+        "number": 320,
+        "source_ref": "refs/pull/320/head",
+        "source_sha": "dd947a0f4f49e33d1adada2d734b6fc4f89e6d3f",
+        "merge_sha": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+        "state": "MERGED",
+        "url": "https://github.com/danieljustus/symaira-cockpit/pull/320"
+      }
+    ]
+  },
+  "tap": {
+    "repo": "danieljustus/homebrew-tap",
+    "merge": "b4ab24ca78e6ec526adcc8d82b5f9b97d34ddc51",
+    "source_head": "090f52444c6905b8d31389735c650207ea2daf11",
+    "source_ref": "refs/pull/39/head",
+    "files": [
+      {
+        "path": "Formula/symcockpit.rb",
+        "git_blob": "a745f6a49a62cbee7aed97bc1a82c0af1cbf3fa2"
+      },
+      {
+        "path": "Casks/symcockpit.rb",
+        "git_blob": "2760ef3115833697c2bd3929dbfc8167f447889a"
+      }
+    ]
+  },
+  "cloud_runtime": "not checked",
+  "release": {
+    "url": "https://github.com/danieljustus/symaira-cockpit/releases/tag/v0.8.0",
+    "assets": [
+      {
+        "name": "checksums.txt",
+        "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/checksums.txt",
+        "size": 107
+      },
+      {
+        "name": "Symaira-Cockpit-0.8.0-macos.dmg",
+        "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/Symaira-Cockpit-0.8.0-macos.dmg",
+        "size": 5163935
+      },
+      {
+        "name": "Symaira-Cockpit-0.8.0.zip",
+        "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/Symaira-Cockpit-0.8.0.zip",
+        "size": 5116971
+      },
+      {
+        "name": "symcockpit_0.8.0_darwin_universal.tar.gz",
+        "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/symcockpit_0.8.0_darwin_universal.tar.gz",
+        "size": 1679436
+      }
+    ]
+  },
+  "ci": [
+    {
+      "conclusion": "success",
+      "headSha": "1cfac18e5612b620d3fe15cb1965072bdba620e1",
+      "status": "completed",
+      "url": "https://github.com/danieljustus/symaira-cockpit/actions/runs/37104615077"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "57f08eefa575a82630276b771c12fa9d0b1f62d4",
+      "status": "completed",
+      "url": "https://github.com/danieljustus/symaira-cockpit/actions/runs/37107794540"
+    }
+  ]
+}
