@@ -150,8 +150,8 @@ final class WriteSurfaceTests: XCTestCase {
 
     func testChargeLimitRequiresSMC() {
         XCTAssertThrowsError(try controller.applyChargeLimit(percent: 80)) { error in
-            guard case TuneError.permission = error else {
-                return XCTFail("expected permission error, got \(error)")
+            guard case ChargeLimitError.noSMCConnection = error else {
+                return XCTFail("expected unavailable SMC error, got \(error)")
             }
         }
     }
