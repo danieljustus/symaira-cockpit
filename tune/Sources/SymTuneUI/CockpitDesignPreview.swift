@@ -139,17 +139,25 @@ struct CockpitDesignPreview: View {
     )
 
     // These public models have no public memberwise initializer. Decode fixed,
-    // checked fixtures rather than widening production API for a design tool.
-    private static let sensors = try! JSONDecoder().decode(SensorReport.self, from: Data(#"""
+    // validated fixtures rather than widening production API for a design tool.
+    private static func decodeFixture<Model: Decodable>(_ type: Model.Type, json: String) -> Model {
+        do {
+            return try JSONDecoder().decode(type, from: Data(json.utf8))
+        } catch {
+            preconditionFailure("Invalid Cockpit design fixture for \(type): \(error)")
+        }
+    }
+
+    private static let sensors = decodeFixture(SensorReport.self, json: #"""
     {
         "thermalPressure": "nominal", "smcSupported": true,
         "temperatures": [{"key": "DEMO", "label": "CPU", "celsius": 48.5}],
         "fans": [{"index": 0, "label": "Demo fan", "rpm": 1800, "minRpm": 1200, "maxRpm": 6000}],
         "notes": ["Design fixture, not a hardware reading"]
     }
-    """#.utf8))
+    """#)
 
-    private static let displays = try! JSONDecoder().decode([DisplayInfo].self, from: Data(#"""
+    private static let displays = decodeFixture([DisplayInfo].self, json: #"""
     [
         {
             "name": "Demo Built-in Display", "displayID": 1, "isBuiltin": true,
@@ -162,7 +170,7 @@ struct CockpitDesignPreview: View {
             "edrCapable": false, "backingScaleFactor": 2.0
         }
     ]
-    """#.utf8))
+    """#)
 }
 
 #Preview("Cockpit · Breit", traits: .fixedLayout(width: 1080, height: 760)) {

@@ -13,6 +13,9 @@ final class CockpitPreviewContractTests: XCTestCase {
 
         XCTAssertTrue(source.hasPrefix("#if DEBUG\n"))
         XCTAssertTrue(source.hasSuffix("#endif\n"))
+        XCTAssertFalse(source.contains("try!"), "preview fixtures must not use forced decoding")
+        XCTAssertFalse(source.contains("try?"), "invalid fixtures must not disappear silently")
+        XCTAssertTrue(source.contains("preconditionFailure(\"Invalid Cockpit design fixture"))
         XCTAssertTrue(source.contains("Beispieldaten · Keine Hardwarezugriffe"))
         XCTAssertEqual(source.components(separatedBy: "#Preview(").count - 1, 3)
         for unsafe in ["TuneController", "StatusBarController", "MainStatusView",
