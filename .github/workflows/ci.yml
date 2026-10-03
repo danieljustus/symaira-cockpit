@@ -62,7 +62,23 @@ jobs:
 
       - name: Release app build
         if: matrix.pkg == 'root'
-        run: swift build --product SymCockpitApp -c release --jobs 2
+        run: |
+          set -euo pipefail
+          release_log="$RUNNER_TEMP/cockpit-release-build.log"
+          swift build --product SymCockpitApp -c release --jobs 2 2>&1 | tee "$release_log"
+          python3 - "$release_log" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          diagnostic = re.compile(
+              r"(?:BrightnessHUDPanel|MenuBarVisibilityCard|TuneViewModel|ProcessUsageService)"
+              r"\.swift:\d+(?::\d+)?:\s*(?:warning|error):"
+          )
+          reported = [line for line in Path(sys.argv[1]).read_text().splitlines() if diagnostic.search(line)]
+          if reported:
+              raise SystemExit("Reported Swift diagnostics remain:\n" + "\n".join(reported))
+          PY
 
       # Keep DMG validation inside the required root check as well as the
       # separate Xcode-26 icon check, so auto-merge cannot outrun it.
