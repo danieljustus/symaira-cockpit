@@ -1,5 +1,5 @@
 import Foundation
-@preconcurrency import AppKit
+import CoreGraphics
 
 /// Protocol abstracting display write operations for testability.
 /// Concrete implementations talk to real hardware (DisplayServices/IOKit/AppKit);
