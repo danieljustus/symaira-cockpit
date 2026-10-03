@@ -1,0 +1,152 @@
+{
+  "tested_remote_head": "45e37a5a738f2a3c886e8a87a0efc5fc117db230",
+  "origin": "https://github.com/danieljustus/symaira-cockpit.git",
+  "checkout": "Independent full clone from GitHub; no copied source/config, stashes, untracked inputs or coordinator build symlink. Standard package-manager caches allowed; build outputs generated in this clone.",
+  "target_cloud_runtime": "not checked",
+  "hardware_write_tests_excluded": "15 WriteSurfaceTests methods; not counted as passed",
+  "commands": [
+    {
+      "command": "swift package resolve",
+      "exit_code": 0
+    },
+    {
+      "command": "make build",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof root --skip-hardware-writes",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof tune --skip-hardware-writes",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof history --skip-hardware-writes",
+      "exit_code": 0
+    },
+    {
+      "command": "CONFIGURATION=release UNIVERSAL=0 CODE_SIGN_IDENTITY=- REQUIRE_COMPILED_ICON=true LAUNCH_SMOKE=0 make smoke-app",
+      "exit_code": 0
+    },
+    {
+      "command": "swift run symcockpit --help",
+      "exit_code": 0
+    },
+    {
+      "command": "swift run symcockpit version --json --no-update-check",
+      "exit_code": 0
+    },
+    {
+      "command": "\"build/app/Symaira Cockpit.app/Contents/MacOS/SymCockpitApp\" --version",
+      "exit_code": 0
+    }
+  ],
+  "packages": [
+    {
+      "package": "root",
+      "head": "45e37a5a738f2a3c886e8a87a0efc5fc117db230",
+      "tests": 57,
+      "skipped": 0,
+      "failures": 0,
+      "seconds": 46.52333091699984,
+      "command": [
+        "swift",
+        "test",
+        "--enable-code-coverage",
+        "--jobs",
+        "2"
+      ]
+    },
+    {
+      "package": "tune",
+      "head": "45e37a5a738f2a3c886e8a87a0efc5fc117db230",
+      "tests": 871,
+      "skipped": 1,
+      "failures": 0,
+      "seconds": 35.49984054200468,
+      "command": [
+        "swift",
+        "test",
+        "--enable-code-coverage",
+        "--jobs",
+        "2",
+        "--skip",
+        "WriteSurfaceTests"
+      ]
+    },
+    {
+      "package": "history",
+      "head": "45e37a5a738f2a3c886e8a87a0efc5fc117db230",
+      "tests": 41,
+      "skipped": 0,
+      "failures": 0,
+      "seconds": 10.495491833004053,
+      "command": [
+        "swift",
+        "test",
+        "--enable-code-coverage",
+        "--jobs",
+        "2"
+      ]
+    }
+  ],
+  "totals": {
+    "tests": 969,
+    "skipped": 1,
+    "failures": 0
+  },
+  "cli_version": {
+    "families": [
+      {
+        "family": "tune",
+        "version": "0.10.0"
+      }
+    ],
+    "schema_version": 1,
+    "tool": "symcockpit",
+    "update": {
+      "status": "skipped",
+      "update_available": false
+    },
+    "version": "0.8.0"
+  },
+  "gui_version": "Symaira Cockpit 0.8.0",
+  "dependency": {
+    "repo": "https://github.com/danieljustus/symaira-appkit.git",
+    "version": "0.14.2",
+    "sha": "3c2e78d0b6649c2a342e2bdaa79aab8515041640"
+  },
+  "rollback_member_count": 5,
+  "fixture_png_privacy": "Reviewed pixels; EXIF contains resolution and pixel-dimension fields only, no author/GPS/device identity.",
+  "public_downloads": [
+    {
+      "name": "checksums.txt",
+      "sha256": "a384365d28042901c811ee4f475929202948c097bd53665f91dd0af11c9d2126",
+      "bytes": 107,
+      "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/checksums.txt",
+      "anonymous_public_download": true
+    },
+    {
+      "name": "Symaira-Cockpit-0.8.0-macos.dmg",
+      "sha256": "589e87a087991a4e72b1055d6457d91b3e3eb57a7e31976726351ecc36ec4a9e",
+      "bytes": 5163935,
+      "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/Symaira-Cockpit-0.8.0-macos.dmg",
+      "anonymous_public_download": true
+    },
+    {
+      "name": "Symaira-Cockpit-0.8.0.zip",
+      "sha256": "35624923be762e496911d0601d718b4bc9db5ab85aeedb2f04001f5f5e04c490",
+      "bytes": 5116971,
+      "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/Symaira-Cockpit-0.8.0.zip",
+      "anonymous_public_download": true
+    },
+    {
+      "name": "symcockpit_0.8.0_darwin_universal.tar.gz",
+      "sha256": "7980495fa68a50db515125534dd139551a1beb2f54141aaffd5af6bc19a15d2f",
+      "bytes": 1679436,
+      "url": "https://github.com/danieljustus/symaira-cockpit/releases/download/v0.8.0/symcockpit_0.8.0_darwin_universal.tar.gz",
+      "anonymous_public_download": true
+    }
+  ]
+}

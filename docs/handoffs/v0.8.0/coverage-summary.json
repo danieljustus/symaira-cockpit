@@ -1,0 +1,22 @@
+[
+  {
+    "variant": "release",
+    "head": "1cfac18e5612b620d3fe15cb1965072bdba620e1",
+    "covered": 7778,
+    "total": 15137,
+    "percent": 51.38402589680914,
+    "tests": 969,
+    "skipped": 1,
+    "failures": 0
+  },
+  {
+    "variant": "baseline-v0.7.0",
+    "head": "f6910fb19660b59d23cbb3413d67159983854cf0",
+    "covered": 7662,
+    "total": 15054,
+    "percent": 50.89677162216022,
+    "tests": 941,
+    "skipped": 1,
+    "failures": 0
+  }
+]

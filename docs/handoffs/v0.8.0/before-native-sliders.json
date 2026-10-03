@@ -1,0 +1,35 @@
+{
+  "purpose": "Exact pre-slider rollback snapshot. Historical source only; not compiled, not current production code, not a validated rollback candidate. Keep current v0.8.0 production source for all builds.",
+  "members": [
+    {
+      "source_path": "tune/Sources/SymTuneUI/TuneSliderRow.swift",
+      "cloud_path": "docs/handoffs/v0.8.0/before-native-sliders/tune/Sources/SymTuneUI/TuneSliderRow.swift",
+      "bytes": 3022,
+      "sha256": "41af0ac1c7571cc9ff4283613b38e86bf6b1e8810bec9dab4f1946b5cdbecd36"
+    },
+    {
+      "source_path": "tune/Sources/SymTuneUI/CenterAnchoredSliderRow.swift",
+      "cloud_path": "docs/handoffs/v0.8.0/before-native-sliders/tune/Sources/SymTuneUI/CenterAnchoredSliderRow.swift",
+      "bytes": 4242,
+      "sha256": "330d98cfaa3d80891fb2a127042508f3ed2b8c4bb36a38920e9d14b1aa627f24"
+    },
+    {
+      "source_path": "tune/Sources/SymTuneUI/ControlCards.swift",
+      "cloud_path": "docs/handoffs/v0.8.0/before-native-sliders/tune/Sources/SymTuneUI/ControlCards.swift",
+      "bytes": 14635,
+      "sha256": "ffab8534adbc60cc752a324d23cda5051b2ee4891995e5818f4420d5b6c66273"
+    },
+    {
+      "source_path": "tune/Sources/SymTuneUI/CockpitDesignPreview.swift",
+      "cloud_path": "docs/handoffs/v0.8.0/before-native-sliders/tune/Sources/SymTuneUI/CockpitDesignPreview.swift",
+      "bytes": 7037,
+      "sha256": "20787a9d8ebef8a37d201877a1dc3f6b0eab185a1861820a78a5b05ee05873d5"
+    },
+    {
+      "source_path": "Tests/SymCockpitE2ETests/CockpitGUIContractTests.swift",
+      "cloud_path": "docs/handoffs/v0.8.0/before-native-sliders/Tests/SymCockpitE2ETests/CockpitGUIContractTests.swift",
+      "bytes": 5277,
+      "sha256": "72a39505ad890171bbcf9962ee7f3fc431b93fb752ba1cb94d67f7b1374d6c9d"
+    }
+  ]
+}
