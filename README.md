@@ -17,7 +17,7 @@ Tune MCP server exposes the same capabilities to AI agents.
 
 ![Symaira Cockpit](docs/assets/social-preview.png)
 
-**Status:** Active development — v0.7.0 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
+**Status:** Active development — v0.8.0 released; see the [release history](https://github.com/danieljustus/symaira-cockpit/releases).
 
 ## Why Cockpit
 
@@ -254,7 +254,7 @@ a standalone package with its own test suite. Contributor details live in
 [AGENTS.md](AGENTS.md).
 
 > The app targets and the tests need the Xcode toolchain:
-> `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build`
+> `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`
 
 ## Contributing
 

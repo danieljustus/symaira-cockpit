@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.8.0] — 2026-10-03
+
 ### Added
 - `doctor`, `permissions`, `history`, and `serve` now work directly under
   `symcockpit`, completing the command map after Operate and Scope moved to
@@ -28,6 +30,23 @@
   more than half the binary size). The CLI keeps an ad-hoc signature so it
   still execs on arm64; the app is stripped before its Developer ID
   signature.
+
+### Fixed
+- Reject trailing CLI arguments before any mutation, validate refresh intervals
+  before saving, and reject unrepresentable charge percentages without crashing
+  (#286, #288, #289).
+- Serialize history recovery, appends and retention across processes; service
+  main-queue work during the MCP stdio loop (#287, #292).
+- Embedded Tune reports `0.10.0` with the unchanged version JSON schema (#278,
+  #306). It remains a component of the sole shipped `symcockpit` CLI.
+- Document public fan/charge-limit capabilities and the actual coverage graph;
+  malformed Debug preview fixtures fail explicitly without forced decoding or
+  fabricated fallback readings (#313, #314).
+
+### Known limitations
+- Native keyboard/VoiceOver acceptance remains explicitly deferred in #305.
+- Compiler warnings and legacy display-write unit-test isolation remain tracked
+  separately in #315 and #316; they are not presented as completed acceptance.
 
 ## [0.7.0] — 2026-09-22
 
