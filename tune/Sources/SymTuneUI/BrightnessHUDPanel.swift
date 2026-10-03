@@ -149,7 +149,9 @@ final class BrightnessHUDPanel {
             context.duration = 0.25
             panel.animator().alphaValue = 0
         } completionHandler: { [weak panel] in
-            panel?.orderOut(nil)
+            Task { @MainActor [weak panel] in
+                panel?.orderOut(nil)
+            }
         }
     }
 }

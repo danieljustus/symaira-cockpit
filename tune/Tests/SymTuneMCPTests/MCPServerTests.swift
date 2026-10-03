@@ -611,6 +611,13 @@ final class MCPServerToolCallTests: XCTestCase {
 // MARK: - Test doubles
 
 final class MockMCPDisplayWriteService: DisplayWriteServiceProtocol, @unchecked Sendable {
+    private var dimLevel: Float = 1.0
+    func applyDim(_ value: Float) { dimLevel = value }
+    func resetDim() { dimLevel = 1.0 }
+    func getDimLevel() -> Float { dimLevel }
+    func restoreDisplayOverrides(brightness: Float?, resetGamma: Bool) {
+        if let brightness { try? setBuiltinBrightness(brightness) }
+    }
     var brightness: Double = 0.8
     func getBuiltinBrightness() throws -> Double { brightness }
     func setBuiltinBrightness(_ value: Float) throws { brightness = Double(value) }

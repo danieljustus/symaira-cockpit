@@ -42,4 +42,5 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 REQUIRE_COMPILED_ICON=true "$ROOT_DIR/scripts/verify-app-icon.sh" "$APP_PATH"
+"$ROOT_DIR/scripts/create-symaira-dmg.sh" "$APP_PATH" "$TMP_DIR/icon-test.dmg" "Cockpit Icon Test"
 printf 'Real .icon compile regression passed with %s\n' "$XCODE_VERSION"

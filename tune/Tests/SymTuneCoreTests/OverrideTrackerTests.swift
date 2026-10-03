@@ -4,7 +4,7 @@ import XCTest
 final class OverrideTrackerTests: XCTestCase {
 
     func testAppliedEDRBrightness() {
-        let tracker = OverrideTracker()
+        let tracker = OverrideTracker(displayWrite: MockDisplayWriteService())
         XCTAssertNil(tracker.appliedEDRBrightness)
         XCTAssertFalse(tracker.hasEDROverride())
 
@@ -14,7 +14,7 @@ final class OverrideTrackerTests: XCTestCase {
     }
 
     func testHasWarmthOverride() {
-        let tracker = OverrideTracker()
+        let tracker = OverrideTracker(displayWrite: MockDisplayWriteService())
         XCTAssertFalse(tracker.hasWarmthOverride())
 
         tracker.saveWarmth(0.3)
@@ -24,7 +24,7 @@ final class OverrideTrackerTests: XCTestCase {
 
     func testRestoreAllClearsAllOverrides() {
         var onRestoreCalled = false
-        let tracker = OverrideTracker(onRestore: { onRestoreCalled = true })
+        let tracker = OverrideTracker(displayWrite: MockDisplayWriteService(), onRestore: { onRestoreCalled = true })
 
         tracker.saveBrightness(0.6)
         tracker.saveWarmth(0.4)
@@ -44,15 +44,17 @@ final class OverrideTrackerTests: XCTestCase {
         XCTAssertTrue(onRestoreCalled)
     }
 
-    func testRestoreBrightnessWithoutDisplayService() {
-        let tracker = OverrideTracker(displayService: nil)
+    func testRestoreBrightnessThroughInjectedService() {
+        let mock = MockDisplayWriteService()
+        let tracker = OverrideTracker(displayWrite: mock)
         tracker.saveBrightness(0.5)
         tracker.restoreAll()
+        XCTAssertEqual(mock.lastSetBrightness, 0.5)
         XCTAssertFalse(tracker.hasBrightnessOverride())
     }
 
     func testRegisterSignalHandlers() {
-        let tracker = OverrideTracker()
+        let tracker = OverrideTracker(displayWrite: MockDisplayWriteService())
         tracker.registerSignalHandlers()
     }
 }
