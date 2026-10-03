@@ -4,11 +4,11 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.0] — 2026-10-02
+## [0.10.0] — 2026-10-03
 
-Component baseline prepared for the next Symaira Cockpit release. The date
-records source preparation, not a standalone Tune release or a change to
-the already-published Cockpit v0.7.0 artifacts.
+Embedded component release in Symaira Cockpit v0.8.0. This is not a standalone
+Tune product release and does not change the already-published Cockpit v0.7.0
+artifacts. Source preparation was completed on 2026-10-02.
 
 ### Changed
 - The embedded Tune component now identifies itself as `0.10.0`, distinct
