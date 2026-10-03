@@ -70,8 +70,8 @@ workflow run became green. Do not retag or replace stable published assets.
 ![Approved fixture-only slider reference](v0.8.0/sliders.png)
 
 The intake checked status including all untracked files, linked worktrees,
-stashes, local branch/upstream state and ignored files. The original Cockpit
-checkout and six existing linked-worktree entries were clean, with no stash;
+stashes, local branch/upstream state and ignored files. All six existing
+worktree entries, including the original checkout, were clean, with no stash;
 no unrelated unique content was removed. The isolated publication checkout
 does not change those older worktrees.
 
@@ -97,8 +97,8 @@ Original Cockpit heads are independently fetchable:
 git fetch origin refs/pull/312/head refs/pull/317/head refs/pull/318/head refs/pull/320/head
 ```
 
-PR source SHAs and remote status are in `v0.8.0/remote-evidence.json` once the
-remote verification gate has completed. No submodule or LFS input is present.
+PR source SHAs and verified remote status are in
+`v0.8.0/remote-evidence.json`. No submodule or LFS input is present.
 
 ## Setup, builds and safe tests
 
@@ -160,14 +160,15 @@ GitHub environment. Variable names only: `CERTIFICATE_P12`,
 `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`, `HOMEBREW_TAP_GITHUB_TOKEN` and
 the automatic `GITHUB_TOKEN`. None is needed for the commands above. Presence
 of metadata does not prove future usability. No credential creation/rotation,
-cloud job, provider fallback or release is started by this continuation.
+separate cloud-agent task, provider fallback or release is started by this
+continuation. Opening the documentation PR uses ordinary existing repository CI.
 
 ## Verification state and next work
 
 - Release source CI: [37104615077](https://github.com/danieljustus/symaira-cockpit/actions/runs/37104615077), 984 executions, 1 skipped, 0 failures.
 - Post-recovery exact-main CI: [37107794540](https://github.com/danieljustus/symaira-cockpit/actions/runs/37107794540), completed successfully at the base code SHA.
 - Recorded release coverage: 7778/15137 production lines (51.384026%); baseline 7662/15054 (50.896772%), diagnostic delta +0.487254 percentage points. Local release run: 969 executions, 1 skipped, 0 failures; 15 hardware-writing methods excluded, not passed. No hard coverage floor is invented.
-- Fresh remote checkout and setup/test/app-build verification of this new continuation branch: **pending**. Do not treat this intermediate document as a completed cloud gate.
+- Fresh remote clone of this branch at `45e37a5a738f2a3c886e8a87a0efc5fc117db230`: the exact setup/build/test/smoke/help/version recipe above exited **0**. Root 57, Tune 871 and history 41: **969 executions, 1 skipped, 0 failures**. App version, public dependency pin, all five rollback-source hashes and the approved image were checked. Four assets were anonymously downloaded again and matched recorded byte digests. Details: `v0.8.0/fresh-checkout-verification.json`. The final evidence-only commit does not alter product source, fixtures, pins or the tested commands; verify its final remote HEAD before continuing.
 - Target-cloud runtime, native desktop, permissions, secret availability and network gates: **not checked**. A local fresh macOS clone proves repository input completeness, not execution in another cloud. Linux cannot build the AppKit/IOKit GUI or perform native acceptance.
 
 Concrete next code task: [#316](https://github.com/danieljustus/symaira-cockpit/issues/316),
