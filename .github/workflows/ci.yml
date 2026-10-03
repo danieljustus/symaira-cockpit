@@ -64,6 +64,12 @@ jobs:
         if: matrix.pkg == 'root'
         run: swift build --product SymCockpitApp -c release --jobs 2
 
+      # Keep DMG validation inside the required root check as well as the
+      # separate Xcode-26 icon check, so auto-merge cannot outrun it.
+      - name: Native app icon and DMG smoke
+        if: matrix.pkg == 'root'
+        run: ./scripts/test-app-icon.sh
+
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.
   icon-compile:
