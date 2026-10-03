@@ -54,6 +54,7 @@ mkdir -p "$STAGE_DIR/.background"
 cp -R "$APP_PATH" "$STAGE_DIR/"
 ln -s /Applications "$STAGE_DIR/Applications"
 cp "$BACKGROUND_PATH" "$STAGE_DIR/.background/symaira-dmg-background.png"
+cp "$APP_PATH/Contents/Resources/AppIcon.icns" "$STAGE_DIR/.VolumeIcon.icns"
 
 hdiutil create \
   -quiet \
@@ -70,6 +71,11 @@ if [ -z "$DEVICE" ] || [ -z "$MOUNT_DIR" ]; then
   echo "error: could not determine mounted DMG device or volume path" >&2
   exit 1
 fi
+
+# Finder recognises .VolumeIcon.icns only with the volume's custom-icon flag.
+SETFILE="$(xcrun --find SetFile)"
+GETFILEINFO="$(xcrun --find GetFileInfo)"
+"$SETFILE" -a C "$MOUNT_DIR"
 
 APP_FILE="$(basename "$APP_PATH")"
 MOUNT_NAME="$(basename "$MOUNT_DIR")"
@@ -102,4 +108,21 @@ DEVICE=""
 
 rm -f "$DMG_PATH"
 hdiutil convert -quiet "$RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
+
+# Check the converted artifact rather than trusting the writable staging image.
+ATTACH_OUTPUT="$(hdiutil attach -readonly -noverify -noautoopen "$DMG_PATH")"
+DEVICE="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/^\/dev\// {print $1; exit}')"
+MOUNT_DIR="$(printf '%s\n' "$ATTACH_OUTPUT" | awk -F '\t' '/^\/dev\// && $3 ~ /^\/Volumes\// {print $3; exit}')"
+if [ -z "$DEVICE" ] || [ -z "$MOUNT_DIR" ]; then
+  echo "error: could not determine final read-only DMG mount" >&2
+  exit 1
+fi
+cmp "$APP_PATH/Contents/Resources/AppIcon.icns" "$MOUNT_DIR/.VolumeIcon.icns"
+VOLUME_FLAGS="$("$GETFILEINFO" -a "$MOUNT_DIR")"
+if [[ "$VOLUME_FLAGS" != *C* ]]; then
+  echo "error: final DMG is missing the custom-volume-icon Finder flag" >&2
+  exit 1
+fi
+hdiutil detach "$DEVICE" -quiet
+DEVICE=""
 echo "Created $DMG_PATH"

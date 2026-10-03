@@ -77,7 +77,7 @@ public struct LibprocProcessSampleSource: ProcessSampleSource {
     private static func name(of pid: Int32) -> String {
         var path = [CChar](repeating: 0, count: pathBufferSize)
         if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
-            let full = String(cString: path)
+            let full = decodeNameBuffer(path)
             if let last = full.split(separator: "/").last, !last.isEmpty {
                 return String(last)
             }
@@ -85,10 +85,15 @@ public struct LibprocProcessSampleSource: ProcessSampleSource {
         // Short name is truncated to 15 characters but always available.
         var short = [CChar](repeating: 0, count: 256)
         if proc_name(pid, &short, UInt32(short.count)) > 0 {
-            let name = String(cString: short)
+            let name = decodeNameBuffer(short)
             if !name.isEmpty { return name }
         }
         return "pid \(pid)"
+    }
+
+    /// Stop at NUL within the supplied buffer; decoding never scans beyond it.
+    static func decodeNameBuffer(_ buffer: [CChar]) -> String {
+        String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 }
 

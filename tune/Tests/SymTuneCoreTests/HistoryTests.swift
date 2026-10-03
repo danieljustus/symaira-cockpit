@@ -153,6 +153,13 @@ final class HistoryTests: XCTestCase {
 
 // A simple fake display write service to avoid calling actual display hardware inside unit tests
 private final class FakeDisplayWriteService: DisplayWriteServiceProtocol, @unchecked Sendable {
+    private var dimLevel: Float = 1.0
+    func applyDim(_ value: Float) { dimLevel = value }
+    func resetDim() { dimLevel = 1.0 }
+    func getDimLevel() -> Float { dimLevel }
+    func restoreDisplayOverrides(brightness: Float?, resetGamma: Bool) {
+        if let brightness { try? setBuiltinBrightness(brightness) }
+    }
     private var brightness: Float = 0.5
 
     func getBuiltinBrightness() throws -> Double {

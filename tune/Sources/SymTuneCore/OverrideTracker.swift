@@ -1,6 +1,4 @@
 import Foundation
-import IOKit
-@preconcurrency import AppKit
 
 /// Tracks applied display overrides and restores them on process exit.
 /// Handles both normal exit (deinit) and abnormal signals (SIGINT/SIGTERM).
@@ -14,8 +12,7 @@ final class OverrideTracker: @unchecked Sendable {
     private var _originalEDRHeadroom: Double?
     private var _hasOverrides = false
     private var signalSources: [DispatchSourceSignal] = []
-    private var displayService: DisplayService?
-    private var edrOverlay: (any EDROverlayServiceProtocol)?
+    private let displayWrite: any DisplayWriteServiceProtocol
     private let onRestore: (() -> Void)?
 
     var currentWarmth: Float {
@@ -48,9 +45,8 @@ final class OverrideTracker: @unchecked Sendable {
         return _originalEDRBrightness != nil
     }
 
-    init(displayService: DisplayService? = nil, edrOverlay: (any EDROverlayServiceProtocol)? = nil, onRestore: (() -> Void)? = nil) {
-        self.displayService = displayService
-        self.edrOverlay = edrOverlay
+    init(displayWrite: any DisplayWriteServiceProtocol = HardwareDisplayWriteService(), onRestore: (() -> Void)? = nil) {
+        self.displayWrite = displayWrite
         self.onRestore = onRestore
     }
 
@@ -125,58 +121,13 @@ final class OverrideTracker: @unchecked Sendable {
 
         guard hasOverrides else { return }
 
-        if let brightness {
-            restoreBrightness(brightness)
-        }
-
-        // Removing the boost hands the gamma table back to ColorSync, which
-        // also clears warmth; the direct call is the fallback for a
-        // warmth-only session and a belt-and-braces reset either way.
-        edrOverlay?.removeAllOverlays()
-        if warmth != nil || edrHeadroom != nil {
-            DisplayGammaController.shared.resetAll()
-            CGDisplayRestoreColorSyncSettings()
-        }
+        // Cleanup must use the injected service too: a mock write must never
+        // be followed by a real brightness or ColorSync restore on exit.
+        displayWrite.restoreDisplayOverrides(
+            brightness: brightness,
+            resetGamma: warmth != nil || edrHeadroom != nil
+        )
         onRestore?()
-    }
-
-    private func restoreBrightness(_ value: Float) {
-        if let displayService {
-            try? displayService.setBuiltinBrightness(value)
-            return
-        }
-
-        guard let displayID = builtinDisplayID() else { return }
-
-        var iter: io_iterator_t = 0
-        let matching = IOServiceMatching("IODisplayConnect")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iter) == KERN_SUCCESS else { return }
-        defer { IOObjectRelease(iter) }
-
-        let cgVendor = CGDisplayVendorNumber(displayID)
-        let cgProduct = CGDisplayModelNumber(displayID)
-
-        var service = IOIteratorNext(iter)
-        while service != 0 {
-            defer { IOObjectRelease(service) }
-            let info = IODisplayCreateInfoDictionary(service, UInt32(kIODisplayOnlyPreferredName)).takeRetainedValue() as? [String: Any]
-            guard let vendorID = info?["DisplayVendorID"] as? UInt32,
-                  let productID = info?["DisplayProductID"] as? UInt32 else {
-                service = IOIteratorNext(iter)
-                continue
-            }
-            guard vendorID == cgVendor, productID == cgProduct else {
-                service = IOIteratorNext(iter)
-                continue
-            }
-            let key = "brightness" as CFString
-            IODisplaySetFloatParameter(service, 0, key, value)
-            return
-        }
-    }
-
-    private func builtinDisplayID() -> CGDirectDisplayID? {
-        DisplayHelpers.builtinDisplayIDOrNil()
     }
 
     deinit {

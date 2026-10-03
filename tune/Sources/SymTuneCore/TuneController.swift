@@ -10,7 +10,6 @@ public final class TuneController: Sendable {
     private let battery: BatteryService
     private let displays = DisplayService()
     private let power = PowerService()
-    private let dimOverlay = DimOverlay()
     private let edrOverlay = EDROverlayService()
     private let displayWrite: any DisplayWriteServiceProtocol
     private let profiles: ProfileService
@@ -135,8 +134,7 @@ public final class TuneController: Sendable {
             client: aiUsageClient ?? SymBrainUsageClient()
         )
         self.restoreTracker = OverrideTracker(
-            displayService: displays,
-            edrOverlay: edrOverlay,
+            displayWrite: self.displayWrite,
             onRestore: { [smcRestoreTracker] in smcRestoreTracker.restoreAll() }
         )
         restoreTracker.registerSignalHandlers()
@@ -146,7 +144,7 @@ public final class TuneController: Sendable {
         keepAwakeCoordinator.end()
         restoreTracker.restoreAll()
         smcRestoreTracker.restoreAll()
-        dimOverlay.removeAllOverlays()
+        displayWrite.resetDim()
         edrOverlay.removeAllOverlays()
     }
 
@@ -423,17 +421,17 @@ public final class TuneController: Sendable {
 
     public func applyDim(_ value: Double) throws {
         let clamped = SafetyPolicy.clamp(value, config.dimMin, config.dimMax)
-        dimOverlay.applyDim(Float(clamped))
+        displayWrite.applyDim(Float(clamped))
         logHistory(action: "dim.set", requested: value, clamped: clamped, applied: clamped, result: "success")
     }
 
     public func resetDim() {
-        dimOverlay.removeAllOverlays()
+        displayWrite.resetDim()
         logHistory(action: "dim.reset", result: "success")
     }
 
     public func getDimLevel() -> Double {
-        Double(dimOverlay.dimLevel)
+        Double(displayWrite.getDimLevel())
     }
 
     public func getWarmthLevel() -> Double {
@@ -929,57 +927,151 @@ extension TuneController {
             Capability(id: "power.keepAwake", available: true, tier: "core",
                        detail: "Prevent idle sleep via IOKit power assertion."),
             Capability(id: "fan.control", available: smcWritable, tier: "core",
-                       detail: smcWritable
-                            ? "Fan speed control via SMC."
-                            : smcAvailable
-                                ? "Fan speed control via SMC. Requires root — the CLI needs `sudo`; "
-                                    + "the cockpit app prompts for your administrator password on demand."
-                                : "SMC unreachable — not a privilege problem, and `sudo` will not "
-                                    + "help. Either this is a VM, or the host's SMC generation is not "
-                                    + "supported by this build."),
-            Capability(id: "battery.chargeLimit", available: smcWritable, tier: "core",
-                       detail: smcWritable
-                            ? "Battery charge limiting via SMC."
-                            : smcAvailable
-                                ? "Battery charge limiting via SMC. Requires root (run the CLI with `sudo`)."
-                                : "SMC unavailable — charge limiting not possible."),
-            powerDrawCapability(),
-        ]
-
-        var recommendations: [String] = []
-        if !edrCapable {
-            recommendations.append("No EDR-capable display detected; extended brightness will be unavailable here.")
-        }
-        if !batteryPresent {
-            recommendations.append("No battery detected; battery features are not applicable on this Mac.")
-        }
-        if recommendations.isEmpty {
-            recommendations.append("Core features are ready. Run `symtune serve` to expose them over MCP.")
+        …8407 tokens truncated…oller.recordMetricsHistory(snapshot.metrics)
         }
 
-        return CapabilityReport(
-            tool: "symtune",
-            version: TuneVersion.current,
-            macosVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-            architecture: Self.architecture,
-            capabilities: caps,
-            permissions: permissions(),
-            recommendations: recommendations,
-            credentialSources: aiUsageService.credentialSources()
+        if metrics != snapshot.metrics { metrics = snapshot.metrics }
+        if let value = snapshot.sensors, sensors != value { sensors = value }
+        if let value = snapshot.battery, battery != value { battery = value }
+        if let value = snapshot.fanGovernorRunning, fanGovernorRunning != value { fanGovernorRunning = value }
+
+        updateStatusItemText()
+        rebuildMetricRows()
+
+        if wantsDetail {
+            refreshMainThreadState()
+        }
+
+        if scheduled { tick &+= 1 }
+    }
+
+    /// Reads that must stay on the main actor (AppKit / overlay state).
+    ///
+    /// The fan-governor probe used to run here too (a synchronous `pgrep`
+    /// fork/exec) but has moved into the `Task.detached` block in
+    /// ``refresh(scheduled:)`` alongside the sensors/battery reads — it needs
+    /// no AppKit and has no business blocking the main actor (issue #194).
+    private func refreshMainThreadState() {
+        let currentOverrides = controller.activeOverrides()
+        if overrides != currentOverrides { overrides = currentOverrides }
+
+        let currentProfile = controller.activeFanProfile
+        if fanProfile != currentProfile { fanProfile = currentProfile }
+
+        // `activeOverrides()` already read the built-in brightness; reuse it
+        // instead of hitting DisplayServices a second time per refresh.
+        let brightness = currentOverrides.brightness ?? (try? controller.getBuiltinBrightness())
+        if let brightness, builtinBrightness != brightness { builtinBrightness = brightness }
+
+        let dim = 1.0 - controller.getDimLevel()
+        if dimAmount != dim { dimAmount = dim }
+
+        let currentWarmth = controller.getWarmthLevel()
+        if warmth != currentWarmth { warmth = currentWarmth }
+
+        let extended = controller.extendedBrightnessStatus()
+        if extendedBrightness != extended { extendedBrightness = extended }
+
+        let session = controller.keepAwakeSessionStatus()
+        if keepAwake != session { keepAwake = session }
+
+        if displays.isEmpty || tick % Self.displayRefreshEveryNTicks == 0 {
+            let list = controller.displaysReport().displays
+            if displays != list { displays = list }
+        }
+    }
+
+    // MARK: - Derived state
+
+    private func rebuildMetricRows() {
+        let ordered = orderedMetrics(preferences.enabledMetrics)
+        guard let report = metrics, !ordered.isEmpty else {
+            if !metricRows.isEmpty { metricRows = [] }
+            return
+        }
+
+        var rows: [MetricRowData] = []
+        rows.reserveCapacity(ordered.count)
+        for id in ordered {
+            let style = preferences.metricStyles[id] ?? .default
+            // Both byte metrics need a total, for different reasons: memory
+            // stores used bytes and needs used + free to derive the free side
+            // and the percentage; disk stores a percentage and needs the
+            // volume capacity to derive gigabytes.
+            let totalBytes: UInt64? = {
+                switch id {
+                case .memory:
+                    guard let used = report.memory.usedBytes,
+                          let free = report.memory.freeBytes else { return nil }
+                    return used + free
+                case .disk:
+                    return report.disk?.capacityBytes
+                default:
+                    return nil
+                }
+            }()
+
+            guard let stats = controller.metricsHistoryStats(for: id) else {
+                guard let fallback = MetricFormatting.fallbackValue(id, report: report, style: style) else { continue }
+                rows.append(MetricRowData(
+                    id: id,
+                    title: id.displayName,
+                    current: fallback,
+                    minimum: "",
+                    maximum: "",
+                    samples: []
+                ))
+                continue
+            }
+            let formatted = MetricFormatting.historyRowValues(id, stats: stats, style: style, totalBytes: totalBytes)
+            rows.append(MetricRowData(
+                id: id,
+                title: id.displayName,
+                current: formatted.current,
+                minimum: formatted.minimum,
+                maximum: formatted.maximum,
+                samples: controller.metricsHistorySamples(for: id)
+            ))
+        }
+
+        if metricRows != rows { metricRows = rows }
+    }
+
+    private func updateStatusItemText() {
+        guard let report = metrics else { return }
+        let visible = orderedMetrics(preferences.visibleMetrics, fallback: [.cpu, .memory])
+        let segments = MetricStyleFormatting.statusItemSegments(
+            report: report,
+            identifiers: visible,
+            styles: preferences.metricStyles
         )
+        // Comparing segments, not just the flattened text: two styles can
+        // render the same characters with a different icon, and the status
+        // item would otherwise keep the stale glyph.
+        guard statusItemSegments != segments else { return }
+        statusItemSegments = segments
+        statusItemText = MetricStyleFormatting.plainText(segments)
+        onStatusItemTextChanged?(segments)
     }
 
-    /// Returns the credential-resolution report for each provider.
-    /// Consumed by the `doctor` command's diagnostics section.
-    public func credentialSources() -> [CredentialSourceReport] {
-        aiUsageService.credentialSources()
+    /// The configured display style for one metric, so surfaces outside the
+    /// history rows (e.g. the System Status chips) can honour the same
+    /// `basis` the menu bar and history card already do, without reaching
+    /// into ``PreferencesManager`` directly.
+    func metricStyle(for id: MetricIdentifier) -> MetricStyle {
+        preferences.metricStyles[id] ?? .default
     }
 
-    // MARK: - AI usage providers
+    private func orderedMetrics(
+        _ selected: Set<MetricIdentifier>,
+        fallback: [MetricIdentifier] = []
+    ) -> [MetricIdentifier] {
+        MetricOrdering.ordered(selected, order: preferences.metricOrder, fallback: fallback)
+    }
 
-    /// The stable symbrain-backed provider catalog shared by the app, CLI, and
-    /// MCP server. Fetching is performed once by `SymBrainUsageClient`.
-    public static func defaultAIUsageProviders() -> [any AIUsageProvider] {
-        SymBrainUsageProvider.catalog()
+    /// Sync the history buffers after the user changed which metrics are enabled.
+    func syncEnabledMetrics() {
+        controller.syncEnabledMetrics(preferences.enabledMetrics)
+        rebuildMetricRows()
     }
 }

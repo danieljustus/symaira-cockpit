@@ -55,139 +55,163 @@ final class SensorTests: XCTestCase {
     }
 }
 
+// These are unit contracts, not opt-in physical-display acceptance tests.
 final class WriteSurfaceTests: XCTestCase {
+    private var mock: MockDisplayWriteService!
+    private var controller: TuneController!
+    private var dataDir: URL!
+
+    override func setUpWithError() throws {
+        mock = MockDisplayWriteService()
+        dataDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        controller = makeController()
+    }
+
+    override func tearDownWithError() throws {
+        controller = nil // exercise restoration while the mock still exists
+        mock = nil
+        try? FileManager.default.removeItem(at: dataDir)
+    }
+
+    private func makeController(config: TuneConfig = TuneConfig()) -> TuneController {
+        TuneController(
+            config: config,
+            displayWrite: mock,
+            smcService: SMCService(connection: FakeSMCConnection(isOpen: false)),
+            batterySource: FakeBatterySource(result: .unavailable),
+            dataDir: dataDir
+        )
+    }
+
     func testExtendedBrightnessConfigApplied() {
-        let custom = TuneConfig(extendedBrightnessMax: 1.4)
-        let controller = TuneController(config: custom)
-        XCTAssertEqual(controller.config.extendedBrightnessMax, 1.4)
+        let custom = makeController(config: TuneConfig(extendedBrightnessMax: 1.4))
+        XCTAssertEqual(custom.config.extendedBrightnessMax, 1.4)
     }
 
     func testFanControlRequiresSMC() {
-        XCTAssertThrowsError(try TuneController().applyFan(fraction: 0.5)) { error in
-            let message = "\(error)"
-            XCTAssertTrue(
-                message.contains("SMC") || message.contains("permission") || message.contains("unsupported"),
-                "unexpected error: \(error)"
-            )
-        }
-    }
-
-    func testBrightnessClampedBeforeApply() {
-        let controller = TuneController()
-        do {
-            try controller.applyBuiltinBrightness(2.0)
-        } catch {
-            guard case TuneError.unsupported = error else {
-                return XCTFail("expected .unsupported (no built-in display), got \(error)")
+        XCTAssertThrowsError(try controller.applyFan(fraction: 0.5)) { error in
+            guard case TuneError.permission = error else {
+                return XCTFail("expected permission error, got \(error)")
             }
         }
     }
 
-    func testDimClampedBySafetyPolicy() {
-        let controller = TuneController()
-        XCTAssertNoThrow(try controller.applyDim(0.5))
-        XCTAssertNoThrow(try controller.applyDim(0.0))
-        XCTAssertNoThrow(try controller.applyDim(2.0))
+    func testBrightnessClampedBeforeApply() throws {
+        try controller.applyBuiltinBrightness(2.0)
+        XCTAssertEqual(mock.lastSetBrightness, 1.0)
+        try controller.applyBuiltinBrightness(-1.0)
+        XCTAssertEqual(mock.lastSetBrightness, Float(controller.config.brightnessMin))
     }
 
-    func testDimLevelTracked() {
-        let controller = TuneController()
+    func testDimClampedBySafetyPolicy() throws {
+        try controller.applyDim(0.5)
+        XCTAssertEqual(mock.dimLevel, 0.5)
+        try controller.applyDim(0.0)
+        XCTAssertEqual(mock.dimLevel, Float(controller.config.dimMin))
+        try controller.applyDim(2.0)
+        XCTAssertEqual(mock.dimLevel, Float(controller.config.dimMax))
+    }
+
+    func testDimLevelTracked() throws {
         XCTAssertEqual(controller.getDimLevel(), 1.0)
-        XCTAssertNoThrow(try controller.applyDim(0.5))
+        try controller.applyDim(0.5)
+        XCTAssertEqual(controller.getDimLevel(), Double(mock.dimLevel))
     }
 
-    func testResetDimClearsOverlays() {
-        let controller = TuneController()
-        XCTAssertNoThrow(try controller.applyDim(0.5))
+    func testResetDimClearsOverlays() throws {
+        try controller.applyDim(0.5)
         controller.resetDim()
+        XCTAssertEqual(mock.dimLevel, 1.0)
+        XCTAssertEqual(controller.getDimLevel(), 1.0)
     }
 
-    func testWarmthClampedBySafetyPolicy() {
-        let controller = TuneController()
-        do {
-            try controller.applyWarmth(0.5)
-        } catch {
-            guard case TuneError.unsupported = error else {
-                return XCTFail("expected .unsupported (no built-in display), got \(error)")
-            }
-            return  // no built-in display; warmth tests are display-dependent
-        }
-        XCTAssertNoThrow(try controller.applyWarmth(0.0))
-        XCTAssertNoThrow(try controller.applyWarmth(2.0))
+    func testWarmthClampedBySafetyPolicy() throws {
+        try controller.applyWarmth(0.5)
+        XCTAssertEqual(mock.lastWarmth, 0.5)
+        try controller.applyWarmth(0.0)
+        XCTAssertEqual(mock.lastWarmth, 0.0)
+        try controller.applyWarmth(2.0)
+        XCTAssertEqual(mock.lastWarmth, 1.0)
     }
 
-    func testResetWarmth() {
-        let controller = TuneController()
-        do {
-            try controller.applyWarmth(0.5)
-        } catch {
-            guard case TuneError.unsupported = error else {
-                return XCTFail("expected .unsupported (no built-in display), got \(error)")
-            }
-            return  // no built-in display; warmth tests are display-dependent
-        }
-        XCTAssertNoThrow(try controller.resetWarmth())
+    func testResetWarmth() throws {
+        try controller.applyWarmth(0.5)
+        try controller.resetWarmth()
+        XCTAssertTrue(mock.resetWarmthCalled)
+        XCTAssertEqual(controller.getWarmthLevel(), 0)
     }
 
     func testRestoreAllNoOpWithoutOverrides() {
-        let controller = TuneController()
-        let warmthBefore = controller.getWarmthLevel()
-        let dimBefore = controller.getDimLevel()
         controller.restoreAll()
-        XCTAssertEqual(controller.getWarmthLevel(), warmthBefore)
-        XCTAssertEqual(controller.getDimLevel(), dimBefore)
+        XCTAssertEqual(mock.restoreCalls, 0)
+        XCTAssertEqual(controller.getWarmthLevel(), 0)
+        XCTAssertEqual(controller.getDimLevel(), 1.0)
     }
 
     func testChargeLimitRequiresSMC() {
-        XCTAssertThrowsError(try TuneController().applyChargeLimit(percent: 80)) { error in
-            let message = "\(error)"
-            XCTAssertTrue(
-                message.contains("SMC") || message.contains("permission") || message.contains("unsupported"),
-                "unexpected error: \(error)"
-            )
+        XCTAssertThrowsError(try controller.applyChargeLimit(percent: 80)) { error in
+            guard case TuneError.permission = error else {
+                return XCTFail("expected permission error, got \(error)")
+            }
         }
     }
 
     func testApplyProfileWithBrightnessAndDim() throws {
-        let controller = TuneController()
         let profile = try TuneProfile(name: "test", brightness: 0.5, dim: 0.7)
-        do {
-            try controller.applyProfile(profile)
-        } catch {
-            guard case TuneError.unsupported = error else {
-                return XCTFail("expected .unsupported (no built-in display), got \(error)")
-            }
-            // no built-in display; profile brightness/dim test is display-dependent
-        }
+        try controller.applyProfile(profile)
+        XCTAssertEqual(mock.lastSetBrightness, 0.5)
+        XCTAssertEqual(mock.dimLevel, 0.7)
     }
 
     func testApplyProfileWithWarmth() throws {
-        let controller = TuneController()
-        let profile = try TuneProfile(name: "test", warmth: 0.4)
-        do {
-            try controller.applyProfile(profile)
-        } catch {
-            guard case TuneError.unsupported = error else {
-                return XCTFail("expected .unsupported (no built-in display), got \(error)")
-            }
-            // no built-in display; profile warmth test is display-dependent
-        }
+        try controller.applyProfile(TuneProfile(name: "test", warmth: 0.4))
+        XCTAssertEqual(mock.lastWarmth, 0.4)
     }
 
     func testApplyProfileMinimal() throws {
-        let controller = TuneController()
-        let profile = try TuneProfile(name: "empty")
-        XCTAssertNoThrow(try controller.applyProfile(profile))
+        try controller.applyProfile(TuneProfile(name: "empty"))
+        XCTAssertNil(mock.lastSetBrightness)
+        XCTAssertNil(mock.lastWarmth)
+        XCTAssertEqual(mock.dimLevel, 1.0)
     }
 
     func testGetWarmthLevelDefault() {
-        let controller = TuneController()
         XCTAssertEqual(controller.getWarmthLevel(), 0)
     }
 
     func testGetDimLevelDefault() {
-        let controller = TuneController()
         XCTAssertEqual(controller.getDimLevel(), 1.0)
+    }
+
+    func testDeinitRestoresOnlyThroughMock() throws {
+        mock.brightness = 0.65
+        try controller.applyBuiltinBrightness(0.9)
+        try controller.applyWarmth(0.4)
+        try controller.applyExtendedBrightness(1.2)
+        try controller.applyDim(0.5)
+        controller = nil
+        XCTAssertEqual(mock.restoreCalls, 1)
+        XCTAssertEqual(mock.lastSetBrightness, 0.65)
+        XCTAssertTrue(mock.restoredGamma)
+        XCTAssertNil(mock.lastExtendedBrightness)
+        XCTAssertEqual(mock.dimLevel, 1.0)
+    }
+
+    func testPermissionAndUnsupportedErrorsArePropagated() {
+        mock.setBuiltinBrightnessError = TuneError.permission("denied")
+        XCTAssertThrowsError(try controller.applyBuiltinBrightness(0.8)) { error in
+            guard case TuneError.permission = error else {
+                return XCTFail("expected permission error, got \(error)")
+            }
+        }
+        XCTAssertNil(mock.lastSetBrightness)
+        mock.applyWarmthError = TuneError.unsupported("no built-in display")
+        XCTAssertThrowsError(try controller.applyProfile(TuneProfile(name: "test", warmth: 0.4))) { error in
+            guard case TuneError.unsupported = error else {
+                return XCTFail("expected unsupported error, got \(error)")
+            }
+        }
+        XCTAssertNil(mock.lastWarmth)
     }
 }
 
@@ -301,6 +325,9 @@ final class UpdateCheckOptOutTests: XCTestCase {
 /// Mock implementation of DisplayWriteServiceProtocol for testing TuneController write paths.
 final class MockDisplayWriteService: DisplayWriteServiceProtocol, @unchecked Sendable {
     var brightness: Double = 0.5
+    var dimLevel: Float = 1.0
+    var restoreCalls = 0
+    var restoredGamma = false
     var lastSetBrightness: Float?
     var lastWarmth: Float?
     var lastExtendedBrightness: Double?
@@ -310,6 +337,17 @@ final class MockDisplayWriteService: DisplayWriteServiceProtocol, @unchecked Sen
     var applyWarmthError: Error?
     var resetWarmthError: Error?
     var applyExtendedBrightnessError: Error?
+
+    func applyDim(_ value: Float) { dimLevel = value }
+    func resetDim() { dimLevel = 1.0 }
+    func getDimLevel() -> Float { dimLevel }
+    func restoreDisplayOverrides(brightness: Float?, resetGamma: Bool) {
+        restoreCalls += 1
+        if let brightness { lastSetBrightness = brightness }
+        if resetGamma { resetWarmthCalled = true }
+        restoredGamma = resetGamma
+        lastExtendedBrightness = nil
+    }
 
     func getBuiltinBrightness() throws -> Double {
         brightness
@@ -446,7 +484,7 @@ final class TuneControllerProfileTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        controller = TuneController()
+        controller = TuneController(displayWrite: MockDisplayWriteService())
     }
 
     // MARK: - Profiles

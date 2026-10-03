@@ -60,6 +60,10 @@ jobs:
         # built `symcockpit` binary — `swift test` there runs them.
         run: swift test
 
+      - name: Release app build
+        if: matrix.pkg == 'root'
+        run: swift build --product SymCockpitApp -c release --jobs 2
+
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.
   icon-compile:
