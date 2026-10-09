@@ -173,6 +173,13 @@ func runAwake(_ args: [String], controller: TuneController) throws {
 }
 
 func runProfile(_ args: [String], controller: TuneController) throws {
+    if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
+        emit("Usage: symcockpit profile save <name>   Save current settings")
+        emit("       symcockpit profile load <name>   Apply saved settings")
+        emit("       symcockpit profile list          List saved profiles")
+        emit("       symcockpit profile delete <name> Delete a saved profile")
+        return
+    }
     guard let subcommand = args.first else {
         throw TuneError.usage("profile: expected subcommand (save, load, list, delete).")
     }
@@ -279,6 +286,12 @@ func runStatus(_ args: [String], controller: TuneController) throws {
 }
 
 func runHistory(_ args: [String], controller: TuneController) throws {
+    if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
+        emit("Usage: symcockpit history [--json] [--limit N | -n N]")
+        emit("Show recorded write operations. Default limit: 100 events.")
+        emit("--json prints structured events instead of the text table.")
+        return
+    }
     let options = try HistoryOptions.parseOptions(args)
 
     let events = controller.getHistory(limit: options.limit)
@@ -599,7 +612,6 @@ private func handleNonTuneError(_ error: Error) -> Int32 {
     emitErr("symtune: \(redactedErrorLine(for: error, debug: debug))")
     return ExitCode.error.rawValue
 }
-
 
 /// Tune CLI logic as a library so both the legacy `symtune` binary and the
 /// unified `symcockpit tune` dispatcher can invoke it.
