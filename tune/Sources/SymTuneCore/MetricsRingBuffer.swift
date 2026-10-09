@@ -176,7 +176,7 @@ public final class MetricsRingBuffer: @unchecked Sendable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let cap = try c.decode(Int.self, forKey: .capacity)
         self.init(capacity: cap)
-        self.storage = try c.decode([MetricSample].self, forKey: .storage)
+        self.storage = Array(try c.decode([MetricSample].self, forKey: .storage).suffix(capacity))
     }
 
     public func encode(to encoder: Encoder) throws {
