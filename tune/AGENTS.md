@@ -29,10 +29,10 @@ tests and release-baseline reports have a wider scope that includes GUI and
 executable code. Compare percentages only with the same scope and denominator;
 never exclude low-coverage production code to improve a percentage.
 
-**Hardware-isolation note:** legacy `WriteSurfaceTests` still construct the
-default hardware display adapter (issue #316). HOME/XDG isolation does not
-prevent physical display writes. New unit tests must inject the existing
-`DisplayWriteService` mock; real-device acceptance must be separate and opt-in.
+**Hardware-isolation note:** controller write/profile tests inject the existing
+`DisplayWriteService` mock, including dimming and restore-on-exit cleanup. HOME/XDG
+isolation alone does not prevent physical display writes. New unit tests must use
+this boundary; real-device acceptance must be separately identified and opt-in.
 
 Local toolchain note: if the Command Line Tools `swift` is broken (dyld errors),
 build with the full Xcode toolchain:

@@ -159,7 +159,7 @@ final class TuneViewModel {
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.refresh(scheduled: true)
-                let interval = await self.currentInterval()
+                let interval = self.currentInterval()
                 do {
                     try await Task.sleep(for: .seconds(interval))
                 } catch {

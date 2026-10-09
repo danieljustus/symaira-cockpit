@@ -358,9 +358,9 @@ struct MenuBarVisibilityCard: View {
         accessibilityLabel: String,
         help: String,
         disabled: Bool = false,
-        set: @escaping (Bool) -> Void
+        set: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> some View {
-        Toggle("", isOn: Binding(get: { isOn }, set: set))
+        Toggle("", isOn: Binding(get: { isOn }, set: { newValue in set(newValue) }))
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()

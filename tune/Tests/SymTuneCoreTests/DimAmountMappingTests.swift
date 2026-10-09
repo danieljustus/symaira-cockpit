@@ -16,7 +16,7 @@ final class DimAmountMappingTests: XCTestCase {
         let coreMultiplier = 1.0 - dimAmount
 
         // Act: pass the converted multiplier to the controller
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
         try controller.applyDim(coreMultiplier)
 
         // Assert: core reports multiplier = 1.0 (no dim)
@@ -30,7 +30,7 @@ final class DimAmountMappingTests: XCTestCase {
         let coreMultiplier = 1.0 - dimAmount
 
         // Act: pass the converted multiplier to the controller
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
         try controller.applyDim(coreMultiplier)
 
         // Assert: core reports multiplier = dimMin (darkest allowed)
@@ -42,7 +42,7 @@ final class DimAmountMappingTests: XCTestCase {
 
     func testReadPathConvertsMultiplierToDimAmount() {
         // Arrange: controller has no dim applied (multiplier = 1.0)
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
 
         // Act: read core level and convert back to dim amount
         let dimAmount = 1.0 - controller.getDimLevel()
@@ -54,7 +54,7 @@ final class DimAmountMappingTests: XCTestCase {
 
     func testReadPathAfterApplyingMaxDim() throws {
         // Arrange: apply darkest allowed dim (core multiplier = dimMin)
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
         try controller.applyDim(SafetyPolicy.dimMin)
 
         // Act: read core level and convert to dim amount
@@ -68,7 +68,7 @@ final class DimAmountMappingTests: XCTestCase {
     // MARK: - Round-trip invariance
 
     func testRoundTripAtZero() throws {
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
 
         // Write: view dim 0% → core multiplier 1.0
         try controller.applyDim(1.0 - 0.0)
@@ -80,7 +80,7 @@ final class DimAmountMappingTests: XCTestCase {
     }
 
     func testRoundTripAtMaximum() throws {
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
 
         // Write: view dim max (0.85) → core multiplier 1.0 - 0.85 = 0.15 = dimMin
         try controller.applyDim(1.0 - 0.85)
@@ -92,7 +92,7 @@ final class DimAmountMappingTests: XCTestCase {
     }
 
     func testRoundTripAtMidpoint() throws {
-        let controller = TuneController(config: TuneConfig())
+        let controller = TuneController(config: TuneConfig(), displayWrite: MockDisplayWriteService())
 
         // View dim 42.5% → core 1.0 - 0.425 = 0.575
         let viewValue = 0.425

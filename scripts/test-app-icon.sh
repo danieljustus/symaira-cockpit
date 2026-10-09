@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ICON_SOURCE="$ROOT_DIR/assets/branding/AppIcon.icon"
 ICNS_SOURCE="$ROOT_DIR/assets/branding/AppIcon.icns"
-TMP_DIR="$(mktemp -d)"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/symcockpit-icon-test.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 XCODE_VERSION="$(xcodebuild -version | sed -n '1p')"
@@ -42,4 +42,5 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 REQUIRE_COMPILED_ICON=true "$ROOT_DIR/scripts/verify-app-icon.sh" "$APP_PATH"
+"$ROOT_DIR/scripts/create-symaira-dmg.sh" "$APP_PATH" "$TMP_DIR/icon-test.dmg" "Cockpit Icon Test"
 printf 'Real .icon compile regression passed with %s\n' "$XCODE_VERSION"

@@ -10,7 +10,6 @@ public final class TuneController: Sendable {
     private let battery: BatteryService
     private let displays = DisplayService()
     private let power = PowerService()
-    private let dimOverlay = DimOverlay()
     private let edrOverlay = EDROverlayService()
     private let displayWrite: any DisplayWriteServiceProtocol
     private let profiles: ProfileService
@@ -135,8 +134,7 @@ public final class TuneController: Sendable {
             client: aiUsageClient ?? SymBrainUsageClient()
         )
         self.restoreTracker = OverrideTracker(
-            displayService: displays,
-            edrOverlay: edrOverlay,
+            displayWrite: self.displayWrite,
             onRestore: { [smcRestoreTracker] in smcRestoreTracker.restoreAll() }
         )
         restoreTracker.registerSignalHandlers()
@@ -146,7 +144,7 @@ public final class TuneController: Sendable {
         keepAwakeCoordinator.end()
         restoreTracker.restoreAll()
         smcRestoreTracker.restoreAll()
-        dimOverlay.removeAllOverlays()
+        displayWrite.resetDim()
         edrOverlay.removeAllOverlays()
     }
 
@@ -423,17 +421,17 @@ public final class TuneController: Sendable {
 
     public func applyDim(_ value: Double) throws {
         let clamped = SafetyPolicy.clamp(value, config.dimMin, config.dimMax)
-        dimOverlay.applyDim(Float(clamped))
+        displayWrite.applyDim(Float(clamped))
         logHistory(action: "dim.set", requested: value, clamped: clamped, applied: clamped, result: "success")
     }
 
     public func resetDim() {
-        dimOverlay.removeAllOverlays()
+        displayWrite.resetDim()
         logHistory(action: "dim.reset", result: "success")
     }
 
     public func getDimLevel() -> Double {
-        Double(dimOverlay.dimLevel)
+        Double(displayWrite.getDimLevel())
     }
 
     public func getWarmthLevel() -> Double {
