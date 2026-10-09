@@ -36,7 +36,7 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 DMG_PATH="$OUTPUT_DIR/$(basename "$DMG_PATH")"
 
-WORK_DIR="$(mktemp -d)"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/symcockpit-dmg.XXXXXX")"
 STAGE_DIR="$WORK_DIR/stage"
 RW_DMG="$WORK_DIR/installer-rw.dmg"
 MOUNT_DIR=""
@@ -54,7 +54,6 @@ mkdir -p "$STAGE_DIR/.background"
 cp -R "$APP_PATH" "$STAGE_DIR/"
 ln -s /Applications "$STAGE_DIR/Applications"
 cp "$BACKGROUND_PATH" "$STAGE_DIR/.background/symaira-dmg-background.png"
-cp "$APP_PATH/Contents/Resources/AppIcon.icns" "$STAGE_DIR/.VolumeIcon.icns"
 
 hdiutil create \
   -quiet \
@@ -71,11 +70,6 @@ if [ -z "$DEVICE" ] || [ -z "$MOUNT_DIR" ]; then
   echo "error: could not determine mounted DMG device or volume path" >&2
   exit 1
 fi
-
-# Finder recognises .VolumeIcon.icns only with the volume's custom-icon flag.
-SETFILE="$(xcrun --find SetFile)"
-GETFILEINFO="$(xcrun --find GetFileInfo)"
-"$SETFILE" -a C "$MOUNT_DIR"
 
 APP_FILE="$(basename "$APP_PATH")"
 MOUNT_NAME="$(basename "$MOUNT_DIR")"
@@ -101,6 +95,13 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
+
+# Finder's update removes an existing volume icon. Install it after layout,
+# then verify both the bytes and custom-icon flag on the converted image.
+cp "$APP_PATH/Contents/Resources/AppIcon.icns" "$MOUNT_DIR/.VolumeIcon.icns"
+SETFILE="$(xcrun --find SetFile)"
+GETFILEINFO="$(xcrun --find GetFileInfo)"
+"$SETFILE" -a C "$MOUNT_DIR"
 
 sync
 hdiutil detach "$DEVICE" -quiet

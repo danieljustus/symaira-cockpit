@@ -360,7 +360,7 @@ struct MenuBarVisibilityCard: View {
         disabled: Bool = false,
         set: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> some View {
-        Toggle("", isOn: Binding(get: { isOn }, set: set))
+        Toggle("", isOn: Binding(get: { isOn }, set: { newValue in set(newValue) }))
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()

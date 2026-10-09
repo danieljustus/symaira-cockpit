@@ -35,7 +35,7 @@ if [[ -f "$RESOURCES/Assets.car" ]]; then
     printf 'Cannot inspect compiled icon catalog: assetutil unavailable.\n' >&2
     exit 1
   }
-  ASSET_INFO="$(mktemp)"
+  ASSET_INFO="$(mktemp "${TMPDIR:-/tmp}/symcockpit-icon-info.XXXXXX")"
   trap 'rm -f "$ASSET_INFO"' EXIT
   "$ASSETUTIL" --info "$RESOURCES/Assets.car" > "$ASSET_INFO"
   python3 - "$ASSET_INFO" <<'PY'
