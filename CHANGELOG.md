@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## [0.8.1] (2026-10-10)
+
+### Fixed
+- Keep decoded metric history within its configured capacity and retain the
+  newest samples without changing the JSON shape (#324, #325).
+- Show contextual `profile` and `history` help before executing operations,
+  preserving stored profiles and history when `--help` or `-h` is requested
+  (#326, #327).
+- Resolve Swift callback-isolation and bounded process-name decoding
+  diagnostics, with regression and Release-build checks (#315, #323).
+- Isolate display-write unit tests through the shared mock boundary, including
+  dimming and restore-on-exit cleanup (#316, #323).
+- Install and verify the reviewed custom DMG volume icon after Finder layout
+  so it survives conversion and the final read-only mount (#321, #323).
+- Publish CLI Formula and GUI Cask updates through protected Homebrew pull
+  requests using exact release-asset checksums (#320).
+
+### Known limitations
+- Native keyboard/VoiceOver acceptance remains explicitly deferred in #305.
+- The legacy `symcockpit tune` prefix remains supported through v0.9; its
+  removal and final migration checks belong to v0.10 (#259).
+
 ## [0.8.0] — 2026-10-03
 
 ### Added
