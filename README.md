@@ -119,6 +119,27 @@ Narrow windows use an icon rail, while wide windows place the power and
 cooling cards side by side. Both surfaces use the same model and cards, and
 closing the window leaves the menu bar running.
 
+The **Storage Volumes** card under **Activity** lists mounted internal disks,
+external SSDs/HDDs, USB drives, memory cards and network/virtual volumes. Each
+row shows its name, mount path, type, read-only state and total, used and
+available capacity. Connecting, removing or renaming a mounted volume refreshes
+the shared list; normal polling updates space usage. Hidden macOS helper
+volumes are omitted. Unmounted or locked volumes are not listed.
+
+Use **Choose…** in the card header to show or hide individual volumes. The
+selection applies immediately to both panels and is saved automatically as a
+GUI preference. New volumes are visible by default, and hidden disconnected
+volumes keep their selection. Filesystem UUIDs preserve the choice across
+renames/reconnects; filesystems without a UUID fall back to their mount path.
+Even with every volume hidden, **Choose…** remains available. CLI/MCP metrics
+still report all discovered volumes, independent of this display preference.
+
+Storage sizes use decimal units, like Finder. Available capacity can include
+purgeable APFS data, and APFS volumes can share a container, so the rows are
+not summed into a misleading total. Missing capacity is labelled unavailable.
+The existing **Disk** metric stays boot-volume-only. `symcockpit metrics` and
+the MCP `get_system_metrics` tool include this same list in `volumes`.
+
 Jump to **Menu bar & HUD** to customize the readout without
 leaving the panel. Its **Menu bar** card is the quick way to change the status
 item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*

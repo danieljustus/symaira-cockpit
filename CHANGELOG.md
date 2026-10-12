@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+- A shared Storage Volumes card lists user-visible mounted internal, external
+  and network/virtual volumes with mount paths and total/used/available space.
+  Mount, unmount and rename notifications refresh the list; `metrics` and
+  `get_system_metrics` expose the same data. Existing boot-volume metrics and
+  card visibility choices remain compatible (#330).
+- A native Choose menu shows or hides individual storage volumes in both
+  panels, saving the selection automatically. Filesystem UUIDs keep choices
+  across renames/reconnects; new volumes remain visible and an all-hidden list
+  keeps the menu reachable. CLI/MCP discovery remains complete (#331).
+
 ## [0.8.1] (2026-10-10)
 
 ### Fixed

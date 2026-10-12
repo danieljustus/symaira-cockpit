@@ -37,6 +37,7 @@ final class TuneViewModel {
     // MARK: - Published state
 
     private(set) var metrics: SystemMetricsReport?
+    private(set) var storageVolumes: [StorageVolumeReport]?
     private(set) var sensors: SensorReport?
     private(set) var battery: BatteryReport?
     private(set) var displays: [DisplayInfo] = []
@@ -92,6 +93,7 @@ final class TuneViewModel {
     private var pollTask: Task<Void, Never>?
     private var tick = 0
     private var isRefreshing = false
+    private var refreshPending = false
     /// Bounded number of fast "priming" polls after launch, so a Mac that never
     /// reports CPU utilisation cannot pin the loop at the fast cadence forever.
     private var primingTicksRemaining = 3
@@ -175,9 +177,18 @@ final class TuneViewModel {
         // A user-triggered refresh can land while the scheduled one is still
         // reading the hardware; letting both through would double-sample the
         // history and read the SMC twice for nothing.
-        guard !isRefreshing else { return }
+        guard !isRefreshing else {
+            if !scheduled { refreshPending = true }
+            return
+        }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            if refreshPending {
+                refreshPending = false
+                refreshNow()
+            }
+        }
 
         let wantsDetail = isDetailVisible
         let controller = self.controller
@@ -203,6 +214,7 @@ final class TuneViewModel {
         }
 
         if metrics != snapshot.metrics { metrics = snapshot.metrics }
+        if storageVolumes != snapshot.metrics.volumes { storageVolumes = snapshot.metrics.volumes }
         if let value = snapshot.sensors, sensors != value { sensors = value }
         if let value = snapshot.battery, battery != value { battery = value }
         if let value = snapshot.fanGovernorRunning, fanGovernorRunning != value { fanGovernorRunning = value }

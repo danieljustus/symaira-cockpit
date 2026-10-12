@@ -69,7 +69,11 @@ struct CockpitDesignPreview: View {
                 }
                 .id(TuneWorkspaceAnchor.power)
 
-                previewOnlySection("Activity", anchor: .activity)
+                VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
+                    sectionLabel("Activity")
+                    StorageVolumesCard(volumes: showsReadings ? Self.volumes : nil)
+                }
+                .id(TuneWorkspaceAnchor.activity)
                 previewOnlySection("Menu bar & HUD", anchor: .readout)
 
                 Text("Komponentenvorschau, nicht das vollständige Cockpit-Fenster. Regler und Schalter wirken nur hier.")
@@ -137,6 +141,18 @@ struct CockpitDesignPreview: View {
         temperatureCelsius: 29, chargeLimitSupported: false,
         notes: ["Design fixture, not a hardware reading"]
     )
+
+    private static let volumes: [StorageVolumeReport] = [
+        StorageVolumeReport(
+            name: "Demo Macintosh HD", mountPath: "/", isInternal: true, isLocal: true,
+            space: DiskReport(capacityBytes: 512_000_000_000, usedBytes: 256_000_000_000, freeBytes: 256_000_000_000)
+        ),
+        StorageVolumeReport(
+            name: "Demo External SSD", mountPath: "/Volumes/Demo External SSD", isInternal: false, isLocal: true,
+            space: DiskReport(capacityBytes: 1_000_000_000_000, usedBytes: 750_000_000_000, freeBytes: 250_000_000_000)
+        ),
+        StorageVolumeReport(name: "Demo Unavailable", mountPath: "/Volumes/Demo Unavailable", isReadOnly: true)
+    ]
 
     // These public models have no public memberwise initializer. Decode fixed,
     // validated fixtures rather than widening production API for a design tool.

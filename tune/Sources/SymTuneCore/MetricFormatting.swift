@@ -207,6 +207,11 @@ public enum MetricFormatting {
         return "\(value) B"
     }
 
+    /// Decimal sizes for mounted storage, matching Finder rather than RAM.
+    public static func storageBytes(_ value: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: .decimal)
+    }
+
     private static func netRate(_ bytesPerSecond: Double) -> String {
         if bytesPerSecond >= 1_048_576 {
             return String(format: "%.1f MB/s", bytesPerSecond / 1_048_576.0)

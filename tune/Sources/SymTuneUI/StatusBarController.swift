@@ -204,10 +204,12 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         aiUsageModel.start()
         checkForUpdatesOnLaunch()
         registerSleepWakeNotifications()
+        registerVolumeNotifications()
     }
 
     deinit {
         MainActor.assumeIsolated {
+            NSWorkspace.shared.notificationCenter.removeObserver(self)
             model.stop()
             aiUsageModel.stop()
         }
@@ -679,6 +681,19 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     // MARK: - Sleep/Wake gap markers
+
+    private func registerVolumeNotifications() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification,
+                     NSWorkspace.didRenameVolumeNotification] {
+            center.addObserver(self, selector: #selector(handleVolumeChange), name: name, object: nil)
+        }
+    }
+
+    @objc private func handleVolumeChange() {
+        // Shares the normal off-main-thread poll; does not add history samples.
+        model.refreshNow()
+    }
 
     private func registerSleepWakeNotifications() {
         let center = NSWorkspace.shared.notificationCenter

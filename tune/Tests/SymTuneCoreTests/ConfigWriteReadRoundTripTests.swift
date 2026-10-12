@@ -23,7 +23,7 @@ final class ConfigWriteReadRoundTripTests: XCTestCase {
         memory_basis = "free"
 
         [popover]
-        cards_version = 2
+        cards_version = \(TuneConfig.popoverCardsSchemaVersion)
         cards = ["display_controls", "system_status"]
         """
         let table = TOMLParser().parse(written)

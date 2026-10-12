@@ -58,13 +58,15 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
     public let network: [NetworkInterfaceStatistics]
     /// Live DC-in power draw; nil when the SMC does not expose the keys.
     public let power: PowerReport?
+    public let volumes: [StorageVolumeReport]
     public init(
         timestamp: TimeInterval = 0,
         cpu: CPUStatistics,
         memory: MemoryStatistics,
         disk: DiskStatistics?,
         network: [NetworkInterfaceStatistics],
-        power: PowerReport? = nil
+        power: PowerReport? = nil,
+        volumes: [StorageVolumeReport] = []
     ) {
         self.timestamp = timestamp
         self.cpu = cpu
@@ -72,6 +74,7 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
         self.disk = disk
         self.network = network
         self.power = power
+        self.volumes = volumes
     }
     public static let empty = SystemMetricsSnapshot(timestamp: 0, cpu: .init(total: [], perCore: []), memory: .empty, disk: nil, network: [])
 }
@@ -92,7 +95,8 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
             memory: readMemory(),
             disk: readDisk(),
             network: readNetwork(),
-            power: smc.readSystemPower()
+            power: smc.readSystemPower(),
+            volumes: StorageVolumeService().read()
         )
     }
 
@@ -184,14 +188,10 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
         let url = URL(fileURLWithPath: path, isDirectory: true)
         let values = try? url.resourceValues(forKeys: [
             .volumeTotalCapacityKey,
+            .volumeAvailableCapacityKey,
             .volumeAvailableCapacityForImportantUsageKey
         ])
-        guard let total = values?.volumeTotalCapacity, total > 0,
-              let available = values?.volumeAvailableCapacityForImportantUsage, available >= 0
-        else { return nil }
-        let capacity = UInt64(total)
-        let free = min(UInt64(available), capacity)
-        return DiskStatistics(capacityBytes: capacity, usedBytes: capacity - free, freeBytes: free)
+        return values.flatMap(StorageVolumeService.statistics)
     }
 
     private func readDiskStatfs() -> DiskStatistics? {

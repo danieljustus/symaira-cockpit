@@ -445,7 +445,7 @@ public struct TuneConfig: Equatable, Sendable {
     }
 
     /// Current `[popover] cards` vocabulary version, written alongside the list.
-    public static let popoverCardsSchemaVersion = 2
+    public static let popoverCardsSchemaVersion = 3
 
     /// Card identifiers a writer at `version` could name. Version 1 is the
     /// unversioned list that shipped through v0.9.1.
@@ -455,6 +455,7 @@ public struct TuneConfig: Equatable, Sendable {
             "system_status", "metrics_history", "displays",
         ]
         guard version >= 2 else { return v1 }
+        guard version >= 3 else { return v1.union(["top_processes"]) }
         return Set(PopoverCard.allCases.map(\.rawValue))
     }
 

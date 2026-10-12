@@ -127,7 +127,11 @@ struct ListDisplaysTool: TuneTool {
 
 struct MetricsTool: TuneTool {
     let name = "get_system_metrics"
-    let description = "Read system metrics: CPU utilization, memory pressure, disk usage, network throughput, and live power draw (volts/amps/watts, when the SMC exposes them)."
+    let description = """
+        Read system metrics: CPU utilization, memory pressure, boot disk usage, \
+        mounted storage volumes (names, paths, capacity), network throughput, and \
+        live power draw (volts/amps/watts, when the SMC exposes them).
+        """
     let inputSchema = MCPJSONSchema()
     var isReadOnly: Bool { true }
 

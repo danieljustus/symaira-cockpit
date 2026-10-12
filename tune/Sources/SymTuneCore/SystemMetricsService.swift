@@ -61,6 +61,7 @@ public final class SystemMetricsService: @unchecked Sendable {
             disk: disk,
             network: network,
             power: current.power,
+            volumes: current.volumes,
             notes: notes
         )
     }

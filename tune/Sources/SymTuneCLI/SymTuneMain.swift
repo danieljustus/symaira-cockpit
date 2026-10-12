@@ -17,7 +17,7 @@ READ COMMANDS
   battery                Battery health: charge %, cycles, capacity, condition (JSON).
   displays               Displays with EDR headroom / extended-brightness capability (JSON).
   permissions            Permission & SMC write status (JSON).
-  metrics [--json]       System metrics: CPU, memory, disk, network (JSON).
+  metrics [--json]       System metrics: CPU, memory, disk, mounted volumes, network (JSON).
   processes [--sort cpu|memory] [--limit N] [--interval <seconds>] [--json]
                          Processes using the most CPU / memory (samples twice).
   ai-usage [--json]      AI subscription/token usage per provider (read-only).
@@ -336,7 +336,7 @@ func runMetrics(_ args: [String], controller: TuneController) throws {
         emit("Usage: symtune metrics [--json]")
         emit("")
         emit("Print system metrics: CPU utilization, memory pressure, disk usage,")
-        emit("and network throughput. All values are read-only snapshots.")
+        emit("mounted storage volumes, and network throughput. All values are read-only snapshots.")
         emit("--json is accepted for consistency with other read commands; it is a no-op here.")
         return
     }
