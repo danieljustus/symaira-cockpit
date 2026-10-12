@@ -24,11 +24,23 @@ final class PreferencesManager: ObservableObject {
     /// Which cards the popover shows.
     @Published var visibleCards: Set<PopoverCard>
 
+    /// GUI-only selection, saved immediately without changing CLI/MCP discovery.
+    @Published var hiddenStorageVolumeIDs: Set<String> {
+        didSet {
+            defaults.set(hiddenStorageVolumeIDs.sorted(), forKey: Self.hiddenStorageVolumeIDsKey)
+        }
+    }
+
+    static let hiddenStorageVolumeIDsKey = "com.symaira.symtune.hiddenStorageVolumes"
+    private let defaults: UserDefaults
+
     private let configPaths = ConfigPaths()
 
     // MARK: - Init
 
-    init(config: TuneConfig = TuneConfig()) {
+    init(config: TuneConfig = TuneConfig(), defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.hiddenStorageVolumeIDs = Set(defaults.stringArray(forKey: Self.hiddenStorageVolumeIDsKey) ?? [])
         self.metricsRefreshInterval = config.metricsRefreshInterval
         self.enabledMetrics = config.enabledMetrics
         self.visibleMetrics = config.visibleMetrics
@@ -48,6 +60,21 @@ final class PreferencesManager: ObservableObject {
     func showsCard(_ card: PopoverCard, hardwareAvailable: Bool = true) -> Bool {
         guard visibleCards.contains(card) else { return false }
         return hardwareAvailable || !card.hidesWhenHardwareMissing
+    }
+
+    /// The same binding is used by every panel. Detached-volume choices remain
+    /// stored, while a newly discovered volume is shown unless explicitly hidden.
+    func storageVolumeVisibility(for volume: StorageVolumeReport) -> Binding<Bool> {
+        Binding(
+            get: { !self.hiddenStorageVolumeIDs.contains(volume.selectionID) },
+            set: { visible in
+                if visible {
+                    self.hiddenStorageVolumeIDs.remove(volume.selectionID)
+                } else {
+                    self.hiddenStorageVolumeIDs.insert(volume.selectionID)
+                }
+            }
+        )
     }
 
     /// The style for `metric`, defaulted, as a binding the pickers can drive.

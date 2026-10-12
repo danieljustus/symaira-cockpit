@@ -407,6 +407,12 @@ public struct DiskReport: Codable, Sendable, Equatable {
     public let capacityBytes: UInt64
     public let usedBytes: UInt64
     public let freeBytes: UInt64
+
+    public init(capacityBytes: UInt64, usedBytes: UInt64, freeBytes: UInt64) {
+        self.capacityBytes = capacityBytes
+        self.usedBytes = usedBytes
+        self.freeBytes = freeBytes
+    }
 }
 
 public struct NetworkInterfaceReport: Codable, Sendable, Equatable {
@@ -450,6 +456,8 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
     public let network: NetworkReport
     /// Live power draw; absent when the SMC does not expose the DC-in keys.
     public let power: PowerReport?
+    /// User-visible mounted filesystems; the separate `disk` stays boot-only.
+    public let volumes: [StorageVolumeReport]
     public let notes: [String]
     public init(
         cpu: CPUReport,
@@ -457,6 +465,7 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
         disk: DiskReport?,
         network: NetworkReport,
         power: PowerReport? = nil,
+        volumes: [StorageVolumeReport] = [],
         notes: [String] = []
     ) {
         self.cpu = cpu
@@ -464,6 +473,25 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
         self.disk = disk
         self.network = network
         self.power = power
+        self.volumes = volumes
         self.notes = notes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case cpu, memory, disk, network, power, volumes, notes
+    }
+
+    /// Reports from older versions have no volume list.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            cpu: try values.decode(CPUReport.self, forKey: .cpu),
+            memory: try values.decode(MemoryReport.self, forKey: .memory),
+            disk: try values.decodeIfPresent(DiskReport.self, forKey: .disk),
+            network: try values.decode(NetworkReport.self, forKey: .network),
+            power: try values.decodeIfPresent(PowerReport.self, forKey: .power),
+            volumes: try values.decodeIfPresent([StorageVolumeReport].self, forKey: .volumes) ?? [],
+            notes: try values.decode([String].self, forKey: .notes)
+        )
     }
 }

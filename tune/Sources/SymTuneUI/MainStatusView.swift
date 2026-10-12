@@ -225,6 +225,9 @@ struct MainStatusView: View {
             if shows(.topProcesses) {
                 TopProcessesCard(model: processesModel)
             }
+            if shows(.storageVolumes) {
+                StorageVolumesSection(model: model, preferences: preferencesManager)
+            }
             if !aiUsageModel.rows.isEmpty {
                 AIUsageCardView(model: aiUsageModel)
             }
@@ -234,7 +237,8 @@ struct MainStatusView: View {
             if chrome == .popover && shows(.displays) {
                 DisplaysSection(model: model)
             }
-            if chrome == .embedded && !shows(.topProcesses) && !shows(.metricsHistory) && aiUsageModel.rows.isEmpty {
+            if chrome == .embedded && !shows(.topProcesses) && !shows(.storageVolumes)
+                && !shows(.metricsHistory) && aiUsageModel.rows.isEmpty {
                 hiddenCardsNote("Activity cards are hidden in Preferences.")
             }
         }
@@ -319,7 +323,7 @@ struct MainStatusView: View {
 
     private var showsAnySystem: Bool {
         shows(.systemStatus) || shows(.topProcesses) || shows(.metricsHistory)
-            || shows(.displays) || !aiUsageModel.rows.isEmpty
+            || shows(.storageVolumes) || shows(.displays) || !aiUsageModel.rows.isEmpty
     }
 
     /// Whether this Mac reports any fan. `nil` sensors means "not read yet",
@@ -392,6 +396,20 @@ private struct DisplaysSection: View {
     var body: some View {
         DisplaysCard(displays: model.displays)
             .equatable()
+    }
+}
+
+/// Observes only the volume list, not every CPU/network metrics tick.
+private struct StorageVolumesSection: View {
+    let model: TuneViewModel
+    @ObservedObject var preferences: PreferencesManager
+
+    var body: some View {
+        StorageVolumesCard(
+            volumes: model.storageVolumes,
+            hiddenVolumeIDs: preferences.hiddenStorageVolumeIDs,
+            visibility: { preferences.storageVolumeVisibility(for: $0) }
+        )
     }
 }
 
