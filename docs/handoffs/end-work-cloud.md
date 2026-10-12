@@ -1,11 +1,178 @@
-# Continuation after Symaira Cockpit v0.8.0
+# Continuation after Symaira Cockpit v0.8.1
 
-## Current checkpoint and scope
+## Current checkpoint, goal and boundaries
 
-This section is the current continuation contract. The October 2 record below is
-preserved as historical evidence; its older issue and publication states are
-superseded by this section. No private chat, local agent skills or original Mac
-filesystem is needed to read or implement the next code task.
+This October 12 checkpoint supersedes the continuation instructions and issue
+states in both historical records below. Its scope is source preservation and
+an independently readable continuation contract, not another product change,
+release, merge or backlog sweep. No unpublished product work was found in the
+original checkout: `main` was clean, equal to GitHub, with no stash, unique local
+commit or additional registered worktree before this documentation checkout.
+
+- Repository: `https://github.com/danieljustus/symaira-cockpit.git` (public).
+- Continuation branch: `handoff/cockpit-v0.8.1-cloud`.
+- Base code commit: `1ff0c104c63c1fbf9836d3a5f743b46f231c1374`.
+- Stable tag `v0.8.1` peels to that same code commit; release PR
+  [#328](https://github.com/danieljustus/symaira-cockpit/pull/328) is merged.
+- Working directory: repository root. The final documentation commit is
+  identified by the external verification receipt in the continuation PR,
+  not recursively inside this file. Never silently substitute a later HEAD.
+
+[PR #323](https://github.com/danieljustus/symaira-cockpit/pull/323) merged as
+`9857816e276317b670807927586c2dae5196de03`: controller write/dim/restore tests
+use the existing injected display boundary, Swift diagnostics were corrected,
+and native DMG icon verification was added. #315, #316 and #321 are closed.
+The old instruction to implement #316 or omit `WriteSurfaceTests` no longer
+applies to this code. Contextual help and bounded history fixes are also
+included in v0.8.1. Existing release metadata and its successful workflow were
+read back; this checkpoint does not claim a new download/signature audit.
+
+The remaining native acceptance task is
+[#305](https://github.com/danieljustus/symaira-cockpit/issues/305), still open
+and explicitly deferred. First finish the blocked fresh-checkout recipe below.
+Then, only in a separately approved interactive macOS acceptance session, test
+one metric's Monitor switch and reorder controls using keyboard input, verify
+state and disabled boundaries, and restore the original state. Record real
+VoiceOver control announcements and activation as a separate gate. Relevant
+views are `tune/Sources/SymTuneUI/PreferencesView.swift` and
+`tune/Sources/SymTuneUI/MenuBarVisibilityCard.swift`.
+
+Keep one shipped CLI, `symcockpit`, the shared tuning panel, calibrated limits,
+authorization, root-owned elevated executable resolution, restore-on-exit,
+credential-reference isolation and MCP stdout/privacy boundaries. Operate and
+Scope belong to Brain. Preserve `com.symaira.symtune`, the helper identities and
+`SYMTUNE_*`. Keep the compatibility prefix through v0.9; its planned v0.10
+removal remains #259. AX inspection and unit tests are not keyboard/VoiceOver
+acceptance. Do not raise windows, inject foreground input, read credentials,
+change hardware, enable auto-merge, retag, publish another release, delete
+retained work or start paid providers from this document.
+
+## Current inputs and disposition
+
+| Required unit | Identity and retrieval | Disposition |
+|---|---|---|
+| Cockpit code, tests, fixtures and scripts | Base code SHA above plus this documentation branch | Published; no local-only product WIP or extra source branch is needed. |
+| Shared AppKit library | Root `Package.resolved`: public `https://github.com/danieljustus/symaira-appkit.git`, exact version/tag `0.14.2`, revision `3c2e78d0b6649c2a342e2bdaa79aab8515041640` | Reproducible through SwiftPM. The anonymous Git ref and immutable raw manifest were fetched; the manifest declares no external package dependency. |
+| In-repository dependencies | Root `Package.swift` uses `tune/`; `tune/Package.swift` uses `../history` | Published in the same checkout, not sibling repositories or local absolute paths. |
+| Test isolation and measurement | `docs/handoffs/v0.8.0/measure.py`, tracked test fixtures | Published. The script uses only Python's standard library and invokes the real package-local Swift tests. |
+| Historical evidence and rollback sources | Existing `docs/handoffs/v0.8.0/` and records below | Preserved unchanged as historical inputs, not evidence for the new final HEAD. |
+
+There are no required submodules, Git LFS objects, private repositories or
+external binary artifacts for the source recipe. Ignored `.build`, `build`,
+`.swiftpm`, generated Xcode state, package-local lockfiles and coverage profiles
+are regenerable, not copied from the original checkout. Retired `operate/` and
+`scope/` residue, older independent checkouts, ignored audit/coverage/prerelease
+reports, local harness settings and OS metadata are not required continuation
+inputs and are retained outside publication. No required input is hidden by
+those exclusions. No product artifact outside the repository was created for
+this checkpoint.
+
+Secrets, real user/device state, private configuration and chat are never
+published. Source setup and mock/unit checks require no provider, service,
+signing or Vault credentials. A future signed native acceptance build needs
+separate authorized signing through `CODE_SIGN_IDENTITY`; release-secret names
+in the historical section are not authorization to consume them. Do not use an
+installed product binary as a substitute for the checked-out source.
+
+## Current reproduction recipe
+
+Requirements: macOS 26+ and full Xcode, Swift tools 6.2 or newer, Git, Make,
+Python 3 and network access to public GitHub. Observed verification host:
+macOS 27.0.1 (26A434), arm64, Xcode 27.0 (27A266a), Apple Swift 6.4,
+swift-driver 1.168.6, Git 2.54.0, gh 2.102.0 and Python 3.14.2. The GUI uses
+SwiftPM, not a separate Xcode project. Linux cannot build AppKit/IOKit targets
+or perform native acceptance.
+
+Set non-secret `VERIFIED_HEAD` to the final full SHA in the external receipt.
+Clone directly from GitHub without alternates, a local reference clone, copied
+source, copied caches or local package overrides. Select full Xcode first.
+
+```sh
+git clone --no-checkout --branch handoff/cockpit-v0.8.1-cloud https://github.com/danieljustus/symaira-cockpit.git
+cd symaira-cockpit
+git checkout --detach "$VERIFIED_HEAD"
+test "$(git rev-parse HEAD)" = "$VERIFIED_HEAD"
+git ls-remote --exit-code origin refs/heads/handoff/cockpit-v0.8.1-cloud
+git status --porcelain=v1 -uall
+export DEVELOPER_DIR="$(xcode-select -p)"
+swift --version
+xcodebuild -version
+swift package resolve
+make build
+swift build
+python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof root
+python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof tune
+python3 docs/handoffs/v0.8.0/measure.py . .build/cloud-proof history
+./scripts/check-make-propagation.sh
+swift run symcockpit --help
+swift run symcockpit version --json --no-update-check
+```
+
+`make build` covers Tune and history only; root `swift build` is separate.
+The measurer executes `swift test --enable-code-coverage --jobs 2` in each
+owning package, isolates `HOME` and `CFFIXED_USER_HOME`, and removes inherited
+XDG configuration/data/cache/state overrides and `LLVM_PROFILE_FILE`.
+Leave `COCKPIT_COVERAGE_HOME` unset. No `--skip-hardware-writes` is needed for
+the fixed v0.8.1 unit-test boundary. This is still not live-device acceptance.
+The help/version commands do not launch the production GUI or a service.
+
+On a host with enforced build/storage rules, use its existing guarded compiler
+launcher and approved output directories. Do not bypass a failed storage gate,
+reuse the original checkout's build symlink, or fall back to an internal disk.
+The current local workspace requires 50 GiB free externally; 27.358 GiB was
+observed during intake. The launcher separately reported its lower 5-GiB
+threshold as healthy; that does not satisfy the stricter workspace rule.
+
+## Current evidence and unresolved gates
+
+| Check | Revision / environment | Actual outcome |
+|---|---|---|
+| Exact `main` ref and peeled `v0.8.1` | Base code SHA above, read from GitHub | Matched the clean original checkout. |
+| Public AppKit input | Exact pinned revision/tag above | Anonymous Git ref and raw manifest retrieval passed. |
+| `./scripts/check-make-propagation.sh` | Base code, local macOS, stub toolchain only | Exit 0. Verifies failure propagation, not product compilation or tests. |
+| Existing source CI | [38049530478](https://github.com/danieljustus/symaira-cockpit/actions/runs/38049530478), exact base code SHA | Completed successfully. Root/Tune/history Build and Test steps, root Release app build and native DMG smoke, icon compilation, make gate and both coverage jobs passed. |
+| Existing release workflow | [38050831604](https://github.com/danieljustus/symaira-cockpit/actions/runs/38050831604), exact base code SHA | Completed successfully; v0.8.1 metadata lists the CLI, ZIP, DMG and checksum manifest. No release was started here. |
+| Fresh GitHub checkout at final documentation HEAD | Pending external receipt | Native setup/build/test recipe is blocked by the local storage rule. Older base-code CI is not a final-HEAD reproduction receipt. |
+
+Cloud readiness remains **blocked** until the final-HEAD fresh-checkout recipe
+or an equivalent exact-final-HEAD native CI receipt is available. Remote source
+publication alone is not that proof. Target-cloud macOS/Xcode runtime,
+permissions, secret provisioning and network access are **not checked**;
+native interactive #305 remains **not checked/deferred**. A local clone proves
+only what was actually executed in it. Keep failed or omitted checks explicit.
+
+Automation: `automatic_continuation=false`. No owned worker, watcher, claim or
+auto-merge request was present at intake; none is started by this checkpoint.
+Only ordinary repository CI may start when its documentation PR is opened.
+No merge, cleanup or follow-up implementation is authorized automatically.
+The final immutable SHA, remote readback, fresh-checkout result and current
+PR/CI state will be published as a verification comment on that PR and read
+back without another evidence-only source commit.
+
+## Current copyable continuation request
+
+Work in `danieljustus/symaira-cockpit` on `handoff/cockpit-v0.8.1-cloud` at the
+full immutable SHA supplied with the verification comment. Read
+`docs/handoffs/end-work-cloud.md` and that comment. Verify HEAD and inputs,
+then execute the recipe on macOS with full Xcode and sufficient approved
+storage. Publish the actual final-HEAD reproduction result before declaring
+cloud readiness. After that, retain #305 as deferred until an interactive
+acceptance session is explicitly approved; its first bounded check is one
+metric's keyboard-only switch/reorder operation with state restoration. Keep
+keyboard, real VoiceOver and unit-test evidence separate. Do not reopen the
+fixed #315/#316/#321 work, merge, release, interrupt active desktop use or
+start a paid provider.
+
+---
+
+# Historical continuation after Symaira Cockpit v0.8.0
+
+## Historical checkpoint and scope
+
+This section preserves the v0.8.0 continuation record. Its former current
+branch, next task and issue states are superseded by the v0.8.1 checkpoint
+above. The October 2 record below is also historical. No private chat, local
+agent skills or original Mac filesystem is needed to read these records.
 
 - Repository: `https://github.com/danieljustus/symaira-cockpit.git` (public).
 - Continuation branch: `handoff/cockpit-v0.8.0-cloud`.
