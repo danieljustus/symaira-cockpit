@@ -25,10 +25,21 @@ struct UpdateNotificationView: View {
     ///
     /// `static` on purpose: a stored property here is constructed every time the
     /// view struct is rebuilt, which happens on every panel refresh.
-    private static let applier = UpdateApplier(
-        checkInstallMethod: false,
-        binaryName: "SymCockpitMenuBarApp"
-    )
+    private static let applier = UpdateApplier(checkInstallMethod: false)
+
+    /// Match the shared updater's selection rules before offering installation.
+    /// Universal GUI assets without a platform/architecture match use Download.
+    static func supportsAutomaticInstall(assetNames: [String]) -> Bool {
+        guard assetNames.contains(where: { $0.lowercased().contains("checksums") }),
+              let name = assetNames.first(where: {
+                  let lower = $0.lowercased()
+                  return !lower.contains("checksums") && lower.contains(applier.os) && lower.contains(applier.arch)
+              }) else { return false }
+        switch applier.detectAssetType(name: name) {
+        case .appBundleDMG, .appBundleZip: return true
+        case .binary, .unknown: return false
+        }
+    }
 
     var body: some View {
         if case .available(let release) = updateChecker.status {
@@ -47,7 +58,7 @@ struct UpdateNotificationView: View {
                     Spacer()
 
                     // Install button — uses UpdateApplier when assets exist
-                    if release.assets.isEmpty {
+                    if !Self.supportsAutomaticInstall(assetNames: release.assets.map(\.name)) {
                         Button("Download") {
                             if let url = URL(string: release.htmlURL) {
                                 NSWorkspace.shared.open(url)
@@ -125,7 +136,10 @@ struct UpdateNotificationView: View {
 
         Task {
             do {
-                _ = try await Self.applier.applyBundle(release: release)
+                let installed = try await Self.applier.applyBundle(release: release)
+                guard installed.pathExtension == "app", FileManager.default.fileExists(atPath: installed.path) else {
+                    throw UpdateApplierError.appBundleNotFound
+                }
                 // Installation succeeded — mark locally
                 installComplete = true
                 isInstalling = false
