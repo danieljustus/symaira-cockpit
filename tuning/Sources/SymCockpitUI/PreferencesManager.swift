@@ -34,11 +34,16 @@ final class PreferencesManager: ObservableObject {
     static let hiddenStorageVolumeIDsKey = "com.symaira.symtune.hiddenStorageVolumes"
     private let defaults: UserDefaults
 
-    private let configPaths = ConfigPaths()
+    private let configPaths: ConfigPaths
 
     // MARK: - Init
 
-    init(config: TuneConfig = TuneConfig(), defaults: UserDefaults = .standard) {
+    init(
+        config: TuneConfig = TuneConfig(),
+        defaults: UserDefaults = .standard,
+        configPaths: ConfigPaths = ConfigPaths()
+    ) {
+        self.configPaths = configPaths
         self.defaults = defaults
         self.hiddenStorageVolumeIDs = Set(defaults.stringArray(forKey: Self.hiddenStorageVolumeIDsKey) ?? [])
         self.metricsRefreshInterval = config.metricsRefreshInterval
@@ -121,10 +126,9 @@ final class PreferencesManager: ObservableObject {
         let existingContent: String
         let configFile = configPaths.configFile
 
-        if let data = try? Data(contentsOf: configFile),
-           let content = String(data: data, encoding: .utf8) {
-            existingContent = content
-        } else {
+        do {
+            existingContent = try String(contentsOf: configFile, encoding: .utf8)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             existingContent = ""
         }
 
@@ -185,44 +189,24 @@ final class PreferencesManager: ObservableObject {
 
     /// Find the range of an existing `[section]` block in TOML content.
     private func existingSectionRange(section: String, in content: String) -> Range<String.Index>? {
-        let header = "[\(section)]"
-        guard let headerStart = content.range(of: header) else { return nil }
+        // Match whole header lines, never examples inside comments or strings.
+        // Inline comments and array-of-table headers also end the current block.
+        let pattern = #"(?m)^[\t ]*\[([^\r\n]+?)\][\t ]*(?:#[^\r\n]*)?\r?$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let headers = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+        guard let index = headers.firstIndex(where: { match in
+            guard let name = Range(match.range(at: 1), in: content) else { return false }
+            return content[name].trimmingCharacters(in: .whitespaces) == section
+        }), let header = Range(headers[index].range, in: content) else { return nil }
 
-        // Start from the header
-        let start = headerStart.lowerBound
-
-        // Find the start of the next section (any [xxx] header after this one)
-        let searchStart = headerStart.upperBound
+        let start = header.lowerBound
         var end = content.endIndex
-
-        while searchStart < content.endIndex {
-            // Find next line starting with '[' that isn't '[['
-            let remaining = content[searchStart...]
-            let lines = remaining.components(separatedBy: .newlines)
-            for line in lines {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("[") && !trimmed.hasPrefix("[[") && trimmed.hasSuffix("]") {
-                    // Found the next section header
-                    if let nextHeaderRange = content.range(of: line, range: searchStart..<content.endIndex) {
-                        // Back up to before any trailing whitespace/newlines of previous section
-                        var scanEnd = nextHeaderRange.lowerBound
-                        while scanEnd > start, content[content.index(before: scanEnd)].isNewline {
-                            scanEnd = content.index(before: scanEnd)
-                        }
-                        end = scanEnd
-                        return start..<end
-                    }
-                }
-            }
-            break
+        if index + 1 < headers.count, let next = Range(headers[index + 1].range, in: content) {
+            end = next.lowerBound
         }
-
-        // No following section — take everything to the end
-        // Trim trailing newlines
         while end > start, content[content.index(before: end)].isNewline {
             end = content.index(before: end)
         }
-
         return start..<end
     }
 
