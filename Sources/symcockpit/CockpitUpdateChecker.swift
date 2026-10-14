@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 import SymCockpitVersion
-import SymTuneCore
+import SymCockpitCore
 import SymairaUpdateCheck
 
 /// The one update target for the shipped `symcockpit` binary.

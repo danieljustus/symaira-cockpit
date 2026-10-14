@@ -31,11 +31,11 @@ final class GUIVersionConsistencyTests: XCTestCase {
     func testEmbeddedTuneVersionMatchesLatestDatedChangelogEntry() throws {
         let version = try XCTUnwrap(firstMatch(
             #"public static let current = "([^"]+)""#,
-            in: read("tune/Sources/SymTuneCore/Version.swift")
+            in: read("tuning/Sources/SymCockpitCore/Version.swift")
         ))
         let changelogVersion = try XCTUnwrap(firstMatch(
             #"(?m)^## \[([0-9]+\.[0-9]+\.[0-9]+)\] [^\n]*[0-9]{4}-[0-9]{2}-[0-9]{2}\r?$"#,
-            in: read("tune/CHANGELOG.md")
+            in: read("tuning/CHANGELOG.md")
         ))
         XCTAssertEqual(version, changelogVersion,
                        "the embedded component identity must match its latest dated baseline")
@@ -85,7 +85,7 @@ final class GUIVersionConsistencyTests: XCTestCase {
     }
 
     func testHomebrewRequirementsMatchMacOS26DeploymentTarget() throws {
-        for manifest in ["Package.swift", "tune/Package.swift", "history/Package.swift"] {
+        for manifest in ["Package.swift", "tuning/Package.swift", "history/Package.swift"] {
             XCTAssertEqual(
                 try firstMatch(#"\.macOS\(\.v([0-9]+)\)"#, in: read(manifest)),
                 "26",

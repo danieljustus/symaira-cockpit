@@ -1,6 +1,6 @@
 @preconcurrency import AppKit
 import SwiftUI
-import SymTuneUI
+import SymCockpitUI
 
 /// Owns the cockpit window and the app's activation policy.
 ///

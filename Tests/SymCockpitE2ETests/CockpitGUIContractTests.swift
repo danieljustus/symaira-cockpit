@@ -34,7 +34,7 @@ final class CockpitGUIContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let ui = root.appendingPathComponent("tune/Sources/SymTuneUI")
+        let ui = root.appendingPathComponent("tuning/Sources/SymCockpitUI")
         for file in ["TuneSliderRow.swift", "CenterAnchoredSliderRow.swift"] {
             let source = try String(contentsOf: ui.appendingPathComponent(file), encoding: .utf8)
             XCTAssertTrue(source.contains(".accessibilityLabel(title)"), file)
@@ -66,7 +66,7 @@ final class CockpitGUIContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let ui = root.appendingPathComponent("tune/Sources/SymTuneUI")
+        let ui = root.appendingPathComponent("tuning/Sources/SymCockpitUI")
         let shell = try String(contentsOf: ui.appendingPathComponent("CockpitWorkspaceView.swift"), encoding: .utf8)
         let panel = try String(contentsOf: ui.appendingPathComponent("MainStatusView.swift"), encoding: .utf8)
         let window = try String(

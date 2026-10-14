@@ -1,0 +1,740 @@
+@preconcurrency import AppKit
+import Combine
+import SymCockpitCore
+import SwiftUI
+import SymairaUpdateCheck
+
+/// Manages the menu-bar status item: icon and NSPopover dropdown view.
+///
+/// Clicking the status icon displays the custom SwiftUI-based popover panel
+/// containing controls and system readouts.
+///
+/// Polling is owned by ``TuneViewModel``, which the status item and the popover
+/// share. The controller only reacts to text changes, and only touches the
+/// status button when the rendered text actually differs — rewriting the
+/// attributed title forces a menu-bar re-layout, so doing it on every tick was
+/// pure overhead.
+@MainActor
+public final class StatusBarController: NSObject, NSPopoverDelegate {
+    private let statusItem: NSStatusItem
+    /// An empty status item that exists only to hold the notch HUD's right
+    /// shoulder open.
+    ///
+    /// Status items are laid out from the right, and the last of them ends up
+    /// directly beside the cutout — underneath the HUD. Nothing lets an app
+    /// tell the menu bar to keep clear of a region, but a status item of the
+    /// shoulder's width occupies it, and everything else is laid out around it.
+    /// So the space is claimed the only way the menu bar understands: by
+    /// putting something in it.
+    ///
+    /// Created lazily, because an app that never turns the HUD on should not
+    /// register a status item at all.
+    private lazy var shoulderSpacer: NSStatusItem = {
+        let item = NSStatusBar.system.statusItem(withLength: 0)
+        item.button?.isEnabled = false
+        item.button?.setAccessibilityLabel("Symaira HUD reserved space")
+        item.isVisible = false
+        return item
+    }()
+    private var hasShoulderSpacer = false
+    private let popover = NSPopover()
+    private let controller: TuneController
+    private let preferencesManager: PreferencesManager
+    let aiUsagePreferences = AIUsagePreferences()
+    private(set) lazy var aiUsageModel = AIUsageViewModel(
+        controller: controller,
+        preferences: aiUsagePreferences
+    )
+    private let model: TuneViewModel
+    private let processesModel: ProcessesViewModel
+    private var preferencesWindow: NSWindow?
+    private var cancellables: Set<AnyCancellable> = []
+
+    /// Where the readout appears, and the HUD that renders one of the two
+    /// choices (issues #224, #251). Both exist unconditionally — the preference
+    /// has to be readable to be rendered — but the notch is only reachable once
+    /// a host opts in via ``isNotchHUDOffered``.
+    let readoutPreferences = ReadoutSurfacePreferences()
+    /// Where the HUD is parked. Owned here rather than by the controller so the
+    /// preferences UI can bind to it whether or not the HUD is currently up.
+    let hudDockPreferences = HUDDockPreferences()
+    /// What the HUD shows, and how far it has to be open before it does.
+    /// Owned here for the same reason the dock is: the settings card binds to
+    /// it whether or not the HUD is currently up.
+    let hudItemPreferences = HUDItemPreferences()
+    private lazy var hudController = HUDDockController(
+        model: model,
+        dockPreferences: hudDockPreferences,
+        itemPreferences: hudItemPreferences
+    )
+
+    /// Who answers the brightness keys, and the tap that answers them when the
+    /// user picks this app (issue #250). Like the readout surface, the
+    /// preference is always readable; the tap only ever runs in a host that
+    /// offers it via ``isBrightnessKeyHandlingOffered``.
+    let brightnessKeyPreferences = BrightnessKeyPreferences()
+    private lazy var brightnessKeyController = BrightnessKeyController(controller: controller)
+
+    /// Last title rendered into the status button, to skip redundant updates.
+    private var renderedSegments: [StatusItemSegment]?
+    /// Whether the button currently shows the icon fallback.
+    private var showingIconFallback = false
+
+    /// Cached attributes — building these per refresh allocated for nothing.
+    private static let titleAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+        .foregroundColor: NSColor.labelColor,
+    ]
+    private static let badgeAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 10, weight: .bold),
+        .baselineOffset: 1.0,
+        .foregroundColor: NSColor.systemYellow,
+    ]
+    private static let iconBadgeAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 9, weight: .bold),
+        .baselineOffset: 8.0,
+    ]
+
+    /// Auto-update preference store for toggling check-on-launch behaviour.
+    let autoPrefs = UserDefaultsAutoUpdatePreferenceStore(keyPrefix: "com.symaira.symtune")
+
+    lazy var updateChecker = AppUpdateChecker(
+        checker: UpdateChecker(owner: "danieljustus", repo: "symaira-cockpit"),
+        store: UserDefaultsSkippedVersionStore(key: "com.symaira.tune.updateSkippedTag"),
+        currentVersion: { self.updateVersionProvider() },
+        autoPrefs: autoPrefs
+    )
+
+    /// Invoked when the user picks "Open Cockpit" from the status item's
+    /// context menu. Left `nil` by the standalone Tune app, which has no
+    /// cockpit window; `SymCockpitApp` sets it to surface its main window.
+    public var onOpenCockpit: (() -> Void)?
+
+    /// Title of the status item's first context-menu entry, when
+    /// ``onOpenCockpit`` is set.
+    public var openCockpitTitle: String = "Open Cockpit"
+
+    /// Title shown at the top of the status popover header. The cockpit host
+    /// overrides this to "SYMAIRA COCKPIT" so left-clicking its (only) menu
+    /// bar icon shows the same product name as the window it opens, instead
+    /// of "SYMAIRA COCKPIT" — previously the one visible surface that gave away
+    /// that Tune was a separate app stapled on rather than a section of one.
+    public var panelTitle: String = "SYMAIRA COCKPIT"
+
+    /// Accessibility description of the menu bar icon (VoiceOver).
+    public var statusItemAccessibilityLabel: String = "Symaira Cockpit"
+
+    /// Text of the fallback icon used when the SF Symbol is unavailable.
+    public var fallbackIconTitle: String = "ST"
+
+    /// Title of the preferences window.
+    public var preferencesWindowTitle: String = "Symaira Cockpit Preferences"
+
+    /// Reason string attached to the Keep Awake power assertion
+    /// (`pmset -g assertions`).
+    public var keepAwakeAssertionReason: String = "Symaira Cockpit menu bar"
+
+    /// Whether this host offers the notch as a readout surface.
+    ///
+    /// The standalone Tune app leaves it `false`, so its menu bar behaves
+    /// exactly as before and the choice never appears; `SymCockpitApp` sets it,
+    /// which surfaces the picker in the cockpit window and lets the HUD run
+    /// when the notch is selected.
+    public var isNotchHUDOffered: Bool = false {
+        didSet {
+            guard isNotchHUDOffered != oldValue else { return }
+            syncReadoutSurface()
+        }
+    }
+
+    /// Whether this host offers to take over the brightness keys.
+    ///
+    /// The standalone Tune app leaves it `false` — intercepting a hardware key
+    /// needs an Accessibility grant keyed to a stable code signature, which the
+    /// shipped cockpit bundle has and an ad-hoc build does not. `SymCockpitApp`
+    /// sets it, which surfaces the choice next to the brightness slider.
+    public var isBrightnessKeyHandlingOffered: Bool = false {
+        didSet {
+            guard isBrightnessKeyHandlingOffered != oldValue else { return }
+            syncBrightnessKeyHandling()
+        }
+    }
+
+    private let updateVersionProvider: () -> String
+
+    /// The status item uses the family version in the standalone Tune app and
+    /// the unified cockpit version in the shipped GUI.
+    public override convenience init() {
+        self.init(updateVersionProvider: { TuneVersion.current })
+    }
+
+    public init(updateVersionProvider: @escaping () -> String) {
+        self.updateVersionProvider = updateVersionProvider
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Load persisted configuration from config.toml so saved preferences
+        // survive a relaunch (issue #357). The CLI uses the same loader
+        // (main.swift:457); the app must too.
+        let config = ConfigPaths().loadConfig()
+        self.controller = TuneController(config: config)
+        let preferences = PreferencesManager(config: config)
+        self.preferencesManager = preferences
+        self.model = TuneViewModel(controller: controller, preferences: preferences)
+        self.processesModel = ProcessesViewModel(controller: controller)
+        super.init()
+        configureButton()
+        setupPopover()
+        observePreferences()
+        model.onStatusItemTextChanged = { [weak self] segments in
+            self?.renderStatusItem(segments: segments)
+        }
+        // The AI usage readout rides on the same status-item pipeline.
+        aiUsageModel.onStatusItemTextChanged = { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
+            }
+        }
+        hudController.openPanel = { [weak self] in self?.togglePanelFromHUD() }
+        // Forwarded rather than copied: the host assigns ``onOpenCockpit``
+        // after construction, and a copy taken here would always be nil.
+        hudController.openCockpit = { [weak self] in self?.onOpenCockpit?() }
+        observeReadoutSurface()
+        observeBrightnessKeyHandling()
+        model.start()
+        aiUsageModel.start()
+        checkForUpdatesOnLaunch()
+        registerSleepWakeNotifications()
+        registerVolumeNotifications()
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            NSWorkspace.shared.notificationCenter.removeObserver(self)
+            model.stop()
+            aiUsageModel.stop()
+        }
+    }
+
+    // MARK: - Update checking
+
+    private func checkForUpdatesOnLaunch() {
+        Task {
+            await updateChecker.checkOnLaunchIfEnabled()
+            renderStatusItem(segments: model.statusItemSegments, force: true)
+        }
+    }
+
+    // MARK: - Preferences
+
+    /// Re-sync the history buffers when the user changes which metrics are on.
+    private func observePreferences() {
+        preferencesManager.$enabledMetrics
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.model.syncEnabledMetrics() }
+            }
+            .store(in: &cancellables)
+
+        preferencesManager.$showCalendarWeek
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
+                }
+            }
+            .store(in: &cancellables)
+
+        // AI usage: provider toggles and the refresh interval apply live;
+        // a toggle change triggers an immediate refresh so the popover does
+        // not wait for the next scheduled tick.
+        aiUsagePreferences.$enabledProviders
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.aiUsageModel.refreshNow() }
+            }
+            .store(in: &cancellables)
+        aiUsagePreferences.$menuBarEnabled
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.aiUsageModel.refreshNow()
+                    self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// The picker applies live, in both directions: one surface comes down as
+    /// the other goes up, without a relaunch.
+    private func observeReadoutSurface() {
+        readoutPreferences.$surface
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncReadoutSurface() }
+            }
+            .store(in: &cancellables)
+
+        // Moving the HUD can change whether it is renderable at all — dragging
+        // it off the cutout onto a screen edge is what makes it available on a
+        // Mac that has no cutout — so the surface is resolved again.
+        hudDockPreferences.$dock
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncReadoutSurface() }
+            }
+            .store(in: &cancellables)
+
+        // A display arriving, leaving or being rearranged can take the cutout
+        // with it. Without this, closing the lid on an external monitor would
+        // leave the status item hidden and the HUD unbuildable — the app with
+        // no visible surface at all.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    @objc private func screenParametersChanged() {
+        MainActor.assumeIsolated { syncReadoutSurface() }
+    }
+
+    /// Show exactly one surface: the status item or the notch HUD.
+    ///
+    /// The stored choice is resolved against what this Mac can actually render,
+    /// so a `.notch` preference on a display without a cutout still leaves the
+    /// status item in place rather than hiding the only way back to the
+    /// preference.
+    private func syncReadoutSurface() {
+        let notchAvailable = isNotchHUDOffered
+            && HUDDockController.isAvailable(dock: hudDockPreferences.dock)
+        let effective = ReadoutSurfaceDefaults.effective(
+            readoutPreferences.surface,
+            notchAvailable: notchAvailable
+        )
+
+        hudController.openCockpitTitle = openCockpitTitle
+        hudController.setEnabled(effective == .notch)
+        statusItem.isVisible = effective == .menuBar
+        syncShoulderSpacer(active: effective == .notch)
+    }
+
+    /// Hold the right shoulder's width open while the notch HUD is up, and give
+    /// it back the moment it comes down.
+    ///
+    /// Only the notch dock needs this. The edge docks sit against the left and
+    /// right sides of the display, where the menu bar's own content does not
+    /// reach.
+    private func syncShoulderSpacer(active: Bool) {
+        let width: CGFloat? = {
+            guard active, hudDockPreferences.dock == .notch, let screen = HUDDockController.hostScreen()
+            else { return nil }
+            return NotchLayout.shoulderWidth(HUDDockController.screenMetrics(screen))
+        }()
+
+        guard let width else {
+            // Never touch the spacer if it was never needed: reading the lazy
+            // property is what registers the status item.
+            if hasShoulderSpacer { shoulderSpacer.isVisible = false }
+            return
+        }
+        hasShoulderSpacer = true
+        shoulderSpacer.length = width
+        shoulderSpacer.isVisible = true
+    }
+
+    /// The choice applies live, in both directions: switching back to the
+    /// system tears the tap down rather than waiting for a relaunch.
+    private func observeBrightnessKeyHandling() {
+        brightnessKeyPreferences.$handling
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncBrightnessKeyHandling() }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncBrightnessKeyHandling() {
+        brightnessKeyController.setEnabled(
+            isBrightnessKeyHandlingOffered
+                && brightnessKeyPreferences.handling == .cockpit
+        )
+    }
+
+    // MARK: - Status item rendering
+
+    /// Render `segments` into the status button. Skips the work when nothing
+    /// changed, which is the common case between refreshes.
+    private func renderStatusItem(segments: [StatusItemSegment], force: Bool = false) {
+        guard let button = statusItem.button else { return }
+        let updateAvailable = { if case .available = updateChecker.status { return true } else { return false } }()
+
+        // The AI usage readout is appended after the calendar-week segment
+        // when enabled and data is available.
+        var combined = segments
+        if preferencesManager.showCalendarWeek {
+            if !combined.isEmpty {
+                combined.append(.text("  "))
+            }
+            // Fixed position: calendar week follows all configured metrics and
+            // precedes the optional AI-usage readout.
+            combined.append(CalendarWeekFormatting.segment(for: Date()))
+        }
+        if !aiUsageModel.statusItemText.isEmpty {
+            if !combined.isEmpty {
+                combined.append(.text("  "))
+            }
+            combined.append(.text(aiUsageModel.statusItemText))
+        }
+
+        guard force || combined != renderedSegments else { return }
+        renderedSegments = combined
+
+        guard !combined.isEmpty else {
+            renderIconFallback(button: button, updateAvailable: updateAvailable)
+            return
+        }
+
+        if showingIconFallback || button.image != nil {
+            button.image = nil
+            showingIconFallback = false
+        }
+
+        let attributed = NSMutableAttributedString()
+        for segment in combined {
+            switch segment {
+            case .text(let text):
+                attributed.append(NSAttributedString(string: text, attributes: Self.titleAttributes))
+            case .symbol(let name):
+                attributed.append(Self.symbolAttachment(named: name))
+            }
+        }
+
+        if updateAvailable {
+            attributed.append(NSAttributedString(
+                string: " \u{26A0}\u{FE0F}",
+                attributes: Self.badgeAttributes
+            ))
+        }
+        let plainText = MetricStyleFormatting.plainText(combined)
+        button.attributedTitle = attributed
+        button.toolTip = plainText
+        button.setAccessibilityLabel(statusItemAccessibilityLabel)
+        button.setAccessibilityValue(plainText)
+    }
+
+    /// An SF Symbol drawn inline in the status-item title.
+    ///
+    /// A menu-bar title is a string, so an icon has to arrive as a text
+    /// attachment. Falls back to the symbol name in text if the system has no
+    /// such symbol — better a stray word than a silently missing metric.
+    private static func symbolAttachment(named name: String) -> NSAttributedString {
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: name) else {
+            return NSAttributedString(string: name, attributes: titleAttributes)
+        }
+        image.isTemplate = true
+
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        // Nudge the glyph down onto the text baseline; an attachment otherwise
+        // sits on its own bottom edge and rides high next to the digits.
+        attachment.bounds = CGRect(x: 0, y: -2, width: 12, height: 12)
+        return NSAttributedString(attachment: attachment)
+    }
+
+    /// Render the fallback icon (and update badge) when no metrics are visible.
+    private func renderIconFallback(button: NSStatusBarButton, updateAvailable: Bool) {
+        if !showingIconFallback {
+            if let image = NSImage(
+                systemSymbolName: "slider.horizontal.3",
+                accessibilityDescription: statusItemAccessibilityLabel
+            ) {
+                image.isTemplate = true
+                button.image = image
+            } else {
+                button.title = fallbackIconTitle
+            }
+            showingIconFallback = true
+        }
+
+        button.attributedTitle = updateAvailable
+            ? NSAttributedString(string: "\u{26A0}\u{FE0F}", attributes: Self.iconBadgeAttributes)
+            : NSAttributedString(string: "")
+    }
+
+    // MARK: - Setup
+
+    private func configureButton() {
+        guard let button = statusItem.button else { return }
+        // Use a nice control sliders symbol to match the tuning nature of the app
+        if let image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: statusItemAccessibilityLabel) {
+            image.isTemplate = true
+            button.image = image
+        } else {
+            button.title = fallbackIconTitle
+        }
+        showingIconFallback = true
+        button.action = #selector(handleButtonClick)
+        button.target = self
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    /// Vertical space the popover may occupy on `screen`: the menu-bar-free
+    /// area, minus room for the popover's arrow, shadow and a small margin.
+    /// Falls back to a conservative value when no screen can be determined.
+    static func availableContentHeight(for screen: NSScreen?) -> CGFloat {
+        guard let screen else { return 600 }
+        return max(320, screen.visibleFrame.height - 32)
+    }
+
+    private var popoverHosting: NSHostingController<MainStatusView>?
+
+    private func makeStatusView(
+        maxHeight: CGFloat,
+        chrome: TunePanelChrome = .popover
+    ) -> MainStatusView {
+        MainStatusView(
+            controller: controller,
+            model: model,
+            aiUsageModel: aiUsageModel,
+            processesModel: processesModel,
+            updateChecker: updateChecker,
+            preferencesManager: preferencesManager,
+            openPreferences: { [weak self] in self?.openPreferences() },
+            onOpenCockpit: onOpenCockpit,
+            openCockpitTitle: openCockpitTitle,
+            panelTitle: panelTitle,
+            panelVersion: updateVersionProvider(),
+            keepAwakeAssertionReason: keepAwakeAssertionReason,
+            maxHeight: maxHeight,
+            chrome: chrome,
+            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            hudDockPreferences: isNotchHUDOffered ? hudDockPreferences : nil,
+            hudItemPreferences: isNotchHUDOffered ? hudItemPreferences : nil,
+            brightnessKeyPreferences: isBrightnessKeyHandlingOffered
+                ? brightnessKeyPreferences
+                : nil,
+            brightnessKeyController: isBrightnessKeyHandlingOffered
+                ? brightnessKeyController
+                : nil
+        )
+    }
+
+    private func setupPopover() {
+        let hosting = NSHostingController(
+            rootView: makeStatusView(
+                maxHeight: Self.availableContentHeight(for: NSScreen.main)
+            )
+        )
+        popoverHosting = hosting
+        // Without preferredContentSize sizing, the SwiftUI content reports its
+        // height only after the popover is shown (and again on every periodic
+        // refresh), so the popover window gets anchored with a stale frame and
+        // ends up clipped above the menu bar instead of hanging below the icon.
+        hosting.sizingOptions = .preferredContentSize
+        popover.contentViewController = hosting
+        popover.contentSize = hosting.view.fittingSize
+        popover.behavior = .transient
+        popover.delegate = self
+    }
+
+    // MARK: - Actions
+
+    /// Left click opens the popover; right click (or ctrl-click) opens the
+    /// context menu, which is where the cockpit window and Quit live.
+    @objc private func handleButtonClick() {
+        let event = NSApp.currentEvent
+        let isSecondary = event.map { $0.type == .rightMouseUp || $0.modifierFlags.contains(.control) } ?? false
+        if isSecondary {
+            showContextMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func showContextMenu() {
+        let menu = NSMenu()
+        if onOpenCockpit != nil {
+            let item = NSMenuItem(title: openCockpitTitle, action: #selector(openCockpit), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+            menu.addItem(NSMenuItem.separator())
+        }
+        let prefs = NSMenuItem(title: "Preferences…", action: #selector(openPreferencesAction), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // `popUpMenu(_:)` is deprecated; assigning the menu and re-clicking is
+        // the supported way to show a status-item menu on demand without
+        // stealing the button's primary action.
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func openCockpit() {
+        onOpenCockpit?()
+    }
+
+    @objc private func openPreferencesAction() {
+        openPreferences()
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            showPopover(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+
+    /// The HUD's own way into the panel.
+    ///
+    /// The HUD is only ever the readout surface while the status item is
+    /// hidden, and `NSPopover` anchored to a hidden status button has nothing
+    /// to attach to — it simply never appears, which is what the HUD's "Panel"
+    /// button used to do (issue #254). Anchoring to the HUD instead both fixes
+    /// that and is the behaviour the button implies: the panel comes out of
+    /// the shape that was clicked.
+    ///
+    /// Falls back to the status item when the stage is not on screen, so the
+    /// action is never a dead end.
+    private func togglePanelFromHUD() {
+        guard let anchor = hudController.panelAnchor() else {
+            togglePopover()
+            return
+        }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            showPopover(relativeTo: anchor.rect, of: anchor.view, preferredEdge: anchor.edge)
+        }
+    }
+
+    /// Show the shared panel popover against an anchor, whichever surface it
+    /// came from.
+    private func showPopover(relativeTo rect: NSRect, of view: NSView, preferredEdge: NSRectEdge) {
+        // The menu bar may have moved to a different-sized display since
+        // the last open, so re-derive the height budget before showing.
+        let screen = view.window?.screen ?? NSScreen.main
+        popoverHosting?.rootView = makeStatusView(
+            maxHeight: Self.availableContentHeight(for: screen)
+        )
+        // Show first, then activate: activating an LSUIElement app before
+        // the popover is anchored can misplace the popover window.
+        popover.show(relativeTo: rect, of: view, preferredEdge: preferredEdge)
+        NSApp.activate(ignoringOtherApps: true)
+        // Switch the model to the interactive tier (faster cadence, full
+        // sensor set) now that the panel is on screen.
+        model.setDetailVisible(true)
+    }
+
+    /// Open the Preferences window.
+    public func openPreferences() {
+        if let window = preferencesWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let prefsView = PreferencesView(
+            manager: preferencesManager,
+            autoPrefs: autoPrefs,
+            aiUsage: aiUsagePreferences,
+            aiUsageProviders: aiUsageModel.providers,
+            onCredentialChange: { [weak self] in
+                // A key was saved/cleared: the provider now resolves lazily,
+                // but its cached snapshot must be dropped and the usage card
+                // refreshed so the live state shows immediately (issue #324).
+                self?.controller.resetAIUsageCache()
+                self?.aiUsageModel.refreshNow()
+            }
+        )
+        let hosting = NSHostingController(rootView: prefsView)
+
+        let window = NSWindow(contentViewController: hosting)
+        window.title = preferencesWindowTitle
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(NSSize(width: 420, height: 480))
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        self.preferencesWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - NSPopoverDelegate
+
+    public func popoverDidClose(_ notification: Notification) {
+        // Drop back to the idle tier: metrics only, at a glanceable cadence.
+        model.setDetailVisible(false)
+        // The process card's `onDisappear` is not guaranteed for a popover that
+        // is torn down; stop sampling explicitly so a closed panel costs nothing.
+        processesModel.setVisible(false)
+    }
+
+    // MARK: - Sleep/Wake gap markers
+
+    private func registerVolumeNotifications() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification,
+                     NSWorkspace.didRenameVolumeNotification] {
+            center.addObserver(self, selector: #selector(handleVolumeChange), name: name, object: nil)
+        }
+    }
+
+    @objc private func handleVolumeChange() {
+        // Shares the normal off-main-thread poll; does not add history samples.
+        model.refreshNow()
+    }
+
+    private func registerSleepWakeNotifications() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(
+            self,
+            selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleWake() {
+        model.recordWakeGap()
+        // The Apple Silicon charge-limit inhibit bit resets on sleep; re-assert
+        // the configured limit (band-controlled) after every wake.
+        controller.reconcileChargeLimit()
+        // macOS also resets the display's gamma table across sleep, which drops
+        // an active brightness boost or warmth shift without telling anyone.
+        controller.reassertDisplayOverrides()
+    }
+
+    // MARK: - Embedding
+
+    /// The very same cards the popover shows, dressed for another window.
+    ///
+    /// `SymCockpitApp` uses this as its main content, so the cockpit window
+    /// and the menu-bar popover render identical cards off one shared
+    /// ``TuneViewModel`` — no second polling pipeline, no divergent UI. The
+    /// ``TunePanelChrome/embedded`` chrome drops the popover's fixed width,
+    /// header and footer; the host window supplies the title and preferences.
+    public func tunePanel(
+        chrome: TunePanelChrome = .embedded,
+        maxHeight: CGFloat = 900
+    ) -> AnyView {
+        AnyView(makeStatusView(maxHeight: maxHeight, chrome: chrome))
+    }
+
+    /// Switch the shared model to the interactive cadence while an embedded
+    /// panel is on screen (the popover does this on open/close itself).
+    public func setEmbeddedPanelVisible(_ visible: Bool) {
+        model.setDetailVisible(visible)
+        processesModel.setVisible(visible)
+    }
+}

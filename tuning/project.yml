@@ -1,0 +1,97 @@
+name: SymairaCockpitTuning
+options:
+  bundleIdPrefix: com.symaira
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: false
+
+packages:
+  symaira-appkit:
+    url: https://github.com/danieljustus/symaira-appkit.git
+    exactVersion: 0.14.2
+  history:
+    path: ../history
+
+targets:
+  SymCockpitCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - Sources/SymCockpitCore
+    dependencies:
+      - package: history
+        product: SymCockpitHistory
+      - package: symaira-appkit
+        product: SymairaKeychain
+      - package: symaira-appkit
+        product: SymairaUpdateCheck
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "AppKit"
+          - "-framework"
+          - "IOKit"
+
+  # The menu-bar UI, as its own module — symcockpit's GUI embeds the same
+  # library through SPM, so the Xcode project mirrors that split instead of
+  # compiling the views straight into the app target.
+  SymCockpitUI:
+    type: library.static
+    platform: macOS
+    sources:
+      - Sources/SymCockpitUI
+    dependencies:
+      - target: SymCockpitCore
+      - package: symaira-appkit
+        product: SymairaProviderKit
+      - package: symaira-appkit
+        product: SymairaUpdateCheck
+      - package: symaira-appkit
+        product: SymairaTheme
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "AppKit"
+
+  SymCockpitMenuBar:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/SymCockpitMenuBarApp
+    dependencies:
+      - target: SymCockpitUI
+      - target: SymCockpitCore
+      - package: history
+        product: SymCockpitHistory
+      - package: symaira-appkit
+        product: SymairaKeychain
+      - package: symaira-appkit
+        product: SymairaProviderKit
+      - package: symaira-appkit
+        product: SymairaUpdateCheck
+      - package: symaira-appkit
+        product: SymairaTheme
+    settings:
+      base:
+        INFOPLIST_FILE: Sources/SymCockpitMenuBarApp/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.symaira.tune
+        PRODUCT_NAME: "Symaira Cockpit Menu Bar"
+        EXECUTABLE_NAME: SymCockpitMenuBar
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
+        OTHER_LDFLAGS:
+          - "-framework"
+          - "AppKit"
+          - "-framework"
+          - "IOKit"

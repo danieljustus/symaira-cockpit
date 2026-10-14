@@ -26,10 +26,10 @@ history. No release is implied by this source cutover.
 | :--- | :--- | :--- |
 | `Sources/symcockpit/` | tune-only dispatcher and version report | Swift 6 |
 | `Sources/SymCockpitApp/` | tune-only menu-bar and window GUI | Swift 6 (SwiftUI/AppKit) |
-| `tune/` | thermals, power, display and brightness | Swift 6 (AppKit/IOKit) |
+| `tuning/` | thermals, power, display and brightness | Swift 6 (AppKit/IOKit) |
 | `history/` | canonical history store, replay codec, secret redaction and bounded subprocess runner | Swift 6 |
 
-`SymTuneCLI` is a library target consumed by both Tune's own executable target
+`SymCockpitCLI` is a library target consumed by both Tune's own executable target
 and the root dispatcher, so Tune stays independently buildable while
 `symcockpit` remains the released CLI surface.
 
@@ -44,7 +44,7 @@ alongside Tune (`PACKAGES` in the `Makefile`, both CI matrices).
 ```bash
 make build                 # swift build in Tune and history
 make test                  # swift test in Tune and history
-make build-tune            # a single package (also test-tune / test-history)
+make build-tuning            # a single package (also test-tune / test-history)
 swift build && swift test  # root dispatcher and GUI integration tests
 ```
 
@@ -101,19 +101,19 @@ families are not version components.
   `SymVaultCredentialStore.reference(for:)` builds an opaque `symvault://` URI;
   that reference — never a secret — goes into the child environment for
   `symbrain usage`, which resolves it itself. Tests protect this boundary.
-- **The GUI owns no logic.** It reads `SymTuneCore` and embeds `SymTuneUI`'s
+- **The GUI owns no logic.** It reads `SymCockpitCore` and embeds `SymCockpitUI`'s
   panel rather than reimplementing it, so the window cannot report something
   `symcockpit` would contradict.
 - **One panel, two chromes.** `MainStatusView` renders the same cards for the
   popover and cockpit window; `TunePanelChrome` decides only the frame. Do not
   fork the panel for the window.
-- **`SymTuneUI` is shared.** Tune's menu-bar UI lives in
-  `tune/Sources/SymTuneUI/`, consumed by both `SymTuneApp` and the cockpit GUI.
-  `tune/project.yml` mirrors that split for XcodeGen — keep both in sync when
+- **`SymCockpitUI` is shared.** Tune's menu-bar UI lives in
+  `tuning/Sources/SymCockpitUI/`, consumed by both `SymCockpitMenuBarApp` and the cockpit GUI.
+  `tuning/project.yml` mirrors that split for XcodeGen — keep both in sync when
   adding files.
 - **Brightness keys are opt-in and default to macOS.**
-  `BrightnessKeyHandling` / `BrightnessKeyStep` (SymTuneCore) hold the
-  preference and step arithmetic; `BrightnessKeyController` (SymTuneUI) owns
+  `BrightnessKeyHandling` / `BrightnessKeyStep` (SymCockpitCore) hold the
+  preference and step arithmetic; `BrightnessKeyController` (SymCockpitUI) owns
   the `CGEventTap` and `BrightnessHUDPanel` the stand-in HUD. It runs only when
   the host offers it and the user picks it. Preserve pass-through for
   non-brightness keys, re-enable disabled taps, honour secure event input, and
@@ -123,7 +123,7 @@ families are not version components.
   place that chooses the active surface; an unavailable notch preference must
   leave the menu-bar status item visible.
 - **The HUD is opt-in and isolated.** Geometry and presentation rules live in
-  SymTuneCore; `HUDDockController` / `HUDDockView` / `NotchHUDView` render from
+  SymCockpitCore; `HUDDockController` / `HUDDockView` / `NotchHUDView` render from
   the shared `TuneViewModel`. Keep the HUD removable and free of business rules.
 - **The HUD opens in three steps, and the shoulders are a hard budget.**
   `HUDPresentation` is ordered (`collapsed < peek < expanded`); shoulders never
@@ -134,7 +134,7 @@ families are not version components.
 - **Zero stdio pollution** in `tune serve`: stdout carries JSON-RPC only;
   everything else goes to stderr.
 - Public Apache-2.0 — no billing, tenant or cloud code here. There is no Pro
-  edition; see `tune/docs/commercial-boundary.md`.
+  edition; see `tuning/docs/commercial-boundary.md`.
 - Tune's SMC writes (fans, charge limits) need `sudo`. The GUI elevates through
   `osascript`'s `do shell script … with administrator privileges`. Resolve the
   elevated CLI only with `PrivilegedExecutableResolver`, which requires the

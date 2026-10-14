@@ -1,14 +1,13 @@
 // symcockpit — unified entrypoint for the cockpit tool family.
 //
 //   symcockpit <command>           thermals, brightness, power
-//   symcockpit version             the Tune component version (JSON)
+//   symcockpit version             the Cockpit version (JSON)
 //
 // Direct commands and the deprecated tune prefix delegate to the same library.
 
 import Foundation
 import SymCockpitVersion
-import SymTuneCore
-import SymTuneCLI
+import SymCockpitCLI
 import SymairaUpdateCheck
 
 let usage = """
@@ -29,16 +28,17 @@ Commands:
 Examples:
   symcockpit doctor
 
-symcockpit provides the tune command tree; operate and scope moved to
-Symaira Brain as optional modules. The legacy dispatcher commands are removed.
+symcockpit covers this machine's thermals, power, display and brightness.
+Operate and Scope moved to Symaira Brain as optional modules; the legacy
+dispatcher commands are removed.
 
 The legacy `symcockpit tune <command>` spelling remains available with a
 deprecation warning through Cockpit v0.9. Use direct commands instead.
 
 """
 
-/// The version report, in the ecosystem's `version --json` shape: a `tool`,
-/// its `version`, and the Tune component underneath.
+/// The version report, in the ecosystem's `version --json` shape: a `tool`
+/// and its `version`. Cockpit ships no sub-families, so `families` is empty.
 func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> String {
     struct FamilyVersion: Encodable {
         let family: String
@@ -78,9 +78,7 @@ func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> Stri
         tool: "symcockpit",
         version: CockpitVersion.current,
         schemaVersion: 1,
-        families: [
-            FamilyVersion(family: "tune", version: TuneVersion.current, schemaVersion: nil),
-        ],
+        families: [],
         update: resolvedUpdate
     )
 
@@ -101,13 +99,13 @@ let code: Int32
 switch args[0] {
 case "tune":
     FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (supported through v0.9).\n".utf8))
-    code = SymTuneMain.run(Array(args.dropFirst()))
+    code = SymCockpitMain.run(Array(args.dropFirst()))
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {
         print(try await cockpitVersionJSON(update: update))
     } else {
-        var line = "symcockpit \(CockpitVersion.current) — tune \(TuneVersion.current)"
+        var line = "symcockpit \(CockpitVersion.current)"
         switch update.status {
         case "available":
             if let latest = update.latestVersion { line += " — update available: \(latest)" }
@@ -134,14 +132,14 @@ case "operate", "scope":
         Install it from a Brain checkout:
           symbrain setup --from-source <brain-checkout> --modules \(args[0])
 
-        symcockpit now ships only the tune command tree (thermals, power,
+        symcockpit now ships hardware and system tuning only (thermals, power,
         display, brightness). See docs/product-boundaries.md (PB-2026-09-09).
 
         """.utf8))
     code = 4
 default:
     if tuneDirectAliases.contains(args[0]) {
-        code = SymTuneMain.run(args)
+        code = SymCockpitMain.run(args)
     } else {
         FileHandle.standardError.write(Data("symcockpit: unknown family '\(args[0])'\n\n".utf8))
         fputs(usage, stderr)
