@@ -4,7 +4,7 @@
 
 The macOS window uses a quiet Codex/ChatGPT-inspired workspace layout, not a chat application. The existing `SymairaTheme` dark/gold palette remains authoritative. There is no new third-party dependency, cloud behavior, product module, or hardware-control implementation.
 
-- `CockpitWorkspaceView` owns only the sidebar, workspace header, scroll container and appearance. The real window and debug-only component preview share this chrome.
+- `CockpitWorkspaceView` owns only the sidebar, scroll container and appearance. The sidebar toggle sits in the window toolbar; there is no separate in-page header row. The real window and debug-only component preview share this chrome.
 - `MainStatusView` remains the one shared tuning panel. The popover keeps its compact presentation. The window groups the same production controls into Overview, Display, Power & cooling, Activity, and Menu bar & HUD.
 - Sidebar buttons are explicitly **Jump to** links, not fake page tabs. They scroll to typed anchors inside one mounted panel. Navigating does not recreate slider or keep-awake draft state.
 - Below 840 pt window width the sidebar automatically becomes a 64 pt icon rail. The user's expanded/collapsed choice survives automatic compact layout. The existing 620 pt minimum window width is retained.
