@@ -96,6 +96,7 @@ final class HistoryTests: XCTestCase {
         let controller = TuneController(
             config: TuneConfig(dimMin: 0.2, dimMax: 0.8, brightnessMin: 0.2, brightnessMax: 0.8),
             displayWrite: FakeDisplayWriteService(),
+            smcService: SMCService(connection: FakeSMCConnection(isOpen: false)),
             dataDir: mockDir
         )
 

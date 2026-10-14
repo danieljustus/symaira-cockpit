@@ -35,6 +35,15 @@ final class MCPArgumentsTests: XCTestCase {
         }
     }
 
+    func testRequireDoubleRejectsNonFiniteValues() {
+        for value in [Double.nan, .infinity, -.infinity] {
+            XCTAssertThrowsError(try requireDouble(.number(value), name: "value"))
+        }
+        for value in ["nan", "inf", "-inf", "1e309"] {
+            XCTAssertThrowsError(try requireDouble(.string(value), name: "value"))
+        }
+    }
+
     // MARK: - requireInt
 
     func testRequireIntAcceptsNumber() throws {

@@ -62,8 +62,8 @@ public enum AwakeOptions: Sendable {
                 preventDisplaySleep = true
             case "--seconds", "-s":
                 index += 1
-                guard index < args.count, let value = Double(args[index]) else {
-                    throw TuneError.usage("awake --seconds requires a number.")
+                guard index < args.count, let value = Double(args[index]), value.isFinite, value >= 0 else {
+                    throw TuneError.usage("awake --seconds requires a number that is finite and non-negative.")
                 }
                 seconds = value
             case "--for":
@@ -90,6 +90,11 @@ public enum AwakeOptions: Sendable {
         }
         if let untilTime {
             seconds = try UntilTimeParser.parse(untilTime)
+        }
+        if let seconds {
+            guard seconds.isFinite, seconds >= 0 else {
+                throw TuneError.usage("awake duration must be finite and non-negative.")
+            }
         }
 
         return Options(seconds: seconds, preventDisplaySleep: preventDisplaySleep)

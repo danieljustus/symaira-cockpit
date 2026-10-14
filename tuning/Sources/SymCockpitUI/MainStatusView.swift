@@ -443,17 +443,26 @@ private struct KeepAwakeSection: View {
 
     @State private var durationIndex = 0
     @State private var preventDisplaySleep = false
+    @State private var awakeError: String?
 
     var body: some View {
-        KeepAwakeCard(
-            active: model.keepAwake.active,
-            preventDisplaySleep: $preventDisplaySleep,
-            durationIndex: $durationIndex,
-            remaining: remaining,
-            isInteractive: !model.keepAwake.active,
-            presets: Self.presets,
-            onToggle: toggle
-        )
+        VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+            KeepAwakeCard(
+                active: model.keepAwake.active,
+                preventDisplaySleep: $preventDisplaySleep,
+                durationIndex: $durationIndex,
+                remaining: remaining,
+                isInteractive: !model.keepAwake.active,
+                presets: Self.presets,
+                onToggle: toggle
+            )
+            if let awakeError {
+                Text(awakeError)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.critical)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
         .onAppear { preventDisplaySleep = model.keepAwake.preventDisplaySleep }
     }
 
@@ -468,14 +477,19 @@ private struct KeepAwakeSection: View {
     }
 
     private func toggle() {
-        if model.keepAwake.active {
-            controller.endKeepAwakeSession()
-        } else {
-            _ = try? controller.beginKeepAwakeSession(
-                duration: Self.presets[durationIndex].seconds,
-                preventDisplaySleep: preventDisplaySleep,
-                reason: assertionReason
-            )
+        do {
+            if controller.keepAwakeSessionStatus().active {
+                controller.endKeepAwakeSession()
+            } else {
+                try controller.beginKeepAwakeSession(
+                    duration: Self.presets[durationIndex].seconds,
+                    preventDisplaySleep: preventDisplaySleep,
+                    reason: assertionReason
+                )
+            }
+            awakeError = nil
+        } catch {
+            awakeError = SecretRedactor.redact(error.localizedDescription)
         }
         model.refreshNow()
     }

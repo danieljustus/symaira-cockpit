@@ -37,6 +37,9 @@ public enum StatusOptions: Sendable {
                     throw TuneError.usage("status: --interval requires a value.")
                 }
                 options.interval = try DurationParser.parse(args[index])
+                guard options.interval.isFinite, options.interval > 0 else {
+                    throw TuneError.usage("status: --interval must be finite and positive.")
+                }
             case "--json":
                 options.isJson = true
             default:

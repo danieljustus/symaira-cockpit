@@ -55,6 +55,11 @@ public enum SafetyPolicy: Sendable {
     /// charge while running on battery can cause an unexpected shutdown.
     public static let requireACForChargeLimit = true
 
+    /// Non-finite requests cannot be clamped safely or persisted as JSON.
+    public static func requireFinite(_ value: Double) throws {
+        guard value.isFinite else { throw TuneError.usage("Value must be finite.") }
+    }
+
     /// Clamp `value` into the inclusive `[lower, upper]` range.
     public static func clamp<T: Comparable>(_ value: T, _ lower: T, _ upper: T) -> T {
         min(max(value, lower), upper)

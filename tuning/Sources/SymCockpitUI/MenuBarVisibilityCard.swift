@@ -50,10 +50,7 @@ struct MenuBarVisibilityCard: View {
 
             if let readout {
                 Divider().overlay(SymairaTheme.borderGlass)
-                surfaceRow(readout)
-                if let hudDock, readout.surface == .notch {
-                    dockRow(hudDock)
-                }
+                ReadoutControls(readout: readout, hudDock: hudDock)
             }
 
             if let saveError {
@@ -250,105 +247,124 @@ struct MenuBarVisibilityCard: View {
         }
     }
 
-    /// Where the readout appears — one surface, not two.
-    ///
-    /// The menu-bar status item and the notch HUD show the same numbers, so
-    /// running both put the same readout on screen twice. This is the same
-    /// decision the switches above make — what the readout shows — one level
-    /// up: where it shows it. On a Mac without a camera cutout there is nowhere
-    /// to put the HUD, and the row says that instead of offering a choice that
-    /// does nothing.
-    private func surfaceRow(_ readout: ReadoutSurfacePreferences) -> some View {
-        // The HUD is offered on every display now that it can sit on a screen
-        // edge; only the cutout itself needs the hardware, and that is the
-        // dock picker's problem rather than this one's.
-        let available = true
+    /// Optional preferences are unwrapped into views that observe their changes.
+    private struct ReadoutControls: View {
+        @ObservedObject var readout: ReadoutSurfacePreferences
+        var hudDock: HUDDockPreferences?
 
-        return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
-            HStack(spacing: SymairaSpacing.medium) {
-                Image(systemName: readout.surface == .notch && available
-                    ? "rectangle.topthird.inset.filled"
-                    : "menubar.rectangle")
+        var body: some View {
+            VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                surfaceRow
+                if let hudDock, readout.surface == .notch {
+                    HUDDockRow(hudDock: hudDock)
+                }
+            }
+        }
+
+        /// Where the readout appears — one surface, not two.
+        ///
+        /// The menu-bar status item and the notch HUD show the same numbers, so
+        /// running both put the same readout on screen twice. This is the same
+        /// decision the switches above make — what the readout shows — one level
+        /// up: where it shows it. On a Mac without a camera cutout there is nowhere
+        /// to put the HUD, and the row says that instead of offering a choice that
+        /// does nothing.
+        private var surfaceRow: some View {
+            // The HUD is offered on every display now that it can sit on a screen
+            // edge; only the cutout itself needs the hardware, and that is the
+            // dock picker's problem rather than this one's.
+            let available = true
+
+            return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                HStack(spacing: SymairaSpacing.medium) {
+                    Image(systemName: readout.surface == .notch && available
+                        ? "rectangle.topthird.inset.filled"
+                        : "menubar.rectangle")
+                        .symairaText(.caption)
+                        .frame(width: 18)
+                        .foregroundStyle(SymairaTheme.goldPrimary)
+
+                    Text("Show in")
+                        .symairaText(.body)
+                        .foregroundStyle(SymairaTheme.textPrimary)
+
+                    Spacer(minLength: SymairaSpacing.small)
+
+                    Picker("", selection: Binding(
+                        get: { readout.surface },
+                        set: { readout.surface = $0 }
+                    )) {
+                        Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
+                        Text("HUD").tag(ReadoutSurface.notch)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 140)
+                    .disabled(!available)
+                    .opacity(available ? 1 : 0.5)
+                    .help("Where the live readout appears — one surface at a time")
+                }
+
+                Text(surfaceCaption(readout.surface, available: available))
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+
+        private func surfaceCaption(_ surface: ReadoutSurface, available: Bool) -> String {
+            guard available else { return "This display cannot show the HUD" }
+            return switch surface {
+            case .menuBar: "The status item in the menu bar"
+            case .notch: "A floating readout; hover to expand, drag to move it"
+            }
+        }
+    }
+
+    private struct HUDDockRow: View {
+        @ObservedObject var hudDock: HUDDockPreferences
+
+        /// Where the HUD is parked.
+        ///
+        /// The same seven positions a drag can reach, offered as a list too — a
+        /// gesture is the fast way to move the HUD, not the only way, and a
+        /// position that can only be reached by dragging is unreachable with a
+        /// trackpad the user cannot use.
+        ///
+        /// The notch entry is disabled rather than hidden on a display without a
+        /// cutout: hiding it would leave a MacBook user who is temporarily on an
+        /// external monitor wondering where their setting went.
+        var body: some View {
+            let notchAvailable = HUDDockController.isAvailable(dock: .notch)
+
+            return HStack(spacing: SymairaSpacing.medium) {
+                Image(systemName: "rectangle.3.group")
                     .symairaText(.caption)
                     .frame(width: 18)
                     .foregroundStyle(SymairaTheme.goldPrimary)
 
-                Text("Show in")
+                Text("Position")
                     .symairaText(.body)
                     .foregroundStyle(SymairaTheme.textPrimary)
 
                 Spacer(minLength: SymairaSpacing.small)
 
                 Picker("", selection: Binding(
-                    get: { readout.surface },
-                    set: { readout.surface = $0 }
+                    get: { hudDock.dock },
+                    set: { hudDock.dock = $0 }
                 )) {
-                    Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
-                    Text("HUD").tag(ReadoutSurface.notch)
+                    Text(HUDDock.notch.displayName)
+                        .tag(HUDDock.notch)
+                        .disabled(!notchAvailable)
+                    Divider()
+                    ForEach(HUDDock.edgeCases, id: \.storageKey) { dock in
+                        Text(dock.displayName).tag(dock)
+                    }
                 }
-                .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 140)
-                .disabled(!available)
-                .opacity(available ? 1 : 0.5)
-                .help("Where the live readout appears — one surface at a time")
+                .frame(width: 190)
+                .help("Where the HUD sits — or just drag it there")
             }
-
-            Text(surfaceCaption(readout.surface, available: available))
-                .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func surfaceCaption(_ surface: ReadoutSurface, available: Bool) -> String {
-        guard available else { return "This display cannot show the HUD" }
-        return switch surface {
-        case .menuBar: "The status item in the menu bar"
-        case .notch: "A floating readout; hover to expand, drag to move it"
-        }
-    }
-
-    /// Where the HUD is parked.
-    ///
-    /// The same seven positions a drag can reach, offered as a list too — a
-    /// gesture is the fast way to move the HUD, not the only way, and a
-    /// position that can only be reached by dragging is unreachable with a
-    /// trackpad the user cannot use.
-    ///
-    /// The notch entry is disabled rather than hidden on a display without a
-    /// cutout: hiding it would leave a MacBook user who is temporarily on an
-    /// external monitor wondering where their setting went.
-    private func dockRow(_ hudDock: HUDDockPreferences) -> some View {
-        let notchAvailable = HUDDockController.isAvailable(dock: .notch)
-
-        return HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: "rectangle.3.group")
-                .symairaText(.caption)
-                .frame(width: 18)
-                .foregroundStyle(SymairaTheme.goldPrimary)
-
-            Text("Position")
-                .symairaText(.body)
-                .foregroundStyle(SymairaTheme.textPrimary)
-
-            Spacer(minLength: SymairaSpacing.small)
-
-            Picker("", selection: Binding(
-                get: { hudDock.dock },
-                set: { hudDock.dock = $0 }
-            )) {
-                Text(HUDDock.notch.displayName)
-                    .tag(HUDDock.notch)
-                    .disabled(!notchAvailable)
-                Divider()
-                ForEach(HUDDock.edgeCases, id: \.storageKey) { dock in
-                    Text(dock.displayName).tag(dock)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 190)
-            .help("Where the HUD sits — or just drag it there")
         }
     }
 

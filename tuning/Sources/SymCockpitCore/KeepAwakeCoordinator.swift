@@ -35,6 +35,11 @@ public final class KeepAwakeCoordinator: @unchecked Sendable {
         preventDisplaySleep: Bool,
         reason: String
     ) throws -> KeepAwakeSession {
+        if let duration {
+            guard duration.isFinite, (0...86_400).contains(duration) else {
+                throw TuneError.usage("Keep-awake duration must be finite and between 0 and 86400 seconds.")
+            }
+        }
         lock.lock()
         defer { lock.unlock() }
 
