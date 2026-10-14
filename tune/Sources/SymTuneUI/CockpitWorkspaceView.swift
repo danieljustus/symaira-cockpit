@@ -67,21 +67,31 @@ public struct CockpitWorkspaceView<Content: View>: View {
             HStack(spacing: 0) {
                 sidebar(scroll)
                 Divider().overlay(SymairaTheme.borderGlass)
-                VStack(spacing: 0) {
-                    workspaceHeader(scroll)
-                    Divider().overlay(SymairaTheme.borderGlass)
-                    ScrollView {
-                        content
-                            .environment(\.tunePanelChrome, .embedded)
-                            .padding(SymairaSpacing.xLarge)
-                            .frame(maxWidth: 840, alignment: .topLeading)
-                            .frame(maxWidth: .infinity, alignment: .top)
-                    }
+                ScrollView {
+                    content
+                        .environment(\.tunePanelChrome, .embedded)
+                        .padding(SymairaSpacing.xLarge)
+                        .frame(maxWidth: 1120, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .top)
                 }
             }
             .onGeometryChange(for: Bool.self) { geometry in
                 geometry.size.width >= 840
             } action: { hasSidebarRoom = $0 }
+        }
+        // The sidebar toggle lives in the window toolbar, like System
+        // Settings — a dedicated header row under the title bar only
+        // duplicated the title and the sidebar's own navigation.
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { sidebarExpanded.toggle() } label: {
+                    Image(systemName: "sidebar.left")
+                }
+                .disabled(!hasSidebarRoom)
+                .accessibilityLabel(showsLabels ? "Collapse sidebar" : "Expand sidebar")
+                .help(hasSidebarRoom ? "Toggle sidebar (⌃⌘S)" : "Sidebar is compact at this window width")
+                .keyboardShortcut("s", modifiers: [.control, .command])
+            }
         }
         .background(SymairaTheme.bgDark)
         .preferredColorScheme(.dark)
@@ -169,40 +179,6 @@ public struct CockpitWorkspaceView<Content: View>: View {
         .padding(SymairaSpacing.medium)
         .frame(width: showsLabels ? 212 : 64)
         .background(SymairaTheme.bgCard)
-    }
-
-    private func workspaceHeader(_ scroll: ScrollViewProxy) -> some View {
-        HStack(spacing: SymairaSpacing.medium) {
-            Button { sidebarExpanded.toggle() } label: {
-                Image(systemName: "sidebar.left")
-                    .frame(width: 32, height: SymairaMetrics.minimumControlHeight)
-            }
-            .buttonStyle(.plain)
-            .disabled(!hasSidebarRoom)
-            .accessibilityLabel(showsLabels ? "Collapse sidebar" : "Expand sidebar")
-            .help(hasSidebarRoom ? "Toggle sidebar (⌃⌘S)" : "Sidebar is compact at this window width")
-            .keyboardShortcut("s", modifiers: [.control, .command])
-
-            Text("This Mac")
-                .symairaText(.subheading, respectsForeground: false)
-                .foregroundStyle(SymairaTheme.textPrimary)
-            Spacer()
-            Menu {
-                ForEach(TuneWorkspaceAnchor.allCases) { anchor in
-                    Button(anchor.title, systemImage: anchor.symbol) {
-                        jump(to: anchor, in: scroll)
-                    }
-                }
-            } label: {
-                Label("Jump to", systemImage: "line.3.horizontal.decrease")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel("Jump to tuning controls")
-        }
-        .foregroundStyle(SymairaTheme.textSecondary)
-        .padding(.horizontal, SymairaSpacing.large)
-        .padding(.vertical, SymairaSpacing.small)
     }
 
     private func jump(to anchor: TuneWorkspaceAnchor, in scroll: ScrollViewProxy) {
