@@ -16,6 +16,7 @@ struct SymVaultCredentialField: View {
     @State private var saved = false
     @State private var statusMessage: String?
     @State private var isMigrating = false
+    @State private var isConfirmingRemoval = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -38,14 +39,18 @@ struct SymVaultCredentialField: View {
                 }
             }
 
-            if !value.isEmpty {
+            Button("Remove saved credential", role: .destructive) {
+                isConfirmingRemoval = true
+            }
+            .font(.caption)
+            .confirmationDialog("Remove saved credential?", isPresented: $isConfirmingRemoval) {
                 Button("Remove saved credential", role: .destructive, action: delete)
-                    .font(.caption)
             }
             if let statusMessage {
                 Text(statusMessage)
                     .font(.caption)
-                    .foregroundStyle(statusMessage.hasPrefix("Saved") || statusMessage.hasPrefix("Migrated") ? .green : .red)
+                    .foregroundStyle(statusMessage.hasPrefix("Saved") || statusMessage.hasPrefix("Migrated")
+                                     || statusMessage.hasPrefix("Removed") ? .green : .red)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
