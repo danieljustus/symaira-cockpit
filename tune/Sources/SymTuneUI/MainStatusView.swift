@@ -104,7 +104,9 @@ struct MainStatusView: View {
             // wheel over half the page.
             cards
                 .onGeometryChange(for: Bool.self) { geometry in
-                    geometry.size.width >= 740
+                    // 640pt of content = two 312pt columns, the popover's own
+                    // card width. Below that a single column reads better.
+                    geometry.size.width >= 640
                 } action: { usesColumns = $0 }
         }
     }
@@ -117,19 +119,10 @@ struct MainStatusView: View {
                     openCockpitRow(onOpenCockpit)
                 }
             }
-            if chrome == .embedded {
-                VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
-                    Text("This Mac")
-                        .symairaText(.title, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textPrimary)
-                    Text("Display, power & cooling")
-                        .symairaText(.callout, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .id(TuneWorkspaceAnchor.overview)
-            }
+            // The window title bar and sidebar already say what this page is;
+            // a second "This Mac" heading here only repeated them.
             LiveSummaryStrip(model: model, isExpanded: chrome == .embedded)
+                .id(TuneWorkspaceAnchor.overview)
             if chrome == .embedded && shows(.systemStatus) {
                 SystemStatusSection(model: model)
             }
@@ -165,7 +158,9 @@ struct MainStatusView: View {
 
     /// AnyLayout preserves each card's state when resizing between columns
     /// and a stack; changing view branches would reset duration and drag state.
-    private var powerLayout: AnyLayout {
+    /// Two columns at window width turn the page into a dashboard instead of
+    /// one long popover column.
+    private var pairedLayout: AnyLayout {
         if chrome == .embedded && usesColumns {
             return AnyLayout(HStackLayout(alignment: .top, spacing: SymairaSpacing.large))
         }
@@ -176,16 +171,20 @@ struct MainStatusView: View {
         VStack(spacing: chrome == .embedded ? SymairaSpacing.section : SymairaSpacing.medium) {
             VStack(spacing: SymairaSpacing.medium) {
                 GroupLabel(chrome == .embedded ? "Display" : "CONTROLS")
-                if shows(.displayControls) {
-                    DisplayControlsCard(
-                        controller: controller,
-                        model: model,
-                        brightnessKeys: brightnessKeyPreferences,
-                        brightnessKeyController: brightnessKeyController
-                    )
-                }
-                if chrome == .embedded && shows(.displays) {
-                    DisplaysSection(model: model)
+                pairedLayout {
+                    if shows(.displayControls) {
+                        DisplayControlsCard(
+                            controller: controller,
+                            model: model,
+                            brightnessKeys: brightnessKeyPreferences,
+                            brightnessKeyController: brightnessKeyController
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    if chrome == .embedded && shows(.displays) {
+                        DisplaysSection(model: model)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
                 }
                 if chrome == .embedded && !shows(.displayControls) && !shows(.displays) {
                     hiddenCardsNote("Display cards are hidden in Preferences.")
@@ -197,7 +196,7 @@ struct MainStatusView: View {
                 if chrome == .embedded {
                     GroupLabel("Power & cooling")
                 }
-                powerLayout {
+                pairedLayout {
                     if shows(.keepAwake) {
                         KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -222,17 +221,25 @@ struct MainStatusView: View {
             if chrome == .popover && shows(.systemStatus) {
                 SystemStatusSection(model: model)
             }
-            if shows(.topProcesses) {
-                TopProcessesCard(model: processesModel)
+            pairedLayout {
+                if shows(.topProcesses) {
+                    TopProcessesCard(model: processesModel)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                if shows(.storageVolumes) {
+                    StorageVolumesSection(model: model, preferences: preferencesManager)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             }
-            if shows(.storageVolumes) {
-                StorageVolumesSection(model: model, preferences: preferencesManager)
-            }
-            if !aiUsageModel.rows.isEmpty {
-                AIUsageCardView(model: aiUsageModel)
-            }
-            if shows(.metricsHistory) {
-                MetricsHistorySection(model: model)
+            pairedLayout {
+                if !aiUsageModel.rows.isEmpty {
+                    AIUsageCardView(model: aiUsageModel)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                if shows(.metricsHistory) {
+                    MetricsHistorySection(model: model)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             }
             if chrome == .popover && shows(.displays) {
                 DisplaysSection(model: model)
@@ -249,21 +256,25 @@ struct MainStatusView: View {
     private var readoutCards: some View {
         VStack(spacing: SymairaSpacing.medium) {
             GroupLabel("Menu bar & HUD")
-            MenuBarVisibilityCard(
-                preferences: preferencesManager,
-                aiUsage: aiUsageModel.preferences,
-                model: model,
-                hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                readout: readoutPreferences,
-                hudDock: hudDockPreferences
-            )
-            if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
-                HUDContentSection(
+            pairedLayout {
+                MenuBarVisibilityCard(
+                    preferences: preferencesManager,
+                    aiUsage: aiUsageModel.preferences,
+                    model: model,
+                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
                     readout: readoutPreferences,
-                    dock: hudDockPreferences,
-                    items: hudItemPreferences,
-                    preferences: preferencesManager
+                    hudDock: hudDockPreferences
                 )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
+                    HUDContentSection(
+                        readout: readoutPreferences,
+                        dock: hudDockPreferences,
+                        items: hudItemPreferences,
+                        preferences: preferencesManager
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             }
         }
         .id(TuneWorkspaceAnchor.readout)
