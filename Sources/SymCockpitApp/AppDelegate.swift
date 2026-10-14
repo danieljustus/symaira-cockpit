@@ -1,5 +1,5 @@
 @preconcurrency import AppKit
-import SymTuneUI
+import SymCockpitUI
 
 /// Application delegate for Symaira Cockpit.
 ///
@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: CockpitWindowController?
 
     /// `NSApplicationMain` only wires the delegate up from a nib, and this app
-    /// has none — set it explicitly before running (same reason as SymTuneApp).
+    /// has none — set it explicitly before running (same reason as SymCockpitMenuBarApp).
     ///
     /// `--version` prints the bundle's cockpit version and exits before AppKit
     /// starts. The GUI binary has no dispatcher CLI; release tooling uses this

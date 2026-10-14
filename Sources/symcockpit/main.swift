@@ -7,7 +7,7 @@
 
 import Foundation
 import SymCockpitVersion
-import SymTuneCLI
+import SymCockpitCLI
 import SymairaUpdateCheck
 
 let usage = """
@@ -99,7 +99,7 @@ let code: Int32
 switch args[0] {
 case "tune":
     FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (supported through v0.9).\n".utf8))
-    code = SymTuneMain.run(Array(args.dropFirst()))
+    code = SymCockpitMain.run(Array(args.dropFirst()))
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {
@@ -139,7 +139,7 @@ case "operate", "scope":
     code = 4
 default:
     if tuneDirectAliases.contains(args[0]) {
-        code = SymTuneMain.run(args)
+        code = SymCockpitMain.run(args)
     } else {
         FileHandle.standardError.write(Data("symcockpit: unknown family '\(args[0])'\n\n".utf8))
         fputs(usage, stderr)

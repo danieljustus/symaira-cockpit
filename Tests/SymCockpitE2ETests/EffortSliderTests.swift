@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
-import SymTuneCore
+import SymCockpitCore
 import XCTest
-@testable import SymTuneUI
+@testable import SymCockpitUI
 
 final class EffortSliderTests: XCTestCase {
     @MainActor

@@ -1,6 +1,6 @@
 import SwiftUI
 import SymairaTheme
-import SymTuneUI
+import SymCockpitUI
 
 /// One tuning surface, backed by the menu bar's existing model and cards.
 @MainActor

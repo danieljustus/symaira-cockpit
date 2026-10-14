@@ -1,5 +1,5 @@
 import XCTest
-import SymTuneCore
+import SymCockpitCore
 
 /// Source safety guard and fixture validation, not a substitute for rendering.
 final class CockpitPreviewContractTests: XCTestCase {
@@ -8,7 +8,7 @@ final class CockpitPreviewContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let file = root.appendingPathComponent("tune/Sources/SymTuneUI/CockpitDesignPreview.swift")
+        let file = root.appendingPathComponent("tuning/Sources/SymCockpitUI/CockpitDesignPreview.swift")
         let source = try String(contentsOf: file, encoding: .utf8)
 
         XCTAssertTrue(source.hasPrefix("#if DEBUG\n"))

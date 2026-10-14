@@ -13,7 +13,7 @@ jobs:
     name: Build and publish
     # macOS-only by construction: the cockpit families drive AppKit, IOKit,
     # Accessibility and ScreenCaptureKit. macos-latest rather than a pinned
-    # runner because tune targets Swift 6.4, matching the CI workflow.
+    # runner because tuning targets Swift 6.4, matching the CI workflow.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -390,7 +390,7 @@ jobs:
 
             def caveats
               <<~EOS
-                symcockpit provides the tune command tree. Operate and Scope are
+                symcockpit covers hardware and system tuning. Operate and Scope are
                 optional modules in Symaira Brain; legacy dispatcher commands are removed.
                 The menu bar app
                 is distributed separately: brew install --cask danieljustus/tap/symcockpit

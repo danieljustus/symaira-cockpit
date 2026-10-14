@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
-import SymTuneCore
-@testable import SymTuneUI
+import SymCockpitCore
+@testable import SymCockpitUI
 
 final class StorageVolumePreferencesTests: XCTestCase {
     @MainActor

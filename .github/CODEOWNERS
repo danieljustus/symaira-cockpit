@@ -14,8 +14,8 @@
 # Privileged elevation. A change here decides which binary runs as root behind
 # the administrator prompt, and how state written by that root process is
 # de-escalated back to the user.
-/tune/Sources/SymTuneCore/PrivilegedElevation.swift  @danieljustus
-/tune/Sources/SymTuneCore/StateFilePermissions.swift @danieljustus
+/tuning/Sources/SymCockpitCore/PrivilegedElevation.swift  @danieljustus
+/tuning/Sources/SymCockpitCore/StateFilePermissions.swift @danieljustus
 /history/Sources/SymCockpitHistory/PrivilegedExecutableResolver.swift @danieljustus
 
 # Release and CI. These publish signed, notarized artifacts and bump the

@@ -269,7 +269,7 @@ swift build -c release --arch arm64 --arch x86_64
 
 The repository is an SPM workspace: `Sources/symcockpit/` is the dispatcher,
 `Sources/SymCockpitApp/` the GUI,
-and [`tune/`](tune/) are
+and [`tuning/`](tuning/) are
 a standalone package with its own test suite. Contributor details live in
 [AGENTS.md](AGENTS.md).
 

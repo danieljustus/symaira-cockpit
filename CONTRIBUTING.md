@@ -25,17 +25,17 @@ ScreenCaptureKit APIs.
 Sources/symcockpit/       # unified dispatcher and version reporting
 Sources/SymCockpitApp/    # SwiftUI/AppKit menu-bar and cockpit window
 Tests/                    # dispatcher and GUI integration tests
-tune/                     # thermals, power, display, and Tune UI package
-  Sources/SymTuneCore/    # hardware and configuration logic
-  Sources/SymTuneUI/      # shared menu-bar panel
-  Sources/SymTuneCLI/     # Tune command library
+tuning/                  # thermals, power, display, and UI package
+  Sources/SymCockpitCore/    # hardware and configuration logic
+  Sources/SymCockpitUI/      # shared menu-bar panel
+  Sources/SymCockpitCLI/     # Tune command library
 history/                  # shared library: canonical history, replay codec,
                           # secret redaction, bounded subprocess runner
 ```
 
 The nested packages remain independently buildable for package-level
 compatibility, but only `symcockpit` is the shipped CLI binary. `history/`
-is the odd one out: no CLI, no MCP server, just a library that `tune/`
+is the odd one out: no CLI, no MCP server, just a library that `tuning/`
 depends on by path. It is built and tested with the rest.
 
 `DeterministicReplayCodec` is future replay groundwork, not a live production

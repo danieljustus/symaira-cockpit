@@ -18,9 +18,9 @@ Display and fan controls reuse `EffortSlider`, a native `NSSlider` with an 8 pt 
 
 ## Hardware boundary
 
-`Sources/SymCockpitApp/CockpitRootView.swift` embeds the workspace and the existing `statusBar.tunePanel(chrome: .embedded)` once. It owns no tuning logic. No changes are made to `SymTuneCore`, credential access, fan authorization, polling, brightness arithmetic, display gamma or preference persistence.
+`Sources/SymCockpitApp/CockpitRootView.swift` embeds the workspace and the existing `statusBar.tunePanel(chrome: .embedded)` once. It owns no tuning logic. No changes are made to `SymCockpitCore`, credential access, fan authorization, polling, brightness arithmetic, display gamma or preference persistence.
 
-`tune/project.yml` already includes all of `Sources/SymTuneUI` through its source-directory entry, matching SwiftPM's discovery of the new file. No duplicated file list or Xcode project is introduced.
+`tuning/project.yml` already includes all of `Sources/SymCockpitUI` through its source-directory entry, matching SwiftPM's discovery of the new file. No duplicated file list or Xcode project is introduced.
 
 ## Review
 
@@ -28,7 +28,7 @@ Display and fan controls reuse `EffortSlider`, a native `NSSlider` with an 8 pt 
 
 Verification commands:
 
-For design work in full Xcode, open the root `Package.swift`, then open `tune/Sources/SymTuneUI/CockpitDesignPreview.swift` in the local Tune package. Enable **Editor → Canvas** and resume one of the named **Breit**, **Kompakt**, or **Ohne Messwerte** previews in a Debug configuration. These previews do not launch the production application; never replace their passive components with `TuneController` or the live root view merely to fill a missing section.
+For design work in full Xcode, open the root `Package.swift`, then open `tuning/Sources/SymCockpitUI/CockpitDesignPreview.swift` in the local tuning package. Enable **Editor → Canvas** and resume one of the named **Breit**, **Kompakt**, or **Ohne Messwerte** previews in a Debug configuration. These previews do not launch the production application; never replace their passive components with `TuneController` or the live root view merely to fill a missing section.
 
 ```sh
 swift build --product SymCockpitApp --jobs 2

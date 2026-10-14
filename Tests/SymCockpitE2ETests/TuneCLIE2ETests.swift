@@ -6,7 +6,7 @@ import XCTest
 /// the public entrypoint is now `symcockpit tune …`. These tests locate the
 /// dispatcher binary relative to this test file (`<repo>/.build/debug/`) and
 /// exercise the same CLI surface through it.
-final class SymTuneCLIE2ETests: XCTestCase {
+final class SymCockpitCLIE2ETests: XCTestCase {
 
     /// Path to the built symcockpit dispatcher binary. The test bundle sits
     /// next to it in `.build/debug/` (SPM layout), so the bundle path is the

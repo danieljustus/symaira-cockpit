@@ -1,7 +1,7 @@
 # Symaira Cockpit — aggregation Makefile
-# Builds and tests the nested SPM packages (tune and history).
+# Builds and tests the nested SPM packages (tuning and history).
 
-PACKAGES := tune history
+PACKAGES := tuning history
 
 # Resolve a full Xcode toolchain: CommandLineTools alone fails on actool.
 # If xcode-select points at CommandLineTools, fall back to an installed Xcode.
@@ -43,11 +43,11 @@ smoke-app: build-app
 run-app: build-app
 	open "build/app/Symaira Cockpit.app"
 
-## build-<pkg>: Build a single package (e.g. make build-tune)
+## build-<pkg>: Build a single package (e.g. make build-tuning)
 build-%:
 	cd $* && swift build
 
-## test-<pkg>: Test a single package (e.g. make test-tune)
+## test-<pkg>: Test a single package (e.g. make test-tuning)
 test-%:
 	cd $* && swift test
 

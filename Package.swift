@@ -2,7 +2,7 @@
 import PackageDescription
 
 // symcockpit — the unified entrypoint for the cockpit tool family.
-// Dispatches to the tune CLI library via a local path dependency.
+// Dispatches to the tuning CLI library via a local path dependency.
 let package = Package(
     name: "symcockpit",
     platforms: [
@@ -18,7 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.2"),
-        .package(path: "tune"),
+        .package(path: "tuning"),
     ],
     targets: [
         .target(name: "SymCockpitVersion"),
@@ -26,7 +26,7 @@ let package = Package(
             name: "symcockpit",
             dependencies: [
                 "SymCockpitVersion",
-                .product(name: "SymTuneCLI", package: "tune"),
+                .product(name: "SymCockpitCLI", package: "tuning"),
                 .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
             ]
         ),
@@ -34,8 +34,8 @@ let package = Package(
             name: "SymCockpitApp",
             dependencies: [
                 "SymCockpitVersion",
-                .product(name: "SymTuneUI", package: "tune"),
-                .product(name: "SymTuneCore", package: "tune"),
+                .product(name: "SymCockpitUI", package: "tuning"),
+                .product(name: "SymCockpitCore", package: "tuning"),
                 .product(name: "SymairaTheme", package: "symaira-appkit"),
             ],
             exclude: ["Info.plist"],
@@ -46,8 +46,8 @@ let package = Package(
         .testTarget(
             name: "SymCockpitE2ETests",
             dependencies: [
-                .product(name: "SymTuneCore", package: "tune"),
-                .product(name: "SymTuneUI", package: "tune"),
+                .product(name: "SymCockpitCore", package: "tuning"),
+                .product(name: "SymCockpitUI", package: "tuning"),
             ]
         ),
     ],
