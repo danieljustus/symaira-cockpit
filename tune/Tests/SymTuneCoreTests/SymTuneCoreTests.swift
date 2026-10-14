@@ -28,7 +28,7 @@ final class SafetyPolicyTests: XCTestCase {
 final class CapabilityTests: XCTestCase {
     func testCapabilitiesShape() {
         let report = TuneController().capabilities()
-        XCTAssertEqual(report.tool, "symtune")
+        XCTAssertEqual(report.tool, "symcockpit")
         XCTAssertEqual(report.version, TuneVersion.current)
         XCTAssertFalse(report.capabilities.isEmpty)
 

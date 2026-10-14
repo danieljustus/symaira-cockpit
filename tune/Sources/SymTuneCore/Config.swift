@@ -369,7 +369,7 @@ public struct TuneConfig: Equatable, Sendable {
             && config.chargeLimitMin < config.chargeLimitMax
 
         if !rangesValid {
-            fputs("symtune: config error: inverted min/max range detected, falling back to defaults\n", stderr)
+            fputs("symcockpit: config error: inverted min/max range detected, falling back to defaults\n", stderr)
             config = TuneConfig()
         }
 

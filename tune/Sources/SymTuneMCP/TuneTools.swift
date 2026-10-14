@@ -235,7 +235,7 @@ struct KeepAwakeTool: TuneTool {
             return try controller.beginKeepAwakeSession(
                 duration: duration,
                 preventDisplaySleep: preventDisplaySleep,
-                reason: "symtune MCP keep_awake"
+                reason: "symcockpit MCP keep_awake"
             )
         } else {
             controller.endKeepAwakeSession()

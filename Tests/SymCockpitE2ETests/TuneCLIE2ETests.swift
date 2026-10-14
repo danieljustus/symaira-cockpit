@@ -27,28 +27,28 @@ final class SymTuneCLIE2ETests: XCTestCase {
 
     func testFanHelp() throws {
         let output = try runCommand(args: ["fan", "--help"])
-        XCTAssert(output.contains("Usage: symtune fan"))
+        XCTAssert(output.contains("Usage: symcockpit fan"))
         XCTAssert(output.contains("<0.0-1.0>"))
     }
 
     func testFanHelpShort() throws {
         let output = try runCommand(args: ["fan", "-h"])
-        XCTAssert(output.contains("Usage: symtune fan"))
+        XCTAssert(output.contains("Usage: symcockpit fan"))
     }
 
     func testDimHelp() throws {
         let output = try runCommand(args: ["dim", "--help"])
-        XCTAssert(output.contains("Usage: symtune dim"))
+        XCTAssert(output.contains("Usage: symcockpit dim"))
     }
 
     func testWarmthHelp() throws {
         let output = try runCommand(args: ["warmth", "--help"])
-        XCTAssert(output.contains("Usage: symtune warmth"))
+        XCTAssert(output.contains("Usage: symcockpit warmth"))
     }
 
     func testBatteryLimitHelp() throws {
         let output = try runCommand(args: ["battery-limit", "--help"])
-        XCTAssert(output.contains("Usage: symtune battery-limit"))
+        XCTAssert(output.contains("Usage: symcockpit battery-limit"))
     }
 
     func testMetricsHelp() throws {
@@ -135,7 +135,7 @@ final class SymTuneCLIE2ETests: XCTestCase {
     func testAlwaysJSONCommandsHelp() throws {
         for command in Self.alwaysJSONCommands {
             let output = try runCommand(args: [command, "--help"])
-            XCTAssert(output.contains("Usage: symtune \(command)"), "\(command) --help: \(output)")
+            XCTAssert(output.contains("Usage: symcockpit \(command)"), "\(command) --help: \(output)")
             // Help output must not be the JSON report.
             XCTAssertFalse(output.contains("{"), "\(command) --help printed JSON instead of help: \(output)")
         }
@@ -144,7 +144,7 @@ final class SymTuneCLIE2ETests: XCTestCase {
     func testAlwaysJSONCommandsHelpShort() throws {
         for command in Self.alwaysJSONCommands {
             let output = try runCommand(args: [command, "-h"])
-            XCTAssert(output.contains("Usage: symtune \(command)"), "\(command) -h: \(output)")
+            XCTAssert(output.contains("Usage: symcockpit \(command)"), "\(command) -h: \(output)")
             XCTAssertFalse(output.contains("{"), "\(command) -h printed JSON instead of help: \(output)")
         }
     }

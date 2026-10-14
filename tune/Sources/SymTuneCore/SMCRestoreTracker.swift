@@ -122,7 +122,7 @@ final class SMCRestoreTracker: @unchecked Sendable {
             try data.write(to: restoreFileURL, options: .atomic)
             StateFilePermissions.applyFilePermissions(at: restoreFileURL)
         } catch {
-            fputs("symtune: warning: failed to persist SMC restore state: \(error.localizedDescription)\n", stderr)
+            fputs("symcockpit: warning: failed to persist SMC restore state: \(error.localizedDescription)\n", stderr)
         }
     }
 
@@ -145,7 +145,7 @@ final class SMCRestoreTracker: @unchecked Sendable {
         guard let record = try? decoder.decode(SMCRestoreRecord.self, from: data) else {
             // Corrupt leftovers cannot be trusted and must never be applied
             // later by accident — discard them.
-            fputs("symtune: warning: discarding unreadable SMC restore file\n", stderr)
+            fputs("symcockpit: warning: discarding unreadable SMC restore file\n", stderr)
             try? fm.removeItem(at: restoreFileURL)
             return
         }
@@ -153,7 +153,7 @@ final class SMCRestoreTracker: @unchecked Sendable {
         guard record.version == SMCRestoreRecord.currentVersion,
               record.architecture == Self.currentArchitecture else {
             fputs(
-                "symtune: warning: ignoring stale SMC restore file (architecture/version mismatch)\n",
+                "symcockpit: warning: ignoring stale SMC restore file (architecture/version mismatch)\n",
                 stderr
             )
             try? fm.removeItem(at: restoreFileURL)
@@ -170,7 +170,7 @@ final class SMCRestoreTracker: @unchecked Sendable {
                 restoreCharge(charge, family)
             } else {
                 fputs(
-                    "symtune: warning: skipping SMC charge restore (recorded key family no longer matches)\n",
+                    "symcockpit: warning: skipping SMC charge restore (recorded key family no longer matches)\n",
                     stderr
                 )
             }

@@ -278,7 +278,7 @@ public final class TuneController: Sendable {
     public func beginKeepAwakeSession(
         duration: TimeInterval?,
         preventDisplaySleep: Bool = false,
-        reason: String = "symtune keep-awake session"
+        reason: String = "symcockpit keep-awake session"
     ) throws -> KeepAwakeSession {
         try keepAwakeCoordinator.begin(
             duration: duration,
@@ -681,7 +681,7 @@ extension TuneController {
         guard PrivilegedElevation.isRunningAsRoot else {
             throw TuneError.permission(
                 "the fan governor writes the SMC and must run as root — "
-                + "start it with `sudo symtune fan governor`, or use the "
+                + "start it with `sudo symcockpit fan governor`, or use the "
                 + "cockpit's fan control, which elevates for you"
             )
         }
@@ -698,7 +698,7 @@ extension TuneController {
         if selected == .system {
             let message = "fan governor: nothing to do — the fan control is on its "
                 + "default position, so the firmware curve is left alone. Select "
-                + "'comfort' or 'performance' first (`symtune fan profile comfort`).\n"
+                + "'comfort' or 'performance' first (`symcockpit fan profile comfort`).\n"
             FileHandle.standardError.write(Data(message.utf8))
             return
         }
@@ -721,7 +721,7 @@ extension TuneController {
         defer { sources.forEach { $0.cancel() } }
 
         // One line per change on stderr: enough to verify the loop by hand
-        // with `sudo symtune fan governor`, and harmless when the cockpit
+        // with `sudo symcockpit fan governor`, and harmless when the cockpit
         // launches it detached with its streams redirected to /dev/null.
         try governor.run(
             profileProvider: { store.read() },
@@ -952,11 +952,11 @@ extension TuneController {
             recommendations.append("No battery detected; battery features are not applicable on this Mac.")
         }
         if recommendations.isEmpty {
-            recommendations.append("Core features are ready. Run `symtune serve` to expose them over MCP.")
+            recommendations.append("Core features are ready. Run `symcockpit serve` to expose them over MCP.")
         }
 
         return CapabilityReport(
-            tool: "symtune",
+            tool: "symcockpit",
             version: TuneVersion.current,
             macosVersion: ProcessInfo.processInfo.operatingSystemVersionString,
             architecture: Self.architecture,

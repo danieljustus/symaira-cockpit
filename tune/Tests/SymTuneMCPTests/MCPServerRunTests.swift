@@ -20,7 +20,7 @@ final class MCPServerRunTests: XCTestCase {
         let result = try XCTUnwrap(try mcpDecodeResult(envelope, as: MCPInitializeResult.self))
         XCTAssertEqual(result.protocolVersion, SymairaMCP.MCPServer.supportedProtocolVersion)
         XCTAssertNotNil(result.capabilities)
-        XCTAssertEqual(result.serverInfo.name, "symtune")
+        XCTAssertEqual(result.serverInfo.name, "symcockpit")
         XCTAssertEqual(result.serverInfo.version, TuneVersion.current)
     }
 

@@ -42,7 +42,7 @@ final class SymTuneServeIntegrationE2ETests: XCTestCase {
         XCTAssertNil(initEnvelope["error"], "initialize must not return an error")
         let initResult = try XCTUnwrap(initEnvelope["result"] as? [String: Any])
         let serverInfo = try XCTUnwrap(initResult["serverInfo"] as? [String: Any])
-        XCTAssertEqual(serverInfo["name"] as? String, "symtune")
+        XCTAssertEqual(serverInfo["name"] as? String, "symcockpit")
 
         // ping → response with matching id and a result payload.
         try child.writeFrame(#"{"jsonrpc":"2.0","id":2,"method":"ping"}"#)

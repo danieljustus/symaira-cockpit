@@ -1,12 +1,12 @@
 # Symaira Cockpit
 
-> **Tune-only product:** Symaira Cockpit provides macOS hardware/system tuning. The former operate and scope capabilities now live in Symaira Brain as optional modules; legacy `symcockpit operate` and `symcockpit scope` commands are removed. See [PB-2026-09-09](docs/product-boundaries.md).
+> **Scope:** Symaira Cockpit provides macOS hardware/system tuning. The former operate and scope capabilities now live in Symaira Brain as optional modules; legacy `symcockpit operate` and `symcockpit scope` commands are removed. See [PB-2026-09-09](docs/product-boundaries.md).
 
 **One command for your Mac: monitor and tune its hardware and system.**
 
 `symcockpit` is a native macOS CLI and menu-bar app for thermals, power,
-display, battery, fans and system metrics. Tune commands speak JSON and the
-Tune MCP server exposes the same capabilities to AI agents.
+display, battery, fans and system metrics. Commands speak JSON and the
+built-in MCP server exposes the same capabilities to AI agents.
 
 [![CI](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-cockpit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/danieljustus/symaira-cockpit?label=release)](https://github.com/danieljustus/symaira-cockpit/releases)
@@ -30,7 +30,7 @@ pulls the local machine facts into **one binary** with **one output format**:
   field names. No parsing human-readable output, no `awk`.
 - **Local, not cloud.** No telemetry, no account, no network access beyond the
   optional update check. What your Mac knows stays on your Mac.
-- **Built for agents.** Tune runs as an MCP server over stdio on demand —
+- **Built for agents.** Cockpit runs as an MCP server over stdio on demand —
   the capabilities you have on the shell become tools for your AI assistant.
 - **Native and fast.** Swift 6, straight against IOKit, Accessibility and
   ScreenCaptureKit. One universal binary, no runtime, no dependencies.
@@ -79,10 +79,9 @@ everything else. `brew upgrade` does not touch `/usr/local/bin`, so repeat the
 command after every upgrade — otherwise fan control silently keeps driving the
 older CLI while the rest of the app has moved on.
 
-The CLI, Tune MCP server, and reading Tune's
-sensors — works from any install location. Only elevation is restricted, and
-`sudo symcockpit tune fan set …` from a terminal is unaffected, because there
-you name the binary yourself.
+The CLI, the MCP server, and reading sensors work from any install location.
+Only elevation is restricted, and `sudo symcockpit fan set …` from a terminal
+is unaffected, because there you name the binary yourself.
 
 ## Quick start
 
@@ -187,7 +186,7 @@ focus: clicking it does not pull the app in front of what you were working in.
 the same preferences window.
 
 Nothing in the window has its own logic: every number comes from the same core
-services the CLI calls, so the window and the shell cannot disagree. The GUI reads and configures Tune settings through the same core services as the CLI.
+services the CLI calls, so the window and the shell cannot disagree.
 
 > macOS keys permissions and Keychain access to the binary, so the app asks for
 > its own grants the first time you use those features — separately from the
@@ -196,7 +195,7 @@ services the CLI calls, so the window and the shell cannot disagree. The GUI rea
 ## Commands
 
 Direct `symcockpit` commands expose thermals, power, battery, display, fan,
-brightness, profiles, diagnostics and the Tune MCP server. The old
+brightness, profiles, diagnostics and the MCP server. The old
 `symcockpit tune <command>` spelling prints a warning to stderr and remains
 supported through v0.9 (the next two minor releases, v0.8 and v0.9); migrate
 clients to the direct spelling before its planned removal in v0.10.
@@ -210,7 +209,7 @@ symcockpit serve
 
 ## MCP / Agent integration
 
-Tune speaks the Model Context Protocol over stdio. Add the Tune server to an
+Cockpit speaks the Model Context Protocol over stdio. Add the server to an
 agent configuration:
 
 ```json
@@ -226,7 +225,7 @@ diagnostics go to `stderr`.
 
 ## Permissions and safety
 
-Cockpit asks only for what Tune needs:
+Cockpit asks only for what it needs:
 
 | Capability | Requires |
 | :--- | :--- |
@@ -253,7 +252,7 @@ symcockpit version --json
 
 - macOS 26 or newer, Apple Silicon or Intel
 - Fan and charge-limit control: access to the Apple SMC — not every model and
-  not every macOS build permits it, and `tune sensors` will tell you
+  not every macOS build permits it, and `symcockpit sensors` will tell you
 
 Unsupported capabilities report exit code `4` cleanly instead of guessing.
 
@@ -262,7 +261,7 @@ Unsupported capabilities report exit code `4` cleanly instead of guessing.
 ```bash
 git clone https://github.com/danieljustus/symaira-cockpit.git
 cd symaira-cockpit
-make build      # Debug build of Tune and history
+make build      # Debug build of the tuning package and history
 make test       # Test suite
 make build-app  # The GUI bundle (build/app/Symaira Cockpit.app)
 swift build -c release --arch arm64 --arch x86_64

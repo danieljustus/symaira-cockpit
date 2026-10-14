@@ -1,7 +1,7 @@
 import Foundation
 import SymTuneCore
 
-/// One-line description shown after `Usage: symtune <command>` for each of
+/// One-line description shown after `Usage: symcockpit <command>` for each of
 /// the always-JSON read commands. Kept in sync with the `READ COMMANDS`
 /// section of the top-level `usage` string in `main.swift`.
 private let alwaysJSONCommandHelp: [String: String] = [
@@ -24,7 +24,7 @@ private func rejectUnexpectedArguments(_ args: [String], command: String) throws
 
 /// Print `--help`/`-h` output for one of the always-JSON read commands.
 private func emitAlwaysJSONCommandHelp(_ command: String) {
-    emit("Usage: symtune \(command) [--json]")
+    emit("Usage: symcockpit \(command) [--json]")
     if let description = alwaysJSONCommandHelp[command] {
         emit("")
         emit(description)
@@ -78,7 +78,7 @@ func runReadCommand(_ command: String, rest: [String], controller: TuneControlle
     return true
 }
 
-/// `symtune processes` — which processes are using the most CPU or memory.
+/// `symcockpit processes` — which processes are using the most CPU or memory.
 ///
 /// Argument parsing and table layout live in
 /// ``ProcessListingPresentation`` so they are covered by unit tests; this
@@ -109,7 +109,7 @@ func runProcesses(_ args: [String], controller: TuneController) throws {
 
 func runAIUsage(_ args: [String], controller: TuneController) throws {
     if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune ai-usage [--json]")
+        emit("Usage: symcockpit ai-usage [--json]")
         emit("")
         emit("AI subscription/token usage via symbrain. Read-only;")
         emit("no credentials are ever printed. --json emits the machine-readable")

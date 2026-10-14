@@ -271,7 +271,7 @@ final class MCPServerToolCallTests: XCTestCase {
 
         let (_, result) = try await mcpCallTool(harness, name: "get_capabilities")
         let text = result?.content.first?.text ?? ""
-        XCTAssertTrue(text.contains("symtune"))
+        XCTAssertTrue(text.contains("symcockpit"))
     }
 
     func testCallGetSensors() async throws {

@@ -2,7 +2,7 @@ import Foundation
 import SymTuneCore
 import SymairaMCP
 
-/// MCP server for symtune, built on appkit's shared `SymairaMCP` module.
+/// MCP server for symcockpit, built on appkit's shared `SymairaMCP` module.
 ///
 /// Registers the `tools/list` and `tools/call` handlers on
 /// `MCPServer.withMethodHandler(_:)` and serves them over
@@ -64,7 +64,7 @@ public final class TuneMCPServer: Sendable {
     /// Builds the appkit `MCPServer` with the `tools` capability registered.
     /// Internal so tests can drive the server over an in-process transport.
     func makeServer() -> MCPServer {
-        let server = MCPServer(name: "symtune", version: TuneVersion.current)
+        let server = MCPServer(name: "symcockpit", version: TuneVersion.current)
         server.withMethodHandler("tools/list") { (_: MCPNoParams) async throws -> MCPListToolsResult in
             MCPListToolsResult(tools: self.registry.schemas())
         }

@@ -3,10 +3,10 @@ import SymTuneCore
 import SymTuneMCP
 
 let usage = """
-symtune \(TuneVersion.current) — tune your Mac (thermals, brightness, power) from the CLI and for AI agents.
+symcockpit \(TuneVersion.current) — tune your Mac (thermals, brightness, power) from the CLI and for AI agents.
 
 USAGE
-  symtune <command> [options]
+  symcockpit <command> [options]
 
 READ COMMANDS
   doctor                 Capabilities, host info, and recommendations (JSON).
@@ -59,7 +59,7 @@ WRITE COMMANDS
 
 PRIVILEGED SMC WRITES
   Fan and battery-limit commands write to the Apple SMC. They must be run as
-  root, e.g. `sudo symtune fan set 0.5`. Values are clamped to safe ranges and
+  root, e.g. `sudo symcockpit fan set 0.5`. Values are clamped to safe ranges and
   original settings are restored on normal exit or Ctrl-C.
 
 AGENTS
@@ -94,7 +94,7 @@ func emitErr(_ line: String) {
 }
 
 func runVersion(checkForUpdates: Bool) {
-    emit("symtune \(TuneVersion.current)")
+    emit("symcockpit \(TuneVersion.current)")
     guard checkForUpdates else { return }
     // The explicitly requested check must actually print its notice before
     // the process exits: block until the detached check finishes, with a
@@ -128,7 +128,7 @@ func parseValue(_ args: [String], command: String) throws -> Double {
         if let value = Double(arg) { return value }
         throw TuneError.usage("\(command): unexpected argument '\(arg)'")
     }
-    throw TuneError.usage("\(command): expected a numeric value, e.g. `symtune \(command) set 1.4`")
+    throw TuneError.usage("\(command): expected a numeric value, e.g. `symcockpit \(command) set 1.4`")
 }
 
 func parseInt(_ args: [String], command: String) throws -> Int {
@@ -138,7 +138,7 @@ func parseInt(_ args: [String], command: String) throws -> Int {
         if let value = Int(arg) { return value }
         throw TuneError.usage("\(command): unexpected argument '\(arg)'")
     }
-    throw TuneError.usage("\(command): expected an integer value, e.g. `symtune \(command) set 80`")
+    throw TuneError.usage("\(command): expected an integer value, e.g. `symcockpit \(command) set 80`")
 }
 
 func runAwake(_ args: [String], controller: TuneController) throws {
@@ -155,19 +155,19 @@ func runAwake(_ args: [String], controller: TuneController) throws {
         return
     }
 
-    let token = try controller.beginKeepAwake(reason: "symtune awake", preventDisplaySleep: options.preventDisplaySleep)
+    let token = try controller.beginKeepAwake(reason: "symcockpit awake", preventDisplaySleep: options.preventDisplaySleep)
     defer { controller.endKeepAwake(token) }
 
     if let seconds = options.seconds {
-        emitErr("symtune: holding wake assertion for \(seconds)s…")
+        emitErr("symcockpit: holding wake assertion for \(seconds)s…")
         // Double-check: don't block beyond a reasonable maximum.
         let capped = min(seconds, 86_400) // 24 hours max
         if capped != seconds {
-            emitErr("symtune: duration capped to 24 hours (86400s)")
+            emitErr("symcockpit: duration capped to 24 hours (86400s)")
         }
         Thread.sleep(forTimeInterval: capped)
     } else {
-        emitErr("symtune: holding wake assertion (Ctrl-C to release)…")
+        emitErr("symcockpit: holding wake assertion (Ctrl-C to release)…")
         RunLoop.current.run()
     }
 }
@@ -242,7 +242,7 @@ func runStatus(_ args: [String], controller: TuneController) throws {
         if options.isJson {
             try emitJSON(report)
         } else {
-            emit("symtune health: \(report.healthScoreMsg) (Score: \(report.healthScore)/100)")
+            emit("symcockpit health: \(report.healthScoreMsg) (Score: \(report.healthScore)/100)")
             emit("\nRecommendations:")
             for rec in report.recommendations {
                 emit("- \(rec)")
@@ -333,7 +333,7 @@ func runHistory(_ args: [String], controller: TuneController) throws {
 
 func runMetrics(_ args: [String], controller: TuneController) throws {
     if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune metrics [--json]")
+        emit("Usage: symcockpit metrics [--json]")
         emit("")
         emit("Print system metrics: CPU utilization, memory pressure, disk usage,")
         emit("mounted storage volumes, and network throughput. All values are read-only snapshots.")
@@ -430,8 +430,8 @@ private func dispatchCommand(_ command: String, rest: [String], controller: Tune
 
 private func runDimSubcommand(_ rest: [String], controller: TuneController) throws {
     if rest.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune dim set <0.15-1.0>")
-        emit("       symtune dim reset")
+        emit("Usage: symcockpit dim set <0.15-1.0>")
+        emit("       symcockpit dim reset")
     } else if rest.first == "reset", let cmd = writeCommandByPrefix["dim reset"] {
         try runWriteCommand(cmd, rest: rest, controller: controller)
     } else if let cmd = writeCommandByPrefix["dim set"] {
@@ -443,8 +443,8 @@ private func runDimSubcommand(_ rest: [String], controller: TuneController) thro
 
 private func runWarmthSubcommand(_ rest: [String], controller: TuneController) throws {
     if rest.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune warmth set <0.0-1.0>")
-        emit("       symtune warmth reset")
+        emit("Usage: symcockpit warmth set <0.0-1.0>")
+        emit("       symcockpit warmth reset")
     } else if rest.first == "reset", let cmd = writeCommandByPrefix["warmth reset"] {
         try runWriteCommand(cmd, rest: rest, controller: controller)
     } else if let cmd = writeCommandByPrefix["warmth set"] {
@@ -456,10 +456,10 @@ private func runWarmthSubcommand(_ rest: [String], controller: TuneController) t
 
 private func runFanSubcommand(_ rest: [String], controller: TuneController) throws {
     if rest.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune fan set <0.0-1.0>")
-        emit("       symtune fan auto")
-        emit("       symtune fan profile [system|comfort|performance]")
-        emit("       symtune fan governor [--state <path>]   (requires root)")
+        emit("Usage: symcockpit fan set <0.0-1.0>")
+        emit("       symcockpit fan auto")
+        emit("       symcockpit fan profile [system|comfort|performance]")
+        emit("       symcockpit fan governor [--state <path>]   (requires root)")
     } else if rest.first == "auto" {
         try rejectTrailingArguments(rest, after: 1, command: "fan auto")
         try controller.restoreFanAuto()
@@ -475,7 +475,7 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
     }
 }
 
-/// `symtune fan profile [name]` — read or set the three-position fan control.
+/// `symcockpit fan profile [name]` — read or set the three-position fan control.
 ///
 /// Setting a profile only records the selection; it never elevates on its own,
 /// because a CLI or MCP caller may have no human present to answer a password
@@ -501,12 +501,12 @@ private func runFanProfile(_ rest: [String], controller: TuneController) throws 
     let running = controller.isFanGovernorRunning()
     if profile != .system && !running {
         emit("Selected \(profile.rawValue). No fan governor is running — "
-             + "start one with `sudo symtune fan governor`.")
+             + "start one with `sudo symcockpit fan governor`.")
     }
     try emitJSON(FanProfileResult(profile: profile.rawValue, governorRunning: running))
 }
 
-/// `symtune fan governor [--state <path>]` — run the temperature-tracking loop
+/// `symcockpit fan governor [--state <path>]` — run the temperature-tracking loop
 /// in the foreground until the selected profile becomes `system`.
 ///
 /// `--state` exists because the cockpit launches this as root, where `HOME` is
@@ -538,8 +538,8 @@ private struct FanProfileResult: Encodable {
 
 private func runBatteryLimitSubcommand(_ rest: [String], controller: TuneController) throws {
     if rest.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symtune battery-limit set <50-100>")
-        emit("       symtune battery-limit clear")
+        emit("Usage: symcockpit battery-limit set <50-100>")
+        emit("       symcockpit battery-limit clear")
     } else if rest.first == "clear", let cmd = writeCommandByPrefix["battery-limit clear"] {
         try runWriteCommand(cmd, rest: rest, controller: controller)
     } else if let cmd = writeCommandByPrefix["battery-limit set"] {
@@ -573,7 +573,7 @@ func runMain(_ cliArgs: [String]) -> Int32 {
     do {
         (dataDirOverride, args) = try extractDataDir(cliArgs)
     } catch let error as TuneError {
-        emitErr("symtune: \(error.description)")
+        emitErr("symcockpit: \(error.description)")
         return error.exitCode
     } catch {
         return handleNonTuneError(error)
@@ -592,12 +592,12 @@ func runMain(_ cliArgs: [String]) -> Int32 {
         } else if let code = try dispatchCommand(command, rest: rest, controller: controller) {
             result = code
         } else {
-            emitErr("symtune: unknown command '\(command)'")
+            emitErr("symcockpit: unknown command '\(command)'")
             emit(usage)
             return ExitCode.usage.rawValue
         }
     } catch let error as TuneError {
-        emitErr("symtune: \(error.description)")
+        emitErr("symcockpit: \(error.description)")
         return error.exitCode
     } catch {
         result = handleNonTuneError(error)
@@ -609,11 +609,11 @@ func runMain(_ cliArgs: [String]) -> Int32 {
 /// writing it to stderr.
 private func handleNonTuneError(_ error: Error) -> Int32 {
     let debug = ProcessInfo.processInfo.environment["SYMTUNE_DEBUG"] != nil
-    emitErr("symtune: \(redactedErrorLine(for: error, debug: debug))")
+    emitErr("symcockpit: \(redactedErrorLine(for: error, debug: debug))")
     return ExitCode.error.rawValue
 }
 
-/// Tune CLI logic as a library so both the legacy `symtune` binary and the
+/// Tune CLI logic as a library so both the legacy `symcockpit` binary and the
 /// unified `symcockpit tune` dispatcher can invoke it.
 public enum SymTuneMain {
     @discardableResult
