@@ -209,44 +209,63 @@ struct SystemStatusCard: View, Equatable {
                 Spacer()
             }
 
-            HStack(spacing: 8) {
-                Image(systemName: batteryIcon)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(batteryState)
+            // The window renders this card full-width: battery and thermal
+            // side by side, so the row's right half is not dead space. The
+            // popover keeps the compact stacked form.
+            if chrome == .embedded {
+                HStack(alignment: .top, spacing: SymairaSpacing.xLarge) {
+                    batteryBlock
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    thermalBlock
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                batteryBlock
+                thermalBlock
+            }
+        }
+        .cardStyle()
+    }
+
+    private var batteryBlock: some View {
+        HStack(spacing: 8) {
+            Image(systemName: batteryIcon)
+                .foregroundStyle(SymairaTheme.goldPrimary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(batteryState)
+                    .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
+                    .foregroundStyle(SymairaTheme.textPrimary)
+                Text(batteryDetails)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTheme.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, SymairaSpacing.xSmall)
+    }
+
+    private var thermalBlock: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "gauge.with.needle.fill")
+                .foregroundStyle(SymairaTheme.goldPrimary)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text("Thermal:")
                         .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                         .foregroundStyle(SymairaTheme.textPrimary)
-                    Text(batteryDetails)
+                    Text(sensors?.thermalPressure ?? "Loading…")
+                        .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
+                        .foregroundStyle(thermalColor)
+                }
+                if let details = sensorDetails {
+                    Text(details)
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTheme.textSecondary)
                 }
-                Spacer()
             }
-            .padding(.vertical, SymairaSpacing.xSmall)
-
-            HStack(spacing: 8) {
-                Image(systemName: "gauge.with.needle.fill")
-                    .foregroundStyle(SymairaTheme.goldPrimary)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text("Thermal:")
-                            .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
-                            .foregroundStyle(SymairaTheme.textPrimary)
-                        Text(sensors?.thermalPressure ?? "Loading…")
-                            .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
-                            .foregroundStyle(thermalColor)
-                    }
-                    if let details = sensorDetails {
-                        Text(details)
-                            .symairaText(.caption)
-                            .foregroundStyle(SymairaTheme.textSecondary)
-                    }
-                }
-                Spacer()
-            }
-            .padding(.vertical, SymairaSpacing.xSmall)
+            Spacer()
         }
-        .cardStyle()
+        .padding(.vertical, SymairaSpacing.xSmall)
     }
 
     // MARK: Derived text
