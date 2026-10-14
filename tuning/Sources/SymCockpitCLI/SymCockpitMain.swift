@@ -125,7 +125,10 @@ func parseValue(_ args: [String], command: String) throws -> Double {
     let values = args.first == "set" ? Array(args.dropFirst()) : args
     try rejectTrailingArguments(values, after: 1, command: command)
     if let arg = values.first {
-        if let value = Double(arg) { return value }
+        if let value = Double(arg) {
+            try SafetyPolicy.requireFinite(value)
+            return value
+        }
         throw TuneError.usage("\(command): unexpected argument '\(arg)'")
     }
     throw TuneError.usage("\(command): expected a numeric value, e.g. `symcockpit \(command) set 1.4`")
@@ -165,7 +168,8 @@ func runAwake(_ args: [String], controller: TuneController) throws {
         if capped != seconds {
             emitErr("symcockpit: duration capped to 24 hours (86400s)")
         }
-        Thread.sleep(forTimeInterval: capped)
+        // Signal restoration runs on the main queue; keep servicing it while waiting.
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: capped))
     } else {
         emitErr("symcockpit: holding wake assertion (Ctrl-C to release)…")
         RunLoop.current.run()
@@ -235,7 +239,7 @@ func runStatus(_ args: [String], controller: TuneController) throws {
         while true {
             let report = controller.statusReport()
             try emitNDJSON(report)
-            Thread.sleep(forTimeInterval: options.interval)
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: options.interval))
         }
     } else {
         let report = controller.statusReport()

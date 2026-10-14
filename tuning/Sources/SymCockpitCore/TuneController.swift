@@ -9,7 +9,7 @@ public final class TuneController: Sendable {
     private let sensors: SensorService
     private let battery: BatteryService
     private let displays = DisplayService()
-    private let power = PowerService()
+    private let power: PowerService
     private let edrOverlay = EDROverlayService()
     private let displayWrite: any DisplayWriteServiceProtocol
     private let profiles: ProfileService
@@ -92,7 +92,9 @@ public final class TuneController: Sendable {
         // before it could restore (SIGKILL, panic, forced power-off). This runs
         // before any new override can be applied.
         smcRestoreTracker.consumePersistedRestore()
-        self.keepAwakeCoordinator = KeepAwakeCoordinator(source: keepAwakeSource ?? HardwarePowerAssertionSource())
+        let powerSource = keepAwakeSource ?? HardwarePowerAssertionSource()
+        self.power = PowerService(source: powerSource)
+        self.keepAwakeCoordinator = KeepAwakeCoordinator(source: powerSource)
         self.metricsService = SystemMetricsService(source: metricsSource ?? HardwareSystemMetricsSource(smc: smc))
         self.processUsage = ProcessUsageService(source: processSource ?? LibprocProcessSampleSource())
         self.fanGovernorRunning = fanGovernorRunning ?? {
@@ -265,8 +267,9 @@ public final class TuneController: Sendable {
 
     public func isKeepAwakeActive() -> Bool {
         powerLock.lock()
-        defer { powerLock.unlock() }
-        return activeTokensCount > 0
+        let hasTokens = activeTokensCount > 0
+        powerLock.unlock()
+        return hasTokens || keepAwakeCoordinator.status().active
     }
 
     // MARK: - Keep-awake sessions (high-level coordinator)
@@ -360,11 +363,12 @@ public final class TuneController: Sendable {
     }
 
     public func applyBuiltinBrightness(_ value: Double) throws {
+        try SafetyPolicy.requireFinite(value)
         let clamped = SafetyPolicy.clamp(value, config.brightnessMin, config.brightnessMax)
         do {
             let original = try? displayWrite.getBuiltinBrightness()
-            if let original { restoreTracker.saveBrightness(Float(original)) }
             try displayWrite.setBuiltinBrightness(Float(clamped))
+            if let original { restoreTracker.saveBrightness(Float(original)) }
             logHistory(action: "brightness.set", requested: value, clamped: clamped, applied: clamped, result: "success")
         } catch {
             logHistory(action: "brightness.set", requested: value, clamped: clamped, applied: nil, result: "failed", error: error)
@@ -373,11 +377,12 @@ public final class TuneController: Sendable {
     }
 
     public func applyExtendedBrightness(_ value: Double) throws {
+        try SafetyPolicy.requireFinite(value)
         let clamped = SafetyPolicy.clamp(value, config.extendedBrightnessMin, config.extendedBrightnessMax)
         do {
             restoreTracker.saveOriginalEDRHeadroom(edrOverlay)
-            restoreTracker.saveEDRBrightness(clamped)
             try displayWrite.applyExtendedBrightness(clamped, displayID: nil)
+            restoreTracker.saveEDRBrightness(clamped)
             logHistory(action: "extbright.set", requested: value, clamped: clamped, applied: clamped, result: "success")
         } catch {
             logHistory(action: "extbright.set", requested: value, clamped: clamped, applied: nil, result: "failed", error: error)
@@ -420,6 +425,7 @@ public final class TuneController: Sendable {
     }
 
     public func applyDim(_ value: Double) throws {
+        try SafetyPolicy.requireFinite(value)
         let clamped = SafetyPolicy.clamp(value, config.dimMin, config.dimMax)
         displayWrite.applyDim(Float(clamped))
         logHistory(action: "dim.set", requested: value, clamped: clamped, applied: clamped, result: "success")
@@ -439,10 +445,11 @@ public final class TuneController: Sendable {
     }
 
     public func applyWarmth(_ value: Double) throws {
+        try SafetyPolicy.requireFinite(value)
         let clamped = SafetyPolicy.clamp(value, 0.0, 1.0)
         do {
-            restoreTracker.saveWarmth(Float(clamped))
             try displayWrite.applyWarmth(Float(clamped))
+            restoreTracker.saveWarmth(Float(clamped))
             logHistory(action: "warmth.set", requested: value, clamped: clamped, applied: clamped, result: "success")
         } catch {
             logHistory(action: "warmth.set", requested: value, clamped: clamped, applied: nil, result: "failed", error: error)
@@ -465,6 +472,7 @@ public final class TuneController: Sendable {
 
     public func restoreAll() {
         restoreTracker.restoreAll()
+        displayWrite.resetDim()
         smcRestoreTracker.restoreAll()
         chargeLimitState.clear()
         logHistory(action: "restore", result: "success")
@@ -585,6 +593,7 @@ extension TuneController {
     /// process, so escalating cannot bypass them — worst case is one
     /// unnecessary password prompt for a genuinely hopeless case.
     public func applyFan(fraction: Double, allowPrivilegeEscalation: Bool = false) throws {
+        try SafetyPolicy.requireFinite(fraction)
         let clamped = SMCWritePolicy.clampFanFraction(fraction, min: config.fanFractionMin, max: config.fanFractionMax)
         do {
             let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0

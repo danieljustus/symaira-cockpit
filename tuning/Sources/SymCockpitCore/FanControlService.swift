@@ -141,6 +141,7 @@ public struct FanControlService: Sendable {
     /// configured safe range, floored at the soft fan floor, and each fan's
     /// target RPM is additionally floored at its firmware minimum.
     public func applyFan(fraction: Double, config: TuneConfig) throws {
+        try SafetyPolicy.requireFinite(fraction)
         guard smc.isAvailable else {
             throw TuneError.permission("SMC not available — fan control requires a real Mac")
         }

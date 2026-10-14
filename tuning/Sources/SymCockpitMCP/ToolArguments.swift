@@ -4,8 +4,14 @@ import SymairaMCP
 
 /// Extract a required `Double` from MCP tool arguments.
 func requireDouble(_ value: MCPJSONValue?, name: String) throws -> Double {
-    if let number = value?.doubleValue { return number }
-    if let string = value?.stringValue, let double = Double(string) { return double }
+    if let number = value?.doubleValue {
+        try SafetyPolicy.requireFinite(number)
+        return number
+    }
+    if let string = value?.stringValue, let double = Double(string) {
+        try SafetyPolicy.requireFinite(double)
+        return double
+    }
     throw TuneError.usage("Missing required numeric argument '\(name)'.")
 }
 
