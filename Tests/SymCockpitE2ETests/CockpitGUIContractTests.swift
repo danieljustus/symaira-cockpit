@@ -56,8 +56,12 @@ final class CockpitGUIContractTests: XCTestCase {
         let panel = try String(
             contentsOf: ui.appendingPathComponent("MainStatusView.swift"), encoding: .utf8
         )
-        XCTAssertTrue(panel.contains(".preferredColorScheme(.dark)"),
-                      "adaptive text must use dark appearance on the fixed dark canvas")
+        // Liquid Topography: the panel follows the system appearance with adaptive
+        // roles; forcing dark would hide the approved light palette.
+        XCTAssertFalse(panel.contains(".preferredColorScheme(.dark)"))
+        XCTAssertTrue(panel.contains("SymairaTokens.canvas"))
+        XCTAssertFalse(panel.contains("SymairaTheme.goldPrimary"),
+                       "selection must use the adaptive selected role, not fixed gold")
     }
 
     /// One mounted panel is essential: navigating must not discard draft controls.

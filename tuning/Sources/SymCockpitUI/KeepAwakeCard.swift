@@ -28,26 +28,26 @@ struct KeepAwakeCard: View {
             HStack {
                 Label("Keep Awake", systemImage: active ? "lock.fill" : "lock.open.fill")
                     .symairaText(.subheading)
-                    .foregroundStyle(active ? SymairaTheme.goldPrimary : SymairaTheme.textSecondary)
+                    .foregroundStyle(active ? SymairaTokens.selected : SymairaTokens.ink2)
                 Spacer()
                 // Status indicator
                 Circle()
-                    .fill(active ? SymairaTheme.positive : SymairaTheme.critical.opacity(0.4))
+                    .fill(active ? SymairaTokens.positive : SymairaTokens.critical.opacity(0.4))
                     .frame(width: 6, height: 6)
                 Text(active ? "Active" : "Inactive")
                     .symairaText(.caption)
-                    .foregroundStyle(active ? SymairaTheme.positive : SymairaTheme.textMuted)
+                    .foregroundStyle(active ? SymairaTokens.positive : SymairaTokens.ink3)
                 if active, let remaining = remaining {
                     Text("· \(remaining)")
                         .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.goldSecondary)
+                        .foregroundStyle(SymairaTokens.ink)
                 }
             }
 
             HStack(spacing: SymairaSpacing.small) {
                 Text("Duration")
                     .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Spacer()
                 Picker("Duration", selection: $durationIndex) {
                     ForEach(0..<presets.count, id: \.self) { i in
@@ -60,8 +60,8 @@ struct KeepAwakeCard: View {
 
             Toggle("Keep display awake", isOn: $preventDisplaySleep)
                 .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
-                .foregroundStyle(SymairaTheme.textSecondary)
-                .toggleStyle(.switch)
+                .foregroundStyle(SymairaTokens.ink2)
+                .toggleStyle(.symairaSwitch)
                 .disabled(!isInteractive)
                 .accessibilityLabel("Keep display awake")
                 .help("The Mac stays awake during the session. Enable this to also prevent display sleep.")
@@ -69,20 +69,14 @@ struct KeepAwakeCard: View {
             // Start / End button
             Button(action: onToggle) {
                 Text(active ? "End Session" : "Start Session")
-                    .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
-                    .foregroundStyle(active ? SymairaTheme.critical : SymairaTheme.bgDark)
-                    .padding(.horizontal, SymairaSpacing.large)
-                    .padding(.vertical, SymairaSpacing.small)
-                    .frame(minHeight: SymairaMetrics.minimumControlHeight)
-                    .background(active ? SymairaTheme.critical.opacity(0.15) : SymairaTheme.goldPrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .symairaButtonStyle(active ? .secondary : .primary)
         }
         .cardStyle(
             borderColor: active
-                ? SymairaTheme.goldPrimary.opacity(0.3)
-                : SymairaTheme.borderGlass
+                ? SymairaTokens.ink3
+                : SymairaTokens.line
         )
     }
 }

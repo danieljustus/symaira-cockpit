@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed
+- **Liquid Topography design (approved pilot, revision 08):** the Cockpit
+  window, popover and preferences follow the system appearance instead of a
+  fixed dark canvas and use the shared Symaira AppKit roles. Google Sans Flex
+  replaces SF Pro. Light-mode selection is ink, dark-mode selection champagne;
+  segmented choices, switches and slider thumbs use the shared
+  `SymairaSegmentedControl` / `.symairaSwitch` components. Start/Apply actions
+  are opaque ink buttons. The notch and dock HUD stay dark on purpose. Requires
+  the unreleased AppKit Liquid Topography change (pinned by revision until it
+  is tagged).
+
 ### Added
 - A shared Storage Volumes card lists user-visible mounted internal, external
   and network/virtual volumes with mount paths and total/used/available space.

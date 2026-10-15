@@ -97,7 +97,7 @@ struct MainStatusView: View {
             }
             .frame(width: 320)
             .frame(maxHeight: maxHeight)
-            .background(SymairaTheme.bgDark)
+            .background(SymairaTokens.canvas)
         case .embedded:
             // No scroll view and no background: the cockpit window owns both,
             // and nesting a second scroll view inside its own would trap the
@@ -149,10 +149,9 @@ struct MainStatusView: View {
         }
         .padding(chrome == .popover ? SymairaSpacing.medium : 0)
         .frame(maxWidth: chrome == .popover ? 320 : .infinity)
-        // The canvas is always dark; adaptive typography and native controls
-        // must not inherit light appearance and draw dark ink on it.
-        .preferredColorScheme(.dark)
-        .tint(SymairaTheme.goldPrimary)
+        // Follows the system appearance; every colour is an adaptive Liquid
+        // Topography role (design pilot revision 08).
+                .tint(SymairaTokens.selected)
         .environment(\.tunePanelChrome, chrome)
     }
 
@@ -284,7 +283,7 @@ struct MainStatusView: View {
         HStack {
             Text(text)
                 .symairaText(.callout, respectsForeground: false)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
             Spacer()
             Button("Preferences…", action: openPreferences)
         }
@@ -302,22 +301,22 @@ struct MainStatusView: View {
             HStack(spacing: 10) {
                 Image(systemName: "macwindow")
                     .font(.system(size: 12))
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
                 Text(openCockpitTitle)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10))
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             .padding(.horizontal, SymairaSpacing.medium)
             .padding(.vertical, SymairaSpacing.small)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
             .overlay(
                 RoundedRectangle(cornerRadius: SymairaRadius.card)
-                    .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+                    .stroke(SymairaTokens.line, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -367,9 +366,9 @@ private struct GroupLabel: View {
         HStack(spacing: SymairaSpacing.small) {
             Text(title)
                 .symairaText(chrome == .embedded ? .heading : .sectionLabel, respectsForeground: false)
-                .foregroundStyle(chrome == .embedded ? SymairaTheme.textPrimary : SymairaTheme.goldSecondary)
+                .foregroundStyle(chrome == .embedded ? SymairaTokens.ink : SymairaTokens.ink)
             Rectangle()
-                .fill(SymairaTheme.borderGlass)
+                .fill(SymairaTokens.line)
                 .frame(height: 1)
         }
         .padding(.horizontal, SymairaSpacing.xSmall)

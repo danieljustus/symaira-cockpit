@@ -9,7 +9,7 @@ options:
 packages:
   symaira-appkit:
     url: https://github.com/danieljustus/symaira-appkit.git
-    exactVersion: 0.14.2
+    revision: 3b439deb365d8b75d4a18f98d72b5a1118f004db  # untagged AppKit PR #159; replace with exactVersion before merge
   history:
     path: ../history
 

@@ -18,12 +18,12 @@ struct StorageVolumesCard: View {
             HStack {
                 Text("STORAGE VOLUMES")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 Spacer()
                 if let visibleVolumes {
                     Text("\(visibleVolumes.count)")
                         .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                 }
                 selectionMenu
             }
@@ -60,7 +60,7 @@ struct StorageVolumesCard: View {
             } label: {
                 Text("Choose…")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -74,11 +74,11 @@ struct StorageVolumesCard: View {
         VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
             HStack(spacing: SymairaSpacing.small) {
                 Image(systemName: volume.isInternal == true ? "internaldrive" : "externaldrive")
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
                     .accessibilityHidden(true)
                 Text(volume.name)
                     .symairaText(.body, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(volume.name)
@@ -87,20 +87,20 @@ struct StorageVolumesCard: View {
             statusText(volume.kind + (volume.isReadOnly == true ? " · Read-only" : ""))
             Text(volume.mountPath)
                 .symairaText(.monoSmall)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
                 .help(volume.mountPath)
             if let fraction = volume.usedFraction {
                 ProgressView(value: fraction)
-                    .tint(fraction >= 0.9 ? SymairaTheme.warning : SymairaTheme.goldPrimary)
+                    .tint(fraction >= 0.9 ? SymairaTokens.warning : SymairaTokens.selected)
                     .accessibilityLabel("Storage used on \(volume.name)")
                     .accessibilityValue(String(format: "%.0f%%", fraction * 100))
             }
             Text(volume.capacitySummary)
                 .symairaText(.caption, respectsForeground: false)
-                .foregroundStyle(SymairaTheme.textPrimary)
+                .foregroundStyle(SymairaTokens.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -111,7 +111,7 @@ struct StorageVolumesCard: View {
     private func statusText(_ text: String) -> some View {
         Text(text)
             .symairaText(.caption, respectsForeground: false)
-            .foregroundStyle(SymairaTheme.textSecondary)
+            .foregroundStyle(SymairaTokens.ink2)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

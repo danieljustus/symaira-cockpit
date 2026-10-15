@@ -30,11 +30,11 @@ struct TuneSliderRow: View {
     private var displayedValue: Double { localValue ?? value }
 
     private var labelColor: Color {
-        isEnabled ? SymairaTheme.textSecondary : SymairaTheme.textMuted
+        isEnabled ? SymairaTokens.ink2 : SymairaTokens.ink3
     }
 
     private var readoutColor: Color {
-        isEnabled ? SymairaTheme.goldSecondary : SymairaTheme.textMuted
+        isEnabled ? SymairaTokens.ink : SymairaTokens.ink3
     }
 
     var body: some View {
