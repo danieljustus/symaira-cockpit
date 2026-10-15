@@ -17,7 +17,9 @@ let package = Package(
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.14.2"),
+        // ponytail: untagged AppKit Liquid Topography commit (PR #159). Replace with
+        // `exact:` on the release tag before merge; AGENTS.md requires a tag pin.
+        .package(url: "https://github.com/danieljustus/symaira-appkit.git", revision: "3b439deb365d8b75d4a18f98d72b5a1118f004db"),
         .package(path: "tuning"),
     ],
     targets: [

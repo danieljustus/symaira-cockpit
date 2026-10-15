@@ -66,7 +66,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
         ScrollViewReader { scroll in
             HStack(spacing: 0) {
                 sidebar(scroll)
-                Divider().overlay(SymairaTheme.borderGlass)
+                Divider().overlay(SymairaTokens.line)
                 ScrollView {
                     content
                         .environment(\.tunePanelChrome, .embedded)
@@ -93,9 +93,8 @@ public struct CockpitWorkspaceView<Content: View>: View {
                 .keyboardShortcut("s", modifiers: [.control, .command])
             }
         }
-        .background(SymairaTheme.bgDark)
-        .preferredColorScheme(.dark)
-        .tint(SymairaTheme.goldPrimary)
+        .background(SymairaTokens.canvas)
+                .tint(SymairaTokens.selected)
     }
 
     private func sidebar(_ scroll: ScrollViewProxy) -> some View {
@@ -103,13 +102,13 @@ public struct CockpitWorkspaceView<Content: View>: View {
             HStack(spacing: SymairaSpacing.small) {
                 Image(systemName: "gauge.with.dots.needle.50percent")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.ink2)
                     .frame(width: 32, height: 36)
                     .accessibilityHidden(true)
                 if showsLabels {
                     Text("Cockpit")
                         .symairaText(.heading, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
                 }
             }
             .padding(.bottom, SymairaSpacing.small)
@@ -117,7 +116,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
             if showsLabels {
                 Text("JUMP TO")
                     .symairaText(.sectionLabel, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .padding(.leading, SymairaSpacing.small)
             }
 
@@ -149,7 +148,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
 
             Spacer(minLength: SymairaSpacing.large)
 
-            Divider().overlay(SymairaTheme.borderGlass)
+            Divider().overlay(SymairaTokens.line)
             Button(action: openPreferences) {
                 HStack(spacing: SymairaSpacing.medium) {
                     Image(systemName: "gearshape").frame(width: 24)
@@ -158,7 +157,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
                             .symairaText(.body, respectsForeground: false)
                         Spacer(minLength: 0)
                         Text("⌘,").font(.system(size: 11))
-                            .foregroundStyle(SymairaTheme.textMuted)
+                            .foregroundStyle(SymairaTokens.ink3)
                     }
                 }
                 .frame(minHeight: SymairaMetrics.minimumControlHeight)
@@ -172,13 +171,13 @@ public struct CockpitWorkspaceView<Content: View>: View {
             if showsLabels {
                 Text("Symaira Cockpit · v\(version)")
                     .symairaText(.caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .padding(.leading, SymairaSpacing.small)
             }
         }
         .padding(SymairaSpacing.medium)
         .frame(width: showsLabels ? 212 : 64)
-        .background(SymairaTheme.bgCard)
+        .background(SymairaTokens.sidebar)
     }
 
     private func jump(to anchor: TuneWorkspaceAnchor, in scroll: ScrollViewProxy) {
@@ -204,8 +203,8 @@ private struct WorkspaceNavigationLabel: View {
 
     var body: some View {
         configuration.label
-            .foregroundStyle(configuration.isPressed ? SymairaTheme.goldPrimary : SymairaTheme.textSecondary)
-            .background(hovered || configuration.isPressed ? SymairaTheme.bgCardHover : Color.clear)
+            .foregroundStyle(configuration.isPressed ? SymairaTokens.selected : SymairaTokens.ink2)
+            .background(hovered || configuration.isPressed ? SymairaTokens.raised : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
             .onHover { hovered = $0 }
     }

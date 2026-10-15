@@ -27,14 +27,14 @@ struct AIUsageCardView: View {
         HStack {
             Label("AI Usage", systemImage: "sparkles")
                 .font(.headline)
-                .foregroundStyle(SymairaTheme.textPrimary)
+                .foregroundStyle(SymairaTokens.ink)
             Spacer()
             Button {
                 model.refreshNow()
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             .buttonStyle(.plain)
             .help("Refresh now")
@@ -50,18 +50,18 @@ private struct ProviderRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(row.displayName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .font(SymairaTypography.bodyMedium)
+                    .foregroundStyle(SymairaTokens.ink)
                 if let source = row.snapshot?.source {
                     Text("via \(source)")
                         .font(.caption2)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
                 Spacer()
                 if row.isUnavailable {
                     Text("Source unavailable")
                         .font(.caption2)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                 }
             }
 
@@ -74,14 +74,14 @@ private struct ProviderRow: View {
             if !row.history.isEmpty {
                 SparklineView(
                     samples: row.history,
-                    lineColor: SymairaTheme.goldPrimary,
+                    lineColor: SymairaTokens.selected,
                     showAnnotations: false
                 )
                 .frame(height: 22)
             }
         }
         .padding(10)
-        .background(SymairaTheme.bgCard, in: RoundedRectangle(cornerRadius: 8))
+        .background(SymairaTokens.surface, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// A provider's meters, its balance, or — when it answered with neither
@@ -97,12 +97,12 @@ private struct ProviderRow: View {
             Text(balance)
                 .font(.caption)
                 .monospacedDigit()
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
         }
         if let empty = AIUsageFormatting.emptySnapshotText(for: snapshot) {
             Text(empty)
                 .font(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
         }
     }
 
@@ -111,21 +111,21 @@ private struct ProviderRow: View {
             HStack {
                 Text(meter.label)
                     .font(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Spacer()
                 Text(AIUsageFormatting.remainingText(for: meter))
                     .font(.caption)
                     .monospacedDigit()
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             if let fraction = AIUsageFormatting.progressFraction(for: meter) {
                 ProgressView(value: fraction)
                     .progressViewStyle(.linear)
-                    .tint(SymairaTheme.goldPrimary)
+                    .tint(SymairaTokens.selected)
             }
             Text("resets in \(AIUsageFormatting.countdownText(until: meter.resetsAt))")
                 .font(.caption2)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
         }
     }
 
@@ -133,16 +133,16 @@ private struct ProviderRow: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(row.error ?? "No data available.")
                 .font(.caption)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
                 .lineLimit(2)
             if let lastSuccessAt = row.lastSuccessAt {
                 Text("Last success: \(lastSuccessAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption2)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             } else {
                 Text("No successful fetch yet")
                     .font(.caption2)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
         }
     }

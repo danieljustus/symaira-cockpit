@@ -35,14 +35,14 @@ struct UpdateNotificationView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .foregroundStyle(SymairaTheme.goldPrimary)
+                        .foregroundStyle(SymairaTokens.selected)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Update Available")
                             .symairaText(.subheading)
-                            .foregroundStyle(SymairaTheme.goldPrimary)
+                            .foregroundStyle(SymairaTokens.selected)
                         Text(release.tagName)
                             .symairaText(.monoSmall)
-                            .foregroundStyle(SymairaTheme.textSecondary)
+                            .foregroundStyle(SymairaTokens.ink2)
                     }
                     Spacer()
 
@@ -55,7 +55,7 @@ struct UpdateNotificationView: View {
                         }
                         .symairaText(.caption, respectsForeground: false)
                         .buttonStyle(.borderedProminent)
-                        .tint(SymairaTheme.goldPrimary)
+                        .tint(SymairaTokens.selected)
                         .controlSize(.small)
                     } else {
                         Button("Jetzt installieren") {
@@ -63,7 +63,7 @@ struct UpdateNotificationView: View {
                         }
                         .symairaText(.caption, respectsForeground: false)
                         .buttonStyle(.borderedProminent)
-                        .tint(SymairaTheme.goldPrimary)
+                        .tint(SymairaTokens.selected)
                         .controlSize(.small)
                         .disabled(isInstalling)
                     }
@@ -73,7 +73,7 @@ struct UpdateNotificationView: View {
                     }
                     .symairaText(.caption)
                     .buttonStyle(.plain)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 }
 
                 // Installation progress / error
@@ -84,35 +84,35 @@ struct UpdateNotificationView: View {
                             .controlSize(.small)
                         Text("Installiere...")
                             .symairaText(.caption)
-                            .foregroundStyle(SymairaTheme.textSecondary)
+                            .foregroundStyle(SymairaTokens.ink2)
                     }
                 }
                 if let error = installError {
                     Text(error)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                 }
             }
             .padding(SymairaSpacing.medium)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
             .overlay(
                 RoundedRectangle(cornerRadius: SymairaRadius.card)
-                    .stroke(SymairaTheme.borderGlassHover, lineWidth: 1)
+                    .stroke(SymairaTokens.line, lineWidth: 1)
             )
         } else if case .error(let message) = updateChecker.status {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Update check unavailable")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Text(message)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SymairaSpacing.medium)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
         }
     }

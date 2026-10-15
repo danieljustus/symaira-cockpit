@@ -27,11 +27,11 @@ struct AIUsagePreferencesSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("AI Usage")
                 .symairaText(.subheading)
-                .foregroundStyle(SymairaTheme.textPrimary)
+                .foregroundStyle(SymairaTokens.ink)
 
             Text("Track AI subscription usage per provider. Symbrain owns provider discovery, auth status, and credential resolution; API keys entered here are stored in SymVault, never in config.toml or cockpit's Keychain.")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
 
             ForEach(providers, id: \.id) { provider in
                 VStack(alignment: .leading, spacing: 6) {
@@ -39,13 +39,13 @@ struct AIUsagePreferencesSection: View {
                         HStack(spacing: 6) {
                             Text(provider.displayName)
                                 .symairaText(.body)
-                                .foregroundStyle(SymairaTheme.textPrimary)
+                                .foregroundStyle(SymairaTokens.ink)
                             Text(provider.isConfigured ? "Configured" : "Not configured")
                                 .symairaText(.caption)
-                                .foregroundStyle(SymairaTheme.textSecondary)
+                                .foregroundStyle(SymairaTokens.ink2)
                         }
                     }
-                    .tint(SymairaTheme.goldPrimary)
+                    .tint(SymairaTokens.selected)
 
                     if preferences.isEnabled(provider.id) {
                         ProviderCredentialView(
@@ -66,14 +66,14 @@ struct AIUsagePreferencesSection: View {
             Toggle(isOn: $preferences.menuBarEnabled) {
                 Text("Show AI usage in the menu bar")
                     .symairaText(.body)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
             }
-            .tint(SymairaTheme.goldPrimary)
+            .tint(SymairaTokens.selected)
 
             HStack {
                 Text("Refresh interval")
                     .symairaText(.body)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
                 Spacer()
                 Picker("", selection: $preferences.refreshInterval) {
                     ForEach(AIUsagePreferences.intervalOptions, id: \.self) { interval in
@@ -92,14 +92,14 @@ struct AIUsagePreferencesSection: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Display")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
 
             Toggle("Pin active provider to menu bar", isOn: $preferences.displayPinnedProvider)
-                .tint(SymairaTheme.goldPrimary)
+                .tint(SymairaTokens.selected)
             Toggle("Reorder providers by drag", isOn: $preferences.displayAllowReorder)
-                .tint(SymairaTheme.goldPrimary)
+                .tint(SymairaTokens.selected)
             Toggle("Hide unconfigured providers", isOn: $preferences.displayHideUnconfigured)
-                .tint(SymairaTheme.goldPrimary)
+                .tint(SymairaTokens.selected)
         }
         .padding(.leading, 4)
     }
@@ -151,7 +151,7 @@ struct ProviderCredentialView: View {
                     }
                     Text("Supported sources: \(kinds.map { kindLabel($0) }.joined(separator: ", "))")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                 }
             }
         } else {
@@ -159,10 +159,10 @@ struct ProviderCredentialView: View {
             // env vars. Show an informational hint.
             HStack {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Text("\(provider.displayName) auto-detects credentials or reads environment variables.")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             .padding(.leading, 20)
         }
@@ -216,12 +216,12 @@ struct ExternalAuthStateRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(descriptor.sourceLabel)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
 
                 if let detail = authState?.detail {
                     Text(detail)
                         .font(.caption2)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                 }
             }
 
@@ -234,7 +234,7 @@ struct ExternalAuthStateRow: View {
             Button(action: refresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.caption2)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             .buttonStyle(.borderless)
             .help("Refresh auth state")

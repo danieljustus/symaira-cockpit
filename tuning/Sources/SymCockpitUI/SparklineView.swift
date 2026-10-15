@@ -24,7 +24,7 @@ struct SparklineView: View, Equatable {
 
     init(
         samples: [MetricSample],
-        lineColor: Color = SymairaTheme.goldPrimary,
+        lineColor: Color = SymairaTokens.selected,
         showAnnotations: Bool = true,
         valueRange: ClosedRange<Double>? = nil
     ) {
@@ -111,7 +111,7 @@ struct SparklineView: View, Equatable {
                 ))
                 context.fill(
                     dot,
-                    with: .color(annotation.isMaximum ? SymairaTheme.positive : SymairaTheme.warning)
+                    with: .color(annotation.isMaximum ? SymairaTokens.positive : SymairaTokens.warning)
                 )
             }
         }

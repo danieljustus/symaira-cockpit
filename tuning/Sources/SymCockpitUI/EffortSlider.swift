@@ -96,18 +96,18 @@ final class EffortSliderCell: NSSliderCell {
         // Put endpoint dots inside the rounded caps, not on their outer edge.
         let rail = NSRect(x: rect.minX + inset - 4, y: rect.midY - 4, width: max(0, rect.width - 2 * inset + 8), height: 8)
         let path = NSBezierPath(roundedRect: rail, xRadius: 4, yRadius: 4)
-        NSColor(SymairaTheme.textMuted).withAlphaComponent(isEnabled ? 1 : 0.4).setFill()
+        NSColor(SymairaTokens.ink3).withAlphaComponent(isEnabled ? 1 : 0.4).setFill()
         path.fill()
 
         let thumb = knobRect(flipped: flipped)
         let filled = NSRect(x: rail.minX, y: rail.minY, width: max(0, thumb.midX - rail.minX), height: rail.height)
         NSGraphicsContext.saveGraphicsState()
         path.addClip()
-        NSColor(SymairaTheme.goldPrimary).withAlphaComponent(isEnabled ? 1 : 0.4).setFill()
+        NSColor(SymairaTokens.selected).withAlphaComponent(isEnabled ? 1 : 0.4).setFill()
         filled.fill()
         NSGraphicsContext.restoreGraphicsState()
 
-        NSColor(SymairaTheme.bgDark).setFill()
+        NSColor(SymairaTokens.canvas).setFill()
         for index in 0..<max(2, guideCount) {
             let x = rect.minX + inset + max(0, rect.width - 2 * inset) * CGFloat(index) / CGFloat(max(2, guideCount) - 1)
             NSBezierPath(ovalIn: NSRect(x: x - 2, y: rail.midY - 2, width: 4, height: 4)).fill()
@@ -116,9 +116,11 @@ final class EffortSliderCell: NSSliderCell {
 
     override func drawKnob(_ knobRect: NSRect) {
         let circle = NSBezierPath(ovalIn: knobRect.insetBy(dx: 0.5, dy: 0.5))
-        NSColor(isEnabled ? SymairaTheme.textPrimary : SymairaTheme.textSecondary).setFill()
+        // Pilot: the thumb carries the selection role (champagne dark, ink light);
+        // a locked slider drops the accent instead of only fading.
+        NSColor(isEnabled ? SymairaTokens.selected : SymairaTokens.line).setFill()
         circle.fill()
-        NSColor(SymairaTheme.bgDark).setStroke()
+        NSColor(SymairaTokens.surface).setStroke()
         circle.lineWidth = 1
         circle.stroke()
     }
