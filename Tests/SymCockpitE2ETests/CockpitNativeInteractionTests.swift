@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Observation
 import SwiftUI
 import SymCockpitCore
@@ -11,10 +10,14 @@ import XCTest
 final class CockpitNativeInteractionTests: XCTestCase {
     @MainActor
     func testSidebarRetainsSliderAndAppearanceButtonsApply() async throws {
-        guard AXIsProcessTrusted() else {
-            throw XCTSkip("Native AX integration needs an AX-trusted host; no permission prompt is requested")
-        }
         let app = NSApplication.shared
+        // AppKit scroll views expose their document's AX children only while
+        // an assistive client is active. Restore this process-local state.
+        let enhancedUI = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
+        XCTAssertTrue(app.accessibilityIsAttributeSettable(enhancedUI))
+        let previousEnhancedUI = app.accessibilityAttributeValue(enhancedUI)
+        app.accessibilitySetValue(true, forAttribute: enhancedUI)
+        defer { app.accessibilitySetValue(previousEnhancedUI, forAttribute: enhancedUI) }
         let oldAppearance = app.appearance
         let oldPolicy = app.activationPolicy()
         app.setActivationPolicy(.regular)
@@ -23,6 +26,9 @@ final class CockpitNativeInteractionTests: XCTestCase {
         let root = CockpitWorkspaceView(version: "test", openPreferences: {}, appearance: appearance, content: {
             SliderContent(state: state)
         })
+        // An in-process test has no assistive client to enable SwiftUI's AX tree.
+        // This is view-local state, not permission to control other applications.
+        .environment(\.accessibilityEnabled, true)
         let window = NSWindow(contentViewController: NSHostingController(rootView: root))
         window.styleMask = [.titled, .resizable, .fullSizeContentView]
         window.setContentSize(NSSize(width: 1080, height: 760))
@@ -53,6 +59,7 @@ final class CockpitNativeInteractionTests: XCTestCase {
             autoPrefs: UserDefaultsAutoUpdatePreferenceStore(keyPrefix: suite, defaults: defaults),
             aiUsage: AIUsagePreferences(defaults: defaults), aiUsageProviders: [], onCredentialChange: {})
             .defaultAppStorage(defaults)
+            .environment(\.accessibilityEnabled, true)
         let settings = NSWindow(contentViewController: NSHostingController(rootView: preferences))
         settings.isReleasedWhenClosed = false
         settings.setContentSize(NSSize(width: 640, height: 560))
@@ -93,7 +100,9 @@ final class CockpitNativeInteractionTests: XCTestCase {
                 children += window.toolbar?.items.compactMap(\.view) ?? []
             }
             if let view = node as? NSView { children += view.subviews }
-            return [node] + children.flatMap(walk)
+            // Toolbar containers mirror a child's label/role but return false
+            // from AXPress. Select the actual descendant control first.
+            return children.flatMap(walk) + [node]
         }
         return walk(root)
     }
@@ -103,7 +112,9 @@ final class CockpitNativeInteractionTests: XCTestCase {
         let selector = NSSelectorFromString("accessibilityPerformPress")
         let nodes = elements(window)
         let button = try XCTUnwrap(nodes.first {
-            text($0, "accessibilityLabel") == label && $0.responds(to: selector)
+            text($0, "accessibilityLabel") == label
+                && text($0, "accessibilityRole") == NSAccessibility.Role.button.rawValue
+                && $0.responds(to: selector)
         }, "Missing button \(label); labels: \(nodes.compactMap { text($0, "accessibilityLabel") })")
         typealias Action = @convention(c) (AnyObject, Selector) -> Bool
         let action = unsafeBitCast(button.method(for: selector), to: Action.self)
