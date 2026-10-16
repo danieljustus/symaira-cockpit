@@ -40,6 +40,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private let controller: TuneController
     private let preferencesManager: PreferencesManager
+    public let appearancePreferences = CockpitAppearancePreferences()
     let aiUsagePreferences = AIUsagePreferences()
     private(set) lazy var aiUsageModel = AIUsageViewModel(
         controller: controller,
@@ -181,6 +182,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         self.model = TuneViewModel(controller: controller, preferences: preferences)
         self.processesModel = ProcessesViewModel(controller: controller)
         super.init()
+        appearancePreferences.apply()
         configureButton()
         setupPopover()
         observePreferences()
@@ -316,7 +318,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             notchAvailable: notchAvailable
         )
 
-        hudController.openCockpitTitle = openCockpitTitle
+        // Keep the compact HUD's "Cockpit" label. The full context-menu title
+        // ("Open Cockpit…") belongs in the menu, not the 288-point edge card.
         hudController.setEnabled(effective == .notch)
         statusItem.isVisible = effective == .menuBar
         syncShoulderSpacer(active: effective == .notch)
@@ -645,6 +648,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
 
         let prefsView = PreferencesView(
             manager: preferencesManager,
+            appearance: appearancePreferences,
             autoPrefs: autoPrefs,
             aiUsage: aiUsagePreferences,
             aiUsageProviders: aiUsageModel.providers,
@@ -661,7 +665,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         let window = NSWindow(contentViewController: hosting)
         window.title = preferencesWindowTitle
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 420, height: 480))
+        window.setContentSize(hosting.view.fittingSize)
         window.isReleasedWhenClosed = false
         window.center()
 

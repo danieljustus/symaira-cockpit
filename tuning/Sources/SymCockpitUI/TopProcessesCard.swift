@@ -41,10 +41,10 @@ struct TopProcessesCard: View {
             HStack(spacing: SymairaSpacing.xSmall) {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 Text("TOP PROCESSES")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 Spacer()
                 // No value while collapsed: the card is not sampling then, and
                 // a number left over from the last time it was open would be a
@@ -52,7 +52,7 @@ struct TopProcessesCard: View {
                 if !isExpanded {
                     Text("show")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
             .contentShape(Rectangle())
@@ -65,13 +65,10 @@ struct TopProcessesCard: View {
 
     private var content: some View {
         VStack(spacing: SymairaSpacing.xSmall) {
-            Picker("", selection: sortBinding) {
-                ForEach(ProcessSortKey.allCases, id: \.self) { key in
-                    Text(key.displayName).tag(key)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            SymairaSegmentedControl(
+                "Sort processes by", selection: sortBinding,
+                options: ProcessSortKey.allCases.map { ($0, $0.displayName) }
+            )
 
             if model.report.processes.isEmpty {
                 if model.sortedBy == .gpu {
@@ -79,7 +76,7 @@ struct TopProcessesCard: View {
                 } else {
                     Text(model.isWarmingUp ? "Sampling…" : "No readable processes.")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                         .padding(.vertical, SymairaSpacing.small)
                 }
             } else {
@@ -108,7 +105,7 @@ struct TopProcessesCard: View {
                 ? "Loading GPU usage…"
                 : (model.report.notes.first ?? "No GPU data."))
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .multilineTextAlignment(.center)
             if !model.isLoadingGPUUsage {
                 Button("Load GPU Usage…") {
@@ -116,7 +113,7 @@ struct TopProcessesCard: View {
                 }
                 .buttonStyle(.plain)
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.goldSecondary)
+                .foregroundStyle(SymairaTokens.ink)
                 .help("Prompts once for your administrator password — powermetrics needs root to report per-process GPU time.")
             }
         }
@@ -130,11 +127,11 @@ struct TopProcessesCard: View {
                 // rate, so it needs a second sample.
                 Text("measuring CPU…")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             } else {
                 Text("\(model.report.sampledProcessCount) processes")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             Spacer()
             Button {
@@ -142,7 +139,7 @@ struct TopProcessesCard: View {
             } label: {
                 Text("Activity Monitor")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             .buttonStyle(.plain)
             .help("Open Activity Monitor for the full picture")
@@ -195,30 +192,24 @@ private struct ProcessRow: View {
                 HStack(spacing: SymairaSpacing.small) {
                     Text(process.name)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: SymairaSpacing.small)
                     Text(valueText)
                         .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.goldSecondary)
+                        .foregroundStyle(SymairaTokens.ink)
                 }
 
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(SymairaTheme.borderGlass)
-                        Capsule()
-                            .fill(SymairaTheme.goldPrimary.opacity(0.7))
-                            .frame(width: max(1, geometry.size.width * fraction))
-                    }
-                }
-                .frame(height: 3)
+                ProgressView(value: fraction)
+                    .progressViewStyle(CockpitProgressStyle(height: 3))
+                    .accessibilityLabel("Relative usage for \(process.name)")
+                    .accessibilityValue(valueText)
 
                 if isSelected {
                     Text(detailText)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
             .contentShape(Rectangle())

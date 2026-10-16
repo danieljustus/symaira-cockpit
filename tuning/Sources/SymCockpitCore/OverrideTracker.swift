@@ -113,6 +113,7 @@ final class OverrideTracker: @unchecked Sendable {
         let edrHeadroom = _originalEDRHeadroom
         _originalBrightness = nil
         _originalWarmth = nil
+        _appliedWarmth = 0
         _originalEDRBrightness = nil
         _appliedEDRBrightness = nil
         _originalEDRHeadroom = nil

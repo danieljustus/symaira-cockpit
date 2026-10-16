@@ -24,16 +24,17 @@ final class HUDItemPreferences: ObservableObject {
     @Published var layout: HUDItemLayout {
         didSet {
             guard layout != oldValue else { return }
-            defaults.set(layout.storageValues, forKey: Self.itemsKey)
+            defaults?.set(layout.storageValues, forKey: Self.itemsKey)
         }
     }
 
-    private let defaults: UserDefaults
+    private let defaults: UserDefaults?
 
-    init(defaults: UserDefaults = .standard) {
+    /// nil keeps demo layout changes in memory, outside the production defaults.
+    init(defaults: UserDefaults? = .standard) {
         self.defaults = defaults
         self.layout = HUDItemLayout(
-            storageValues: defaults.array(forKey: Self.itemsKey) as? [String]
+            storageValues: defaults?.array(forKey: Self.itemsKey) as? [String]
         ) ?? .default
     }
 

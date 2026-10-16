@@ -41,6 +41,21 @@ EXECUTABLE="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify-app-icon.sh" "$APP_PATH"
 
+THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-appkit_SymairaTheme.bundle/Contents/Resources"
+for resource in GoogleSansFlex.ttf GoogleSansFlex-OFL.txt GoogleSansFlex-TRADEMARKS.md default.metallib; do
+  [[ -s "$THEME_RESOURCES/$resource" ]] || {
+    printf 'Missing required AppKit resource: %s\n' "$resource" >&2
+    exit 1
+  }
+done
+PROVIDER_RESOURCES="$APP_PATH/Contents/Resources/symaira-appkit_SymairaProviderKit.bundle/Contents/Resources"
+for resource in llm_providers.json llm_errors.json; do
+  [[ -s "$PROVIDER_RESOURCES/$resource" ]] || {
+    printf 'Missing required provider resource: %s\n' "$resource" >&2
+    exit 1
+  }
+done
+
 SIGNATURE_INFO=$(codesign --display --verbose=2 "$APP_PATH" 2>&1 || true)
 if grep -q '^Signature=adhoc$' <<<"$SIGNATURE_INFO"; then
   printf '%s\n' 'Bundle smoke check: ad-hoc unsigned build (expected outside release).'

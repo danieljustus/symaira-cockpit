@@ -25,29 +25,40 @@ struct UpdateNotificationView: View {
     ///
     /// `static` on purpose: a stored property here is constructed every time the
     /// view struct is rebuilt, which happens on every panel refresh.
-    private static let applier = UpdateApplier(
-        checkInstallMethod: false,
-        binaryName: "SymCockpitMenuBarApp"
-    )
+    private static let applier = UpdateApplier(checkInstallMethod: false)
+
+    /// Match the shared updater's selection rules before offering installation.
+    /// Universal GUI assets without a platform/architecture match use Download.
+    static func supportsAutomaticInstall(assetNames: [String]) -> Bool {
+        guard assetNames.contains(where: { $0.lowercased().contains("checksums") }),
+              let name = assetNames.first(where: {
+                  let lower = $0.lowercased()
+                  return !lower.contains("checksums") && lower.contains(applier.os) && lower.contains(applier.arch)
+              }) else { return false }
+        switch applier.detectAssetType(name: name) {
+        case .appBundleDMG, .appBundleZip: return true
+        case .binary, .unknown: return false
+        }
+    }
 
     var body: some View {
         if case .available(let release) = updateChecker.status {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .foregroundStyle(SymairaTheme.goldPrimary)
+                        .foregroundStyle(SymairaTokens.selected)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Update Available")
                             .symairaText(.subheading)
-                            .foregroundStyle(SymairaTheme.goldPrimary)
+                            .foregroundStyle(SymairaTokens.selected)
                         Text(release.tagName)
                             .symairaText(.monoSmall)
-                            .foregroundStyle(SymairaTheme.textSecondary)
+                            .foregroundStyle(SymairaTokens.ink2)
                     }
                     Spacer()
 
                     // Install button — uses UpdateApplier when assets exist
-                    if release.assets.isEmpty {
+                    if !Self.supportsAutomaticInstall(assetNames: release.assets.map(\.name)) {
                         Button("Download") {
                             if let url = URL(string: release.htmlURL) {
                                 NSWorkspace.shared.open(url)
@@ -55,7 +66,7 @@ struct UpdateNotificationView: View {
                         }
                         .symairaText(.caption, respectsForeground: false)
                         .buttonStyle(.borderedProminent)
-                        .tint(SymairaTheme.goldPrimary)
+                        .tint(SymairaTokens.selected)
                         .controlSize(.small)
                     } else {
                         Button("Jetzt installieren") {
@@ -63,7 +74,7 @@ struct UpdateNotificationView: View {
                         }
                         .symairaText(.caption, respectsForeground: false)
                         .buttonStyle(.borderedProminent)
-                        .tint(SymairaTheme.goldPrimary)
+                        .tint(SymairaTokens.selected)
                         .controlSize(.small)
                         .disabled(isInstalling)
                     }
@@ -73,7 +84,7 @@ struct UpdateNotificationView: View {
                     }
                     .symairaText(.caption)
                     .buttonStyle(.plain)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 }
 
                 // Installation progress / error
@@ -84,35 +95,35 @@ struct UpdateNotificationView: View {
                             .controlSize(.small)
                         Text("Installiere...")
                             .symairaText(.caption)
-                            .foregroundStyle(SymairaTheme.textSecondary)
+                            .foregroundStyle(SymairaTokens.ink2)
                     }
                 }
                 if let error = installError {
                     Text(error)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                 }
             }
             .padding(SymairaSpacing.medium)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
             .overlay(
                 RoundedRectangle(cornerRadius: SymairaRadius.card)
-                    .stroke(SymairaTheme.borderGlassHover, lineWidth: 1)
+                    .stroke(SymairaTokens.line, lineWidth: 1)
             )
         } else if case .error(let message) = updateChecker.status {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Update check unavailable")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Text(message)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SymairaSpacing.medium)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
         }
     }
@@ -125,7 +136,10 @@ struct UpdateNotificationView: View {
 
         Task {
             do {
-                _ = try await Self.applier.applyBundle(release: release)
+                let installed = try await Self.applier.applyBundle(release: release)
+                guard installed.pathExtension == "app", FileManager.default.fileExists(atPath: installed.path) else {
+                    throw UpdateApplierError.appBundleNotFound
+                }
                 // Installation succeeded — mark locally
                 installComplete = true
                 isInstalling = false
