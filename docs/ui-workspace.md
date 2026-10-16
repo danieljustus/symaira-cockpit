@@ -2,23 +2,23 @@
 
 ## Contract
 
-The macOS window uses a quiet Codex/ChatGPT-inspired workspace layout, not a chat application. The existing `SymairaTheme` dark/gold palette remains authoritative. There is no new third-party dependency, cloud behavior, product module, or hardware-control implementation.
+The macOS window uses the shared `SymairaTheme` Liquid Topography workspace, not a chat application. Semantic colors and Google Sans Flex typography follow the System/Light/Dark appearance choice. There is no new third-party dependency, cloud behavior, product module, or hardware-control implementation.
 
 - `CockpitWorkspaceView` owns only the sidebar, scroll container and appearance. The sidebar toggle sits in the window toolbar; there is no separate in-page header row. The real window and debug-only component preview share this chrome.
 - `MainStatusView` remains the one shared tuning panel. The popover keeps its compact presentation. The window groups the same production controls into Overview, Display, Power & cooling, Activity, and Menu bar & HUD.
 - Sidebar buttons are explicitly **Jump to** links, not fake page tabs. They scroll to typed anchors inside one mounted panel. Navigating does not recreate slider or keep-awake draft state.
-- Below 840 pt window width the sidebar automatically becomes a 64 pt icon rail. The user's expanded/collapsed choice survives automatic compact layout. The existing 620 pt minimum window width is retained.
-- Window typography and card padding use the embedded chrome environment; the compact popover retains its original spacing. Native controls use dark appearance on the fixed dark canvas. Reduce Motion disables animated section jumps.
+- The shared sidebar policy switches to a 64 pt icon rail when the available width cannot fit its minimum expanded width plus the content reserve. The user's expanded/collapsed choice and preferred width survive automatic compact layout. The existing 620 pt minimum window width is retained.
+- Window typography and card padding use the embedded chrome environment; the compact popover retains its own spacing. Native controls inherit the selected app appearance. Reduce Motion disables animated section jumps.
 
 ## Sliders
 
-Display and fan controls reuse `EffortSlider`, a native `NSSlider` with an 8 pt capsule rail, inset guide dots, a 20 pt light circular knob and the existing gold active colour. The shared display rows retain their original value ranges. Continuous display guide dots do not enable native tick snapping; the centre-anchored row still snaps pointer drags to Normal, while non-drag actions commit without trapping small steps at zero.
+Display and fan controls reuse `EffortSlider`, a native `NSSlider` with an 8 pt capsule rail, inset guide dots and a 20 pt circular knob. The rail, fill and thumb use the same adaptive neutral colors as the meters. The shared display rows retain their original value ranges. Continuous display guide dots do not enable native tick snapping; the centre-anchored row still snaps pointer drags to Normal, while non-drag actions commit without trapping small steps at zero.
 
 `FanProfileSliderRow` selects only the existing Standard, Cool and Max profiles, with native detents from `FanProfile.ordered`. It does not expose arbitrary RPM. Pointer edits remain local until release; the existing fan binding, authorization, rollback and temperature-dependent safety curves remain in charge. The slider is disabled while authorization is pending.
 
 ## Hardware boundary
 
-`Sources/SymCockpitApp/CockpitRootView.swift` embeds the workspace and the existing `statusBar.tunePanel(chrome: .embedded)` once. It owns no tuning logic. No changes are made to `SymCockpitCore`, credential access, fan authorization, polling, brightness arithmetic, display gamma or preference persistence.
+`Sources/SymCockpitApp/CockpitRootView.swift` embeds the workspace and the existing `statusBar.tunePanel(chrome: .embedded)` once. It owns no tuning logic. Hardware control, credential access, fan authorization, polling, brightness arithmetic and display gamma remain in the existing production services. HUD geometry belongs to `SymCockpitCore`; appearance and docking preferences retain their production persistence boundaries.
 
 `tuning/project.yml` already includes all of `Sources/SymCockpitUI` through its source-directory entry, matching SwiftPM's discovery of the new file. No duplicated file list or Xcode project is introduced.
 
@@ -67,5 +67,7 @@ make build
 ```
 
 `CockpitGUIContractTests` guards one shared panel, all five unique scroll anchors, component reuse, accessibility labels, compact navigation and Reduce Motion. `CockpitPreviewContractTests` validates fixture decoding and the absence of model, credential and hardware lifecycle calls. `EffortSliderTests` checks native knob endpoints/centre, fan detents and binding feedback. Runtime review additionally checks native sidebar actions, scroll destinations and reversible local control changes. Native target/action checks in an inactive component-render host verify callbacks, not physical keyboard delivery or VoiceOver. Compare an unmodified native control before interpreting an inactive-host input no-op as a production defect.
+
+`CockpitNativeInteractionTests` exercises sidebar and appearance AX actions on the production views while checking retained slider identity and value. Its passive hosts enable SwiftUI accessibility and temporarily establish AppKit's process-local assistive-client state, restoring that state afterward. The walker selects descendant buttons before toolbar containers that mirror their names and roles. It requires no cross-process AX-trust grant and does not skip the interaction for missing trust; this is not physical keyboard or VoiceOver acceptance.
 
 Private user references and local screenshots are not committed. This source redesign does not constitute an app installation, release or notarized distribution.
