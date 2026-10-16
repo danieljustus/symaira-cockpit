@@ -7,8 +7,14 @@ import SymairaTheme
 /// All values are labelled fixtures; interactions change local view state only.
 /// The production workspace surrounds passive components. Fan, activity and
 /// HUD model behavior still need the running app, not invented preview values.
-struct CockpitDesignPreview: View {
+public struct CockpitDesignPreview: View {
     var showsReadings = true
+    @State private var appearance: CockpitAppearancePreferences
+
+    public init(showsReadings: Bool = true, appearance: CockpitAppearance = .system) {
+        self.showsReadings = showsReadings
+        _appearance = State(initialValue: CockpitAppearancePreferences(defaults: nil, initialValue: appearance))
+    }
 
     @State private var brightness = 0.62
     @State private var beyondNormal = 0.0
@@ -19,17 +25,21 @@ struct CockpitDesignPreview: View {
     @State private var showsPreviewPreferences = false
     @State private var fanProfile: FanProfile = .system
 
-    var body: some View {
-        CockpitWorkspaceView(version: TuneVersion.current, openPreferences: openPreviewPreferences) {
+    public var body: some View {
+        CockpitWorkspaceView(
+            version: TuneVersion.current, openPreferences: openPreviewPreferences, appearance: appearance
+        ) {
             VStack(alignment: .leading, spacing: SymairaSpacing.large) {
                 VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                     Text("This Mac")
                         .symairaText(.title, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
+                        .cockpitProtected()
                     Label("PREVIEW · Beispieldaten · Keine Hardwarezugriffe", systemImage: "eye")
                         .symairaText(.caption, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.goldSecondary)
+                        .foregroundStyle(SymairaTokens.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                        .cockpitProtected()
                 }
                 .id(TuneWorkspaceAnchor.overview)
 
@@ -51,10 +61,10 @@ struct CockpitDesignPreview: View {
                         FanProfileSliderRow(profile: fanProfile, onCommit: selectPreviewFanProfile)
                         Text(fanProfile.summary)
                             .symairaText(.caption, respectsForeground: false)
-                            .foregroundStyle(SymairaTheme.textSecondary)
+                            .foregroundStyle(SymairaTokens.ink2)
                         Text("PREVIEW · Profile selection only · No fan writes")
                             .symairaText(.caption, respectsForeground: false)
-                            .foregroundStyle(SymairaTheme.goldSecondary)
+                            .foregroundStyle(SymairaTokens.ink)
                     }
                     .cardStyle()
                     KeepAwakeCard(
@@ -78,8 +88,9 @@ struct CockpitDesignPreview: View {
 
                 Text("Komponentenvorschau, nicht das vollständige Cockpit-Fenster. Regler und Schalter wirken nur hier.")
                     .symairaText(.caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .cockpitProtected()
             }
         }
         .alert("Design preview", isPresented: $showsPreviewPreferences) {
@@ -102,7 +113,8 @@ struct CockpitDesignPreview: View {
             sectionLabel(title)
             Text("Available in the running app. No live model is started by this preview.")
                 .symairaText(.callout, respectsForeground: false)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
+                .cockpitProtected()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .id(anchor)
@@ -111,7 +123,8 @@ struct CockpitDesignPreview: View {
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
             .symairaText(.heading, respectsForeground: false)
-            .foregroundStyle(SymairaTheme.textPrimary)
+            .foregroundStyle(SymairaTokens.ink)
+            .cockpitProtected()
     }
 
     /// Reuse the production slider rows, but commit only to preview-local state.

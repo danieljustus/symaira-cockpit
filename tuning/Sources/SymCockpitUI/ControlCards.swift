@@ -60,7 +60,7 @@ struct DisplayControlsCard: View {
             if let note = extendedBrightnessNote {
                 Text(note)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.warning)
+                    .foregroundStyle(SymairaTokens.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -76,7 +76,7 @@ struct DisplayControlsCard: View {
             if let displayError {
                 Text(displayError)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.critical)
+                    .foregroundStyle(SymairaTokens.critical)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -104,29 +104,22 @@ struct DisplayControlsCard: View {
                     Image(systemName: "keyboard")
                         .symairaText(.caption)
                         .frame(width: 18)
-                        .foregroundStyle(SymairaTheme.goldPrimary)
+                        .foregroundStyle(SymairaTokens.selected)
 
                     Text("Brightness keys")
                         .symairaText(.body)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
 
                     Spacer(minLength: SymairaSpacing.small)
-
-                    Picker("", selection: Binding(
-                        get: { preferences.handling },
-                        set: { preferences.handling = $0 }
-                    )) {
-                        Text(BrightnessKeyHandling.system.displayName)
-                            .tag(BrightnessKeyHandling.system)
-                        Text(BrightnessKeyHandling.cockpit.displayName)
-                            .tag(BrightnessKeyHandling.cockpit)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .accessibilityLabel("Brightness keys")
-                    .frame(width: 160)
-                    .help("Who answers F1 and F2 — macOS, or this app with its own HUD")
                 }
+
+                SymairaSegmentedControl(
+                    "Brightness keys",
+                    selection: Binding(get: { preferences.handling }, set: { preferences.handling = $0 }),
+                    options: [BrightnessKeyHandling.system, .cockpit].map { ($0, $0.displayName) }
+                )
+                .accessibilityLabel("Brightness keys")
+                .help("Who answers F1 and F2 — macOS, or this app with its own HUD")
 
                 if preferences.handling == .cockpit, let impediment {
                     impedimentNote(impediment)
@@ -149,7 +142,7 @@ struct DisplayControlsCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Needs Accessibility to see the keys before macOS does")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.warning)
+                        .foregroundStyle(SymairaTokens.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: SymairaSpacing.small) {
                         Button("Grant\u{2026}") {
@@ -166,7 +159,7 @@ struct DisplayControlsCard: View {
                 // External panels are driven over DDC/CI, which this does not do.
                 Text("No built-in display to control")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.warning)
+                    .foregroundStyle(SymairaTokens.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -270,12 +263,12 @@ struct FanControlCard: View {
                 HStack {
                     Label("Fan Control", systemImage: "fanblades.fill")
                         .symairaText(.subheading)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                     Spacer()
                     if let rpm = currentRPM {
                         Text("\(rpm) rpm")
                             .symairaText(.caption)
-                            .foregroundStyle(SymairaTheme.textMuted)
+                            .foregroundStyle(SymairaTokens.ink3)
                     }
                 }
 
@@ -285,19 +278,19 @@ struct FanControlCard: View {
 
                 Text(selectedProfile.summary)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if isAwaitingAuthorization {
                     Text("Starting the fan governor — you may be asked for your "
                          + "administrator password…")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let fanError {
                     Text(fanError)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if selectedProfile != .system && !model.fanGovernorRunning {
                     // Honest reporting: a selected position with nothing
@@ -305,7 +298,7 @@ struct FanControlCard: View {
                     // curve, and saying "Cool" would be a lie.
                     Text("Not in effect — no fan governor is running.")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -319,12 +312,12 @@ struct FanControlCard: View {
                 HStack {
                     Label("Fan Control", systemImage: "fanblades.fill")
                         .symairaText(.subheading)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                     Spacer()
                 }
                 Text("Not available on this Mac")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             .cardStyle()
         }

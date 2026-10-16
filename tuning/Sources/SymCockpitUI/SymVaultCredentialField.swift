@@ -22,7 +22,7 @@ struct SymVaultCredentialField: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Stored in SymVault as \(store.reference(for: providerID))")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textSecondary)
+                .foregroundStyle(SymairaTokens.ink2)
                 .textSelection(.enabled)
 
             HStack {

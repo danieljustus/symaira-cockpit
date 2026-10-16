@@ -18,7 +18,7 @@ struct MetricsHistoryCard: View, Equatable {
                 HStack {
                     Text("SYSTEM METRICS")
                         .symairaText(.sectionLabel)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                     Spacer()
                 }
                 ForEach(rows) { row in
@@ -40,18 +40,18 @@ struct MetricsHistoryRow: View, Equatable {
             HStack {
                 Text(row.title)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Spacer()
                 Text(row.current)
                     .symairaText(.monoSmall)
-                    .foregroundStyle(SymairaTheme.goldSecondary)
+                    .foregroundStyle(SymairaTokens.ink)
                 if row.samples.isEmpty {
                     Text("·")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                     Text("collecting…")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
 
@@ -62,11 +62,11 @@ struct MetricsHistoryRow: View, Equatable {
                 HStack {
                     Text("min \(row.minimum)")
                         .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                     Spacer()
                     Text("max \(row.maximum)")
                         .symairaText(.monoSmall)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
         }

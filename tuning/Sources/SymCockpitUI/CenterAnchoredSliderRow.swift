@@ -34,15 +34,15 @@ struct CenterAnchoredSliderRow: View {
             HStack {
                 Label(title, systemImage: systemImage)
                     .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                 Spacer()
                 Text(format(displayed))
                     .symairaText(chrome == .embedded ? .body : .monoSmall, respectsForeground: false)
                     .monospacedDigit()
                     .foregroundStyle(
                         abs(displayed) < 0.005
-                            ? SymairaTheme.textMuted
-                            : SymairaTheme.goldSecondary
+                            ? SymairaTokens.ink3
+                            : SymairaTokens.ink
                     )
             }
 
@@ -74,19 +74,19 @@ struct CenterAnchoredSliderRow: View {
             HStack {
                 Text(minimumLabel)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .lineLimit(1)
                     .fixedSize()
                 Spacer()
                 Text("Normal")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .lineLimit(1)
                     .fixedSize()
                 Spacer()
                 Text(maximumDisabledNote ?? maximumLabel)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .lineLimit(1)
                     .fixedSize()
             }

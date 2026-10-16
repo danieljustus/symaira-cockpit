@@ -61,7 +61,7 @@ struct MetricStyleRow: View {
 
             Text(preview)
                 .symairaText(.monoSmall)
-                .foregroundStyle(SymairaTheme.goldPrimary)
+                .foregroundStyle(SymairaTokens.selected)
                 .lineLimit(1)
                 .fixedSize()
         }
@@ -76,7 +76,7 @@ struct MetricStyleRow: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
                 .symairaText(.sectionLabel)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .lineLimit(1)
                 .fixedSize()
 

@@ -44,19 +44,19 @@ struct MenuBarVisibilityCard: View {
                 calendarWeekRow
             }
 
-            Divider().overlay(SymairaTheme.borderGlass)
+            Divider().overlay(SymairaTokens.line)
 
             aiUsageRow
 
             if let readout {
-                Divider().overlay(SymairaTheme.borderGlass)
+                Divider().overlay(SymairaTokens.line)
                 ReadoutControls(readout: readout, hudDock: hudDock)
             }
 
             if let saveError {
                 Text(saveError)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.critical)
+                    .foregroundStyle(SymairaTokens.critical)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -70,10 +70,10 @@ struct MenuBarVisibilityCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("MENU BAR")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
                 Text("What the status item shows")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             Spacer(minLength: SymairaSpacing.small)
             preview
@@ -88,11 +88,11 @@ struct MenuBarVisibilityCard: View {
             Spacer(minLength: 0)
             Text("Monitor")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .frame(width: 64)
             Text("Menu bar")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .frame(width: 64)
         }
     }
@@ -107,18 +107,18 @@ struct MenuBarVisibilityCard: View {
                     Text("icon only")
                         .symairaText(.caption)
                 }
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
             } else {
                 Text(model.statusItemText)
                     .symairaText(.monoSmall)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
             }
         }
         .padding(.horizontal, SymairaSpacing.small)
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: SymairaRadius.control)
-                .fill(SymairaTheme.bgDarker.opacity(0.7))
+                .fill(SymairaTokens.sidebar.opacity(0.7))
         )
         .help("What the menu bar shows right now")
     }
@@ -133,11 +133,11 @@ struct MenuBarVisibilityCard: View {
             Image(systemName: metric.statusItemSymbol)
                 .symairaText(.caption)
                 .frame(width: 18)
-                .foregroundStyle(isVisible ? SymairaTheme.goldPrimary : SymairaTheme.textMuted)
+                .foregroundStyle(isVisible ? SymairaTokens.selected : SymairaTokens.ink3)
 
             Text(metric.displayName)
                 .symairaText(.body)
-                .foregroundStyle(isMonitored ? SymairaTheme.textPrimary : SymairaTheme.textMuted)
+                .foregroundStyle(isMonitored ? SymairaTokens.ink : SymairaTokens.ink3)
 
             Spacer(minLength: SymairaSpacing.small)
 
@@ -181,13 +181,13 @@ struct MenuBarVisibilityCard: View {
                 .frame(width: 18)
                 .foregroundStyle(
                     preferences.showCalendarWeek
-                        ? SymairaTheme.goldPrimary
-                        : SymairaTheme.textMuted
+                        ? SymairaTokens.selected
+                        : SymairaTokens.ink3
                 )
 
             Text("Calendar week")
                 .symairaText(.body)
-                .foregroundStyle(SymairaTheme.textPrimary)
+                .foregroundStyle(SymairaTokens.ink)
 
             Spacer(minLength: SymairaSpacing.small)
 
@@ -213,18 +213,18 @@ struct MenuBarVisibilityCard: View {
                 .frame(width: 18)
                 .foregroundStyle(
                     aiUsage.menuBarEnabled && hasEnabledAIProviders
-                        ? SymairaTheme.goldPrimary
-                        : SymairaTheme.textMuted
+                        ? SymairaTokens.selected
+                        : SymairaTokens.ink3
                 )
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("AI usage")
                     .symairaText(.body)
-                    .foregroundStyle(hasEnabledAIProviders ? SymairaTheme.textPrimary : SymairaTheme.textMuted)
+                    .foregroundStyle(hasEnabledAIProviders ? SymairaTokens.ink : SymairaTokens.ink3)
                 if !hasEnabledAIProviders {
                     Text("No provider enabled — turn one on in Preferences")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
 
@@ -282,23 +282,19 @@ struct MenuBarVisibilityCard: View {
                         : "menubar.rectangle")
                         .symairaText(.caption)
                         .frame(width: 18)
-                        .foregroundStyle(SymairaTheme.goldPrimary)
+                        .foregroundStyle(SymairaTokens.selected)
 
                     Text("Show in")
                         .symairaText(.body)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
 
                     Spacer(minLength: SymairaSpacing.small)
 
-                    Picker("", selection: Binding(
-                        get: { readout.surface },
-                        set: { readout.surface = $0 }
-                    )) {
-                        Text(ReadoutSurface.menuBar.displayName).tag(ReadoutSurface.menuBar)
-                        Text("HUD").tag(ReadoutSurface.notch)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    SymairaSegmentedControl(
+                        "Show in",
+                        selection: Binding(get: { readout.surface }, set: { readout.surface = $0 }),
+                        options: [(ReadoutSurface.menuBar, ReadoutSurface.menuBar.displayName), (.notch, "HUD")]
+                    )
                     .frame(width: 140)
                     .disabled(!available)
                     .opacity(available ? 1 : 0.5)
@@ -307,7 +303,7 @@ struct MenuBarVisibilityCard: View {
 
                 Text(surfaceCaption(readout.surface, available: available))
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -341,11 +337,11 @@ struct MenuBarVisibilityCard: View {
                 Image(systemName: "rectangle.3.group")
                     .symairaText(.caption)
                     .frame(width: 18)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
 
                 Text("Position")
                     .symairaText(.body)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
 
                 Spacer(minLength: SymairaSpacing.small)
 
@@ -377,11 +373,9 @@ struct MenuBarVisibilityCard: View {
         set: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> some View {
         Toggle("", isOn: Binding(get: { isOn }, set: { newValue in set(newValue) }))
-            .toggleStyle(.switch)
-            .controlSize(.mini)
+            .toggleStyle(.symairaSwitch)
             .labelsHidden()
             .accessibilityLabel(accessibilityLabel)
-            .tint(SymairaTheme.goldPrimary)
             .frame(width: 64)
             .disabled(disabled)
             .opacity(disabled ? 0.5 : 1)

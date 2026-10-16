@@ -2,7 +2,35 @@
 
 ## Unreleased
 
+### Changed
+- Consolidate window settings in one native trailing gear menu, with
+  System/Light/Dark choices and the existing full-settings action. Remove
+  duplicate sidebar and parent-toolbar settings entries (#354).
+- **Liquid Topography design (approved pilot, revision 08):** the Cockpit
+  window, popover and preferences follow the system appearance instead of a
+  fixed dark canvas and use the shared Symaira AppKit roles. Google Sans Flex
+  replaces SF Pro. Light-mode selection is ink, dark-mode selection champagne;
+  segmented choices, switches and slider thumbs use the shared
+  `SymairaSegmentedControl` / `.symairaSwitch` components. Start/Apply actions
+  are opaque ink buttons. The notch and dock HUD stay dark on purpose. Requires
+  the unreleased AppKit Liquid Topography change (pinned by revision until it
+  is tagged).
+- The window uses AppKit's reactive Metal topography behind protected content,
+  a 272-point glass sidebar with visible selection/focus, and a compact icon
+  rail. Settings and popovers remain quiet, opaque surfaces; HUD customization
+  uses a full-width row so its controls fit.
+
+### Fixed
+- Bundle the AppKit font, license, compiled shader and provider resource
+  bundles with the app; bundle smoke checks reject missing resources (#351).
+- Protect headings and descriptions at their own text bounds rather than
+  blanking the entire title stack or section divider row behind the topography
+  (#354).
+
 ### Added
+- Debug builds support `--design-preview` (with `--light`, `--dark`,
+  `--compact` or `--no-readings`) for native review without hardware polling,
+  credential access or preference writes. Release builds exclude this path.
 - A shared Storage Volumes card lists user-visible mounted internal, external
   and network/virtual volumes with mount paths and total/used/available space.
   Mount, unmount and rename notifications refresh the list; `metrics` and

@@ -39,77 +39,83 @@ extension EnvironmentValues {
     }
 }
 
+extension View {
+    func cockpitProtected(hill: Bool = false) -> some View {
+        topoProtected(hill: hill)
+    }
+}
+
 /// Native workspace chrome shared by the live window and the isolated preview.
 /// Navigation scrolls one mounted panel, preserving drafts and drag state.
 public struct CockpitWorkspaceView<Content: View>: View {
     let version: String
     let openPreferences: () -> Void
     let content: Content
+    @Bindable private var appearance: CockpitAppearancePreferences
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var sidebarExpanded = true
-    @State private var hasSidebarRoom = true
+    @State private var sidebarLayout = SymairaSidebarState()
+    @State private var selectedAnchor = TuneWorkspaceAnchor.overview
+    @State private var topography = SymairaTopoModel()
+    @FocusState private var focusedAnchor: TuneWorkspaceAnchor?
 
     public init(
         version: String,
         openPreferences: @escaping () -> Void,
+        appearance: CockpitAppearancePreferences = CockpitAppearancePreferences(),
         @ViewBuilder content: () -> Content
     ) {
         self.version = version
         self.openPreferences = openPreferences
+        self.appearance = appearance
         self.content = content()
     }
 
-    private var showsLabels: Bool { sidebarExpanded && hasSidebarRoom }
+    private var showsLabels: Bool { sidebarLayout.showsLabels }
 
     public var body: some View {
         ScrollViewReader { scroll in
-            HStack(spacing: 0) {
-                sidebar(scroll)
-                Divider().overlay(SymairaTheme.borderGlass)
-                ScrollView {
-                    content
-                        .environment(\.tunePanelChrome, .embedded)
-                        .padding(SymairaSpacing.xLarge)
-                        .frame(maxWidth: 1120, alignment: .topLeading)
-                        .frame(maxWidth: .infinity, alignment: .top)
-                }
-            }
-            .onGeometryChange(for: Bool.self) { geometry in
-                geometry.size.width >= 840
-            } action: { hasSidebarRoom = $0 }
+            SymairaWorkspace(
+                sidebar: $sidebarLayout, topography: topography,
+                navigation: { _ in sidebar(scroll) },
+                content: {
+                    ScrollView {
+                        content
+                            .environment(\.tunePanelChrome, .embedded)
+                            .padding(SymairaSpacing.xLarge)
+                            .frame(maxWidth: 960, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                })
         }
         // The sidebar toggle lives in the window toolbar, like System
         // Settings — a dedicated header row under the title bar only
         // duplicated the title and the sidebar's own navigation.
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button { sidebarExpanded.toggle() } label: {
-                    Image(systemName: "sidebar.left")
-                }
-                .disabled(!hasSidebarRoom)
-                .accessibilityLabel(showsLabels ? "Collapse sidebar" : "Expand sidebar")
-                .help(hasSidebarRoom ? "Toggle sidebar (⌃⌘S)" : "Sidebar is compact at this window width")
-                .keyboardShortcut("s", modifiers: [.control, .command])
+                SymairaSidebarToggle(sidebar: $sidebarLayout)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                SymairaSettingsMenu(selection: $appearance.selection, openSettings: openPreferences)
+                    .accessibilityIdentifier("cockpit-settings-menu")
             }
         }
-        .background(SymairaTheme.bgDark)
-        .preferredColorScheme(.dark)
-        .tint(SymairaTheme.goldPrimary)
+        .tint(SymairaTokens.selected)
+        .onAppear(perform: appearance.apply)
     }
 
     private func sidebar(_ scroll: ScrollViewProxy) -> some View {
         VStack(alignment: showsLabels ? .leading : .center, spacing: SymairaSpacing.large) {
             HStack(spacing: SymairaSpacing.small) {
                 Image(systemName: "gauge.with.dots.needle.50percent")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(SymairaTokens.ink2)
                     .frame(width: 32, height: 36)
                     .accessibilityHidden(true)
                 if showsLabels {
                     Text("Cockpit")
                         .symairaText(.heading, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
                 }
             }
             .padding(.bottom, SymairaSpacing.small)
@@ -117,7 +123,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
             if showsLabels {
                 Text("JUMP TO")
                     .symairaText(.sectionLabel, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .padding(.leading, SymairaSpacing.small)
             }
 
@@ -126,21 +132,30 @@ public struct CockpitWorkspaceView<Content: View>: View {
                     Button { jump(to: anchor, in: scroll) } label: {
                         HStack(spacing: SymairaSpacing.medium) {
                             Image(systemName: anchor.symbol)
-                                .font(.system(size: 16))
+                                .font(.system(size: 16, weight: .semibold))
                                 .frame(width: 24)
                                 .accessibilityHidden(true)
                             if showsLabels {
                                 Text(anchor.title)
-                                    .symairaText(.body, respectsForeground: false)
+                                    .symairaText(selectedAnchor == anchor ? .subheading : .body, respectsForeground: false)
                                     .lineLimit(1)
                                 Spacer(minLength: 0)
                             }
                         }
-                        .frame(minHeight: 38)
-                        .padding(.horizontal, SymairaSpacing.small)
+                        .frame(minHeight: 44)
+                        .padding(.horizontal, SymairaSpacing.medium)
                         .contentShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
                     }
-                    .buttonStyle(WorkspaceNavigationStyle())
+                    .buttonStyle(SymairaNavigationButtonStyle(isSelected: selectedAnchor == anchor))
+                    .focused($focusedAnchor, equals: anchor)
+                    .overlay {
+                        if focusedAnchor == anchor {
+                            RoundedRectangle(cornerRadius: SymairaRadius.control)
+                                .stroke(SymairaTokens.focus, lineWidth: 2)
+                                .padding(-2)
+                        }
+                    }
+                    .accessibilityAddTraits(selectedAnchor == anchor ? [.isSelected] : [])
                     .accessibilityLabel("Jump to \(anchor.title)")
                     .accessibilityIdentifier("cockpit-jump-\(anchor.rawValue)")
                     .help("Jump to \(anchor.title)")
@@ -149,39 +164,19 @@ public struct CockpitWorkspaceView<Content: View>: View {
 
             Spacer(minLength: SymairaSpacing.large)
 
-            Divider().overlay(SymairaTheme.borderGlass)
-            Button(action: openPreferences) {
-                HStack(spacing: SymairaSpacing.medium) {
-                    Image(systemName: "gearshape").frame(width: 24)
-                    if showsLabels {
-                        Text("Preferences")
-                            .symairaText(.body, respectsForeground: false)
-                        Spacer(minLength: 0)
-                        Text("⌘,").font(.system(size: 11))
-                            .foregroundStyle(SymairaTheme.textMuted)
-                    }
-                }
-                .frame(minHeight: SymairaMetrics.minimumControlHeight)
-                .padding(.horizontal, SymairaSpacing.small)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(WorkspaceNavigationStyle())
-            .accessibilityLabel("Open preferences")
-            .help("Open preferences (⌘,)")
-
+            Divider().overlay(SymairaTokens.line)
             if showsLabels {
                 Text("Symaira Cockpit · v\(version)")
                     .symairaText(.caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .padding(.leading, SymairaSpacing.small)
             }
         }
         .padding(SymairaSpacing.medium)
-        .frame(width: showsLabels ? 212 : 64)
-        .background(SymairaTheme.bgCard)
     }
 
     private func jump(to anchor: TuneWorkspaceAnchor, in scroll: ScrollViewProxy) {
+        selectedAnchor = anchor
         if reduceMotion {
             scroll.scrollTo(anchor, anchor: .top)
         } else {
@@ -189,24 +184,5 @@ public struct CockpitWorkspaceView<Content: View>: View {
                 scroll.scrollTo(anchor, anchor: .top)
             }
         }
-    }
-}
-
-private struct WorkspaceNavigationStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        WorkspaceNavigationLabel(configuration: configuration)
-    }
-}
-
-private struct WorkspaceNavigationLabel: View {
-    let configuration: ButtonStyleConfiguration
-    @State private var hovered = false
-
-    var body: some View {
-        configuration.label
-            .foregroundStyle(configuration.isPressed ? SymairaTheme.goldPrimary : SymairaTheme.textSecondary)
-            .background(hovered || configuration.isPressed ? SymairaTheme.bgCardHover : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
-            .onHover { hovered = $0 }
     }
 }
