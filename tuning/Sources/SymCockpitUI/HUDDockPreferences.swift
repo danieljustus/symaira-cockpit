@@ -19,15 +19,16 @@ final class HUDDockPreferences: ObservableObject {
     @Published var dock: HUDDock {
         didSet {
             guard dock != oldValue else { return }
-            defaults.set(dock.storageKey, forKey: Self.dockKey)
+            defaults?.set(dock.storageKey, forKey: Self.dockKey)
         }
     }
 
-    private let defaults: UserDefaults
+    private let defaults: UserDefaults?
 
-    init(defaults: UserDefaults = .standard) {
+    /// nil gives a demo an in-memory choice without reading or writing settings.
+    init(defaults: UserDefaults? = .standard) {
         self.defaults = defaults
-        self.dock = defaults.string(forKey: Self.dockKey)
+        self.dock = defaults?.string(forKey: Self.dockKey)
             .flatMap(HUDDock.init(storageKey:))
             ?? .notch
     }

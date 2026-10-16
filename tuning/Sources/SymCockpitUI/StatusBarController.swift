@@ -318,7 +318,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             notchAvailable: notchAvailable
         )
 
-        hudController.openCockpitTitle = openCockpitTitle
+        // Keep the compact HUD's "Cockpit" label. The full context-menu title
+        // ("Open Cockpit…") belongs in the menu, not the 288-point edge card.
         hudController.setEnabled(effective == .notch)
         statusItem.isVisible = effective == .menuBar
         syncShoulderSpacer(active: effective == .notch)

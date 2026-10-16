@@ -71,7 +71,8 @@ private final class HUDStageHostingView: NSHostingView<HUDDockView> {
 /// ``HUDDockLayout``, which is pure and tested.
 @MainActor
 final class HUDDockController: NSObject {
-    private let model: TuneViewModel
+    private let resolveItems: ([HUDItemKind]) -> [HUDItemValue]
+    private let onDetailVisibility: (Bool) -> Void
     let dockPreferences: HUDDockPreferences
     let itemPreferences: HUDItemPreferences
 
@@ -117,12 +118,29 @@ final class HUDDockController: NSObject {
         presentation == .expanded ? Self.expandedCollapseDelay : Self.peekCollapseDelay
     }
 
-    init(
+    convenience init(
         model: TuneViewModel,
         dockPreferences: HUDDockPreferences = HUDDockPreferences(),
         itemPreferences: HUDItemPreferences = HUDItemPreferences()
     ) {
-        self.model = model
+        self.init(
+            dockPreferences: dockPreferences,
+            itemPreferences: itemPreferences,
+            resolveItems: { [model] in HUDItemResolver.values(for: $0, model: model) },
+            onDetailVisibility: { [model] in model.setDetailVisible($0) }
+        )
+    }
+
+    /// The presentation host needs values and a cadence callback, not hardware.
+    /// Passive demos use this same docking/event path without constructing a model.
+    init(
+        dockPreferences: HUDDockPreferences,
+        itemPreferences: HUDItemPreferences,
+        resolveItems: @escaping ([HUDItemKind]) -> [HUDItemValue],
+        onDetailVisibility: @escaping (Bool) -> Void
+    ) {
+        self.resolveItems = resolveItems
+        self.onDetailVisibility = onDetailVisibility
         self.dockPreferences = dockPreferences
         self.itemPreferences = itemPreferences
         super.init()
@@ -228,7 +246,7 @@ final class HUDDockController: NSObject {
     private func rootView(dock: HUDDock, screen: NSScreen) -> HUDDockView {
         let metrics = Self.screenMetrics(screen)
         return HUDDockView(
-            model: model,
+            resolveItems: resolveItems,
             itemLayout: itemPreferences.layout,
             metrics: metrics,
             dock: dock,
@@ -392,7 +410,7 @@ final class HUDDockController: NSObject {
         // switch the popover makes. A peek does not qualify: it is a glance at
         // numbers that are already being sampled.
         if wasExpanded != (next == .expanded) {
-            model.setDetailVisible(next == .expanded)
+            onDetailVisibility(next == .expanded)
         }
         refreshView()
     }

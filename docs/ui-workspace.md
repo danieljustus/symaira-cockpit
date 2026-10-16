@@ -22,6 +22,35 @@ Display and fan controls reuse `EffortSlider`, a native `NSSlider` with an 8 pt 
 
 `tuning/project.yml` already includes all of `Sources/SymCockpitUI` through its source-directory entry, matching SwiftPM's discovery of the new file. No duplicated file list or Xcode project is introduced.
 
+## Notch and edge HUD
+
+The HUD consumes the existing Liquid Topography `SymairaTheme` semantic colors,
+Google Sans Flex typography and shared primary/secondary button styles. There
+is no HUD-local palette or new AppKit dependency. Expanded cards inherit the
+same System/Light/Dark choice as the workspace; the camera strip and collapsed
+or peeking edge bezel stay black with explicitly dark-surface readouts.
+
+Dense HUD cards use quiet opaque surfaces, not a moving topography behind small
+numbers. The camera clearance, screen-edge anchoring, drag and three-stage
+presentation remain intact. Expanded shoulders retain the peek width, bounded
+by the actual card width and camera gap, rather than clipping peek items back
+into collapsed shoulders. The shared row-height budget matches the larger
+type; constrained displays scroll the readings while keeping actions visible.
+
+`HUDDesignTests` mounts the production HUD in passive native panels with test
+values, never a hardware controller. It checks notch/left/right shapes, every
+stage, both appearances, empty/full content, and updates in an already mounted
+HUD. Native component captures are not live docking, pointer or VoiceOver
+acceptance. Set `COCKPIT_HUD_RENDER_DIR` to export these fixture renders.
+
+For hands-on review, launch the Debug app with `--hud-demo` (optionally
+`--light` or `--dark`). This mounts the production `HUDDockController` on the
+actual screen with labelled example values and an in-memory preference store.
+The control window chooses the dock, appearance and visibility; hovering,
+clicking and dragging use the production event path. Closing that window or
+choosing **Demo beenden** removes the HUD and quits only the demo process.
+No hardware model, polling, credentials or persistent tuning settings are used.
+
 ## Review
 
 `CockpitDesignPreview` is compiled only in DEBUG. It uses passive production cards and explicitly labelled fixtures. Its controls, including the real passive fan-profile slider row, write local SwiftUI state only. Fan hardware behavior, live Activity and HUD behavior require the real app; the preview labels those sections rather than synthesizing data or starting controllers. The production app bundle is built and smoke-checked separately. A preview screenshot is design evidence, not live hardware evidence.

@@ -12,7 +12,9 @@
   replaces SF Pro. Light-mode selection is ink, dark-mode selection champagne;
   segmented choices, switches and slider thumbs use the shared
   `SymairaSegmentedControl` / `.symairaSwitch` components. Start/Apply actions
-  are opaque ink buttons. The notch and dock HUD stay dark on purpose. Requires
+  are opaque ink buttons. The compact notch/edge bezel stays black; expanded
+  HUD cards follow System/Light/Dark with shared type, neutral surfaces and
+  action buttons. Larger rows remain scrollable on short displays (#357). Requires
   the unreleased AppKit Liquid Topography change (pinned by revision until it
   is tagged).
 - The window uses AppKit's reactive Metal topography behind protected content,
@@ -28,6 +30,9 @@
   (#354).
 
 ### Added
+- Debug builds offer `--hud-demo`: the real screen-docked HUD with labelled
+  example values, hover/click/drag, position and appearance controls. It starts
+  no hardware model and keeps all settings in memory (#357).
 - Debug builds support `--design-preview` (with `--light`, `--dark`,
   `--compact` or `--no-readings`) for native review without hardware polling,
   credential access or preference writes. Release builds exclude this path.

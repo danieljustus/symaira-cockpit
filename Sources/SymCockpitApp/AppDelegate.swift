@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: CockpitWindowController?
     #if DEBUG
     private var designPreviewWindow: NSWindow?
+    private var hudDemo: HUDDemoController?
     #endif
 
     /// `NSApplicationMain` only wires the delegate up from a nib, and this app
@@ -43,6 +44,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--hud-demo") {
+            let arguments = ProcessInfo.processInfo.arguments
+            let appearance: CockpitAppearance = arguments.contains("--dark") ? .dark
+                : (arguments.contains("--light") ? .light : .system)
+            let demo = HUDDemoController(appearance: appearance)
+            hudDemo = demo
+            demo.show()
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--design-preview") {
             showDesignPreview()
             return
@@ -116,6 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
 
     func applicationWillTerminate(_ notification: Notification) {
+        #if DEBUG
+        hudDemo?.stop()
+        hudDemo = nil
+        #endif
         windowController = nil
         statusBarController = nil
     }

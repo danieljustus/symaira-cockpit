@@ -10,21 +10,23 @@ import SymCockpitCore
 @MainActor
 struct HUDCompactItem: View {
     let item: HUDItemValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: item.symbolName)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(SymairaTheme.goldPrimary)
+                .font(.system(size: 10, weight: SymairaTokens.iconWeight))
+                .foregroundStyle(item.isActive
+                    ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
             Text(item.value)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white)
+                .font(SymairaTypography.caption.monospacedDigit())
+                .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 // The digits roll rather than cut, which is most of what makes
                 // a live readout read as live.
                 .contentTransition(.numericText())
-                .animation(HUDMotion.value, value: item.value)
+                .animation(reduceMotion ? nil : HUDMotion.value, value: item.value)
         }
         .fixedSize()
         .accessibilityElement(children: .combine)
@@ -36,27 +38,55 @@ struct HUDCompactItem: View {
 @MainActor
 struct HUDCardRow: View {
     let item: HUDItemValue
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: SymairaSpacing.xSmall) {
+            Image(systemName: item.symbolName)
+                .font(.system(size: 12, weight: SymairaTokens.iconWeight))
+                .frame(width: 16)
+                .foregroundStyle(item.isActive
+                    ? SymairaTheme.selected(for: colorScheme) : SymairaTheme.foregroundSecondary(for: colorScheme))
+            Text(item.title)
+                .symairaText(.callout)
+                .lineLimit(1)
+            Spacer(minLength: SymairaSpacing.xSmall)
+            Text(item.value)
+                .font(SymairaTypography.label.monospacedDigit())
+                .foregroundStyle(item.isActive
+                    ? SymairaTheme.selected(for: colorScheme) : SymairaTheme.foregroundPrimary(for: colorScheme))
+                .lineLimit(1)
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : HUDMotion.value, value: item.value)
+        }
+        .frame(height: HUDDockLayout.expandedRowHeight - SymairaSpacing.xSmall)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title) \(item.value)")
+    }
+}
+
+/// Both docks use AppKit actions, not a second miniature button theme.
+@MainActor
+struct HUDCardActions: View {
+    let openPanel: () -> Void
+    let openCockpit: () -> Void
+    let openCockpitTitle: String
 
     var body: some View {
         HStack(spacing: SymairaSpacing.small) {
-            Image(systemName: item.symbolName)
-                .symairaText(.caption)
-                .frame(width: 16)
-                .foregroundStyle(SymairaTheme.goldPrimary)
-            Text(item.title)
-                .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textSecondary)
-                .lineLimit(1)
-            Spacer(minLength: SymairaSpacing.small)
-            Text(item.value)
-                .symairaText(.monoSmall)
-                .foregroundStyle(item.isActive ? SymairaTheme.goldPrimary : SymairaTheme.textPrimary)
-                .lineLimit(1)
-                .contentTransition(.numericText())
-                .animation(HUDMotion.value, value: item.value)
+            Button(action: openPanel) {
+                Label("Panel", systemImage: "slider.horizontal.3")
+            }
+            .symairaButtonStyle(.secondary)
+            .accessibilityIdentifier("hud-open-panel")
+            Button(action: openCockpit) {
+                Label(openCockpitTitle, systemImage: "gauge.with.dots.needle.bottom.50percent")
+            }
+            .symairaButtonStyle(.primary)
+            .accessibilityIdentifier("hud-open-cockpit")
+            Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title) \(item.value)")
     }
 }
 
@@ -105,9 +135,8 @@ struct HUDEmptyState: View {
     var body: some View {
         Text(hasEnabledItems
             ? "Nothing to report yet"
-            : "No readouts chosen — pick some under Menu bar › HUD content")
+            : "Choose readouts under Menu bar › HUD content")
             .symairaText(.caption)
-            .foregroundStyle(SymairaTheme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
