@@ -6,23 +6,26 @@ import SymCockpitCore
 
 /// The panel background shared by every card in the status popover.
 struct CardStyle: ViewModifier {
-    var borderColor: Color = SymairaTheme.borderGlass
+    var borderColor: Color = SymairaTokens.line
     @Environment(\.tunePanelChrome) private var chrome
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
         content
             .padding(chrome == .embedded ? SymairaSpacing.xLarge : SymairaSpacing.medium)
-            .background(SymairaTheme.bgCard)
+            .background(SymairaTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.card))
             .overlay(
                 RoundedRectangle(cornerRadius: SymairaRadius.card)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(contrast == .increased ? SymairaTokens.ink3 : borderColor,
+                            lineWidth: contrast == .increased ? 2 : 1)
             )
+            .cockpitProtected(hill: true)
     }
 }
 
 extension View {
-    func cardStyle(borderColor: Color = SymairaTheme.borderGlass) -> some View {
+    func cardStyle(borderColor: Color = SymairaTokens.line) -> some View {
         modifier(CardStyle(borderColor: borderColor))
     }
 }
@@ -43,14 +46,14 @@ struct StatusHeaderView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .symairaText(.heading)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
                 Text("v\(version)")
                     .symairaText(.monoSmall)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             Spacer()
             Circle()
-                .fill(SymairaTheme.positive.opacity(0.8))
+                .fill(SymairaTokens.positive.opacity(0.8))
                 .frame(width: 6, height: 6)
         }
         .padding(.horizontal, SymairaSpacing.xSmall)
@@ -80,23 +83,23 @@ struct LiveSummaryStrip: View {
         label: String,
         symbol: String,
         text: String,
-        tint: Color = SymairaTheme.goldPrimary
+        tint: Color = SymairaTokens.selected
     ) -> some View {
         HStack(spacing: isExpanded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             Image(systemName: symbol)
-                .font(isExpanded ? SymairaTypography.heading : .system(size: 9))
+                .font(.system(size: isExpanded ? 18 : 9, weight: .semibold))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
                 if isExpanded {
                     Text(label)
                         .symairaText(.caption, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                 }
                 Text(text)
                     .symairaText(isExpanded ? .heading : .monoSmall, respectsForeground: false)
                     .monospacedDigit()
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -104,16 +107,17 @@ struct LiveSummaryStrip: View {
         .padding(.horizontal, isExpanded ? SymairaSpacing.large : SymairaSpacing.small)
         .padding(.vertical, isExpanded ? SymairaSpacing.medium : 3)
         .frame(maxWidth: isExpanded ? .infinity : nil, alignment: .leading)
-        .background(SymairaTheme.bgCard)
+        .background(SymairaTokens.surface)
         .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
         .overlay(
             RoundedRectangle(cornerRadius: SymairaRadius.control)
-                .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+                .stroke(SymairaTokens.line, lineWidth: 1)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityValue(text)
         .accessibilityIdentifier(id)
+        .cockpitProtected(hill: true)
     }
 
     // Both chips go through the shared core formatter rather than formatting
@@ -137,11 +141,11 @@ struct LiveSummaryStrip: View {
     }
 
     private var thermalColor: Color {
-        guard model.sensors != nil else { return SymairaTheme.textMuted }
+        guard model.sensors != nil else { return SymairaTokens.ink3 }
         switch thermalText.lowercased() {
-        case "nominal": return SymairaTheme.positive
-        case "fair": return SymairaTheme.warning
-        default: return SymairaTheme.critical
+        case "nominal": return SymairaTokens.positive
+        case "fair": return SymairaTokens.warning
+        default: return SymairaTokens.critical
         }
     }
 }
@@ -154,14 +158,14 @@ struct StatusFooterView: View {
             Button(action: openPreferences) {
                 Text("Preferences\u{2026}")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
                     .padding(.horizontal, SymairaSpacing.medium)
                     .padding(.vertical, SymairaSpacing.small)
-                    .background(SymairaTheme.bgCard)
+                    .background(SymairaTokens.surface)
                     .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
                     .overlay(
                         RoundedRectangle(cornerRadius: SymairaRadius.control)
-                            .stroke(SymairaTheme.borderGlass, lineWidth: 1)
+                            .stroke(SymairaTokens.line, lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
@@ -172,14 +176,8 @@ struct StatusFooterView: View {
                 NSApp.terminate(nil)
             } label: {
                 Text("Quit")
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.bgDark)
-                    .padding(.horizontal, SymairaSpacing.large)
-                    .padding(.vertical, SymairaSpacing.small)
-                    .background(SymairaTheme.goldPrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
             }
-            .buttonStyle(.plain)
+            .symairaButtonStyle(.secondary)
         }
         .padding(.top, SymairaSpacing.xSmall)
     }
@@ -205,7 +203,7 @@ struct SystemStatusCard: View, Equatable {
             HStack {
                 Text("SYSTEM STATUS")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 Spacer()
             }
 
@@ -230,14 +228,14 @@ struct SystemStatusCard: View, Equatable {
     private var batteryBlock: some View {
         HStack(spacing: 8) {
             Image(systemName: batteryIcon)
-                .foregroundStyle(SymairaTheme.goldPrimary)
+                .foregroundStyle(SymairaTokens.selected)
             VStack(alignment: .leading, spacing: 1) {
                 Text(batteryState)
                     .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+                    .foregroundStyle(SymairaTokens.ink)
                 Text(batteryDetails)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             }
             Spacer()
         }
@@ -247,12 +245,12 @@ struct SystemStatusCard: View, Equatable {
     private var thermalBlock: some View {
         HStack(spacing: 8) {
             Image(systemName: "gauge.with.needle.fill")
-                .foregroundStyle(SymairaTheme.goldPrimary)
+                .foregroundStyle(SymairaTokens.selected)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text("Thermal:")
                         .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
-                        .foregroundStyle(SymairaTheme.textPrimary)
+                        .foregroundStyle(SymairaTokens.ink)
                     Text(sensors?.thermalPressure ?? "Loading…")
                         .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                         .foregroundStyle(thermalColor)
@@ -260,7 +258,7 @@ struct SystemStatusCard: View, Equatable {
                 if let details = sensorDetails {
                     Text(details)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                 }
             }
             Spacer()
@@ -305,11 +303,11 @@ struct SystemStatusCard: View, Equatable {
     }
 
     private var thermalColor: Color {
-        guard let sensors else { return SymairaTheme.textMuted }
+        guard let sensors else { return SymairaTokens.ink3 }
         switch sensors.thermalPressure.lowercased() {
-        case "nominal": return SymairaTheme.positive
-        case "fair": return SymairaTheme.warning
-        default: return SymairaTheme.critical
+        case "nominal": return SymairaTokens.positive
+        case "fair": return SymairaTokens.warning
+        default: return SymairaTokens.critical
         }
     }
 
@@ -346,24 +344,24 @@ struct DisplaysCard: View, Equatable {
             HStack {
                 Text("CONNECTED DISPLAYS")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                 Spacer()
             }
 
             if displays.isEmpty {
                 Text("No active displays found")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textSecondary)
+                    .foregroundStyle(SymairaTokens.ink2)
             } else {
                 ForEach(displays, id: \.displayID) { display in
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(display.name)
                                 .symairaText(.caption)
-                                .foregroundStyle(SymairaTheme.textPrimary)
+                                .foregroundStyle(SymairaTokens.ink)
                             Text(display.isBuiltin == true ? "Built-in Display" : "External Display")
                                 .symairaText(.caption)
-                                .foregroundStyle(SymairaTheme.textSecondary)
+                                .foregroundStyle(SymairaTokens.ink2)
                         }
                         Spacer()
                         if display.edrCapable {
@@ -371,8 +369,8 @@ struct DisplaysCard: View, Equatable {
                                 .symairaText(.monoSmall)
                                 .padding(.horizontal, SymairaSpacing.small)
                                 .padding(.vertical, SymairaSpacing.xSmall)
-                                .background(SymairaTheme.goldPrimary.opacity(0.12))
-                                .foregroundStyle(SymairaTheme.goldPrimary)
+                                .background(SymairaTokens.raised)
+                                .foregroundStyle(SymairaTokens.ink)
                                 .clipShape(RoundedRectangle(cornerRadius: SymairaRadius.control))
                         }
                     }

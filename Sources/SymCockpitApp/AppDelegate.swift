@@ -1,4 +1,5 @@
 @preconcurrency import AppKit
+import SwiftUI
 import SymCockpitUI
 
 /// Application delegate for Symaira Cockpit.
@@ -16,6 +17,10 @@ import SymCockpitUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var windowController: CockpitWindowController?
+    #if DEBUG
+    private var designPreviewWindow: NSWindow?
+    private var hudDemo: HUDDemoController?
+    #endif
 
     /// `NSApplicationMain` only wires the delegate up from a nib, and this app
     /// has none — set it explicitly before running (same reason as SymCockpitMenuBarApp).
@@ -38,6 +43,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--hud-demo") {
+            let arguments = ProcessInfo.processInfo.arguments
+            let appearance: CockpitAppearance = arguments.contains("--dark") ? .dark
+                : (arguments.contains("--light") ? .light : .system)
+            let demo = HUDDemoController(appearance: appearance)
+            hudDemo = demo
+            demo.show()
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--design-preview") {
+            showDesignPreview()
+            return
+        }
+        #endif
         installMainMenu()
 
         let statusBar = StatusBarController(updateVersionProvider: { CockpitAppVersion.current })
@@ -82,7 +102,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// which is what the launch smoke check uses.
     private static let hasLaunchedKey = "com.symaira.cockpit.hasLaunched"
 
+    #if DEBUG
+    /// Passive review of the production components. No controller, credentials,
+    /// polling or persisted preferences are constructed on this launch path.
+    @MainActor
+    private func showDesignPreview() {
+        let arguments = ProcessInfo.processInfo.arguments
+        let appearance: CockpitAppearance = arguments.contains("--dark") ? .dark
+            : (arguments.contains("--light") ? .light : .system)
+        let view = CockpitDesignPreview(showsReadings: !arguments.contains("--no-readings"), appearance: appearance)
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = "Symaira Cockpit · Design Preview"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.setContentSize(NSSize(width: arguments.contains("--compact") ? 620 : 1080, height: 760))
+        window.contentMinSize = NSSize(width: 620, height: 520)
+        window.isReleasedWhenClosed = false
+        designPreviewWindow = window
+        NSApp.setActivationPolicy(.regular)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+    #endif
+
     func applicationWillTerminate(_ notification: Notification) {
+        #if DEBUG
+        hudDemo?.stop()
+        hudDemo = nil
+        #endif
         windowController = nil
         statusBarController = nil
     }

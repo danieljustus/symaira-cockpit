@@ -52,10 +52,10 @@ struct HUDContentCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("HUD CONTENT")
                     .symairaText(.sectionLabel)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+                    .foregroundStyle(SymairaTokens.selected)
                 Text("What the HUD shows, and how far it has to be open")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             Spacer(minLength: SymairaSpacing.small)
             Button("Reset") { items.resetToDefault() }
@@ -70,11 +70,11 @@ struct HUDContentCard: View {
             Spacer(minLength: 0)
             Text("Side")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .frame(width: Self.sideWidth)
             Text("Show")
                 .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.textMuted)
+                .foregroundStyle(SymairaTokens.ink3)
                 .frame(width: Self.stageWidth)
             Color.clear.frame(width: Self.toggleWidth, height: 1)
         }
@@ -82,7 +82,7 @@ struct HUDContentCard: View {
 
     private static let sideWidth: CGFloat = 96
     private static let stageWidth: CGFloat = 132
-    private static let toggleWidth: CGFloat = 44
+    private static let toggleWidth: CGFloat = 56
 
     // MARK: - Rows
 
@@ -98,28 +98,25 @@ struct HUDContentCard: View {
             Image(systemName: kind.symbolName)
                 .symairaText(.caption)
                 .frame(width: 18)
-                .foregroundStyle(placement.isEnabled ? SymairaTheme.goldPrimary : SymairaTheme.textMuted)
+                .foregroundStyle(placement.isEnabled ? SymairaTokens.selected : SymairaTokens.ink3)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(kind.displayName)
                     .symairaText(.body)
-                    .foregroundStyle(placement.isEnabled ? SymairaTheme.textPrimary : SymairaTheme.textMuted)
+                    .foregroundStyle(placement.isEnabled ? SymairaTokens.ink : SymairaTokens.ink3)
                 if placement.isEnabled, unmonitored {
                     Text("Not monitored — turn it on above")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                 }
             }
 
             Spacer(minLength: SymairaSpacing.small)
 
-            Picker("", selection: sideBinding(kind)) {
-                ForEach(HUDItemSide.allCases, id: \.rawValue) { side in
-                    Text(side.displayName).tag(side)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            SymairaSegmentedControl(
+                "\(kind.displayName) side", selection: sideBinding(kind),
+                options: HUDItemSide.allCases.map { ($0, $0.displayName) }
+            )
             .frame(width: Self.sideWidth)
             .disabled(!placement.isEnabled)
             .opacity(placement.isEnabled ? 1 : 0.4)
@@ -137,10 +134,8 @@ struct HUDContentCard: View {
             .help(placement.stage.settingsCaption)
 
             Toggle("", isOn: enabledBinding(kind))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                .toggleStyle(.symairaSwitch)
                 .labelsHidden()
-                .tint(SymairaTheme.goldPrimary)
                 .frame(width: Self.toggleWidth)
                 .help("Show \(kind.displayName) on the HUD")
         }
@@ -163,12 +158,12 @@ struct HUDContentCard: View {
     private var footnote: some View {
         let notes = warnings
         if !notes.isEmpty {
-            Divider().overlay(SymairaTheme.borderGlass)
+            Divider().overlay(SymairaTokens.line)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(notes, id: \.self) { note in
                     Text(note)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

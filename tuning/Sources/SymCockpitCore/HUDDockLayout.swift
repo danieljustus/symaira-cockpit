@@ -157,7 +157,7 @@ public enum HUDDockLayout {
     // MARK: - Card height
 
     /// Height of one item row in the expanded card.
-    public static let expandedRowHeight: CGFloat = 21
+    public static let expandedRowHeight: CGFloat = 28
     /// Everything in the card that is not an item row: the padding above and
     /// below, the divider, and the action buttons.
     public static let expandedChromeHeight: CGFloat = 82

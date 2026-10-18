@@ -10,7 +10,8 @@ import SymairaTheme
 /// values, moving between docks, opening and being dragged are all one
 /// animatable change instead of three mechanisms.
 ///
-/// Two shapes live here, and both are black on purpose. In the cutout the HUD
+/// Both resting shapes are black on purpose. Expanded cards use the shared
+/// appearance-aware surface, typography and actions. In the cutout the HUD
 /// is horizontal and square-topped so it fuses with the bezel — that is
 /// ``NotchHUDView``. On a screen edge it is a thin vertical sliver, flush with
 /// the display's frame and rounded only on the inward side, that swells and
@@ -20,8 +21,11 @@ import SymairaTheme
 /// machine, which is the whole reason they work.
 @MainActor
 struct HUDDockView: View {
-    let model: TuneViewModel
+    let resolveItems: ([HUDItemKind]) -> [HUDItemValue]
     let itemLayout: HUDItemLayout
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     /// The display the stage covers, in global screen coordinates.
     let metrics: NotchScreenMetrics
@@ -76,6 +80,12 @@ struct HUDDockView: View {
         }
         .frame(width: metrics.frame.width, height: metrics.frame.height, alignment: .topLeading)
         .coordinateSpace(.named(Self.stageSpace))
+        .transaction {
+            if reduceMotion {
+                $0.animation = nil
+                $0.disablesAnimations = true
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Symaira HUD")
     }
@@ -104,10 +114,12 @@ struct HUDDockView: View {
     /// shoulders; the edge docks answer zero and never ask.
     private var shoulderWidth: CGFloat {
         let width = switch presentation {
-        case .collapsed, .expanded: NotchLayout.shoulderWidth(metrics)
-        case .peek: NotchLayout.peekShoulderWidth(metrics)
+        case .collapsed: NotchLayout.shoulderWidth(metrics)
+        case .peek, .expanded: NotchLayout.peekShoulderWidth(metrics)
         }
-        return width ?? 0
+        // Expanded still shows peek items; do not squeeze them back into the
+        // collapsed shoulder. The current card/camera geometry is a hard cap.
+        return min(width ?? 0, max(0, (target.width - notchWidth) / 2))
     }
 
     /// The edge the HUD is attached to, and therefore the point a stretch must
@@ -142,7 +154,7 @@ struct HUDDockView: View {
         Group {
             if dock == .notch {
                 NotchHUDView(
-                    model: model,
+                    resolveItems: resolveItems,
                     itemLayout: itemLayout,
                     notchWidth: notchWidth,
                     shoulderWidth: shoulderWidth,
@@ -189,12 +201,9 @@ struct HUDDockView: View {
     /// The edge HUD: a black sliver flush with the display's frame, which swells
     /// under the pointer and unfolds inward into a card.
     ///
-    /// It is drawn the way the notch dock is drawn, and for the same reason.
-    /// The notch HUD has to be black because it is pretending to be the camera
-    /// cutout; the edge HUD has to be black because it is pretending to be the
-    /// bezel. In both cases the illusion dies the moment the fill is anything a
-    /// display frame could not be — a glass pill parked near the edge reads as
-    /// a small window, not as part of the machine.
+    /// Parked and peeking remain black like the bezel. The expanded card uses
+    /// the same quiet content surface as Cockpit, with no animated background
+    /// competing with these tightly packed readings.
     private var edge: some View {
         Group {
             switch presentation {
@@ -209,15 +218,15 @@ struct HUDDockView: View {
             }
         }
         .background {
-            Color.black
+            (presentation == .expanded ? SymairaTheme.surfaceOpaque(for: colorScheme) : Color.black)
                 .clipShape(edgeShape)
                 .overlay(
                     // Only the inward edges are drawn. A line along the screen
                     // edge would trace the outline of a window, which is the
                     // one thing this must never look like.
                     edgeShape.strokeBorder(
-                        presentation == .expanded ? SymairaTheme.borderGlass : Color.clear,
-                        lineWidth: 1
+                        presentation == .expanded ? SymairaTheme.line(for: colorScheme) : Color.clear,
+                        lineWidth: contrast == .increased ? 2 : 1
                     )
                 )
                 // Room for the flare, taken from outside the frame rather than
@@ -259,7 +268,7 @@ struct HUDDockView: View {
     /// picked the "wrong" side would be a trap.
     private var edgePeek: some View {
         VStack(spacing: 6) {
-            ForEach(HUDItemResolver.values(for: itemLayout.items(at: .peek), model: model)) { item in
+            ForEach(resolveItems(itemLayout.items(at: .peek))) { item in
                 HUDCompactItem(item: item)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
@@ -273,8 +282,8 @@ struct HUDDockView: View {
     /// Expanded: every item the user placed, plus the actions.
     private var edgeCard: some View {
         VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-            let left = HUDItemResolver.values(for: itemLayout.items(on: .left, at: .expanded), model: model)
-            let right = HUDItemResolver.values(for: itemLayout.items(on: .right, at: .expanded), model: model)
+            let left = resolveItems(itemLayout.items(on: .left, at: .expanded))
+            let right = resolveItems(itemLayout.items(on: .right, at: .expanded))
 
             if left.isEmpty && right.isEmpty {
                 HUDEmptyState(hasEnabledItems: itemLayout.hasItems(at: .expanded))
@@ -282,54 +291,22 @@ struct HUDDockView: View {
                 // One column, not two: the edge card is 288 points wide, and
                 // splitting that leaves neither side room for a label and a
                 // number on one line.
-                VStack(spacing: 4) {
-                    ForEach(left + right) { item in
-                        HUDCardRow(item: item)
+                ScrollView {
+                    VStack(spacing: SymairaSpacing.xSmall) {
+                        ForEach(left + right) { item in
+                            HUDCardRow(item: item)
+                        }
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
 
-            Divider().overlay(SymairaTheme.borderGlass)
-
-            HStack(spacing: SymairaSpacing.small) {
-                actionButton("Panel", symbol: "slider.horizontal.3", action: openPanel)
-                actionButton(
-                    openCockpitTitle,
-                    symbol: "gauge.with.dots.needle.bottom.50percent",
-                    action: openCockpit
-                )
-                Spacer(minLength: 0)
-            }
+            Divider().overlay(SymairaTheme.line(for: colorScheme))
+            HUDCardActions(openPanel: openPanel, openCockpit: openCockpit, openCockpitTitle: openCockpitTitle)
         }
         .padding(SymairaSpacing.medium)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .transition(.opacity)
     }
 
-    private func actionButton(
-        _ title: String,
-        symbol: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: symbol)
-                Text(title)
-            }
-            .symairaText(.caption)
-            .foregroundStyle(SymairaTheme.textPrimary)
-            .padding(.horizontal, SymairaSpacing.small)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: SymairaRadius.control)
-                    .fill(SymairaTheme.bgCardHover.opacity(0.8))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SymairaRadius.control)
-                    .strokeBorder(SymairaTheme.borderGlass, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }

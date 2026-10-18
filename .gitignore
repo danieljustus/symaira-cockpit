@@ -8,6 +8,8 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 .swiftpm/
+# SwiftPM editable dependency links are local development state.
+Packages/
 **/Package.resolved
 !/Package.resolved
 *.profraw

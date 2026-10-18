@@ -19,35 +19,6 @@ final class LineReader: @unchecked Sendable {
     }
 }
 
-/// Boots a `TuneMCPServer` on an in-process pipe pair and returns a harness
-/// that lets the test act as the MCP client.
-struct MCPTestHarness {
-    let server: MCPServer
-    let clientWrite: FileHandle
-    let reader: LineReader
-    let serverTask: Task<Void, Error>
-
-    static func make(controller: TuneController = TuneController(), config: TuneConfig = TuneConfig()) throws -> MCPTestHarness {
-        let clientToServer = Pipe()
-        let serverToClient = Pipe()
-        let transport = MCPStdioTransport(
-            input: clientToServer.fileHandleForReading,
-            output: serverToClient.fileHandleForWriting
-        )
-        let tuneServer = TuneMCPServer(controller: controller, config: config)
-        let server = tuneServer.makeServer()
-        // Detached: async XCTest methods run on a special executor that never
-        // schedules unstructured tasks created inside the test body.
-        let serverTask = Task.detached { try await server.start(transport: transport) }
-        return MCPTestHarness(
-            server: server,
-            clientWrite: clientToServer.fileHandleForWriting,
-            reader: LineReader(handle: serverToClient.fileHandleForReading),
-            serverTask: serverTask
-        )
-    }
-}
-
 struct MCPTestEnvelope: Decodable {
     let jsonrpc: String?
     let id: MCPJSONRPCID?
@@ -416,7 +387,8 @@ final class MCPServerToolCallTests: XCTestCase {
     }
 
     func testCallKeepAwakeTool() async throws {
-        let harness = try MCPTestHarness.make()
+        let power = MockMCPPowerAssertionSource()
+        let harness = try MCPTestHarness.make(powerSource: power)
         defer { try? harness.clientWrite.close() }
 
         let (enableEnvelope, enableResult) = try await mcpCallTool(
@@ -426,10 +398,13 @@ final class MCPServerToolCallTests: XCTestCase {
         )
         XCTAssertNil(enableEnvelope.error)
         XCTAssertEqual(enableResult?.isError, false)
+        XCTAssertEqual(power.counts.created, 1)
+        XCTAssertEqual(power.counts.released, 0)
 
         let (disableEnvelope, disableResult) = try await mcpCallTool(harness, name: "keep_awake", arguments: ["enabled": false])
         XCTAssertNil(disableEnvelope.error)
         XCTAssertEqual(disableResult?.isError, false)
+        XCTAssertEqual(power.counts.released, 1)
     }
 
     func testCallGetBrightnessTool() async throws {

@@ -3,9 +3,8 @@ import XCTest
 
 // MARK: - TuneController sensorsReport(), beginKeepAwake(), endKeepAwake()
 //
-// Covers TuneController.swift lines 98, 179-185, 187-192.
-// PowerService is unprivileged (IOKit caffeinate-analog) so it works in tests
-// without injection — but we make meaningful behavioral assertions.
+// Keep-awake tests inject a power source: ordinary unit tests must not
+// create IOKit sleep assertions on the machine running them.
 
 final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
 
@@ -14,7 +13,7 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
     /// Covers the sensorsReport() facade: returns a SensorReport with a
     /// recognised thermal-pressure label and the expected field shape.
     func testSensorsReportReturnsValidReport() {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
         let report = controller.sensorsReport()
 
         // Thermal pressure must be one of the known labels
@@ -42,7 +41,7 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
     /// Covers lines 179-185: beginKeepAwake creates a power assertion,
     /// increments the active token count, and returns a valid token.
     func testBeginKeepAwakeReturnsTokenAndActivates() throws {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
 
         XCTAssertFalse(controller.isKeepAwakeActive(), "precondition: should start inactive")
 
@@ -51,19 +50,18 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
             preventDisplaySleep: false
         )
 
-        // Token has a valid (non-zero) IOKit assertion ID
+        // Token has a valid (non-zero) assertion ID from the injected source
         XCTAssertNotEqual(token.id, 0, "token ID should be non-zero")
 
         // Active state flips on
         XCTAssertTrue(controller.isKeepAwakeActive())
 
-        // Clean up to avoid leaking real power assertions
         controller.endKeepAwake(token)
     }
 
     /// Covers lines 179-185 with preventDisplaySleep: true.
     func testBeginKeepAwakeDisplaySleepVariant() throws {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
 
         let token = try controller.beginKeepAwake(
             reason: "test display-prevent",
@@ -78,7 +76,7 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
 
     /// Multiple begin calls stack the active-token counter.
     func testBeginKeepAwakeMultipleTokensStack() throws {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
 
         let t1 = try controller.beginKeepAwake(reason: "first", preventDisplaySleep: false)
         XCTAssertTrue(controller.isKeepAwakeActive())
@@ -97,10 +95,10 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
 
     // MARK: - endKeepAwake (lines 187-192)
 
-    /// Covers lines 187-192: endKeepAwake releases the IOKit assertion
+    /// Covers lines 187-192: endKeepAwake releases the assertion
     /// and decrements the active token count to zero.
     func testEndKeepAwakeReleasesAndDeactivates() throws {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
 
         let token = try controller.beginKeepAwake(
             reason: "test end",
@@ -115,17 +113,16 @@ final class TuneControllerSensorsKeepAwakeTests: XCTestCase {
 
     /// endKeepAwake clamps the counter at 0 (no underflow).
     func testEndKeepAwakeClampsCounterAtZero() throws {
-        let controller = TuneController()
+        let controller = TuneController(displayWrite: MockDisplayWriteService(), keepAwakeSource: FakePowerAssertionSource())
 
         let token = try controller.beginKeepAwake(reason: "single", preventDisplaySleep: false)
         controller.endKeepAwake(token)
         XCTAssertFalse(controller.isKeepAwakeActive())
 
-        // Calling endKeepAwake again with a different token should not crash
-        // and the counter should remain at 0 (clamped by max(0, ...)).
+        // Calling endKeepAwake again should not crash or underflow.
         let token2 = try controller.beginKeepAwake(reason: "second", preventDisplaySleep: false)
         controller.endKeepAwake(token2)
-        controller.endKeepAwake(token2)  // second release of same token — counter stays at 0
+        controller.endKeepAwake(token2)
         XCTAssertFalse(controller.isKeepAwakeActive())
     }
 }

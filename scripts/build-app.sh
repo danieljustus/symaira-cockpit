@@ -12,6 +12,7 @@ set -euo pipefail
 #   CONFIGURATION  debug | release (default: release)
 #   UNIVERSAL      1 to build arm64 + x86_64 (default: 1)
 #   OUTPUT_DIR     where the .app lands (default: build/app)
+#   SWIFT_SCRATCH_PATH optional isolated SwiftPM build directory
 
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
@@ -35,7 +36,12 @@ COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)
   exit 1
 }
 
+# Use the toolchain's default build system (Swift Build on Xcode 27). The
+# resource gate below rejects an uncompiled .metal source-only bundle.
 BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:-2}")
+if [[ -n "${SWIFT_SCRATCH_PATH:-}" ]]; then
+  BUILD_ARGS+=(--scratch-path "$SWIFT_SCRATCH_PATH")
+fi
 if [[ "$UNIVERSAL" == "1" ]]; then
   BUILD_ARGS+=(--arch arm64 --arch x86_64)
 fi
@@ -53,6 +59,21 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+# Bundle.module searches Contents/Resources in an assembled app. Copy every
+# package resource bundle, not just the executable: fonts, shaders and provider
+# descriptors must work after moving the app away from its build directory.
+shopt -s nullglob
+RESOURCE_BUNDLES=("$(dirname "$BIN_PATH")"/*.bundle)
+for resource_bundle in "${RESOURCE_BUNDLES[@]}"; do
+  cp -R "$resource_bundle" "$APP_PATH/Contents/Resources/"
+done
+THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-appkit_SymairaTheme.bundle/Contents/Resources"
+for resource in GoogleSansFlex.ttf GoogleSansFlex-OFL.txt GoogleSansFlex-TRADEMARKS.md default.metallib; do
+  [[ -s "$THEME_RESOURCES/$resource" ]] || {
+    printf 'Missing required AppKit resource: %s\n' "$resource" >&2
+    exit 1
+  }
+done
 cp -R "$ICON_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icon"
 cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icns"
 

@@ -18,8 +18,7 @@ struct DisplayControlsCard: View {
     var brightnessKeys: BrightnessKeyPreferences?
     var brightnessKeyController: BrightnessKeyController?
 
-    /// Why the takeover is not working, when it is switched on but blocked.
-    @State private var impediment: BrightnessKeyController.Impediment?
+    @State private var displayError: String?
 
     private var isEDRCapable: Bool {
         model.displays.contains { $0.edrCapable }
@@ -33,8 +32,11 @@ struct DisplayControlsCard: View {
                 value: model.builtinBrightness,
                 range: 0.0...1.0
             ) { value in
-                try? controller.applyBuiltinBrightness(value)
-                model.refreshNow()
+                apply { try controller.applyBuiltinBrightness(value) }
+            }
+
+            if let preferences = brightnessKeys {
+                BrightnessKeyRow(preferences: preferences, brightnessKeyController: brightnessKeyController)
             }
 
             // Software dimming and EDR headroom as one control: centre is the
@@ -58,7 +60,7 @@ struct DisplayControlsCard: View {
             if let note = extendedBrightnessNote {
                 Text(note)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.warning)
+                    .foregroundStyle(SymairaTokens.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -68,8 +70,14 @@ struct DisplayControlsCard: View {
                 value: model.warmth,
                 range: 0.0...1.0
             ) { value in
-                try? controller.applyWarmth(value)
-                model.refreshNow()
+                apply { try controller.applyWarmth(value) }
+            }
+
+            if let displayError {
+                Text(displayError)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTokens.critical)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .cardStyle()
@@ -85,76 +93,75 @@ struct DisplayControlsCard: View {
     /// Switching to this app needs an Accessibility grant, so the row explains
     /// the block and offers the way to clear it rather than silently doing
     /// nothing.
-    @ViewBuilder
-    private func brightnessKeyRow(_ preferences: BrightnessKeyPreferences) -> some View {
-        VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
-            HStack(spacing: SymairaSpacing.medium) {
-                Image(systemName: "keyboard")
-                    .symairaText(.caption)
-                    .frame(width: 18)
-                    .foregroundStyle(SymairaTheme.goldPrimary)
+    private struct BrightnessKeyRow: View {
+        @ObservedObject var preferences: BrightnessKeyPreferences
+        var brightnessKeyController: BrightnessKeyController?
+        @State private var impediment: BrightnessKeyController.Impediment?
 
-                Text("Brightness keys")
-                    .symairaText(.body)
-                    .foregroundStyle(SymairaTheme.textPrimary)
+        var body: some View {
+            VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                HStack(spacing: SymairaSpacing.medium) {
+                    Image(systemName: "keyboard")
+                        .symairaText(.caption)
+                        .frame(width: 18)
+                        .foregroundStyle(SymairaTokens.selected)
 
-                Spacer(minLength: SymairaSpacing.small)
+                    Text("Brightness keys")
+                        .symairaText(.body)
+                        .foregroundStyle(SymairaTokens.ink)
 
-                Picker("", selection: Binding(
-                    get: { preferences.handling },
-                    set: { preferences.handling = $0 }
-                )) {
-                    Text(BrightnessKeyHandling.system.displayName)
-                        .tag(BrightnessKeyHandling.system)
-                    Text(BrightnessKeyHandling.cockpit.displayName)
-                        .tag(BrightnessKeyHandling.cockpit)
+                    Spacer(minLength: SymairaSpacing.small)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 160)
+
+                SymairaSegmentedControl(
+                    "Brightness keys",
+                    selection: Binding(get: { preferences.handling }, set: { preferences.handling = $0 }),
+                    options: [BrightnessKeyHandling.system, .cockpit].map { ($0, $0.displayName) }
+                )
+                .accessibilityLabel("Brightness keys")
                 .help("Who answers F1 and F2 — macOS, or this app with its own HUD")
-            }
 
-            if preferences.handling == .cockpit, let impediment {
-                impedimentNote(impediment)
-            }
-        }
-        .onAppear { impediment = brightnessKeyController?.impediment }
-        .task(id: preferences.handling) {
-            // The controller reaches the grant asynchronously — it keeps
-            // retrying while the user is still in System Settings — so the row
-            // follows it rather than reading once.
-            brightnessKeyController?.onImpedimentChanged = { impediment = $0 }
-            impediment = brightnessKeyController?.impediment
-        }
-    }
-
-    @ViewBuilder
-    private func impedimentNote(_ impediment: BrightnessKeyController.Impediment) -> some View {
-        switch impediment {
-        case .accessibilityNotGranted:
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Needs Accessibility to see the keys before macOS does")
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: SymairaSpacing.small) {
-                    Button("Grant\u{2026}") {
-                        BrightnessKeyController.requestAccessibilityGrant()
-                    }
-                    Button("Open Settings") {
-                        BrightnessKeyController.openAccessibilitySettings()
-                    }
+                if preferences.handling == .cockpit, let impediment {
+                    impedimentNote(impediment)
                 }
-                .buttonStyle(.link)
-                .symairaText(.caption)
             }
-        case .noBuiltInDisplay:
-            // External panels are driven over DDC/CI, which this does not do.
-            Text("No built-in display to control")
-                .symairaText(.caption)
-                .foregroundStyle(SymairaTheme.warning)
-                .fixedSize(horizontal: false, vertical: true)
+            .onAppear { impediment = brightnessKeyController?.impediment }
+            .task(id: preferences.handling) {
+                // The controller reaches the grant asynchronously — it keeps
+                // retrying while the user is still in System Settings — so the row
+                // follows it rather than reading once.
+                brightnessKeyController?.onImpedimentChanged = { impediment = $0 }
+                impediment = brightnessKeyController?.impediment
+            }
+        }
+
+        @ViewBuilder
+        private func impedimentNote(_ impediment: BrightnessKeyController.Impediment) -> some View {
+            switch impediment {
+            case .accessibilityNotGranted:
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Needs Accessibility to see the keys before macOS does")
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTokens.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: SymairaSpacing.small) {
+                        Button("Grant\u{2026}") {
+                            BrightnessKeyController.requestAccessibilityGrant()
+                        }
+                        Button("Open Settings") {
+                            BrightnessKeyController.openAccessibilitySettings()
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .symairaText(.caption)
+                }
+            case .noBuiltInDisplay:
+                // External panels are driven over DDC/CI, which this does not do.
+                Text("No built-in display to control")
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTokens.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -197,9 +204,20 @@ struct DisplayControlsCard: View {
         )
         // Both sides are written every time: leaving the other one at its last
         // value would keep it acting after the knob has crossed centre.
-        try? controller.applyDim(resolved.dimFactor)
-        if isEDRCapable {
-            try? controller.applyExtendedBrightness(resolved.extendedBrightness)
+        apply {
+            try controller.applyDim(resolved.dimFactor)
+            if isEDRCapable {
+                try controller.applyExtendedBrightness(resolved.extendedBrightness)
+            }
+        }
+    }
+
+    private func apply(_ action: () throws -> Void) {
+        do {
+            try action()
+            displayError = nil
+        } catch {
+            displayError = SecretRedactor.redact(error.localizedDescription)
         }
         model.refreshNow()
     }
@@ -245,12 +263,12 @@ struct FanControlCard: View {
                 HStack {
                     Label("Fan Control", systemImage: "fanblades.fill")
                         .symairaText(.subheading)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                     Spacer()
                     if let rpm = currentRPM {
                         Text("\(rpm) rpm")
                             .symairaText(.caption)
-                            .foregroundStyle(SymairaTheme.textMuted)
+                            .foregroundStyle(SymairaTokens.ink3)
                     }
                 }
 
@@ -260,19 +278,19 @@ struct FanControlCard: View {
 
                 Text(selectedProfile.summary)
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if isAwaitingAuthorization {
                     Text("Starting the fan governor — you may be asked for your "
                          + "administrator password…")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.textMuted)
+                        .foregroundStyle(SymairaTokens.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let fanError {
                     Text(fanError)
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if selectedProfile != .system && !model.fanGovernorRunning {
                     // Honest reporting: a selected position with nothing
@@ -280,7 +298,7 @@ struct FanControlCard: View {
                     // curve, and saying "Cool" would be a lie.
                     Text("Not in effect — no fan governor is running.")
                         .symairaText(.caption)
-                        .foregroundStyle(SymairaTheme.critical)
+                        .foregroundStyle(SymairaTokens.critical)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -294,12 +312,12 @@ struct FanControlCard: View {
                 HStack {
                     Label("Fan Control", systemImage: "fanblades.fill")
                         .symairaText(.subheading)
-                        .foregroundStyle(SymairaTheme.textSecondary)
+                        .foregroundStyle(SymairaTokens.ink2)
                     Spacer()
                 }
                 Text("Not available on this Mac")
                     .symairaText(.caption)
-                    .foregroundStyle(SymairaTheme.textMuted)
+                    .foregroundStyle(SymairaTokens.ink3)
             }
             .cardStyle()
         }

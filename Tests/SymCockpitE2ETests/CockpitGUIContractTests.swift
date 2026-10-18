@@ -25,7 +25,8 @@ final class CockpitGUIContractTests: XCTestCase {
                         "cockpitFocusSectionFilter", "Tune Preferences"] {
             XCTAssertFalse(source.contains(retired), "retired module shell remains: \(retired)")
         }
-        XCTAssertTrue(window.contains("Label(\"Preferences\", systemImage: \"gearshape\")"))
+        XCTAssertFalse(window.contains(".toolbar"), "The shared workspace owns the single settings entry")
+        XCTAssertTrue(window.contains("openPreferences: openPreferences"))
     }
 
     /// Source guard supplements live AX checks; it does not replace them.
@@ -56,8 +57,12 @@ final class CockpitGUIContractTests: XCTestCase {
         let panel = try String(
             contentsOf: ui.appendingPathComponent("MainStatusView.swift"), encoding: .utf8
         )
-        XCTAssertTrue(panel.contains(".preferredColorScheme(.dark)"),
-                      "adaptive text must use dark appearance on the fixed dark canvas")
+        // Liquid Topography: the panel follows the system appearance with adaptive
+        // roles; forcing dark would hide the approved light palette.
+        XCTAssertFalse(panel.contains(".preferredColorScheme(.dark)"))
+        XCTAssertTrue(panel.contains("SymairaTokens.canvas"))
+        XCTAssertFalse(panel.contains("SymairaTheme.goldPrimary"),
+                       "selection must use the adaptive selected role, not fixed gold")
     }
 
     /// One mounted panel is essential: navigating must not discard draft controls.
@@ -77,7 +82,20 @@ final class CockpitGUIContractTests: XCTestCase {
         XCTAssertTrue(shell.contains("ScrollViewReader"))
         XCTAssertTrue(shell.contains("scroll.scrollTo(anchor, anchor: .top)"))
         XCTAssertTrue(shell.contains("accessibilityReduceMotion"))
-        XCTAssertTrue(shell.contains("geometry.size.width >= 840"))
+        XCTAssertTrue(shell.contains("SymairaWorkspace("))
+        XCTAssertTrue(shell.contains("sidebar: $sidebarLayout, topography: topography"))
+        XCTAssertTrue(shell.contains("topoProtected(hill: hill)"))
+        XCTAssertTrue(shell.contains("SymairaSidebarToggle(sidebar: $sidebarLayout)"))
+        XCTAssertTrue(shell.contains("SymairaSettingsMenu(selection: $appearance.selection, openSettings: openPreferences)"))
+        XCTAssertFalse(shell.contains("Text(\"Preferences\")"), "Do not duplicate settings in the sidebar")
+        XCTAssertFalse(shell.contains("clipShape(contentPanel)"), "panel rules belong in AppKit")
+        XCTAssertTrue(shell.contains(".focused($focusedAnchor, equals: anchor)"))
+        let cards = try String(contentsOf: ui.appendingPathComponent("StatusCards.swift"), encoding: .utf8)
+        XCTAssertTrue(cards.contains(".cockpitProtected(hill: true)"))
+        XCTAssertTrue(cards.contains("colorSchemeContrast"))
+        XCTAssertTrue(panel.contains(".cockpitProtected()"))
+        // Width budgets and compact restoration are exercised by the native sizing test.
+        XCTAssertTrue(shell.contains("SymairaSidebarState()"))
         XCTAssertTrue(shell.contains(".accessibilityLabel(\"Jump to "))
         for anchor in ["overview", "display", "power", "activity", "readout"] {
             XCTAssertEqual(panel.components(separatedBy: ".id(TuneWorkspaceAnchor.\(anchor))").count - 1, 1)

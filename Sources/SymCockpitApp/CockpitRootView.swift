@@ -9,16 +9,11 @@ struct CockpitRootView: View {
     let openPreferences: () -> Void
 
     var body: some View {
-        CockpitWorkspaceView(version: CockpitAppVersion.current, openPreferences: openPreferences) {
+        CockpitWorkspaceView(
+            version: CockpitAppVersion.current, openPreferences: openPreferences,
+            appearance: statusBar.appearancePreferences
+        ) {
             statusBar.tunePanel(chrome: .embedded)
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: openPreferences) {
-                    Label("Preferences", systemImage: "gearshape")
-                }
-                .help("Open preferences (⌘,)")
-            }
         }
     }
 }
