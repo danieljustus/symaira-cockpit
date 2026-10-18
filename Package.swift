@@ -17,9 +17,7 @@ let package = Package(
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
-        // ponytail: unreleased shared workspace commit (AppKit PR #167). Replace with
-        // `exact:` on the release tag before merge; AGENTS.md requires a tag pin.
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", revision: "fae36d927b166446b91fd4c9af1c919765efdbe3"),
+        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.15.1"),
         .package(path: "tuning"),
     ],
     targets: [
