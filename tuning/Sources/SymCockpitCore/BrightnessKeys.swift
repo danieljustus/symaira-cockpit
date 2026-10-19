@@ -84,6 +84,29 @@ public enum BrightnessKeyStep {
         return min(1, max(0, snapped + direction.sign * grid))
     }
 
+    /// The level to write for one press, or `nil` when the press belongs to
+    /// macOS instead (issue #359).
+    ///
+    /// The read comes from a private API that has been observed to report a
+    /// near-zero level while the panel was visibly lit; stepping up from that
+    /// wrote the lowest step and blacked the screen out on every press. A read
+    /// that cannot be trusted is not stepped from at all: the system answers
+    /// the key, exactly as it would with the feature off.
+    ///
+    /// - Parameter current: the level read off the display, or `nil` when the
+    ///   read failed.
+    /// - Returns: `nil` for a failed, non-finite or out-of-range read, and for
+    ///   a brightness-up press from a read that snaps to zero.
+    public static func target(
+        fromRead current: Float?,
+        direction: Direction,
+        fine: Bool
+    ) -> Float? {
+        guard let current, current.isFinite, (0...1).contains(current) else { return nil }
+        if direction == .up, current < coarse / 2 { return nil }
+        return next(from: current, direction: direction, fine: fine)
+    }
+
     /// How many segments of a `count`-segment bar are lit at `level`.
     ///
     /// The system HUD quantises its bar the same way, so a level between two

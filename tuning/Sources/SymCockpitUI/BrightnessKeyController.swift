@@ -257,33 +257,40 @@ final class BrightnessKeyController: NSObject {
         let flags = data1 & 0x0000_FFFF
         let isDown = ((flags & 0xFF00) >> 8) == 0x0A
 
-        if isDown {
-            // Shift+Option is the system's fine-adjust chord: quarter steps.
-            let fine = nsEvent.modifierFlags.contains(.shift)
-                && nsEvent.modifierFlags.contains(.option)
-            let direction: BrightnessKeyStep.Direction =
-                keyCode == brightnessUpKeyCode ? .up : .down
-            apply(direction: direction, fine: fine)
+        // A key-up follows its key-down: macOS must not see a release for a
+        // press it never received, nor miss one for a press it did.
+        guard isDown else {
+            return lastPressHandled ? nil : Unmanaged.passUnretained(event)
         }
 
-        return nil
+        // Shift+Option is the system's fine-adjust chord: quarter steps.
+        let fine = nsEvent.modifierFlags.contains(.shift)
+            && nsEvent.modifierFlags.contains(.option)
+        let direction: BrightnessKeyStep.Direction =
+            keyCode == brightnessUpKeyCode ? .up : .down
+        lastPressHandled = apply(direction: direction, fine: fine)
+        return lastPressHandled ? nil : Unmanaged.passUnretained(event)
     }
+
+    /// Whether the most recent brightness key-down was answered here, so its
+    /// key-up is consumed or handed back to match.
+    private var lastPressHandled = false
 
     /// Step from the level the display actually holds, never from a running
     /// total: anything else drifts the moment auto-brightness, Control Center
     /// or a wake from sleep moves brightness behind this app's back.
-    private func apply(direction: BrightnessKeyStep.Direction, fine: Bool) {
-        guard let current = try? controller.getBuiltinBrightness() else { return }
-        let target = BrightnessKeyStep.next(
-            from: Float(current),
-            direction: direction,
-            fine: fine
-        )
-        // The HUD reflects the request even if the write is refused: the config
-        // can bound brightness below the key's range, and a HUD that ignores
-        // the press entirely reads as a dead key.
-        try? controller.applyBuiltinBrightness(Double(target))
+    ///
+    /// - Returns: `false` when the press was not answered and belongs to
+    ///   macOS: the read was unusable (issue #359) or the write failed.
+    private func apply(direction: BrightnessKeyStep.Direction, fine: Bool) -> Bool {
+        let current = (try? controller.getBuiltinBrightness()).map(Float.init)
+        guard let target = BrightnessKeyStep.target(fromRead: current, direction: direction, fine: fine) else {
+            return false
+        }
+        guard (try? controller.applyBuiltinBrightness(Double(target))) != nil else { return false }
+        // Config bounds can clamp the write, so show what the display holds.
         let shown = (try? controller.getBuiltinBrightness()).map(Float.init) ?? target
         hud.show(level: shown)
+        return true
     }
 }
