@@ -1,16 +1,13 @@
 name: CI
 
+# No workflow-level path filter: a workflow that never starts leaves the
+# required checks missing and blocks the merge. Job selection happens per job
+# through the `changes` job instead, and a skipped job still reports its check.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
 
 permissions:
   contents: read
@@ -20,22 +17,127 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Packages: the two nested packages plus the symcockpit dispatcher
-  # package at the repo root. Matrix per package so a failure is attributable
-  # by name. macOS-only code (AppKit/IOKit/AX) — no ubuntu leg.
+  # Hosted macOS runners queue for hours, so start only the jobs a change can
+  # affect. scripts/ci-changed-areas.sh maps changed paths to jobs and runs
+  # everything for a path it does not know.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      tuning: ${{ steps.detect.outputs.tuning }}
+      history: ${{ steps.detect.outputs.history }}
+      root: ${{ steps.detect.outputs.root }}
+      icon: ${{ steps.detect.outputs.icon }}
+      make: ${{ steps.detect.outputs.make }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the path-to-job table
+        run: ./scripts/test-ci-changed-areas.sh
+
+      - name: Detect affected jobs
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # A pull_request checkout is the test merge commit, so its first
+          # parent is the base it will merge into. A push compares against
+          # the previous tip; without one (new branch, force push) run all.
+          if [ "$EVENT_NAME" = pull_request ]; then
+            range=(HEAD^1 HEAD)
+          elif [ "$EVENT_NAME" = push ] && [ -n "$BEFORE" ] \
+            && ! [[ "$BEFORE" =~ ^0+$ ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range=("$BEFORE" HEAD)
+          else
+            range=()
+          fi
+          if [ "${#range[@]}" -eq 2 ]; then
+            git diff --name-only "${range[@]}" > "$RUNNER_TEMP/changed.txt"
+          else
+            echo "Makefile" > "$RUNNER_TEMP/changed.txt"  # forces the full set
+          fi
+          echo "Changed paths:"; cat "$RUNNER_TEMP/changed.txt"
+          ./scripts/ci-changed-areas.sh < "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+
+  # One job per package so a failure is attributable by name. The names are
+  # static on purpose: `root` and `history` are required checks, and a skipped
+  # matrix job reports only its unexpanded name, which would leave them
+  # missing. Every macOS job uses `!cancelled() && ... != 'false'` so that a
+  # broken `changes` job runs everything instead of skipping it.
+  # macOS-only code (AppKit/IOKit/AX) — no ubuntu leg.
   # macos-latest rather than macos-15: tuning targets Xcode 27 (Swift 6.4) and
   # the older runner's Swift 6.0 rejects @unchecked Sendable boundaries that
   # 6.4 accepts.
-  swift:
-    name: ${{ matrix.pkg }}
+  tuning:
+    name: tuning
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.tuning != 'false' }}
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: ${{ matrix.pkg == 'root' && '.' || matrix.pkg }}
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [tuning, history, root]
+        working-directory: tuning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Prefer the Xcode-beta toolchain when present (actool for the app
+      # targets), otherwise fall back to the runner's default swift.
+      - name: Select toolchain
+        run: |
+          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+  history:
+    name: history
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.history != 'false' }}
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: history
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Prefer the Xcode-beta toolchain when present (actool for the app
+      # targets), otherwise fall back to the runner's default swift.
+      - name: Select toolchain
+        run: |
+          if [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+  # The dispatcher package at the repo root.
+  root:
+    name: root
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.root != 'false' }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -61,7 +163,6 @@ jobs:
         run: swift test
 
       - name: Release app build
-        if: matrix.pkg == 'root'
         run: |
           set -euo pipefail
           release_log="$RUNNER_TEMP/cockpit-release-build.log"
@@ -83,13 +184,14 @@ jobs:
       # Keep DMG validation inside the required root check as well as the
       # separate Xcode-26 icon check, so auto-merge cannot outrun it.
       - name: Native app icon and DMG smoke
-        if: matrix.pkg == 'root'
         run: ./scripts/test-app-icon.sh
 
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.
   icon-compile:
     name: app icon compile
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.icon != 'false' }}
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -112,11 +214,14 @@ jobs:
         run: ./scripts/test-app-icon.sh
 
   # The release workflow gates on `make test`. That gate is only real if a
-  # failing package makes the recipe exit non-zero, so assert it on every
-  # change. Runs on macos-latest to exercise the same make as the release job;
-  # the check itself stubs the toolchain and needs no Swift build.
+  # failing package makes the recipe exit non-zero, so assert it whenever the
+  # Makefile or this check changes. Stays on macos-latest to exercise the same
+  # (older, Apple-shipped GNU 3.81) make as the release job; the check itself
+  # stubs the toolchain and needs no Swift build.
   make-gate:
     name: make failure propagation
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.make != 'false' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -125,7 +230,7 @@ jobs:
         run: ./scripts/check-make-propagation.sh
 
   # Coverage tracking only — main-branch pushes, not a PR check. Keeps PR
-  # checks fast (see the `swift` job above) while still recording coverage
+  # checks fast (see the package jobs above) while still recording coverage
   # figures for tuning/history over time.
   coverage:
     if: github.event_name == 'push'
