@@ -231,9 +231,13 @@ jobs:
 
   # Coverage tracking only — main-branch pushes, not a PR check. Keeps PR
   # checks fast (see the package jobs above) while still recording coverage
-  # figures for tuning/history over time.
+  # figures for tuning/history over time, and only when one of them changed.
+  # Not a required check, so the matrix may be skipped as a whole.
   coverage:
-    if: github.event_name == 'push'
+    needs: changes
+    if: >-
+      ${{ github.event_name == 'push' && !cancelled() &&
+      (needs.changes.outputs.tuning != 'false' || needs.changes.outputs.history != 'false') }}
     name: coverage (${{ matrix.pkg }})
     runs-on: macos-latest
     defaults:
