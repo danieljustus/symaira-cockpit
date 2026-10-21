@@ -95,6 +95,29 @@ final class BrightnessKeysTests: XCTestCase {
         XCTAssertEqual(level, 1.0, accuracy: 0.0001)
     }
 
+    // MARK: - Untrusted reads (#359)
+
+    func testAnUnusableReadHandsThePressToMacOS() {
+        for read: Float? in [nil, .nan, .infinity, -0.1, 1.5] {
+            XCTAssertNil(BrightnessKeyStep.target(fromRead: read, direction: .up, fine: false), "\(String(describing: read))")
+            XCTAssertNil(BrightnessKeyStep.target(fromRead: read, direction: .down, fine: false), "\(String(describing: read))")
+        }
+    }
+
+    func testBrightnessUpNeverStepsFromANearZeroRead() {
+        // The incident: a lit panel read as ~0 and every press wrote 1/16.
+        for read: Float in [0, 0.01, 0.031] {
+            XCTAssertNil(BrightnessKeyStep.target(fromRead: read, direction: .up, fine: false))
+            XCTAssertNil(BrightnessKeyStep.target(fromRead: read, direction: .up, fine: true))
+        }
+    }
+
+    func testATrustedReadStepsAsBefore() {
+        XCTAssertEqual(BrightnessKeyStep.target(fromRead: 0.0625, direction: .up, fine: false), 0.125)
+        XCTAssertEqual(BrightnessKeyStep.target(fromRead: 0.923, direction: .up, fine: false), 1.0)
+        XCTAssertEqual(BrightnessKeyStep.target(fromRead: 0.01, direction: .down, fine: false), 0.0)
+    }
+
     // MARK: - HUD bar
 
     func testSegmentsFillProportionally() {
