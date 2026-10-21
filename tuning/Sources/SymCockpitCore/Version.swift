@@ -6,3 +6,5 @@ import Foundation
 public enum TuneVersion: Sendable {
     public static let current = "0.10.0"
 }
+
+// CI verification for #365 (not for merge).
