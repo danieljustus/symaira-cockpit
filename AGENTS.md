@@ -53,6 +53,9 @@ swift build && swift test  # root dispatcher and GUI integration tests
   Xcode automatically, or set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 - CI (`.github/workflows/ci.yml`) runs Tune, history and root `swift build` +
   `swift test` on `macos-latest`.
+  A `changes` job (`scripts/ci-changed-areas.sh`) starts only the macOS jobs a
+  change can affect; unknown paths run everything, and skipped jobs still
+  report their required checks. Add new source areas to that table.
 - The GUI is assembled by `make build-app` (`scripts/build-app.sh`): SwiftPM
   builds `SymCockpitApp` and the script wraps it in
   `build/app/Symaira Cockpit.app`. There is deliberately **no** Xcode project
