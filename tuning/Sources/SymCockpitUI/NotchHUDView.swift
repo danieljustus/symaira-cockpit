@@ -163,10 +163,10 @@ struct NotchHUDView: View {
     ) -> some View {
         HStack(spacing: 6) {
             ForEach(items) { item in
-                // Parked, the shoulder is too narrow for the long text and
-                // the readout shortens and scales to fit it; peeking, it has
-                // room to spell the value out.
-                HUDCompactItem(item: item, fitsWidth: presentation == .collapsed)
+                // The shoulder's width is a budget in every presentation, so the
+                // readouts shorten and scale to fit it rather than overrun it:
+                // peeking, two long values side by side did not fit 116 pt.
+                HUDCompactItem(item: item, fitsWidth: true)
                     // Each readout arrives from the cutout's direction rather
                     // than fading in place, so a peek looks like the shoulder
                     // sliding content out from behind the camera housing.
