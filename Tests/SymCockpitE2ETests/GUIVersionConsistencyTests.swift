@@ -115,6 +115,6 @@ final class GUIVersionConsistencyTests: XCTestCase {
         XCTAssertTrue(smokeScript.contains("verify-app-icon.sh"))
         XCTAssertTrue(guardScript.contains("diff -qr"))
         XCTAssertTrue(guardScript.contains("CFBundleIconName"))
-        XCTAssertTrue(checksums.contains("fedb70be9bf220e1d0399fb0a6082ed1e625071b6741d01d1ae8f1c813df23bc"))
+        XCTAssertTrue(checksums.contains("16db66a0203587de0230dee0d144ee52c87df0caab267dab8c4fe8f8215344a7"))
     }
 }

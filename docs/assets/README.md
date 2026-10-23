@@ -30,6 +30,7 @@ size; the visible viewport ends partway through the scrollable content.
 
 `social-preview.png` is a marketing illustration, not an application
 screenshot. Its shared source is Symaira AppKit's `Brand/Marketing` kit.
-The native app icon remains the approved A3 foreground composition; its
-background follows the shared neutral light/dark palette. The native
+The native app icon is the approved K1v2 composition (2026-10-23): the Symaira S
+in graphite relief with contour lines plus the champagne Cockpit glyph, on the
+shared neutral light/dark palette. The native
 `.icon` source, ICNS fallback and source hashes are vendored together.
