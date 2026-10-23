@@ -96,6 +96,26 @@ final class NotchLayoutTests: XCTestCase {
         XCTAssertEqual(NotchLayout.shoulderWidth(metrics), NotchLayout.preferredShoulder)
     }
 
+    /// Issue #374: the parked HUD used to take 64pt per side. The width it asks
+    /// for now is the one measured for the compact readouts, and the share cap
+    /// must not be what decides it on a real display.
+    func testRestingShoulderIsClearlyNarrowerThanTheOldSixtyFourPoints() {
+        // Arrange: a normal 14" — 656pt per side, far more than the cap needs.
+        let metrics = notchedScreen()
+
+        // Act
+        let shoulder = NotchLayout.shoulderWidth(metrics)
+
+        // Assert
+        XCTAssertEqual(shoulder, 48)
+        XCTAssertLessThan(NotchLayout.preferredShoulder, 64)
+        XCTAssertGreaterThanOrEqual(
+            NotchLayout.preferredShoulder,
+            NotchLayout.minimumShoulder,
+            "the preferred width must be one the HUD is allowed to use"
+        )
+    }
+
     func testTooNarrowAStripDisablesTheHUDEntirely() {
         // Arrange: 40% of 60pt is 24pt — under the minimum a readout needs.
         let metrics = notchedScreen(width: 1000, notch: 880)
@@ -105,6 +125,20 @@ final class NotchLayoutTests: XCTestCase {
         XCTAssertNil(NotchLayout.shoulderWidth(metrics))
         XCTAssertNil(NotchLayout.collapsedFrame(metrics))
         XCTAssertFalse(NotchLayout.supportsHUD(metrics))
+    }
+
+    func testTheMinimumShoulderIsTheCutoffForAHUD() {
+        // Arrange: strips of exactly 100pt (40% = 40pt, the minimum) and of
+        // 99pt (39.6pt, just under it).
+        let atMinimum = notchedScreen(width: 1000, notch: 800)
+        let belowMinimum = notchedScreen(width: 1000, notch: 802)
+
+        // Act + assert
+        XCTAssertEqual(NotchLayout.minimumShoulder, 40)
+        XCTAssertEqual(NotchLayout.shoulderWidth(atMinimum), 40)
+        XCTAssertTrue(NotchLayout.supportsHUD(atMinimum))
+        XCTAssertNil(NotchLayout.shoulderWidth(belowMinimum))
+        XCTAssertFalse(NotchLayout.supportsHUD(belowMinimum))
     }
 
     // MARK: - Collapsed frame
@@ -123,6 +157,9 @@ final class NotchLayoutTests: XCTestCase {
         XCTAssertEqual(frame?.height, 37)
         XCTAssertEqual(frame?.minX, 656 - shoulder)
         XCTAssertEqual(frame?.maxY, 982)
+        // Issue #374, in absolute numbers: 296pt, where it used to be 328pt.
+        XCTAssertEqual(frame?.width, 296)
+        XCTAssertEqual(frame?.minX, 608)
     }
 
     func testCollapsedFrameFollowsTheScreenOrigin() {
@@ -136,6 +173,29 @@ final class NotchLayoutTests: XCTestCase {
         // Assert: the frame is global, not screen-relative.
         XCTAssertEqual(frame?.minX, 3840 + 656 - NotchLayout.preferredShoulder)
         XCTAssertEqual(frame?.maxY, 400 + 982)
+    }
+
+    // MARK: - Peek
+
+    /// Narrowing the resting shoulder must not narrow the peek: it grows to the
+    /// same 116pt per side it always did, so only the resting state gave up
+    /// menu-bar space.
+    func testThePeekStillGrowsToItsExistingWidth() {
+        // Arrange
+        let metrics = notchedScreen()
+
+        // Act
+        let resting = NotchLayout.shoulderWidth(metrics)
+        let peeking = NotchLayout.peekShoulderWidth(metrics)
+        let frame = NotchLayout.peekFrame(metrics)
+
+        // Assert
+        XCTAssertEqual(NotchLayout.preferredPeekShoulder, 116)
+        XCTAssertEqual(resting, 48)
+        XCTAssertEqual(peeking, 116)
+        XCTAssertEqual(frame?.width, 200 + 116 * 2)
+        XCTAssertEqual(frame?.minX, 656 - 116)
+        XCTAssertEqual(frame?.height, 37 + NotchLayout.peekDrop)
     }
 
     // MARK: - Expanded frame
@@ -185,9 +245,11 @@ final class NotchLayoutTests: XCTestCase {
     func testExpandedCardStaysInsideTheScreenMargins() {
         // Arrange: cutout hard against the right edge, so a card centred on it
         // would hang off the display.
-        var metrics = notchedScreen(width: 800, notch: 75)
-        metrics.leftAuxiliaryWidth = 650
-        metrics.rightAuxiliaryWidth = 75
+        // The right strip is 100pt — 40% of it is exactly the minimum shoulder,
+        // so the display can still host a HUD at all.
+        var metrics = notchedScreen(width: 800, notch: 100)
+        metrics.leftAuxiliaryWidth = 600
+        metrics.rightAuxiliaryWidth = 100
 
         // Act
         let frame = NotchLayout.expandedFrame(metrics)

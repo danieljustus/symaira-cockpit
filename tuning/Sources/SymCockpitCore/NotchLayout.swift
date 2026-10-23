@@ -62,16 +62,39 @@ public enum NotchLayout {
     /// menu titles on the left and the status items on the right, and the right
     /// side is the only one an app can claim back (see the spacer status item
     /// in `StatusBarController`) — so the width is set by what a readout
-    /// actually needs, not by what looks comfortable. A long value like
-    /// `485.0 GB` fits at this width; anything longer scales down rather than
-    /// widening the panel.
-    public static let preferredShoulder: CGFloat = 64
+    /// actually needs, not by what looks comfortable.
+    ///
+    /// 48 points, down from 64 (issue #374). Measured with the shoulder's own
+    /// readout (a 10 pt SF Symbol, 3 pt gap, then the value in Google Sans Flex
+    /// 11.5/500 with tabular digits) plus its 4 pt padding per side, the long
+    /// strings never fitted 64: `15.2 GB` needs 71 pt and `485.0 GB` 79 pt.
+    /// The resting shoulder therefore shows the compact form of the value (see
+    /// `MetricFormatting.compactReadout`). Natural width of the whole item, and
+    /// the shoulder it would need to show it unscaled (item + 8 pt padding):
+    ///
+    /// | readout         | item  | shoulder |
+    /// | --------------- | ----- | -------- |
+    /// | `37%`           | 38    | 46       |
+    /// | `15G`, `99G`    | 41    | 49       |
+    /// | `7.9G`          | 44    | 52       |
+    /// | `100%`          | 45    | 53       |
+    /// | `128G`, `485G`  | 48–49 | 56–57    |
+    ///
+    /// At 48 the usual readouts (`37%`, `15G`) fit as they are or within a
+    /// point of it; the rare wide ones scale their text instead of widening the
+    /// panel or being clipped — about 0.85 for `100%` and 0.75 for
+    /// three-digit gigabytes, above the 0.7 floor `HUDCompactItem` allows.
+    public static let preferredShoulder: CGFloat = 48
     /// Below this the shoulders cannot hold a readout, so the HUD stays off.
-    public static let minimumShoulder: CGFloat = 30
+    ///
+    /// The narrowest useful readout is an icon and a two-digit percentage
+    /// (`37%`: 12 pt symbol, 3 pt gap, 22.5 pt of text) with its text at the
+    /// 0.7 scale floor, which is 38.75 pt including padding.
+    public static let minimumShoulder: CGFloat = 40
     /// Shoulder width the HUD grows to while the pointer is on it.
     ///
-    /// Nearly double the resting width, which is what buys the peek a second
-    /// readout per side. The overlap it costs is borrowed rather than taken:
+    /// Two and a half times the resting width, which is what buys the peek a
+    /// second readout per side. The overlap it costs is borrowed rather than taken:
     /// it lasts as long as the pointer is there, and the pointer being there is
     /// itself evidence the user is not reading the menu titles underneath.
     public static let preferredPeekShoulder: CGFloat = 116
