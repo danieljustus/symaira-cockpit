@@ -104,6 +104,24 @@ public enum AIUsageFormatting {
         return "No quota reported for this account."
     }
 
+    /// Why a provider has no data, in words the card can show. A key provider
+    /// that symbrain lists as unconfigured almost always means the SymVault
+    /// entry its reference points at does not exist, so that row names the
+    /// entry. Any other error is already redacted and passes through; `nil`
+    /// means there is nothing to explain.
+    public static func unavailableReason(
+        providerID: String,
+        error: String?,
+        entryPaths: SymVaultEntryPaths
+    ) -> String? {
+        guard let error, !error.isEmpty else { return nil }
+        if error == AIUsageService.notConfiguredMessage,
+           SymVaultEntryPaths.supportedProviderIDs.contains(providerID) {
+            return "No SymVault entry at \(entryPaths.path(for: providerID))"
+        }
+        return error
+    }
+
     // MARK: - Internals
 
     static func percentText(_ value: Decimal) -> String {
@@ -141,5 +159,22 @@ public enum AIUsageFormatting {
         default:
             return plainText(value)
         }
+    }
+}
+
+/// Whether a provider's row is shown when "hide unconfigured providers" is on.
+///
+/// Pure so the rule is tested once. The preference only declutters providers
+/// the user never asked for: an enabled provider that is unconfigured or
+/// failing must stay visible, because that is exactly the case where the user
+/// needs the reason (for example a SymVault entry that does not exist).
+public enum AIUsageVisibility {
+    public static func isVisible(
+        hideUnconfigured: Bool,
+        isEnabled: Bool,
+        isConfigured: Bool
+    ) -> Bool {
+        guard hideUnconfigured, !isConfigured else { return true }
+        return isEnabled
     }
 }
