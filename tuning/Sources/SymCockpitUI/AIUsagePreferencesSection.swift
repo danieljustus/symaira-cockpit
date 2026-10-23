@@ -128,6 +128,7 @@ struct ProviderCredentialView: View {
                     providerID: provider.id,
                     store: SymVaultCredentialStore(),
                     title: field?.label ?? "\(provider.displayName) API key",
+                    preferences: preferences,
                     onCredentialChange: onCredentialChange
                 )
 

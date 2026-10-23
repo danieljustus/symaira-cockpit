@@ -104,8 +104,13 @@ public struct SymVaultCredentialStore: Sendable {
         self.keychainDeleter = keychainDeleter
     }
 
+    /// The entry Cockpit itself writes to when the user stores a key here.
+    public static func defaultEntryPath(for providerID: String) -> String {
+        "\(entryPrefix)/\(providerID)"
+    }
+
     public static func reference(for providerID: String) -> String {
-        "symvault://\(entryPrefix)/\(providerID)"
+        "\(SymVaultEntryPaths.scheme)\(defaultEntryPath(for: providerID))"
     }
 
     public func reference(for providerID: String) -> String {
@@ -157,6 +162,73 @@ public struct SymVaultCredentialStore: Sendable {
     }
 
     private func entryPath(for providerID: String) -> String {
-        "\(Self.entryPrefix)/\(providerID)"
+        Self.defaultEntryPath(for: providerID)
+    }
+}
+
+/// Which SymVault entry each API-key provider's usage lookup points at.
+///
+/// A user who already keeps an OpenRouter or Kimi key in SymVault (for
+/// example `openrouter/work`) can point usage at it instead of copying the key
+/// into Cockpit's own `symtune/<provider>` entry. Only the opaque entry path is
+/// stored — never a secret — and nothing here touches the vault: the path
+/// becomes a `symvault://` reference that `symbrain` resolves itself.
+public struct SymVaultEntryPaths: Sendable, Equatable {
+    public static let scheme = "symvault://"
+    /// UserDefaults key (dictionary of provider ID -> entry path), in the
+    /// grandfathered `com.symaira.symtune` namespace like the other AI-usage
+    /// preferences.
+    public static let defaultsKey = "com.symaira.symtune.aiUsage.vaultEntryPaths"
+
+    /// Providers whose usage key is looked up through a SymVault reference.
+    public static var supportedProviderIDs: [String] {
+        SymBrainUsageClient.credentialEnvironment.map(\.providerID)
+    }
+
+    /// Custom entry path per provider ID; always normalized and non-empty.
+    public let overrides: [String: String]
+
+    public init(_ overrides: [String: String] = [:]) {
+        var cleaned: [String: String] = [:]
+        for (providerID, raw) in overrides {
+            if let path = Self.normalize(raw) { cleaned[providerID] = path }
+        }
+        self.overrides = cleaned
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> SymVaultEntryPaths {
+        SymVaultEntryPaths(defaults.dictionary(forKey: defaultsKey) as? [String: String] ?? [:])
+    }
+
+    /// The user's custom path, or `nil` when the provider uses the default.
+    public func customPath(for providerID: String) -> String? {
+        overrides[providerID]
+    }
+
+    public func path(for providerID: String) -> String {
+        overrides[providerID] ?? SymVaultCredentialStore.defaultEntryPath(for: providerID)
+    }
+
+    public func reference(for providerID: String) -> String {
+        Self.scheme + path(for: providerID)
+    }
+
+    /// Trims the input, accepts a pasted `symvault://` reference, and drops
+    /// surrounding slashes. Returns `nil` for an empty or unusable value
+    /// (whitespace/control characters inside, `..` segments) so the caller
+    /// falls back to the default entry.
+    public static func normalize(_ raw: String) -> String? {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.lowercased().hasPrefix(scheme) {
+            value = String(value.dropFirst(scheme.count))
+        }
+        value = value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !value.isEmpty else { return nil }
+        let forbidden = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+        guard value.unicodeScalars.allSatisfy({ !forbidden.contains($0) }) else { return nil }
+        guard !value.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0 == ".." || $0.isEmpty }) else {
+            return nil
+        }
+        return value
     }
 }

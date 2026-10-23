@@ -233,7 +233,10 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
         runner: any SymBrainCommandRunner = ProcessSymBrainCommandRunner(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         credentialReference: @escaping @Sendable (String) -> String? = { providerID in
-            SymVaultCredentialStore.reference(for: providerID)
+            // Read lazily, per fetch: the user's chosen SymVault entry path (a
+            // preference, not a credential) decides which entry symbrain
+            // resolves. No vault access happens here.
+            SymVaultEntryPaths.load().reference(for: providerID)
         }
     ) {
         self.runner = runner
@@ -268,17 +271,19 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
         }
     }
 
+    /// Environment variable symbrain reads each API-key provider's key from.
+    static let credentialEnvironment: [(environmentKey: String, providerID: String)] = [
+        ("OPENROUTER_API_KEY", "openrouter"),
+        ("MOONSHOT_API_KEY", "moonshot"),
+        ("KIMI_CODE_API_KEY", "kimi"),
+    ]
+
     private func childEnvironment() -> [String: String] {
         var result = environment
         // symbrain resolves these references itself. Keeping them opaque here
         // avoids a second credential store and prevents plaintext values from
         // entering cockpit's process environment.
-        let mappings = [
-            ("OPENROUTER_API_KEY", "openrouter"),
-            ("MOONSHOT_API_KEY", "moonshot"),
-            ("KIMI_CODE_API_KEY", "kimi"),
-        ]
-        for (environmentKey, providerID) in mappings where result[environmentKey]?.isEmpty != false {
+        for (environmentKey, providerID) in Self.credentialEnvironment where result[environmentKey]?.isEmpty != false {
             if let reference = credentialReference(providerID), !reference.isEmpty {
                 result[environmentKey] = reference
             }
