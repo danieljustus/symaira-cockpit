@@ -256,25 +256,25 @@ final class BrightnessKeyController: NSObject {
 
         let flags = data1 & 0x0000_FFFF
         let isDown = ((flags & 0xFF00) >> 8) == 0x0A
-
-        // A key-up follows its key-down: macOS must not see a release for a
-        // press it never received, nor miss one for a press it did.
-        guard isDown else {
-            return lastPressHandled ? nil : Unmanaged.passUnretained(event)
-        }
+        let isRepeat = (flags & 0x1) != 0
+        let transition: BrightnessKeyPressRouter.Event =
+            !isDown ? .up : (isRepeat ? .repeatDown : .down)
 
         // Shift+Option is the system's fine-adjust chord: quarter steps.
         let fine = nsEvent.modifierFlags.contains(.shift)
             && nsEvent.modifierFlags.contains(.option)
         let direction: BrightnessKeyStep.Direction =
             keyCode == brightnessUpKeyCode ? .up : .down
-        lastPressHandled = apply(direction: direction, fine: fine)
-        return lastPressHandled ? nil : Unmanaged.passUnretained(event)
+        // One owner per press: macOS must never see a release for a press it
+        // never received, nor miss one for a press it did (#359).
+        let consumed = pressRouter.route(transition, keyCode: keyCode) {
+            apply(direction: direction, fine: fine)
+        }
+        return consumed ? nil : Unmanaged.passUnretained(event)
     }
 
-    /// Whether the most recent brightness key-down was answered here, so its
-    /// key-up is consumed or handed back to match.
-    private var lastPressHandled = false
+    /// Which side owns each brightness key press currently held.
+    private var pressRouter = BrightnessKeyPressRouter()
 
     /// Step from the level the display actually holds, never from a running
     /// total: anything else drifts the moment auto-brightness, Control Center
