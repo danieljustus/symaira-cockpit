@@ -450,4 +450,77 @@ final class MetricFormattingTests: XCTestCase {
         )
         XCTAssertEqual(text, "")
     }
+
+    // MARK: - Compact readout (HUD shoulder, issue #374)
+
+    func testCompactReadoutDropsTheDecimalOfLargeAmounts() {
+        XCTAssertEqual(MetricFormatting.compactReadout("485.0 GB"), "485G")
+        XCTAssertEqual(MetricFormatting.compactReadout("117.4 GB"), "117G")
+        XCTAssertEqual(MetricFormatting.compactReadout("15.2 GB"), "15G")
+        XCTAssertEqual(MetricFormatting.compactReadout("10.0 GB"), "10G")
+    }
+
+    func testCompactReadoutRoundsHalvesAwayFromZeroNotToEven() {
+        // `printf("%.0f")` would turn 14.5 into 14.
+        XCTAssertEqual(MetricFormatting.compactReadout("14.5 GB"), "15G")
+        XCTAssertEqual(MetricFormatting.compactReadout("99.5 GB"), "100G")
+    }
+
+    func testCompactReadoutKeepsOneDecimalBelowTen() {
+        XCTAssertEqual(MetricFormatting.compactReadout("7.9 GB"), "7.9G")
+        XCTAssertEqual(MetricFormatting.compactReadout("1.2 MB/s"), "1.2M/s")
+        // A trailing zero carries nothing.
+        XCTAssertEqual(MetricFormatting.compactReadout("8.0 GB"), "8G")
+    }
+
+    func testCompactReadoutShortensEveryUnitAndKeepsTheRateSuffix() {
+        XCTAssertEqual(MetricFormatting.compactReadout("512 MB"), "512M")
+        XCTAssertEqual(MetricFormatting.compactReadout("96 KB"), "96K")
+        XCTAssertEqual(MetricFormatting.compactReadout("1.8 TB"), "1.8T")
+        XCTAssertEqual(MetricFormatting.compactReadout("0 B/s"), "0B/s")
+        XCTAssertEqual(MetricFormatting.compactReadout("999 KB/s"), "999K/s")
+        XCTAssertEqual(MetricFormatting.compactReadout("12.3 MB/s"), "12M/s")
+    }
+
+    func testCompactReadoutRemovesTheSpaceBeforeAPercentSign() {
+        XCTAssertEqual(MetricFormatting.compactReadout("100 %"), "100%")
+        XCTAssertEqual(MetricFormatting.compactReadout("82 %"), "82%")
+    }
+
+    func testCompactReadoutCompactsEachPartOfACombinedReading() {
+        XCTAssertEqual(MetricFormatting.compactReadout("442.0 GB · 89%"), "442G · 89%")
+    }
+
+    func testCompactReadoutLeavesEverythingElseAlone() {
+        for text in ["37%", "100%", "KW 37", "Awake", "Sleep allowed", "Balanced (idle)", ""] {
+            XCTAssertEqual(MetricFormatting.compactReadout(text), text, "changed \(text)")
+        }
+    }
+
+    /// The point of the exercise: every long form the metrics produce gets
+    /// shorter, never longer, so a readout that fitted still fits.
+    func testCompactReadoutNeverLengthensAReading() {
+        let samples = [
+            "485.0 GB", "15.2 GB", "7.9 GB", "512 MB", "96 KB", "999.9 GB", "1.8 TB",
+            "0 B/s", "999 KB/s", "12.3 MB/s", "1.2 MB/s", "100 %", "37%", "KW 37",
+        ]
+        for text in samples {
+            XCTAssertLessThanOrEqual(
+                MetricFormatting.compactReadout(text).count,
+                text.count,
+                "lengthened \(text)"
+            )
+        }
+    }
+
+    func testCompactReadoutAppliedToTheRealFormattersGivesTheShortForm() {
+        // 8 GB used of 16 GB: the card says `8.0 GB`, the shoulder `8G`.
+        let long = MetricFormatting.value(.memory, 8_589_934_592, totalBytes: 17_179_869_184)
+        XCTAssertEqual(long, "8.0 GB")
+        XCTAssertEqual(MetricFormatting.compactReadout(long), "8G")
+        // Decimal disk: 485 GB used.
+        let disk = MetricFormatting.value(.disk, 97, totalBytes: 500_000_000_000)
+        XCTAssertEqual(disk, "485.0 GB")
+        XCTAssertEqual(MetricFormatting.compactReadout(disk), "485G")
+    }
 }

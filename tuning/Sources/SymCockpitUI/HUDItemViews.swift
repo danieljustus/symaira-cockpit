@@ -5,12 +5,26 @@ import SymCockpitCore
 /// One item as it appears on a shoulder or a sliver: icon, number, nothing else.
 ///
 /// Shared by every dock, because "compact" means the same thing in the notch's
-/// 64-point shoulder and on an edge dock's peeking sliver, and having written
+/// narrow shoulder and on an edge dock's peeking sliver, and having written
 /// it twice once is enough.
 @MainActor
 struct HUDCompactItem: View {
     let item: HUDItemValue
+    /// Squeeze into whatever width the parent offers instead of taking the
+    /// natural one, and show ``MetricFormatting/compactReadout(_:)`` rather than
+    /// the long text.
+    ///
+    /// The parked notch shoulder (``NotchLayout/preferredShoulder``) sets this:
+    /// its width is a budget, so a readout that does not fit has to give — a
+    /// shorter string first, then a smaller one, never a wider shoulder and
+    /// never a clipped digit. Without it the item keeps its natural size, which
+    /// is what the peek and the edge docks have always had.
+    var fitsWidth = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var text: String {
+        fitsWidth ? MetricFormatting.compactReadout(item.value) : item.value
+    }
 
     var body: some View {
         HStack(spacing: 3) {
@@ -18,7 +32,7 @@ struct HUDCompactItem: View {
                 .font(.system(size: 10, weight: SymairaTokens.iconWeight))
                 .foregroundStyle(item.isActive
                     ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
-            Text(item.value)
+            Text(text)
                 .font(SymairaTypography.caption.monospacedDigit())
                 .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
                 .lineLimit(1)
@@ -26,9 +40,11 @@ struct HUDCompactItem: View {
                 // The digits roll rather than cut, which is most of what makes
                 // a live readout read as live.
                 .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : HUDMotion.value, value: item.value)
+                .animation(reduceMotion ? nil : HUDMotion.value, value: text)
         }
-        .fixedSize()
+        // `minimumScaleFactor` does nothing under a horizontal `fixedSize()`:
+        // the text is offered its ideal width and never needs to shrink.
+        .fixedSize(horizontal: !fitsWidth, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title) \(item.value)")
     }

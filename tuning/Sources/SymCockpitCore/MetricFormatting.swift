@@ -283,4 +283,48 @@ public enum MetricFormatting {
         }
         return String(format: "%.0fB", bytesPerSecond)
     }
+
+    // MARK: - HUD shoulder
+
+    /// The short form of a readout string, for the resting notch shoulder
+    /// (issue #374).
+    ///
+    /// A parked shoulder is a few dozen points wide, so the long strings the
+    /// card uses (`485.0 GB`, `100 %`) are rewritten rather than squeezed:
+    ///
+    /// - an amount keeps at most three significant digits — `485.0 GB` becomes
+    ///   `485G`, `15.2 GB` becomes `15G`, `7.9 GB` stays `7.9G`;
+    /// - the unit shrinks to its first letter (`GB` → `G`, `MB/s` → `M/s`) and
+    ///   loses the space before it, as ``statusItemText(report:identifiers:)``
+    ///   already does for the menu bar;
+    /// - the space before a percent sign goes (`100 %` → `100%`).
+    ///
+    /// Anything else (`37%`, `KW 37`, `Awake`) is returned untouched, so the
+    /// function is safe to apply to any HUD value. It is display-only: the
+    /// accessibility label and the expanded card keep the full text.
+    public static func compactReadout(_ text: String) -> String {
+        // A size or rate with its unit: `15.2 GB`, `512 MB`, `1.2 MB/s`. Built
+        // here rather than held in a static: `Regex` is not `Sendable`.
+        let sizeToken = #/(\d+(?:\.\d+)?) ?(TB|GB|MB|KB|B)(/s)?/#
+        return text
+            .replacing(sizeToken) { match in
+                compactAmount(match.output.1)
+                    + compactUnit(match.output.2)
+                    + (match.output.3.map { String($0) } ?? "")
+            }
+            .replacing(" %", with: "%")
+    }
+
+    private static func compactAmount(_ digits: Substring) -> String {
+        guard let amount = Double(digits) else { return String(digits) }
+        if amount >= 10 { return String(Int(amount.rounded())) }
+        // Below ten one decimal carries information (`7.9G`), unless it is a
+        // zero (`8.0` → `8`).
+        let tenths = (amount * 10).rounded() / 10
+        return tenths == tenths.rounded() ? String(Int(tenths)) : String(format: "%.1f", tenths)
+    }
+
+    private static func compactUnit(_ unit: Substring) -> String {
+        String(unit.prefix(1))
+    }
 }

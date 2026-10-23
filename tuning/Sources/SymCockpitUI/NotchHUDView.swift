@@ -121,7 +121,7 @@ struct NotchHUDView: View {
 
     /// What the *shoulders* show, which is never more than the peek's worth.
     ///
-    /// A shoulder is 64 points parked and about 116 peeking, and that is a hard
+    /// A shoulder is 48 points parked and about 116 peeking, and that is a hard
     /// budget — it is carved out of the menu titles and the status items either
     /// side of the cutout. Letting the expanded stage's items onto it would put
     /// `Sleep allowed` in a space that fits `40 %`, and the strip would render
@@ -163,7 +163,10 @@ struct NotchHUDView: View {
     ) -> some View {
         HStack(spacing: 6) {
             ForEach(items) { item in
-                HUDCompactItem(item: item)
+                // Parked, the shoulder is too narrow for the long text and
+                // the readout shortens and scales to fit it; peeking, it has
+                // room to spell the value out.
+                HUDCompactItem(item: item, fitsWidth: presentation == .collapsed)
                     // Each readout arrives from the cutout's direction rather
                     // than fading in place, so a peek looks like the shoulder
                     // sliding content out from behind the camera housing.
