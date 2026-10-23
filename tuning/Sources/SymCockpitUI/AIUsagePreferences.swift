@@ -52,6 +52,13 @@ final class AIUsagePreferences: ObservableObject {
         didSet { defaults.set(displayVisibility, forKey: Keys.displayVisibility) }
     }
 
+    /// Custom SymVault entry path per provider ID (issue #376). Opaque paths
+    /// only — never a secret. A provider without an entry uses the default
+    /// `symtune/<provider>`.
+    @Published private(set) var vaultEntryPaths: [String: String] {
+        didSet { defaults.set(vaultEntryPaths, forKey: Keys.vaultEntryPaths) }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -63,6 +70,7 @@ final class AIUsagePreferences: ObservableObject {
         static let displayHideUnconfigured = "com.symaira.symtune.aiUsage.displayHideUnconfigured"
         static let displayOrder = "com.symaira.symtune.aiUsage.displayOrder"
         static let displayVisibility = "com.symaira.symtune.aiUsage.displayVisibility"
+        static let vaultEntryPaths = SymVaultEntryPaths.defaultsKey
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -76,6 +84,7 @@ final class AIUsagePreferences: ObservableObject {
         self.displayHideUnconfigured = defaults.bool(forKey: Keys.displayHideUnconfigured)
         self.displayOrder = defaults.stringArray(forKey: Keys.displayOrder) ?? []
         self.displayVisibility = defaults.dictionary(forKey: Keys.displayVisibility) as? [String: Bool] ?? [:]
+        self.vaultEntryPaths = SymVaultEntryPaths.load(from: defaults).overrides
     }
 
     /// The user-facing refresh interval options (minutes).
@@ -116,9 +125,29 @@ final class AIUsagePreferences: ObservableObject {
         if let override = displayVisibility[providerID] {
             return override
         }
-        if displayHideUnconfigured && !isConfigured {
-            return false
+        return AIUsageVisibility.isVisible(
+            hideUnconfigured: displayHideUnconfigured,
+            isEnabled: isEnabled(providerID),
+            isConfigured: isConfigured
+        )
+    }
+
+    // MARK: - SymVault entry paths (issue #376)
+
+    /// The user's chosen entry paths, as the Core value the usage client uses.
+    var entryPaths: SymVaultEntryPaths { SymVaultEntryPaths(vaultEntryPaths) }
+
+    /// Points a provider at an existing SymVault entry. An empty value clears
+    /// the choice (back to the default); an unusable one is rejected and
+    /// leaves the current choice untouched. Returns whether it was accepted.
+    @discardableResult
+    func setVaultEntryPath(_ raw: String, for providerID: String) -> Bool {
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            vaultEntryPaths.removeValue(forKey: providerID)
+            return true
         }
+        guard let path = SymVaultEntryPaths.normalize(raw) else { return false }
+        vaultEntryPaths[providerID] = path
         return true
     }
 
