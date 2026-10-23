@@ -96,6 +96,15 @@ $ symcockpit brightness set 0.5
 
 Your Mac's display, power and cooling controls in one window.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/workspace-preview-dark.png">
+  <img src="docs/assets/workspace-preview-light.png" alt="Symaira Cockpit native workspace preview with clearly labelled example readings" width="1080">
+</picture>
+
+*Native SwiftUI component preview with example data, not live hardware readings.
+Transparent chrome is flattened onto the shared sidebar color for documentation;
+this is not a live-window capture. [Asset provenance](docs/assets/README.md).*
+
 ```bash
 brew install --cask danieljustus/tap/symcockpit
 ```
@@ -146,7 +155,8 @@ item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 immediately and are written to `config.toml`, so they survive a relaunch.
 
 Display and fan controls use native sliders with rounded rails, guide dots
-and light circular knobs in the existing dark/gold palette. Display values
+and light circular knobs in the shared neutral Liquid Topography palette.
+Champagne is reserved for state accents. Display values
 remain continuous; the fan slider selects **Standard**, **Cool**, or **Max**,
 not arbitrary RPM. Existing temperature curves and administrator permission
 checks still apply. Missing readings are labelled as loading rather than
