@@ -17,10 +17,17 @@ struct HUDCompactItem: View {
     /// The parked notch shoulder (``NotchLayout/preferredShoulder``) sets this:
     /// its width is a budget, so a readout that does not fit has to give — a
     /// shorter string first, then a smaller one, never a wider shoulder and
-    /// never a clipped digit. Without it the item keeps its natural size, which
-    /// is what the peek and the edge docks have always had.
+    /// never a clipped digit. The notch strip sets it in every presentation:
+    /// the peeking shoulder is wider, but two long readouts side by side still
+    /// overran it and were clipped at the outer edges. Without it the item
+    /// keeps its natural size, which is what the edge docks have always had.
     var fitsWidth = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Lighter and a step smaller than the shared caption: the strip sits next
+    /// to the menu bar's own titles, and at caption weight the readouts read
+    /// heavier than the system text around them.
+    static let valueFont = SymairaFont.font(size: 10.5, weight: 400, relativeTo: .caption2)
 
     private var text: String {
         fitsWidth ? MetricFormatting.compactReadout(item.value) : item.value
@@ -29,11 +36,11 @@ struct HUDCompactItem: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: item.symbolName)
-                .font(.system(size: 10, weight: SymairaTokens.iconWeight))
+                .font(.system(size: 9, weight: SymairaTokens.iconWeight))
                 .foregroundStyle(item.isActive
                     ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
             Text(text)
-                .font(SymairaTypography.caption.monospacedDigit())
+                .font(Self.valueFont.monospacedDigit())
                 .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
