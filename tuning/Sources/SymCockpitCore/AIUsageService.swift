@@ -15,6 +15,9 @@ public struct AIUsageService: @unchecked Sendable {
         }
     }
 
+    /// The error reported for a provider symbrain lists as unconfigured.
+    public static let notConfiguredMessage = "not configured"
+
     public let providers: [any AIUsageProvider]
     private let client: any SymBrainUsageClientProtocol
 
@@ -95,7 +98,7 @@ public struct AIUsageService: @unchecked Sendable {
                 results.append(ProviderResult(
                     providerID: row.id,
                     snapshot: nil,
-                    error: "not configured"
+                    error: Self.notConfiguredMessage
                 ))
                 continue
             }

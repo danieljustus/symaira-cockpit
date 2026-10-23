@@ -89,6 +89,7 @@ final class AIUsageViewModel {
 
     private func refresh() async {
         let enabled = preferences.enabledProviders
+        let entryPaths = preferences.entryPaths
         guard !enabled.isEmpty else {
             rows = []
             updateStatusItem()
@@ -111,7 +112,11 @@ final class AIUsageViewModel {
         var newRows: [AIUsageRow] = []
         for result in enabledResults {
             let id = result.providerID
-            let displayName = providers.first { $0.id == id }?.displayName ?? id
+            let provider = providers.first { $0.id == id }
+            let displayName = provider?.displayName ?? id
+            // An enabled provider that cannot report stays on the card with the
+            // reason, even when "hide unconfigured" is on (issue #376).
+            guard preferences.isVisible(id, isConfigured: provider?.isConfigured ?? false) else { continue }
             if let snapshot = result.snapshot {
                 lastSuccessAt[id] = now
                 recordHistory(id: id, snapshot: snapshot, at: now)
@@ -125,7 +130,11 @@ final class AIUsageViewModel {
                 providerID: id,
                 displayName: displayName,
                 snapshot: result.snapshot,
-                error: result.error,
+                error: AIUsageFormatting.unavailableReason(
+                    providerID: id,
+                    error: result.error,
+                    entryPaths: entryPaths
+                ),
                 lastSuccessAt: lastSuccessAt[id],
                 history: historyBuffers[id]?.samples ?? []
             ))

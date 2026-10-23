@@ -27,7 +27,7 @@ struct HUDItemValue: Identifiable, Equatable {
 ///
 /// An item with nothing behind it is **dropped**, not drawn as a placeholder.
 /// A HUD reading `RAM --` is worse than a HUD one readout shorter, and on a
-/// shoulder 64 points wide it is also indistinguishable from a bug.
+/// narrow parked shoulder it is also indistinguishable from a bug.
 @MainActor
 enum HUDItemResolver {
     /// Resolve `kinds` against the model, skipping the ones with no data.

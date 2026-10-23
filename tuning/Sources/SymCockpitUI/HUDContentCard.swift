@@ -180,9 +180,9 @@ struct HUDContentCard: View {
         } else if items.layout.items(at: .peek) == items.layout.items(at: .expanded) {
             notes.append("Nothing is set to “When opened”, so clicking the HUD adds no readouts.")
         }
-        if dock == .notch, items.layout.items(on: .left, at: .collapsed).count > 2
-            || items.layout.items(on: .right, at: .collapsed).count > 2 {
-            notes.append("A parked shoulder fits about two readouts; the rest are clipped until you hover.")
+        if dock == .notch, items.layout.items(on: .left, at: .collapsed).count > 1
+            || items.layout.items(on: .right, at: .collapsed).count > 1 {
+            notes.append("A parked shoulder fits one readout; the rest are clipped until you hover.")
         }
         return notes
     }
