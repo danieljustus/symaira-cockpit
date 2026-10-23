@@ -117,3 +117,52 @@ public enum BrightnessKeyStep {
         return min(count, max(0, Int((clamped * Float(count)).rounded())))
     }
 }
+
+/// Who owns one physical brightness key press, from its first key-down
+/// through its auto-repeats to its key-up (issue #359).
+///
+/// The owner is decided once, on the initial key-down, and every later event
+/// of that press goes to the same side. Deciding per event split a held key:
+/// macOS received the first key-down (a near-zero read handed it back), the
+/// app answered the repeats once the panel had brightened, and so swallowed
+/// the key-up. macOS never saw the release and kept brightening, with its HUD
+/// stuck on screen.
+public struct BrightnessKeyPressRouter: Sendable {
+    public enum Event: Sendable, Equatable {
+        case down, repeatDown, up
+    }
+
+    private var owners: [Int32: Bool] = [:]
+
+    public init() {}
+
+    /// Whether the app consumes this event.
+    ///
+    /// - Parameters:
+    ///   - event: the key transition.
+    ///   - keyCode: the key, so two held keys keep separate owners.
+    ///   - answer: performs the step and reports whether it was answered.
+    ///     Called for the initial key-down and for repeats of a press the app
+    ///     owns; never for a press macOS owns or for a key-up.
+    public mutating func route(_ event: Event, keyCode: Int32, answer: () -> Bool) -> Bool {
+        switch event {
+        case .down:
+            let owned = answer()
+            owners[keyCode] = owned
+            return owned
+        case .repeatDown:
+            // A repeat whose key-down this app never saw (the tap came up
+            // mid-hold) belongs to macOS, like the rest of that press.
+            guard owners[keyCode] == true else {
+                owners[keyCode] = false
+                return false
+            }
+            // A repeat that cannot step is still this app's: handing macOS a
+            // lone repeat would start a press it never sees released.
+            _ = answer()
+            return true
+        case .up:
+            return owners.removeValue(forKey: keyCode) ?? false
+        }
+    }
+}

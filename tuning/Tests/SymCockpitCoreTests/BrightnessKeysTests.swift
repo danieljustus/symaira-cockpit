@@ -118,6 +118,50 @@ final class BrightnessKeysTests: XCTestCase {
         XCTAssertEqual(BrightnessKeyStep.target(fromRead: 0.01, direction: .down, fine: false), 0.0)
     }
 
+    // MARK: - Press ownership (#359)
+
+    func testAHeldKeyKeepsTheOwnerOfItsFirstKeyDown() {
+        // The regression: macOS took the first key-down, the app answered the
+        // repeats once the panel brightened and then swallowed the key-up.
+        var router = BrightnessKeyPressRouter()
+        var answers = [false, true, true]
+        var calls = 0
+        let answer = { () -> Bool in calls += 1; return answers.removeFirst() }
+
+        XCTAssertFalse(router.route(.down, keyCode: 2, answer: answer))
+        XCTAssertFalse(router.route(.repeatDown, keyCode: 2, answer: answer))
+        XCTAssertFalse(router.route(.repeatDown, keyCode: 2, answer: answer))
+        XCTAssertFalse(router.route(.up, keyCode: 2, answer: answer), "macOS must see the release")
+        XCTAssertEqual(calls, 1, "repeats of a press macOS owns are never stepped here")
+    }
+
+    func testAnAnsweredPressConsumesItsRepeatsAndRelease() {
+        var router = BrightnessKeyPressRouter()
+        var answers = [true, false, true]
+        let answer = { () -> Bool in answers.removeFirst() }
+
+        XCTAssertTrue(router.route(.down, keyCode: 2, answer: answer))
+        XCTAssertTrue(router.route(.repeatDown, keyCode: 2, answer: answer), "a failed repeat must not reach macOS alone")
+        XCTAssertTrue(router.route(.repeatDown, keyCode: 2, answer: answer))
+        XCTAssertTrue(router.route(.up, keyCode: 2, answer: answer))
+        XCTAssertTrue(answers.isEmpty)
+    }
+
+    func testTwoHeldKeysKeepSeparateOwners() {
+        var router = BrightnessKeyPressRouter()
+        XCTAssertFalse(router.route(.down, keyCode: 2) { false })
+        XCTAssertTrue(router.route(.down, keyCode: 3) { true })
+        XCTAssertFalse(router.route(.up, keyCode: 2) { XCTFail(); return true })
+        XCTAssertTrue(router.route(.up, keyCode: 3) { XCTFail(); return true })
+    }
+
+    func testEventsWithoutASeenKeyDownBelongToMacOS() {
+        var router = BrightnessKeyPressRouter()
+        XCTAssertFalse(router.route(.repeatDown, keyCode: 2) { XCTFail(); return true })
+        XCTAssertFalse(router.route(.up, keyCode: 2) { XCTFail(); return true })
+        XCTAssertFalse(router.route(.up, keyCode: 3) { XCTFail(); return true })
+    }
+
     // MARK: - HUD bar
 
     func testSegmentsFillProportionally() {
