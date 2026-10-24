@@ -327,14 +327,16 @@ final class HUDDockController: NSObject {
     private func startPointerMonitoring() {
         guard globalPointerMonitor == nil else { return }
         globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.mouseMoved, .leftMouseDragged]
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            matching: [.mouseMoved, .leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            let isMouseUp = event.type == .leftMouseUp
+            MainActor.assumeIsolated { isMouseUp ? self?.mouseReleased() : self?.pointerMoved() }
         }
         localPointerMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.mouseMoved, .leftMouseDragged]
+            matching: [.mouseMoved, .leftMouseDragged, .leftMouseUp]
         ) { [weak self] event in
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            let isMouseUp = event.type == .leftMouseUp
+            MainActor.assumeIsolated { isMouseUp ? self?.mouseReleased() : self?.pointerMoved() }
             return event
         }
     }
@@ -370,6 +372,26 @@ final class HUDDockController: NSObject {
             }
         } else if presentation.isOpen {
             scheduleCollapse()
+        }
+    }
+
+    /// The mouse button went up somewhere on the system.
+    ///
+    /// Normally the drag gesture's own `onEnded` has already finished the drag
+    /// by the time this runs. But SwiftUI cancels a gesture without calling
+    /// `onEnded` — when the view it is attached to is rebuilt mid-drag, for
+    /// instance — and a drag that never ends leaves the stage live over the
+    /// whole display: every click lands on the invisible panel, which then
+    /// becomes key and takes the keyboard too. So the controller does not rely
+    /// on the gesture alone. One turn of the run loop later, a drag that is
+    /// still marked as in progress is ended here, at the pointer.
+    private func mouseReleased() {
+        guard isDragging else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isDragging else { return }
+                self.dragEnded(at: NSEvent.mouseLocation)
+            }
         }
     }
 
