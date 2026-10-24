@@ -53,15 +53,6 @@ struct HUDDockView: View {
     /// stick where it was dropped. See ``HUDDragPhysics``.
     @GestureState private var drag: HUDDragState = .resting
 
-    /// The spring the HUD returns on, worked out from how fast the pointer was
-    /// moving when it let go.
-    ///
-    /// State rather than gesture state on purpose: `drag` is wiped by SwiftUI
-    /// the instant the gesture ends, but the animation that carries the HUD
-    /// home has to be chosen *by* that release — and be the same one for the
-    /// offset and the stretch it undoes.
-    @State private var releaseSpring: HUDReleaseSpring = .soft
-
     private static let stageSpace = "symaira.hud.stage"
 
     var body: some View {
@@ -74,9 +65,7 @@ struct HUDDockView: View {
                 .frame(width: target.width, height: target.height)
                 // Applied before `.position`, and anchored at the edge the HUD
                 // is parked against, so the stretch peels the shape away from
-                // the bezel instead of scaling it about its own middle. While
-                // attached `drag.offset` is zero across that edge, so the edge
-                // itself does not leave the bezel — only the body follows.
+                // the bezel instead of scaling it about its own middle.
                 .scaleEffect(drag.stretch, anchor: stretchAnchor)
                 .position(x: target.midX, y: target.midY)
                 .offset(drag.offset)
@@ -85,12 +74,9 @@ struct HUDDockView: View {
                 // Two curves for one value: while the gesture is live the HUD
                 // tracks the pointer, and the moment it is released the same
                 // property springs home. Choosing the animation from
-                // `drag.isActive` is what lets one modifier do both. The way
-                // home depends on how the pointer was moving when it let go:
-                // the offset starts out at the pointer's speed, the stretch
-                // has no velocity of its own and just recoils.
-                .animation(drag.isActive ? HUDMotion.track : HUDMotion.release(releaseSpring), value: drag.offset)
-                .animation(drag.isActive ? HUDMotion.track : HUDMotion.recoil(releaseSpring), value: drag.stretch)
+                // `drag.isActive` is what lets one modifier do both.
+                .animation(drag.isActive ? HUDMotion.track : HUDMotion.release, value: drag.offset)
+                .animation(drag.isActive ? HUDMotion.track : HUDMotion.release, value: drag.stretch)
         }
         .frame(width: metrics.frame.width, height: metrics.frame.height, alignment: .topLeading)
         .coordinateSpace(.named(Self.stageSpace))
@@ -200,49 +186,14 @@ struct HUDDockView: View {
         // the drag never starts, so the click is unambiguous.
         DragGesture(minimumDistance: 6, coordinateSpace: .named(Self.stageSpace))
             .updating($drag) { value, state, _ in
-                // Reduce Motion keeps the resistance and drops the deformation:
-                // the HUD still moves with the pointer, it just stays square.
-                state = HUDDragPhysics.resolve(
-                    translation: value.translation,
-                    dock: dock,
-                    reduceMotion: reduceMotion
-                )
+                state = HUDDragPhysics.resolve(translation: value.translation, dock: dock)
             }
             .onChanged { value in
-                // A drag that was abandoned never reaches `onEnded`, so the
-                // previous release must not leak into the next one.
-                if releaseSpring != .soft { releaseSpring = .soft }
                 onDragChanged(globalPoint(value.location))
             }
             .onEnded { value in
-                let release = HUDDragPhysics.release(
-                    translation: value.translation,
-                    velocity: value.velocity,
-                    dock: dock,
-                    reduceMotion: reduceMotion
-                )
-                releaseSpring = release.spring
-                onDragEnded(landingPoint(for: value, release: release))
+                onDragEnded(globalPoint(value.location))
             }
-    }
-
-    /// Where the controller should treat the drop as having happened, in global
-    /// screen coordinates.
-    ///
-    /// The point the pointer was heading for rather than the one it happened to
-    /// be at, so a flick towards a neighbouring dock docks there and a flick
-    /// back towards home cancels the pull. A slow release projects to almost
-    /// exactly where it is, which is why it behaves as it always did. The
-    /// projection is only trusted when it lands within reach of a dock at all:
-    /// a pointer that was still moving as it arrived on a target must not be
-    /// carried past it and told to go home.
-    private func landingPoint(for value: DragGesture.Value, release: HUDDragRelease) -> CGPoint {
-        let released = globalPoint(value.location)
-        let projected = globalPoint(CGPoint(
-            x: value.location.x + release.momentum.width,
-            y: value.location.y + release.momentum.height
-        ))
-        return HUDDockLayout.nearestDock(to: projected, on: metrics) != nil ? projected : released
     }
 
     // MARK: - Edge dock
