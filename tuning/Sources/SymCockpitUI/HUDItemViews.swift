@@ -57,6 +57,41 @@ struct HUDCompactItem: View {
     }
 }
 
+/// One item in a peeking edge dock: the icon centred above the value.
+///
+/// The edge sliver is a narrow column, and an icon beside a long value did not
+/// fit it — `397.4 GB` ran into the screen edge and was clipped. Stacked, the
+/// value gets the sliver's whole width, both sides of the column keep the same
+/// margin, and the short form (``MetricFormatting/compactReadout(_:)``) plus
+/// scaling make sure nothing is cut off. The accessibility label keeps the
+/// full text.
+@MainActor
+struct HUDStackedItem: View {
+    let item: HUDItemValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var text: String { MetricFormatting.compactReadout(item.value) }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: item.symbolName)
+                .font(.system(size: 10, weight: SymairaTokens.iconWeight))
+                .foregroundStyle(item.isActive
+                    ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
+            Text(text)
+                .font(HUDCompactItem.valueFont.monospacedDigit())
+                .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : HUDMotion.value, value: text)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title) \(item.value)")
+    }
+}
+
 /// One item as a row in the expanded card: icon, name, value pushed right.
 @MainActor
 struct HUDCardRow: View {
