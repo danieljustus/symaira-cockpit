@@ -126,26 +126,48 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
         guard result == KERN_SUCCESS else { return .empty }
         var pageSizeValue: vm_size_t = 0
         guard host_page_size(mach_host_self(), &pageSizeValue) == KERN_SUCCESS else { return .empty }
-        let pageSize = UInt64(pageSizeValue)
-        let free = UInt64(vmStats.free_count) * pageSize
-        let inactive = UInt64(vmStats.inactive_count) * pageSize
-        let speculative = UInt64(vmStats.speculative_count) * pageSize
-        let wired = UInt64(vmStats.wire_count) * pageSize
-        let compressed = UInt64(vmStats.compressor_page_count) * pageSize
-        let active = UInt64(vmStats.active_count) * pageSize
-        let available = free &+ inactive &+ speculative
-        let used = active &+ wired &+ compressed
+        return Self.memoryStatistics(
+            internalPages: UInt64(vmStats.internal_page_count),
+            purgeablePages: UInt64(vmStats.purgeable_count),
+            wiredPages: UInt64(vmStats.wire_count),
+            compressorPages: UInt64(vmStats.compressor_page_count),
+            pageSize: UInt64(pageSizeValue),
+            physicalMemory: ProcessInfo.processInfo.physicalMemory
+        )
+    }
+
+    /// Memory use as Activity Monitor counts it (issue #384).
+    ///
+    /// "Memory Used" there is App Memory + Wired + Compressed, where App Memory
+    /// is the anonymous (internal) pages less the purgeable ones. Counting the
+    /// *active* pages instead mixes in file cache and drops inactive app memory,
+    /// which put the readout well over a gigabyte below Activity Monitor's.
+    /// Everything else — file cache, purgeable and free pages — is memory macOS
+    /// hands out on demand, so available is simply physical memory less used,
+    /// and the two always add up.
+    static func memoryStatistics(
+        internalPages: UInt64,
+        purgeablePages: UInt64,
+        wiredPages: UInt64,
+        compressorPages: UInt64,
+        pageSize: UInt64,
+        physicalMemory: UInt64
+    ) -> MemoryStatistics {
+        let appMemory = (internalPages > purgeablePages ? internalPages - purgeablePages : 0) * pageSize
+        let wired = wiredPages * pageSize
+        let compressed = compressorPages * pageSize
+        let used = min(appMemory &+ wired &+ compressed, physicalMemory)
+        let available = physicalMemory - used
         return MemoryStatistics(
             usedBytes: used,
             freeBytes: available,
             wiredBytes: wired,
             compressedBytes: compressed,
-            pressure: pressureLevel(availableBytes: available)
+            pressure: pressureLevel(availableBytes: available, physicalMemory: physicalMemory)
         )
     }
 
-    private func pressureLevel(availableBytes: UInt64) -> String? {
-        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+    private static func pressureLevel(availableBytes: UInt64, physicalMemory: UInt64) -> String? {
         guard physicalMemory > 0 else { return nil }
         let availableRatio = Double(availableBytes) / Double(physicalMemory)
         switch availableRatio {
