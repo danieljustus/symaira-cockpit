@@ -267,13 +267,13 @@ struct HUDDockView: View {
     /// strip, and dropping half the user's choices on the floor because they
     /// picked the "wrong" side would be a trap.
     private var edgePeek: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 9) {
             ForEach(resolveItems(itemLayout.items(at: .peek))) { item in
-                HUDCompactItem(item: item)
+                HUDStackedItem(item: item)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .animation(HUDMotion.peek, value: presentation)

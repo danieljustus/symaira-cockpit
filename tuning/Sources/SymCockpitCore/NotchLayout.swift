@@ -84,6 +84,14 @@ public enum NotchLayout {
     /// point of it; the rare wide ones scale their text instead of widening the
     /// panel or being clipped — about 0.85 for `100%` and 0.75 for
     /// three-digit gigabytes, above the 0.7 floor `HUDCompactItem` allows.
+    ///
+    /// The strip has since moved to a lighter 10.5/400 value with a 9 pt
+    /// symbol, and the compact form keeps the full unit behind a narrow gap
+    /// (`485 GB`, `37 %`). Measured the same way with a proxy face, that is
+    /// about 49 pt for `485 GB` and 43 pt for `15 GB` / `100 %` — the same
+    /// scaling as above. A rate such as `1.9 MB/s` (about 55 pt) would hit the
+    /// 0.7 floor on a parked shoulder; the default layout keeps the network
+    /// readout at the peek, where the shoulder is wide enough.
     public static let preferredShoulder: CGFloat = 48
     /// Below this the shoulders cannot hold a readout, so the HUD stays off.
     ///

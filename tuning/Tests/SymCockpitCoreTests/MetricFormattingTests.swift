@@ -454,32 +454,32 @@ final class MetricFormattingTests: XCTestCase {
     // MARK: - Compact readout (HUD shoulder, issue #374)
 
     func testCompactReadoutDropsTheDecimalOfLargeAmounts() {
-        XCTAssertEqual(MetricFormatting.compactReadout("485.0 GB"), "485\u{202F}G")
-        XCTAssertEqual(MetricFormatting.compactReadout("117.4 GB"), "117\u{202F}G")
-        XCTAssertEqual(MetricFormatting.compactReadout("15.2 GB"), "15\u{202F}G")
-        XCTAssertEqual(MetricFormatting.compactReadout("10.0 GB"), "10\u{202F}G")
+        XCTAssertEqual(MetricFormatting.compactReadout("485.0 GB"), "485\u{202F}GB")
+        XCTAssertEqual(MetricFormatting.compactReadout("117.4 GB"), "117\u{202F}GB")
+        XCTAssertEqual(MetricFormatting.compactReadout("15.2 GB"), "15\u{202F}GB")
+        XCTAssertEqual(MetricFormatting.compactReadout("10.0 GB"), "10\u{202F}GB")
     }
 
     func testCompactReadoutRoundsHalvesAwayFromZeroNotToEven() {
         // `printf("%.0f")` would turn 14.5 into 14.
-        XCTAssertEqual(MetricFormatting.compactReadout("14.5 GB"), "15\u{202F}G")
-        XCTAssertEqual(MetricFormatting.compactReadout("99.5 GB"), "100\u{202F}G")
+        XCTAssertEqual(MetricFormatting.compactReadout("14.5 GB"), "15\u{202F}GB")
+        XCTAssertEqual(MetricFormatting.compactReadout("99.5 GB"), "100\u{202F}GB")
     }
 
     func testCompactReadoutKeepsOneDecimalBelowTen() {
-        XCTAssertEqual(MetricFormatting.compactReadout("7.9 GB"), "7.9\u{202F}G")
-        XCTAssertEqual(MetricFormatting.compactReadout("1.2 MB/s"), "1.2\u{202F}M/s")
+        XCTAssertEqual(MetricFormatting.compactReadout("7.9 GB"), "7.9\u{202F}GB")
+        XCTAssertEqual(MetricFormatting.compactReadout("1.2 MB/s"), "1.2\u{202F}MB/s")
         // A trailing zero carries nothing.
-        XCTAssertEqual(MetricFormatting.compactReadout("8.0 GB"), "8\u{202F}G")
+        XCTAssertEqual(MetricFormatting.compactReadout("8.0 GB"), "8\u{202F}GB")
     }
 
     func testCompactReadoutShortensEveryUnitAndKeepsTheRateSuffix() {
-        XCTAssertEqual(MetricFormatting.compactReadout("512 MB"), "512\u{202F}M")
-        XCTAssertEqual(MetricFormatting.compactReadout("96 KB"), "96\u{202F}K")
-        XCTAssertEqual(MetricFormatting.compactReadout("1.8 TB"), "1.8\u{202F}T")
+        XCTAssertEqual(MetricFormatting.compactReadout("512 MB"), "512\u{202F}MB")
+        XCTAssertEqual(MetricFormatting.compactReadout("96 KB"), "96\u{202F}KB")
+        XCTAssertEqual(MetricFormatting.compactReadout("1.8 TB"), "1.8\u{202F}TB")
         XCTAssertEqual(MetricFormatting.compactReadout("0 B/s"), "0\u{202F}B/s")
-        XCTAssertEqual(MetricFormatting.compactReadout("999 KB/s"), "999\u{202F}K/s")
-        XCTAssertEqual(MetricFormatting.compactReadout("12.3 MB/s"), "12\u{202F}M/s")
+        XCTAssertEqual(MetricFormatting.compactReadout("999 KB/s"), "999\u{202F}KB/s")
+        XCTAssertEqual(MetricFormatting.compactReadout("12.3 MB/s"), "12\u{202F}MB/s")
     }
 
     func testCompactReadoutNarrowsTheSpaceBeforeAPercentSign() {
@@ -490,7 +490,7 @@ final class MetricFormattingTests: XCTestCase {
     }
 
     func testCompactReadoutCompactsEachPartOfACombinedReading() {
-        XCTAssertEqual(MetricFormatting.compactReadout("442.0 GB · 89%"), "442\u{202F}G · 89\u{202F}%")
+        XCTAssertEqual(MetricFormatting.compactReadout("442.0 GB · 89%"), "442\u{202F}GB · 89\u{202F}%")
     }
 
     func testCompactReadoutLeavesEverythingElseAlone() {
@@ -518,13 +518,13 @@ final class MetricFormattingTests: XCTestCase {
     }
 
     func testCompactReadoutAppliedToTheRealFormattersGivesTheShortForm() {
-        // 8 GB used of 16 GB: the card says `8.0 GB`, the shoulder `8G`.
+        // 8 GB used of 16 GB: the card says `8.0 GB`, the shoulder `8 GB`.
         let long = MetricFormatting.value(.memory, 8_589_934_592, totalBytes: 17_179_869_184)
         XCTAssertEqual(long, "8.0 GB")
-        XCTAssertEqual(MetricFormatting.compactReadout(long), "8\u{202F}G")
+        XCTAssertEqual(MetricFormatting.compactReadout(long), "8\u{202F}GB")
         // Decimal disk: 485 GB used.
         let disk = MetricFormatting.value(.disk, 97, totalBytes: 500_000_000_000)
         XCTAssertEqual(disk, "485.0 GB")
-        XCTAssertEqual(MetricFormatting.compactReadout(disk), "485\u{202F}G")
+        XCTAssertEqual(MetricFormatting.compactReadout(disk), "485\u{202F}GB")
     }
 }
