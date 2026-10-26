@@ -7,34 +7,36 @@ permissions:
   contents: read
 jobs:
   probe:
-    name: metal ${{ matrix.runner }} ${{ matrix.method }}
+    name: metal ${{ matrix.xcode }}
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-latest, macos-26]
-        method: [nosandbox, perarch]
-    runs-on: ${{ matrix.runner }}
+        xcode: [default, xcode27]
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Select Xcode 26.4.1 (app job)
-        if: matrix.runner == 'macos-26'
-        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
-        with:
-          xcode-version: '26.4.1'
+      - name: Select Xcode
+        env:
+          WANT: ${{ matrix.xcode }}
+        run: |
+          ls -d /Applications/Xcode*.app
+          if [ "$WANT" = xcode27 ]; then
+            x=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode-beta.app 2>/dev/null | sort -V | tail -1)
+            echo "DEVELOPER_DIR=$x/Contents/Developer" >> "$GITHUB_ENV"
+          fi
       - name: Toolchain state
         run: |
           xcodebuild -version
           xcodebuild -showComponent MetalToolchain || true
+          xcodebuild -showComponent MetalToolchain | grep -q 'Status: installed' || xcodebuild -downloadComponent MetalToolchain
           xcrun metal --version
-      - name: Universal build without sandbox
-        if: matrix.method == 'nosandbox'
+          swift --version
+      - name: Universal release build (verbose)
         run: |
-          swift build -c release --arch arm64 --arch x86_64 --disable-sandbox
-          find .build -name default.metallib -path '*SymairaTheme*' | head
-      - name: Per-arch native builds + lipo
-        if: matrix.method == 'perarch'
+          set -o pipefail
+          swift build -c release --arch arm64 --arch x86_64 -v 2>&1 | tee build.log | tail -5
+      - name: Metal invocation
+        if: always()
         run: |
-          set -euo pipefail
-          for a in arm64 x86_64; do swift build -c release --arch "$a" --product symcockpit; swift build -c release --arch "$a" --product SymCockpitApp; done
+          grep -n -i -B2 -A8 'CompileMetalFile\|SymairaTopo.metal' build.log | cut -c1-600 | head -60
           find .build -name default.metallib | head
-          find .build -name '*SymairaTheme.bundle' -maxdepth 4 | while read b; do ls "$b" "$b/Contents/Resources" 2>/dev/null; done
