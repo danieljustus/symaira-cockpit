@@ -7,36 +7,26 @@ permissions:
   contents: read
 jobs:
   probe:
-    name: metal ${{ matrix.xcode }}
-    strategy:
-      fail-fast: false
-      matrix:
-        xcode: [default, xcode27]
-    runs-on: macos-26
+    name: metal shim
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Select Xcode
-        env:
-          WANT: ${{ matrix.xcode }}
+      - name: Shim resolution
         run: |
-          ls -d /Applications/Xcode*.app
-          if [ "$WANT" = xcode27 ]; then
-            x=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode-beta.app 2>/dev/null | sort -V | tail -1)
-            echo "DEVELOPER_DIR=$x/Contents/Developer" >> "$GITHUB_ENV"
-          fi
-      - name: Toolchain state
+          set +e
+          DEV=$(xcode-select -p); SHIM="$DEV/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal"
+          echo "DEV=$DEV"; ls -l "$SHIM"; file "$SHIM"
+          TC=$(xcodebuild -showComponent MetalToolchain | sed -n 's/^Toolchain Identifier: //p'); echo "TC=$TC"
+          echo "--- plain";         "$SHIM" --version; echo "rc=$?"
+          echo "--- DEVELOPER_DIR"; DEVELOPER_DIR="$DEV" "$SHIM" --version; echo "rc=$?"
+          echo "--- TOOLCHAINS";    TOOLCHAINS="$TC" "$SHIM" --version; echo "rc=$?"
+          echo "--- xcrun";         xcrun metal --version; echo "rc=$?"
+          echo "--- env -i";        env -i PATH=/usr/bin:/bin HOME="$HOME" "$SHIM" --version; echo "rc=$?"
+          echo "--- env -i + DEV";  env -i PATH=/usr/bin:/bin HOME="$HOME" DEVELOPER_DIR="$DEV" "$SHIM" --version; echo "rc=$?"
+          echo "--- env -i + TC";   env -i PATH=/usr/bin:/bin HOME="$HOME" TOOLCHAINS="$TC" "$SHIM" --version; echo "rc=$?"
+          exit 0
+      - name: Build with DEVELOPER_DIR exported
         run: |
-          xcodebuild -version
-          xcodebuild -showComponent MetalToolchain || true
-          xcodebuild -showComponent MetalToolchain | grep -q 'Status: installed' || xcodebuild -downloadComponent MetalToolchain
-          xcrun metal --version
-          swift --version
-      - name: Universal release build (verbose)
-        run: |
-          set -o pipefail
-          swift build -c release --arch arm64 --arch x86_64 -v 2>&1 | tee build.log | tail -5
-      - name: Metal invocation
-        if: always()
-        run: |
-          grep -n -i -B2 -A8 'CompileMetalFile\|SymairaTopo.metal' build.log | cut -c1-600 | head -60
+          export DEVELOPER_DIR=$(xcode-select -p)
+          swift build -c release --arch arm64 --arch x86_64 2>&1 | tail -4
           find .build -name default.metallib | head
