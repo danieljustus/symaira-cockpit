@@ -1,8 +1,29 @@
 # Changelog
 
-## Unreleased
+## [0.9.0] (2026-10-26)
 
 ### Changed
+- **Notch HUD:** the parked shoulders beside the camera cutout are 48 pt
+  instead of 64 pt, so the HUD covers less of the menu bar. Strip readouts use
+  a lighter, smaller face and a compact form with the full unit behind a
+  narrow gap (`485 GB`, `37 %`); values scale to fit instead of being clipped,
+  also while peeking (#374, #378, #381).
+- **Edge HUD:** a peeking edge dock stacks each icon above its value, so long
+  readouts such as `397 GB` no longer run into the screen edge (#385).
+- **Memory readout:** memory used is counted the way Activity Monitor's
+  components are (App Memory + Wired + Compressed), and used plus available
+  always add up to physical memory. The previous figure counted active pages
+  and sat over a gigabyte lower (#384, #386).
+- The cockpit window lays its cards out as a two-column dashboard; the sidebar
+  toggle lives in the toolbar and duplicate headings are gone (#335).
+- The GUI is rebuilt on the shared Symaira AppKit workspace (#356).
+- Tune/SymTune is no longer a visible module name: `symcockpit version`,
+  help, error prefixes, the MCP server identity (`symcockpit`) and the
+  doctor/capabilities `tool` field use Cockpit naming. Grandfathered
+  Keychain/UserDefaults/helper identifiers are unchanged (#337, #338, #339,
+  #340).
+- Refreshed Liquid Topography brand assets, re-rendered with smooth contours,
+  and the approved K1v2 app icon (#371, #372, #380).
 - Consolidate window settings in one native trailing gear menu, with
   System/Light/Dark choices and the existing full-settings action. Remove
   duplicate sidebar and parent-toolbar settings entries (#354).
@@ -14,9 +35,7 @@
   `SymairaSegmentedControl` / `.symairaSwitch` components. Start/Apply actions
   are opaque ink buttons. The compact notch/edge bezel stays black; expanded
   HUD cards follow System/Light/Dark with shared type, neutral surfaces and
-  action buttons. Larger rows remain scrollable on short displays (#357). Requires
-  the unreleased AppKit Liquid Topography change (pinned by revision until it
-  is tagged).
+  action buttons. Larger rows remain scrollable on short displays (#357).
 - The window uses AppKit's reactive Metal topography behind protected content,
   a 272-point glass sidebar with visible selection/focus, and a compact icon
   rail. Settings and popovers remain quiet, opaque surfaces; HUD customization
@@ -28,6 +47,16 @@
 - Protect headings and descriptions at their own text bounds rather than
   blanking the entire title stack or section divider row behind the topography
   (#354).
+- AI usage: OpenRouter, Moonshot and Kimi can point at an existing SymVault
+  entry (for example `openrouter/work`) instead of the fixed
+  `symtune/<provider>` path. Only the opaque path is stored; an enabled
+  provider without a usable entry stays on the card with the reason instead of
+  disappearing (#376, #377).
+- Brightness keys: an untrusted brightness read hands the key press back to
+  macOS, and each press has exactly one owner (#359, #360, #373).
+- Ending a HUD drag no longer depends only on the gesture's own end event; a
+  cancelled drag can no longer leave an invisible full-screen panel capturing
+  all mouse and keyboard input (#382).
 
 ### Added
 - Debug builds offer `--hud-demo`: the real screen-docked HUD with labelled
@@ -45,6 +74,15 @@
   panels, saving the selection automatically. Filesystem UUIDs keep choices
   across renames/reconnects; new volumes remain visible and an all-hidden list
   keeps the menu reachable. CLI/MCP discovery remains complete (#331).
+
+### Known limitations
+- The fluid edge-pull drag animation from #379 was reverted after the
+  hands-on check (#383); #375 stays open until the intended look is pinned down.
+- AI usage's custom SymVault entry is a GUI preference; CLI/MCP processes keep
+  the default `symtune/<provider>` reference.
+- Native keyboard/VoiceOver acceptance remains deferred in #305. The legacy
+  `symcockpit tune` prefix remains supported through v0.9; its removal belongs
+  to v0.10 (#259).
 
 ## [0.8.1] (2026-10-10)
 
