@@ -1,0 +1,46 @@
+# Temporary probe for the v0.9.0 release failure; removed before merge.
+name: Metal probe
+on:
+  pull_request:
+    paths: [.github/workflows/metal-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    name: metal ${{ matrix.runner }} ${{ matrix.method }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-26]
+        method: [download, import]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Select Xcode 26.4.1 (app job)
+        if: matrix.runner == 'macos-26'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.4.1'
+      - name: Before
+        run: |
+          xcodebuild -version
+          xcodebuild -showComponent MetalToolchain || true
+          xcrun metal --version || echo "metal unusable before install"
+      - name: Install (download)
+        if: matrix.method == 'download'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain
+          xcrun --kill-cache || true
+      - name: Install (export/import)
+        if: matrix.method == 'import'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain -exportPath "$RUNNER_TEMP/mt"
+          ls "$RUNNER_TEMP/mt"
+          xcodebuild -importComponent metalToolchain -importPath "$RUNNER_TEMP"/mt/*.exportedBundle
+          xcrun --kill-cache || true
+      - name: After
+        run: |
+          xcodebuild -showComponent MetalToolchain || true
+          xcrun metal --version
+      - name: Universal release build (CLI + app)
+        run: swift build -c release --arch arm64 --arch x86_64
