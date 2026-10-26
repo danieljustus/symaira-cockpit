@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         runner: [macos-latest, macos-26]
-        method: [download, import]
+        method: [nosandbox, perarch]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -21,26 +21,20 @@ jobs:
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: '26.4.1'
-      - name: Before
+      - name: Toolchain state
         run: |
           xcodebuild -version
           xcodebuild -showComponent MetalToolchain || true
-          xcrun metal --version || echo "metal unusable before install"
-      - name: Install (download)
-        if: matrix.method == 'download'
-        run: |
-          xcodebuild -downloadComponent MetalToolchain
-          xcrun --kill-cache || true
-      - name: Install (export/import)
-        if: matrix.method == 'import'
-        run: |
-          xcodebuild -downloadComponent MetalToolchain -exportPath "$RUNNER_TEMP/mt"
-          ls "$RUNNER_TEMP/mt"
-          xcodebuild -importComponent metalToolchain -importPath "$RUNNER_TEMP"/mt/*.exportedBundle
-          xcrun --kill-cache || true
-      - name: After
-        run: |
-          xcodebuild -showComponent MetalToolchain || true
           xcrun metal --version
-      - name: Universal release build (CLI + app)
-        run: swift build -c release --arch arm64 --arch x86_64
+      - name: Universal build without sandbox
+        if: matrix.method == 'nosandbox'
+        run: |
+          swift build -c release --arch arm64 --arch x86_64 --disable-sandbox
+          find .build -name default.metallib -path '*SymairaTheme*' | head
+      - name: Per-arch native builds + lipo
+        if: matrix.method == 'perarch'
+        run: |
+          set -euo pipefail
+          for a in arm64 x86_64; do swift build -c release --arch "$a" --product symcockpit; swift build -c release --arch "$a" --product SymCockpitApp; done
+          find .build -name default.metallib | head
+          find .build -name '*SymairaTheme.bundle' -maxdepth 4 | while read b; do ls "$b" "$b/Contents/Resources" 2>/dev/null; done
