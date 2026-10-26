@@ -33,6 +33,12 @@ jobs:
             exit 1
           fi
 
+      - name: Install Metal Toolchain
+        # Release builds compile the shared AppKit topography shader
+        # (SymairaTopo.metal). Xcode 26+ ships the Metal compiler as a
+        # separate component that hosted runners do not preinstall.
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Test every package
         run: make test
 
@@ -115,6 +121,12 @@ jobs:
             echo "::error::Expected Xcode 26 or newer, got: $XCODE_VERSION"
             exit 1
           fi
+
+      - name: Install Metal Toolchain
+        # Release builds compile the shared AppKit topography shader
+        # (SymairaTopo.metal). Xcode 26+ ships the Metal compiler as a
+        # separate component that hosted runners do not preinstall.
+        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Resolve version from tag
         id: version
