@@ -33,11 +33,12 @@ jobs:
             exit 1
           fi
 
-      - name: Install Metal Toolchain
+      - name: Make the Metal toolchain usable
         # Release builds compile the shared AppKit topography shader
-        # (SymairaTopo.metal). Xcode 26+ ships the Metal compiler as a
-        # separate component that hosted runners do not preinstall.
-        run: xcodebuild -downloadComponent MetalToolchain
+        # (SymairaTopo.metal). On hosted runners the Xcode Metal shims that
+        # Swift Build calls fail even though the component is installed;
+        # the script routes them to the real tools.
+        run: bash scripts/ci-metal-toolchain.sh
 
       - name: Test every package
         run: make test
@@ -122,11 +123,12 @@ jobs:
             exit 1
           fi
 
-      - name: Install Metal Toolchain
+      - name: Make the Metal toolchain usable
         # Release builds compile the shared AppKit topography shader
-        # (SymairaTopo.metal). Xcode 26+ ships the Metal compiler as a
-        # separate component that hosted runners do not preinstall.
-        run: xcodebuild -downloadComponent MetalToolchain
+        # (SymairaTopo.metal). On hosted runners the Xcode Metal shims that
+        # Swift Build calls fail even though the component is installed;
+        # the script routes them to the real tools.
+        run: bash scripts/ci-metal-toolchain.sh
 
       - name: Resolve version from tag
         id: version
