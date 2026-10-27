@@ -33,6 +33,13 @@ jobs:
             exit 1
           fi
 
+      - name: Make the Metal toolchain usable
+        # Release builds compile the shared AppKit topography shader
+        # (SymairaTopo.metal). On hosted runners the Xcode Metal shims that
+        # Swift Build calls fail even though the component is installed;
+        # the script routes them to the real tools.
+        run: bash scripts/ci-metal-toolchain.sh
+
       - name: Test every package
         run: make test
 
@@ -115,6 +122,13 @@ jobs:
             echo "::error::Expected Xcode 26 or newer, got: $XCODE_VERSION"
             exit 1
           fi
+
+      - name: Make the Metal toolchain usable
+        # Release builds compile the shared AppKit topography shader
+        # (SymairaTopo.metal). On hosted runners the Xcode Metal shims that
+        # Swift Build calls fail even though the component is installed;
+        # the script routes them to the real tools.
+        run: bash scripts/ci-metal-toolchain.sh
 
       - name: Resolve version from tag
         id: version
