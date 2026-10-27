@@ -7,26 +7,25 @@ permissions:
   contents: read
 jobs:
   probe:
-    name: metal shim
-    runs-on: macos-latest
+    name: metal wrap ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-26]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Shim resolution
+      - name: Select Xcode 26.4.1 (app job)
+        if: matrix.runner == 'macos-26'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.4.1'
+      - name: Route Metal shims to the installed toolchain
         run: |
-          set +e
-          DEV=$(xcode-select -p); SHIM="$DEV/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal"
-          echo "DEV=$DEV"; ls -l "$SHIM"; file "$SHIM"
-          TC=$(xcodebuild -showComponent MetalToolchain | sed -n 's/^Toolchain Identifier: //p'); echo "TC=$TC"
-          echo "--- plain";         "$SHIM" --version; echo "rc=$?"
-          echo "--- DEVELOPER_DIR"; DEVELOPER_DIR="$DEV" "$SHIM" --version; echo "rc=$?"
-          echo "--- TOOLCHAINS";    TOOLCHAINS="$TC" "$SHIM" --version; echo "rc=$?"
-          echo "--- xcrun";         xcrun metal --version; echo "rc=$?"
-          echo "--- env -i";        env -i PATH=/usr/bin:/bin HOME="$HOME" "$SHIM" --version; echo "rc=$?"
-          echo "--- env -i + DEV";  env -i PATH=/usr/bin:/bin HOME="$HOME" DEVELOPER_DIR="$DEV" "$SHIM" --version; echo "rc=$?"
-          echo "--- env -i + TC";   env -i PATH=/usr/bin:/bin HOME="$HOME" TOOLCHAINS="$TC" "$SHIM" --version; echo "rc=$?"
-          exit 0
-      - name: Build with DEVELOPER_DIR exported
+          set -euo pipefail
+          bash scripts/ci-metal-toolchain.sh
+      - name: Universal release build
         run: |
-          export DEVELOPER_DIR=$(xcode-select -p)
+          set -o pipefail
           swift build -c release --arch arm64 --arch x86_64 2>&1 | tail -4
-          find .build -name default.metallib | head
+          find .build -name default.metallib -path '*SymairaTheme*' | tee /dev/stderr | grep -q .
