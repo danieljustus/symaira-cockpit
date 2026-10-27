@@ -17,7 +17,7 @@ let package = Package(
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.15.1"),
+        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.17.1"),
         .package(path: "tuning"),
     ],
     targets: [
