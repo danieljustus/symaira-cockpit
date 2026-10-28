@@ -7,11 +7,13 @@ public struct AIUsageService: @unchecked Sendable {
         public let snapshot: AIUsageSnapshot?
         /// A generic, secret-free error. The subprocess output is never exposed.
         public let error: String?
+        public let history: AIUsageRecordedHistory?
 
-        public init(providerID: String, snapshot: AIUsageSnapshot?, error: String?) {
+        public init(providerID: String, snapshot: AIUsageSnapshot?, error: String?, history: AIUsageRecordedHistory? = nil) {
             self.providerID = providerID
             self.snapshot = snapshot
             self.error = error
+            self.history = history
         }
     }
 
@@ -20,36 +22,83 @@ public struct AIUsageService: @unchecked Sendable {
 
     public let providers: [any AIUsageProvider]
     private let client: any SymBrainUsageClientProtocol
+    private let cache: AIUsageSnapshotCache?
 
-    /// The compatibility layer keeps the old provider catalog and result shape,
-    /// while the only usage fetch is `symbrain usage --output json`.
+    /// Inject a cache explicitly; tests and embedded callers remain disk-free.
     public init(
         providers: [any AIUsageProvider] = SymBrainUsageProvider.catalog(),
-        client: any SymBrainUsageClientProtocol = SymBrainUsageClient()
+        client: any SymBrainUsageClientProtocol = SymBrainUsageClient(),
+        cache: AIUsageSnapshotCache? = nil
     ) {
         self.providers = providers
         self.client = client
+        self.cache = cache
     }
 
     public var providerCatalog: [(id: String, displayName: String)] {
         providers.map { ($0.id, $0.displayName) }
     }
 
-    /// Execute one symbrain report and adapt it to the legacy CLI/MCP result
-    /// shape. A missing binary, non-zero exit, or malformed report is an
-    /// unavailable result for every catalog entry, not a thrown UI error.
-    public func usageAll() async -> [ProviderResult] {
+    /// An explicit empty selection performs no subprocess or credential work.
+    /// Failed refreshes carry the last snapshot AND an error, never a fake zero.
+    public func usageAll(providerIDs: Set<String>? = nil, force: Bool = true, grokHistoryEnabled: Bool = false,
+                         opencodeHistoryEnabled: Bool = false, claudeHistoryEnabled: Bool = false,
+                         claudeHistoryOnly: Bool = false, codexHistoryEnabled: Bool = false,
+                         codexHistoryOnly: Bool = false) async -> [ProviderResult] {
+        let selected = providers.filter { providerIDs?.contains($0.id) ?? true }
+        guard !selected.isEmpty else { return [] }
+        let cached = cachedResults(providerIDs: providerIDs)
+        let historyIDs = Set([grokHistoryEnabled ? "grok" : nil, opencodeHistoryEnabled ? "opencode" : nil,
+                              claudeHistoryEnabled ? "claude" : nil, codexHistoryEnabled ? "codex" : nil].compactMap { $0 })
+            .intersection(providerIDs ?? [])
+        if !force, historyIDs.isEmpty, cached.count == selected.count,
+           cached.allSatisfy({ $0.error == nil && ($0.snapshot.map { AIUsageSnapshotCache.isFresh($0) } ?? false) }) {
+            return cached
+        }
         do {
-            let report = try client.fetchReport()
-            return reportResults(report)
+            let report: SymBrainUsageReport
+            if let providerIDs {
+                report = try client.fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled,
+                                                opencodeHistoryEnabled: opencodeHistoryEnabled,
+                                                claudeHistoryEnabled: historyIDs.contains("claude"),
+                                                claudeHistoryOnly: historyIDs.contains("claude") && claudeHistoryOnly,
+                                                codexHistoryEnabled: historyIDs.contains("codex"),
+                                                codexHistoryOnly: historyIDs.contains("codex") && codexHistoryOnly)
+            } else {
+                report = try client.fetchReport()
+            }
+            return reportResults(report).filter { providerIDs?.contains($0.providerID) ?? true }.map { raw in
+                let result = ProviderResult(providerID: raw.providerID, snapshot: raw.snapshot, error: raw.error,
+                    history: historyIDs.contains(raw.providerID) ? raw.history : nil)
+                if let snapshot = result.snapshot {
+                    try? cache?.save(snapshot)
+                    return result
+                }
+                // Removing credentials must not keep showing the prior account.
+                if result.error == Self.notConfiguredMessage {
+                    cache?.remove(providerID: result.providerID)
+                    return result
+                }
+                cache?.markRefreshFailed(providerID: result.providerID)
+                return ProviderResult(providerID: result.providerID,
+                                      snapshot: cache?.load(providerID: result.providerID), error: result.error, history: result.history)
+            }
         } catch {
-            // Name the failure instead of collapsing it. Every
-            // ``SymBrainUsageError`` description is a fixed string that never
-            // embeds subprocess output, so this stays secret-free — and a
-            // missing `symbrain` now says so rather than looking exactly like
-            // a provider that simply has no data.
             let message = (error as? SymBrainUsageError)?.errorDescription ?? "AI usage unavailable."
-            return providers.map { ProviderResult(providerID: $0.id, snapshot: nil, error: message) }
+            return selected.map { provider in
+                cache?.markRefreshFailed(providerID: provider.id)
+                return ProviderResult(providerID: provider.id, snapshot: cache?.load(providerID: provider.id), error: message)
+            }
+        }
+    }
+
+    /// Immediate launch presentation, followed by an asynchronous refresh.
+    public func cachedResults(providerIDs: Set<String>? = nil) -> [ProviderResult] {
+        providers.compactMap { provider in
+            guard providerIDs?.contains(provider.id) ?? true,
+                  let snapshot = cache?.load(providerID: provider.id) else { return nil }
+            return ProviderResult(providerID: provider.id, snapshot: snapshot,
+                                  error: cache?.lastRefreshFailed(providerID: provider.id) == true ? "Last refresh failed" : nil)
         }
     }
 
@@ -58,14 +107,15 @@ public struct AIUsageService: @unchecked Sendable {
         guard providers.contains(where: { $0.id == providerID }) else {
             throw AIUsageError.unknownProvider(providerID)
         }
-        let result = await usageAll().first { $0.providerID == providerID }
-        guard let snapshot = result?.snapshot else { throw AIUsageError.unavailable }
+        let result = await usageAll(providerIDs: [providerID]).first
+        guard let snapshot = result?.snapshot, result?.error == nil else { throw AIUsageError.unavailable }
         return snapshot
     }
 
-    /// The runtime command is deliberately uncached. The UI controls refresh
-    /// cadence, and every CLI/MCP invocation should reflect the latest report.
-    public func resetCache() {}
+    /// Credential changes invalidate account-bound snapshots on every surface.
+    public func resetCache() {
+        for provider in providers { cache?.remove(providerID: provider.id) }
+    }
 
     /// Doctor now reports the same auth source/status used by the usage screen.
     public func credentialSources() -> [CredentialSourceReport] {
@@ -110,7 +160,7 @@ public struct AIUsageService: @unchecked Sendable {
                 ))
                 continue
             }
-            guard let rawSnapshot = row.snapshot else {
+            guard let rawSnapshot = row.snapshot, rawSnapshot.providerID == row.id else {
                 results.append(ProviderResult(
                     providerID: row.id,
                     snapshot: nil,
@@ -132,6 +182,9 @@ public struct AIUsageService: @unchecked Sendable {
                 ))
             }
         }
-        return results
+        return results.map { result in
+            ProviderResult(providerID: result.providerID, snapshot: result.snapshot, error: result.error,
+                history: report.providers.first { $0.id == result.providerID }?.history)
+        }
     }
 }

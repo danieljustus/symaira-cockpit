@@ -21,6 +21,7 @@ public struct SymBrainProviderUsage: Codable, Sendable, Equatable {
     public let authStatus: SymBrainAuthStatus
     public let snapshot: SymBrainUsageSnapshot?
     public let error: String
+    public let history: AIUsageRecordedHistory?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -28,7 +29,7 @@ public struct SymBrainProviderUsage: Codable, Sendable, Equatable {
         case configured
         case authStatus = "auth_status"
         case snapshot
-        case error
+        case error, history
     }
 
     public init(
@@ -37,7 +38,8 @@ public struct SymBrainProviderUsage: Codable, Sendable, Equatable {
         configured: Bool,
         authStatus: SymBrainAuthStatus,
         snapshot: SymBrainUsageSnapshot?,
-        error: String = ""
+        error: String = "",
+        history: AIUsageRecordedHistory? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -45,6 +47,7 @@ public struct SymBrainProviderUsage: Codable, Sendable, Equatable {
         self.authStatus = authStatus
         self.snapshot = snapshot
         self.error = error
+        self.history = history
     }
 
     public init(from decoder: Decoder) throws {
@@ -55,6 +58,8 @@ public struct SymBrainProviderUsage: Codable, Sendable, Equatable {
         authStatus = try container.decode(SymBrainAuthStatus.self, forKey: .authStatus)
         snapshot = try container.decodeIfPresent(SymBrainUsageSnapshot.self, forKey: .snapshot)
         error = try container.decodeIfPresent(String.self, forKey: .error) ?? ""
+        // An invalid optional extension must not discard usable quota data.
+        history = try? container.decodeIfPresent(AIUsageRecordedHistory.self, forKey: .history)
     }
 }
 
@@ -90,9 +95,9 @@ public struct SymBrainUsageSnapshot: Codable, Sendable, Equatable {
             providerID: providerID,
             meters: convertedMeters,
             balance: balanceValue,
-            currency: currency,
+            currency: currency.map(SecretRedactor.redact),
             fetchedAt: fetchedAt,
-            source: source
+            source: SecretRedactor.redact(source)
         )
     }
 }
@@ -119,10 +124,10 @@ public struct SymBrainUsageMeter: Codable, Sendable, Equatable {
         case "requests": unitValue = .requests
         case "credits": unitValue = .credits
         case "%", "percent": unitValue = .percent
-        default: unitValue = .currency(unit)
+        default: unitValue = .currency(SecretRedactor.redact(unit))
         }
         return AIUsageMeter(
-            label: label,
+            label: SecretRedactor.redact(label),
             used: try decimal(used, field: "used"),
             limit: try decimal(limit, field: "limit"),
             unit: unitValue,
@@ -133,7 +138,10 @@ public struct SymBrainUsageMeter: Codable, Sendable, Equatable {
 
 private func decimal(_ value: String?, field: String) throws -> Decimal? {
     guard let value else { return nil }
-    guard let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")) else {
+    guard value.range(of: #"\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z"#,
+                      options: .regularExpression) != nil,
+          let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")),
+          NSDecimalNumber(decimal: decimal).doubleValue.isFinite else {
         throw SymBrainUsageError.invalidValue(field)
     }
     return decimal
@@ -164,9 +172,11 @@ public enum SymBrainUsageError: Error, LocalizedError, Sendable, Equatable {
     case invalidJSON
     case unsupportedSchemaVersion(Int)
     case invalidValue(String)
+    case providerSelectionUnsupported
 
     public var errorDescription: String? {
         switch self {
+        case .providerSelectionUnsupported: return "Update symbrain to use provider-specific refresh safely"
         case .binaryUnavailable: return "symbrain is not installed"
         case .commandFailed: return "symbrain usage failed"
         case .emptyOutput: return "symbrain usage returned no output"
@@ -177,8 +187,10 @@ public enum SymBrainUsageError: Error, LocalizedError, Sendable, Equatable {
     }
 }
 
-/// Executes `symbrain` without a shell. Binary resolution is PATH-only; no
-/// user-specific path is assumed and callers can inject a runner in tests.
+/// Executes `symbrain` without a shell using the shared bounded runner's
+/// PATH-first resolution and managed-install fallbacks. Tests inject a runner
+/// or place a fixture executable first on PATH; removing PATH entries alone
+/// does not isolate an installed Brain.
 public struct ProcessSymBrainCommandRunner: SymBrainCommandRunner, Sendable {
     public let binaryName: String
     public let timeout: TimeInterval
@@ -221,6 +233,50 @@ public struct ProcessSymBrainCommandRunner: SymBrainCommandRunner, Sendable {
 
 public protocol SymBrainUsageClientProtocol: Sendable {
     func fetchReport() throws -> SymBrainUsageReport
+    func fetchReport(providerIDs: Set<String>) throws -> SymBrainUsageReport
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool) throws -> SymBrainUsageReport
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool) throws -> SymBrainUsageReport
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                     claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool) throws -> SymBrainUsageReport
+    // Preserve explicit consent arguments and existing adapter callers.
+    // swiftlint:disable:next function_parameter_count
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                     claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool,
+                     codexHistoryEnabled: Bool, codexHistoryOnly: Bool) throws -> SymBrainUsageReport
+}
+
+public extension SymBrainUsageClientProtocol {
+    // Preserve explicit consent arguments and existing adapter callers.
+    // swiftlint:disable:next function_parameter_count
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                     claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool,
+                     codexHistoryEnabled: Bool, codexHistoryOnly: Bool) throws -> SymBrainUsageReport {
+        guard !codexHistoryEnabled, !codexHistoryOnly else { throw SymBrainUsageError.providerSelectionUnsupported }
+        return try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled,
+            opencodeHistoryEnabled: opencodeHistoryEnabled, claudeHistoryEnabled: claudeHistoryEnabled, claudeHistoryOnly: claudeHistoryOnly)
+    }
+
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                     claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool) throws -> SymBrainUsageReport {
+        guard !claudeHistoryEnabled, !claudeHistoryOnly else { throw SymBrainUsageError.providerSelectionUnsupported }
+        return try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled, opencodeHistoryEnabled: opencodeHistoryEnabled)
+    }
+
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool) throws -> SymBrainUsageReport {
+        guard !opencodeHistoryEnabled else { throw SymBrainUsageError.providerSelectionUnsupported }
+        return try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled)
+    }
+
+    func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool) throws -> SymBrainUsageReport {
+        guard !grokHistoryEnabled else { throw SymBrainUsageError.providerSelectionUnsupported }
+        return try fetchReport(providerIDs: providerIDs)
+    }
+
+    /// Older adapters cannot promise selective credential/network access.
+    /// Do not silently substitute an all-provider fetch for an opt-in request.
+    func fetchReport(providerIDs: Set<String>) throws -> SymBrainUsageReport {
+        throw SymBrainUsageError.providerSelectionUnsupported
+    }
 }
 
 /// Runtime adapter for the published symbrain usage contract.
@@ -245,11 +301,60 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
     }
 
     public func fetchReport() throws -> SymBrainUsageReport {
+        try fetchReport(selection: nil)
+    }
+
+    public func fetchReport(providerIDs: Set<String>) throws -> SymBrainUsageReport {
+        try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: false)
+    }
+
+    public func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool) throws -> SymBrainUsageReport {
+        try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled, opencodeHistoryEnabled: false)
+    }
+
+    public func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool) throws -> SymBrainUsageReport {
+        try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled,
+                        opencodeHistoryEnabled: opencodeHistoryEnabled, claudeHistoryEnabled: false, claudeHistoryOnly: false)
+    }
+
+    public func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                            claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool = false) throws -> SymBrainUsageReport {
+        return try fetchReport(providerIDs: providerIDs, grokHistoryEnabled: grokHistoryEnabled,
+            opencodeHistoryEnabled: opencodeHistoryEnabled, claudeHistoryEnabled: claudeHistoryEnabled,
+            claudeHistoryOnly: claudeHistoryOnly, codexHistoryEnabled: false, codexHistoryOnly: false)
+    }
+
+    // Additive overload keeps existing adapter callers unchanged.
+    // swiftlint:disable:next function_parameter_count
+    public func fetchReport(providerIDs: Set<String>, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                            claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool,
+                            codexHistoryEnabled: Bool, codexHistoryOnly: Bool = false) throws -> SymBrainUsageReport {
+        guard !providerIDs.isEmpty else {
+            return SymBrainUsageReport(schemaVersion: 1, providers: [])
+        }
+        guard providerIDs.allSatisfy({ id in
+            !id.isEmpty && id.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }
+        }) else { throw SymBrainUsageError.invalidValue("provider ID") }
+        return try fetchReport(selection: providerIDs, grokHistoryEnabled: grokHistoryEnabled, opencodeHistoryEnabled: opencodeHistoryEnabled,
+                               claudeHistoryEnabled: claudeHistoryEnabled, claudeHistoryOnly: claudeHistoryOnly,
+                               codexHistoryEnabled: codexHistoryEnabled, codexHistoryOnly: codexHistoryOnly)
+    }
+
+    private func fetchReport(selection: Set<String>?, grokHistoryEnabled: Bool = false, opencodeHistoryEnabled: Bool = false,
+                             claudeHistoryEnabled: Bool = false, claudeHistoryOnly: Bool = false,
+                             codexHistoryEnabled: Bool = false, codexHistoryOnly: Bool = false) throws -> SymBrainUsageReport {
+        var arguments = ["usage", "--output", "json"]
+        if let selection { arguments += ["--providers", selection.sorted().joined(separator: ",")] }
         let result = try runner.run(
-            arguments: ["usage", "--output", "json"],
-            environment: childEnvironment()
+            arguments: arguments,
+            environment: childEnvironment(selection: selection, grokHistoryEnabled: grokHistoryEnabled, opencodeHistoryEnabled: opencodeHistoryEnabled,
+                                          claudeHistoryEnabled: claudeHistoryEnabled, claudeHistoryOnly: claudeHistoryOnly,
+                                          codexHistoryEnabled: codexHistoryEnabled, codexHistoryOnly: codexHistoryOnly)
         )
         guard result.terminationStatus == 0 else {
+            if selection != nil && result.terminationStatus == 2 {
+                throw SymBrainUsageError.providerSelectionUnsupported
+            }
             throw SymBrainUsageError.commandFailed(result.terminationStatus)
         }
         guard !result.standardOutput.isEmpty else {
@@ -276,14 +381,42 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
         ("OPENROUTER_API_KEY", "openrouter"),
         ("MOONSHOT_API_KEY", "moonshot"),
         ("KIMI_CODE_API_KEY", "kimi"),
+        ("ZAI_API_KEY", "zai"),
+        ("DEVIN_API_KEY", "devin"),
+        ("GROK_ACCESS_TOKEN", "grok"),
+        ("OPENCODE_GO_API_KEY", "opencode"),
     ]
 
-    private func childEnvironment() -> [String: String] {
-        var result = environment
+    // Each provider consent is independent; inherited flags never grant consent.
+    // swiftlint:disable:next function_parameter_count
+    private func childEnvironment(selection: Set<String>?, grokHistoryEnabled: Bool, opencodeHistoryEnabled: Bool,
+                                  claudeHistoryEnabled: Bool, claudeHistoryOnly: Bool,
+                                  codexHistoryEnabled: Bool, codexHistoryOnly: Bool) -> [String: String] {
+        // Strip every inherited history opt-in, including flags for unsupported providers.
+        var result = environment.filter { !($0.key.hasPrefix("SYMBRAIN_USAGE_") && $0.key.contains("_HISTORY")) }
+        if codexHistoryEnabled, selection?.contains("codex") == true {
+            result["SYMBRAIN_USAGE_CODEX_HISTORY"] = "1"
+            if codexHistoryOnly { result["SYMBRAIN_USAGE_CODEX_HISTORY_ONLY"] = "1" }
+        }
+        if claudeHistoryEnabled, selection?.contains("claude") == true {
+            result["SYMBRAIN_USAGE_CLAUDE_HISTORY"] = "1"
+            if claudeHistoryOnly { result["SYMBRAIN_USAGE_CLAUDE_HISTORY_ONLY"] = "1" }
+        }
+        if opencodeHistoryEnabled, selection?.contains("opencode") == true {
+            result["SYMBRAIN_USAGE_OPENCODE_HISTORY"] = "1"
+        }
+        if grokHistoryEnabled, selection?.contains("grok") == true {
+            result["SYMBRAIN_USAGE_GROK_HISTORY"] = "1"
+        }
         // symbrain resolves these references itself. Keeping them opaque here
         // avoids a second credential store and prevents plaintext values from
         // entering cockpit's process environment.
-        for (environmentKey, providerID) in Self.credentialEnvironment where result[environmentKey]?.isEmpty != false {
+        for (environmentKey, providerID) in Self.credentialEnvironment {
+            if let selection, !selection.contains(providerID) {
+                result.removeValue(forKey: environmentKey)
+                continue
+            }
+            guard result[environmentKey]?.isEmpty != false else { continue }
             if let reference = credentialReference(providerID), !reference.isEmpty {
                 result[environmentKey] = reference
             }

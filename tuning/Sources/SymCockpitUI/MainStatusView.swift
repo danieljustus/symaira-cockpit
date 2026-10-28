@@ -230,7 +230,7 @@ struct MainStatusView: View {
                 }
             }
             pairedLayout {
-                if !aiUsageModel.rows.isEmpty {
+                if !aiUsageModel.providers.isEmpty {
                     AIUsageCardView(model: aiUsageModel)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -243,7 +243,7 @@ struct MainStatusView: View {
                 DisplaysSection(model: model)
             }
             if chrome == .embedded && !shows(.topProcesses) && !shows(.storageVolumes)
-                && !shows(.metricsHistory) && aiUsageModel.rows.isEmpty {
+                && !shows(.metricsHistory) && aiUsageModel.providers.isEmpty {
                 hiddenCardsNote("Activity cards are hidden in Preferences.")
             }
         }
@@ -333,7 +333,7 @@ struct MainStatusView: View {
 
     private var showsAnySystem: Bool {
         shows(.systemStatus) || shows(.topProcesses) || shows(.metricsHistory)
-            || shows(.storageVolumes) || shows(.displays) || !aiUsageModel.rows.isEmpty
+            || shows(.storageVolumes) || shows(.displays) || !aiUsageModel.providers.isEmpty
     }
 
     /// Whether this Mac reports any fan. `nil` sensors means "not read yet",
