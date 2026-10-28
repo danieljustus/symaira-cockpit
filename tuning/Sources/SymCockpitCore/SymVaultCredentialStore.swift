@@ -209,8 +209,15 @@ public struct SymVaultEntryPaths: Sendable, Equatable {
         overrides[providerID] ?? SymVaultCredentialStore.defaultEntryPath(for: providerID)
     }
 
-    public func reference(for providerID: String) -> String {
-        Self.scheme + path(for: providerID)
+    /// Local CLI auth remains discoverable until the user explicitly chooses a vault entry.
+    public static func usesLocalDiscovery(for providerID: String) -> Bool {
+        providerID == "grok" || providerID == "devin" || providerID == "opencode"
+    }
+
+    public func reference(for providerID: String) -> String? {
+        guard Self.supportedProviderIDs.contains(providerID) else { return nil }
+        if Self.usesLocalDiscovery(for: providerID), overrides[providerID] == nil { return nil }
+        return Self.scheme + path(for: providerID)
     }
 
     /// Trims the input, accepts a pasted `symvault://` reference, and drops

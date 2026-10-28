@@ -42,6 +42,10 @@ public final class SymBrainUsageProvider: AIUsageProvider, @unchecked Sendable {
             SymBrainUsageProvider(id: "opencode", displayName: "OpenCode Go"),
             SymBrainUsageProvider(id: "openrouter", displayName: "OpenRouter"),
             SymBrainUsageProvider(id: "antigravity", displayName: "Antigravity"),
+            SymBrainUsageProvider(id: "zai", displayName: "Z.ai"),
+            SymBrainUsageProvider(id: "devin", displayName: "Devin"),
+            SymBrainUsageProvider(id: "grok", displayName: "Grok"),
+            SymBrainUsageProvider(id: "ollama", displayName: "Ollama Cloud"),
         ]
     }
 
@@ -52,6 +56,18 @@ public final class SymBrainUsageProvider: AIUsageProvider, @unchecked Sendable {
         let account: String?
         let label: String
         switch id {
+        case "zai":
+            account = "zai-api-key"
+            label = "Z.ai API key (ZAI_API_KEY; resolved by symbrain)"
+        case "devin":
+            account = "devin-api-key"
+            label = "Codeium-compatible Devin CLI credential (DEVIN_API_KEY or local CLI auth; not devin.ai organization keys)"
+        case "grok":
+            account = "grok-access-token"
+            label = "Grok access token (GROK_ACCESS_TOKEN or local GROK_HOME auth)"
+        case "ollama":
+            account = nil
+            label = "Ollama Cloud local signing key (accessed only by symbrain when enabled)"
         case "moonshot":
             account = "moonshot-api-key"
             label = "API key (symbrain env MOONSHOT_API_KEY or Keychain)"
@@ -77,8 +93,8 @@ public final class SymBrainUsageProvider: AIUsageProvider, @unchecked Sendable {
             account = nil
             label = "Hermes auth store (managed by symbrain)"
         case "opencode":
-            account = nil
-            label = "OpenCode auth (managed by symbrain)"
+            account = "opencode-go-api-key"
+            label = "Optional OpenCode Go API key (OPENCODE_GO_API_KEY; not Zen keys or cookies). Without an explicit key, symbrain uses native auth or configured cookie/workspace auth."
         case "antigravity":
             account = nil
             label = "Local Antigravity probe (managed by symbrain)"
