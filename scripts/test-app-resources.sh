@@ -9,7 +9,7 @@ TEST_DIR="$(mktemp -d "${TMPDIR:?TMPDIR must name a scratch directory}/cockpit-r
 trap 'rm -rf "$TEST_DIR"' EXIT
 COPY="$TEST_DIR/Cockpit.app"
 cp -R "$APP_PATH" "$COPY"
-FONT="$COPY/Contents/Resources/symaira-appkit_SymairaTheme.bundle/Contents/Resources/GoogleSansFlex.ttf"
+FONT="$COPY/Contents/Resources/symaira-corekit_SymairaTheme.bundle/Contents/Resources/GoogleSansFlex.ttf"
 mv "$FONT" "$TEST_DIR/font.ttf"
 if "$SCRIPT_DIR/smoke-app.sh" "$COPY" > "$TEST_DIR/missing.log" 2>&1; then
   printf 'Smoke check incorrectly accepted an app without its font.\n' >&2

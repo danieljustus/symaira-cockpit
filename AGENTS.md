@@ -87,9 +87,9 @@ families are not version components.
 ### GUI
 
 `Sources/SymCockpitApp` and `tuning/Sources/SymCockpitUI` follow the Symaira
-Interface Guidelines shipped with the pinned `symaira-appkit`: read its
+Interface Guidelines shipped with the pinned `symaira-corekit` (AppKit lives under `appkit/`): read its
 `GUIDELINES.md`, then `DESIGN.md` and `docs/workspace-foundation.md`, and
-review a UI change with `python3 <symaira-appkit>/scripts/gui-review.py
+review a UI change with `python3 <symaira-corekit>/appkit/scripts/gui-review.py
 tuning/Sources/SymCockpitUI` plus the manual checklist in GUIDELINES.md
 section 13. Cockpit is the design pilot: a reusable rule agreed here moves
 into AppKit with its implementation and regression check before other

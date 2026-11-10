@@ -43,7 +43,7 @@ The only target with logic or IOKit access.
 ### `SymCockpitMCP`
 
 - Thin facade (`TuneMCPServer`) over the shared `SymairaMCP` module from
-  `symaira-appkit`: registers the `tools/list` and `tools/call` handlers on
+  `symaira-corekit`: registers the `tools/list` and `tools/call` handlers on
   `MCPServer.withMethodHandler(_:)`, served over `MCPStdioTransport`
   (newline-delimited JSON-RPC, per the MCP spec's stdio framing).
 - `initialize`, `tools/list`, `tools/call`, `ping` are owned by `SymairaMCP`.

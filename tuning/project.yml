@@ -7,9 +7,9 @@ options:
   generateEmptyDirectories: false
 
 packages:
-  symaira-appkit:
-    url: https://github.com/danieljustus/symaira-appkit.git
-    exactVersion: 0.15.1
+  symaira-corekit:
+    url: https://github.com/danieljustus/symaira-corekit.git
+    exactVersion: 0.20.0
   history:
     path: ../history
 
@@ -22,9 +22,9 @@ targets:
     dependencies:
       - package: history
         product: SymCockpitHistory
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaKeychain
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaUpdateCheck
     settings:
       base:
@@ -46,11 +46,11 @@ targets:
       - Sources/SymCockpitUI
     dependencies:
       - target: SymCockpitCore
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaProviderKit
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaUpdateCheck
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaTheme
     settings:
       base:
@@ -70,13 +70,13 @@ targets:
       - target: SymCockpitCore
       - package: history
         product: SymCockpitHistory
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaKeychain
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaProviderKit
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaUpdateCheck
-      - package: symaira-appkit
+      - package: symaira-corekit
         product: SymairaTheme
     settings:
       base:

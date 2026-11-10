@@ -17,7 +17,7 @@ let package = Package(
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.17.1"),
+        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.20.0"),
         .package(path: "tuning"),
     ],
     targets: [
@@ -27,7 +27,7 @@ let package = Package(
             dependencies: [
                 "SymCockpitVersion",
                 .product(name: "SymCockpitCLI", package: "tuning"),
-                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
             ]
         ),
         .executableTarget(
@@ -36,7 +36,7 @@ let package = Package(
                 "SymCockpitVersion",
                 .product(name: "SymCockpitUI", package: "tuning"),
                 .product(name: "SymCockpitCore", package: "tuning"),
-                .product(name: "SymairaTheme", package: "symaira-appkit"),
+                .product(name: "SymairaTheme", package: "symaira-corekit"),
             ],
             exclude: ["Info.plist"],
             linkerSettings: [

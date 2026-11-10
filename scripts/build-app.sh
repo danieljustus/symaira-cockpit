@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Assemble Symaira Cockpit.app from the SwiftPM product.
 #
-# The GUI has no Xcode project on purpose: its dependency graph (tune plus symaira-appkit) is already declared once in Package.swift, and a
+# The GUI has no Xcode project on purpose: its dependency graph (tune plus symaira-corekit) is already declared once in Package.swift, and a
 # parallel XcodeGen definition would be a second place to keep in sync. SwiftPM
 # builds the executable; this script wraps it in a bundle, which is all the
 # extra structure an LSUIElement app needs.
@@ -67,7 +67,7 @@ RESOURCE_BUNDLES=("$(dirname "$BIN_PATH")"/*.bundle)
 for resource_bundle in "${RESOURCE_BUNDLES[@]}"; do
   cp -R "$resource_bundle" "$APP_PATH/Contents/Resources/"
 done
-THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-appkit_SymairaTheme.bundle/Contents/Resources"
+THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-corekit_SymairaTheme.bundle/Contents/Resources"
 for resource in GoogleSansFlex.ttf GoogleSansFlex-OFL.txt GoogleSansFlex-TRADEMARKS.md default.metallib; do
   [[ -s "$THEME_RESOURCES/$resource" ]] || {
     printf 'Missing required AppKit resource: %s\n' "$resource" >&2

@@ -17,7 +17,7 @@ let package = Package(
         .library(name: "SymCockpitUI", targets: ["SymCockpitUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-appkit.git", exact: "0.17.1"),
+        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.20.0"),
         .package(path: "../history"),
     ],
     targets: [
@@ -25,8 +25,8 @@ let package = Package(
             name: "SymCockpitCore",
             dependencies: [
                 .product(name: "SymCockpitHistory", package: "history"),
-                .product(name: "SymairaKeychain", package: "symaira-appkit"),
-                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
+                .product(name: "SymairaKeychain", package: "symaira-corekit"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -37,7 +37,7 @@ let package = Package(
             name: "SymCockpitMCP",
             dependencies: [
                 "SymCockpitCore",
-                .product(name: "SymairaMCP", package: "symaira-appkit"),
+                .product(name: "SymairaMCP", package: "symaira-corekit"),
             ]
         ),
         .target(
@@ -45,8 +45,8 @@ let package = Package(
             dependencies: [
                 "SymCockpitCore",
                 "SymCockpitMCP",
-                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
-                .product(name: "SymairaTheme", package: "symaira-appkit"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
+                .product(name: "SymairaTheme", package: "symaira-corekit"),
             ]
         ),
         .executableTarget(
@@ -59,10 +59,10 @@ let package = Package(
             name: "SymCockpitUI",
             dependencies: [
                 "SymCockpitCore",
-                .product(name: "SymairaProviderKit", package: "symaira-appkit"),
-                .product(name: "SymairaKeychain", package: "symaira-appkit"),
-                .product(name: "SymairaUpdateCheck", package: "symaira-appkit"),
-                .product(name: "SymairaTheme", package: "symaira-appkit"),
+                .product(name: "SymairaProviderKit", package: "symaira-corekit"),
+                .product(name: "SymairaKeychain", package: "symaira-corekit"),
+                .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
+                .product(name: "SymairaTheme", package: "symaira-corekit"),
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -89,7 +89,7 @@ let package = Package(
             name: "SymCockpitMCPTests",
             dependencies: [
                 "SymCockpitMCP",
-                .product(name: "SymairaMCP", package: "symaira-appkit"),
+                .product(name: "SymairaMCP", package: "symaira-corekit"),
             ]
         ),
     ],
