@@ -184,6 +184,44 @@ public struct FanControlService: Sendable {
         #endif
     }
 
+    /// How far a fan's read-back target may sit from the written one and
+    /// still count as held. Wider than the `fpe2`/`flt ` rounding, far
+    /// narrower than any audible change of speed.
+    // ponytail: fixed tolerance; derive it per fan from F{n}Mx if a model
+    // turns out to report targets with coarser granularity.
+    public static let appliedTargetToleranceRPM = 50.0
+
+    /// Whether every fan still holds what `applyFan(fraction:config:)` writes
+    /// for `fraction`: manual control and a target within
+    /// `appliedTargetToleranceRPM`. A fan that cannot be read answers
+    /// `false`: control that cannot be seen cannot be vouched for.
+    public func holdsAppliedState(fraction: Double, config: TuneConfig) -> Bool {
+        guard smc.isAvailable else { return false }
+        let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
+        guard fanCount > 0 else { return false }
+        let clamped = SMCWritePolicy.clampFanFraction(
+            fraction,
+            min: config.fanFractionMin,
+            max: config.fanFractionMax
+        )
+
+        #if arch(x86_64)
+        let manualBits = UInt((1 << fanCount) - 1)
+        guard let bits = smc.readKeyUInt("FS!"), bits & manualBits == manualBits else { return false }
+        #endif
+
+        for index in 0..<fanCount {
+            #if arch(arm64)
+            guard smc.readFanMode(fanIndex: index) == 1 else { return false }
+            #endif
+            guard let expected = try? SMCWritePolicy.targetRPM(fraction: clamped, fanIndex: index, smc: smc),
+                  let actual = smc.readFanTargetRPM(fanIndex: index),
+                  abs(actual - expected) <= Self.appliedTargetToleranceRPM
+            else { return false }
+        }
+        return true
+    }
+
     /// Whether writing `fraction` would ask the fans for at least as much
     /// air as they are already being asked for. Compared per fan against the
     /// live target (`F{n}Tg`), since a fraction is of each fan's own maximum.

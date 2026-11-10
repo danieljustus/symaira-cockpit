@@ -30,6 +30,17 @@ public struct FanGovernor: Sendable {
     /// every tick.
     public static let deadband = 0.02
 
+    /// Consecutive ticks without a governing temperature after which the
+    /// fans go back to the firmware. Shorter gaps are held through (an empty
+    /// poll is not "cold"), but holding indefinitely would pin the fans at a
+    /// constant speed with nothing governing it. 3 ticks ≈ 10 s of hold.
+    public static let maxConsecutiveMissingTemperatures = 3
+
+    /// Consecutive ticks on which the SMC did not hold the applied state,
+    /// even after it was re-asserted, before the governor stops claiming
+    /// control and restores what it found.
+    public static let maxConsecutiveUnverifiedTicks = 3
+
     private let fanControl: FanControlService
     private let sensors: SensorService
     private let config: TuneConfig
@@ -88,6 +99,11 @@ public struct FanGovernor: Sendable {
     /// The original per-fan mode and target are captured before the first
     /// write and restored on the way out, so exiting leaves the SMC exactly
     /// as it was found rather than at a guessed "auto" constant.
+    ///
+    /// The loop also gives up rather than govern blind: a lasting temperature
+    /// gap (`maxConsecutiveMissingTemperatures`) or an SMC that keeps dropping
+    /// the applied state (`maxConsecutiveUnverifiedTicks`) restores the
+    /// originals and throws `TuneError.failed`.
     public func run(
         profileProvider: @Sendable () -> FanProfile,
         shouldContinue: @Sendable () -> Bool = { true },
@@ -104,16 +120,41 @@ public struct FanGovernor: Sendable {
             if let originals { fanControl.restore(originalStates: originals) }
         }
 
+        var missingTemperatures = 0
+        var unverifiedTicks = 0
+
         while shouldContinue() {
             let profile = profileProvider()
             guard profile != .system else { return }
 
             let temperature = FanProfile.governingTemperature(in: sensors.read())
-            if let next = Self.nextFraction(
-                profile: profile,
-                temperature: temperature,
-                applied: applied
-            ) {
+            missingTemperatures = temperature == nil ? missingTemperatures + 1 : 0
+            if missingTemperatures >= Self.maxConsecutiveMissingTemperatures {
+                throw TuneError.failed(
+                    "fan governor: no die temperature for \(missingTemperatures) consecutive "
+                    + "readings — handing the fans back to the firmware"
+                )
+            }
+
+            var next = Self.nextFraction(profile: profile, temperature: temperature, applied: applied)
+            // Inside the deadband nothing is written, so confirm the SMC still
+            // holds the applied state (the firmware can take the fans back,
+            // e.g. across sleep) and re-assert it when it does not.
+            if next == nil, let applied {
+                if fanControl.holdsAppliedState(fraction: applied, config: config) {
+                    unverifiedTicks = 0
+                } else {
+                    unverifiedTicks += 1
+                    if unverifiedTicks >= Self.maxConsecutiveUnverifiedTicks {
+                        throw TuneError.failed(
+                            "fan governor: the SMC did not hold the applied fan state for "
+                            + "\(unverifiedTicks) consecutive checks — handing the fans back to the firmware"
+                        )
+                    }
+                    next = applied
+                }
+            }
+            if let next {
                 if originals == nil { originals = fanControl.captureOriginalStates() }
                 try fanControl.applyFan(fraction: next, config: config)
                 applied = next

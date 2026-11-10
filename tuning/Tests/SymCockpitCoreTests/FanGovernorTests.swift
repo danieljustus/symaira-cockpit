@@ -79,7 +79,11 @@ final class FanGovernorTests: XCTestCase {
         )
     }
 
-    private func fanKeys(dieCelsius: Double, targetRPM: Double = 2000) -> [String: FakeSMCKeyResult] {
+    private func fanKeys(
+        dieCelsius: Double,
+        targetRPM: Double = 2000,
+        mode: UInt8 = 1
+    ) -> [String: FakeSMCKeyResult] {
         func flt(_ v: Double) -> FakeSMCKeyResult {
             let raw = Float(v).bitPattern
             return FakeSMCKeyResult(dataType: smcEncodeKey("flt "), bytes: [
@@ -90,7 +94,7 @@ final class FanGovernorTests: XCTestCase {
         let ui8 = smcEncodeKey("ui8 ")
         return [
             "FNum": FakeSMCKeyResult(dataType: ui8, bytes: [1]),
-            "F0Md": FakeSMCKeyResult(dataType: ui8, bytes: [1]),
+            "F0Md": FakeSMCKeyResult(dataType: ui8, bytes: [mode]),
             "F0Ac": flt(targetRPM),
             "F0Tg": flt(targetRPM),
             "F0Mn": flt(2000),
@@ -152,6 +156,115 @@ final class FanGovernorTests: XCTestCase {
         let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 85))
         try governor.run(profileProvider: { .system })
         XCTAssertFalse(conn.writtenKeys.contains { $0.key == "F0Tg" })
+    }
+
+    // MARK: - Failure bounds
+
+    /// A short sensor gap is held through, so a single empty poll never
+    /// drops the fans on a hot chip.
+    func testLoopHoldsThroughAShortTemperatureGap() throws {
+        let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 85))
+        let die = conn.keys["TCMz"]
+        let ticks = TickCounter()
+
+        try governor.run(
+            profileProvider: { .performance },
+            shouldContinue: { ticks.count < 6 },
+            onTick: { _, _ in
+                ticks.increment()
+                // Readings vanish for the ticks just short of the bound, then return.
+                let missing = ticks.count < FanGovernor.maxConsecutiveMissingTemperatures
+                conn.keys["TCMz"] = missing ? nil : die
+            }
+        )
+
+        XCTAssertEqual(ticks.count, 6)
+    }
+
+    /// Holding the last speed forever would pin the fans at a constant speed
+    /// with nothing governing it, so a lasting gap hands them back.
+    func testLoopHandsBackAfterConsecutiveMissingTemperatures() throws {
+        let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 85, targetRPM: 2500))
+        let ticks = TickCounter()
+
+        XCTAssertThrowsError(try governor.run(
+            profileProvider: { .performance },
+            shouldContinue: { ticks.count < 20 },
+            onTick: { _, _ in
+                ticks.increment()
+                conn.keys["TCMz"] = nil
+            }
+        )) { error in
+            guard case TuneError.failed = error else {
+                return XCTFail("expected TuneError.failed, got \(error)")
+            }
+        }
+
+        XCTAssertEqual(ticks.count, FanGovernor.maxConsecutiveMissingTemperatures)
+        let lastTarget = conn.writtenKeys.last { $0.key == "F0Tg" }
+        XCTAssertEqual(
+            smcConvertValue(dataType: smcEncodeKey("flt "), bytes: lastTarget?.bytes ?? []),
+            2500,
+            accuracy: 1.0
+        )
+    }
+
+    /// The deadband means a steady temperature writes nothing, so without a
+    /// read-back the governor would not notice the firmware taking the fans
+    /// back (for example across sleep). It re-asserts the applied state.
+    func testLoopReassertsWhenTheFirmwareTakesTheFansBack() throws {
+        // Firmware mode 3, so the restore on exit cannot pass for a re-assert.
+        let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 85, mode: 3))
+        let ui8 = smcEncodeKey("ui8 ")
+        let ticks = TickCounter()
+
+        try governor.run(
+            profileProvider: { .performance },
+            shouldContinue: { ticks.count < 4 },
+            onTick: { _, _ in
+                ticks.increment()
+                if ticks.count == 1 {
+                    conn.keys["F0Md"] = FakeSMCKeyResult(dataType: ui8, bytes: [3])
+                    conn.writtenKeys.removeAll()
+                }
+            }
+        )
+
+        XCTAssertTrue(conn.writtenKeys.contains { $0.key == "F0Md" && $0.bytes == [1] })
+    }
+
+    /// When re-asserting cannot make the SMC hold the applied state, the
+    /// governor stops claiming control and restores what it found.
+    func testLoopHandsBackWhenTheAppliedStateWillNotHold() throws {
+        let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 85, targetRPM: 2500))
+        let ticks = TickCounter()
+        conn.writeHandler = { key, dataType, bytes in
+            // After the first tick the firmware ignores every target write.
+            if key == "F0Tg", ticks.count >= 1 { return true }
+            conn.keys[key] = FakeSMCKeyResult(dataType: dataType, bytes: bytes)
+            return true
+        }
+
+        XCTAssertThrowsError(try governor.run(
+            profileProvider: { .performance },
+            shouldContinue: { ticks.count < 20 },
+            onTick: { _, _ in
+                ticks.increment()
+                if ticks.count == 1 { conn.keys["F0Tg"] = conn.keys["F0Mn"] }
+            }
+        )) { error in
+            guard case TuneError.failed = error else {
+                return XCTFail("expected TuneError.failed, got \(error)")
+            }
+        }
+
+        XCTAssertEqual(ticks.count, FanGovernor.maxConsecutiveUnverifiedTicks)
+        let lastTarget = conn.writtenKeys.last { $0.key == "F0Tg" }
+        XCTAssertEqual(
+            smcConvertValue(dataType: smcEncodeKey("flt "), bytes: lastTarget?.bytes ?? []),
+            2500,
+            accuracy: 1.0
+        )
     }
 }
 
