@@ -32,12 +32,15 @@ private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
     private(set) var stops = 0
     private(set) var invalidated = false
     var failHeartbeats = false
+    /// What the helper answers to a heartbeat: does it still govern?
+    var governing = true
 
     func startGovernor(profile: String) throws { lock.lock(); started.append(profile); lock.unlock() }
-    func heartbeat() throws {
+    func heartbeat() throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         beats += 1
         if failHeartbeats { throw FanHelperTransportError.unreachable("gone") }
+        return governing
     }
     func stopGovernor() throws { lock.lock(); stops += 1; lock.unlock() }
     func invalidate() { lock.lock(); invalidated = true; lock.unlock() }
@@ -52,6 +55,13 @@ private final class TransportFactory: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         let t = FakeTransport(); made.append(t); teamIDs.append(team); return t
     }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    func increment() { lock.lock(); n += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return n }
 }
 
 final class FanHelperClientTests: XCTestCase {
@@ -177,6 +187,52 @@ final class FanHelperClientTests: XCTestCase {
         // The next fan change reconnects with a fresh transport.
         try c.startGovernor(profile: .comfort)
         XCTAssertEqual(factory.made.count, 2)
+        try c.stopGovernor()
+    }
+
+    // MARK: - Governor status (F3) and lost governor (m1)
+
+    func testGovernorStatusFollowsStartStopAndDrop() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        XCTAssertEqual(c.governorStatus(), .idle)
+        try c.startGovernor(profile: .performance)
+        XCTAssertEqual(c.governorStatus(), FanHelperGovernorStatus(isGoverning: true, profile: .performance))
+        try c.stopGovernor()
+        XCTAssertEqual(c.governorStatus(), .idle)
+
+        try c.startGovernor(profile: .comfort)
+        let transport = try XCTUnwrap(factory.made.last)
+        transport.failHeartbeats = true
+        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+    }
+
+    func testALostGovernorIsRestartedABoundedNumberOfTimes() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        let transport = try XCTUnwrap(factory.made.first)
+        transport.governing = false // the helper's governor gave up every time
+        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+        XCTAssertEqual(
+            transport.started.count, 1 + FanHelperClient.maxHealAttempts,
+            "one user start plus a bounded number of restarts"
+        )
+        let beats = transport.beatCount
+        Thread.sleep(forTimeInterval: 0.08)
+        XCTAssertEqual(transport.beatCount, beats, "heartbeats stop once the client gives up")
+    }
+
+    func testHeartbeatObserverRunsOnEveryAnsweredBeat() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        let calls = Counter()
+        c.setHeartbeatObserver { calls.increment() }
+        try c.startGovernor(profile: .comfort)
+        XCTAssertTrue(waitUntil { calls.value >= 3 })
         try c.stopGovernor()
     }
 

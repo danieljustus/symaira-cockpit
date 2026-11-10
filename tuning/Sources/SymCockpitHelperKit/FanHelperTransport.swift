@@ -40,8 +40,9 @@ public struct SMAppServiceDaemon: FanHelperDaemonService {
 /// routing logic is testable without a daemon.
 public protocol FanHelperTransport: Sendable {
     func startGovernor(profile: String) throws
-    /// Throws when the helper is unreachable.
-    func heartbeat() throws
+    /// Throws when the helper is unreachable. Returns whether the helper still
+    /// has a governor running (false: it gave up or was stopped meanwhile).
+    func heartbeat() throws -> Bool
     func stopGovernor() throws
     func invalidate()
 }
@@ -116,8 +117,8 @@ final class XPCFanHelperTransport: FanHelperTransport, @unchecked Sendable {
         if let message { throw FanHelperTransportError.rejected(message) }
     }
 
-    func heartbeat() throws {
-        let _: Bool = try call { proxy, done in proxy.heartbeat { done($0) } }
+    func heartbeat() throws -> Bool {
+        try call { proxy, done in proxy.heartbeat { done($0) } }
     }
 
     func stopGovernor() throws {

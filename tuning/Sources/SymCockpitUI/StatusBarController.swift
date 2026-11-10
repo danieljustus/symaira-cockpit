@@ -197,6 +197,12 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // at launch (the helper restored the fans when the app last quit).
         let resumeController = controller
         Task.detached(priority: .utility) { resumeController.resumeFanProfileViaHelper() }
+        // A CLI/MCP `fan profile …` changes only the stored profile; the root
+        // helper reads no user files, so the app reconciles it on every
+        // heartbeat (system stops the helper, another position retargets it).
+        fanHelperClient.setHeartbeatObserver { [weak resumeController] in
+            resumeController?.reconcileFanProfileWithHelper()
+        }
         model.onStatusItemTextChanged = { [weak self] segments in
             self?.renderStatusItem(segments: segments)
         }

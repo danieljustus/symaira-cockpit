@@ -17,6 +17,14 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     private let lock = NSLock()
     private var transport: (any FanHelperTransport)?
     private var heartbeat: DispatchSourceTimer?
+    private var status = FanHelperGovernorStatus.idle
+    /// Profile of the last accepted start, re-sent when a heartbeat reports
+    /// that the helper lost its governor.
+    private var lastProfile: FanProfile?
+    private var healAttempts = 0
+    private var heartbeatObserver: (@Sendable () -> Void)?
+    /// Bound for re-starting a governor the helper dropped, per user action.
+    static let maxHealAttempts = 3
     private let heartbeatQueue = DispatchQueue(label: "symaira.fan-helper.heartbeat")
 
     public init(
@@ -68,6 +76,11 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         do {
             let transport = try connectedTransport(teamID: teamID)
             try transport.startGovernor(profile: profile.rawValue)
+            lock.lock()
+            status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
+            lastProfile = profile
+            healAttempts = 0
+            lock.unlock()
             startHeartbeat()
         } catch {
             dropTransport()
@@ -75,10 +88,26 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         }
     }
 
+    public func governorStatus() -> FanHelperGovernorStatus {
+        lock.lock(); defer { lock.unlock() }
+        return status
+    }
+
+    /// Called on the heartbeat queue after every answered heartbeat. The app
+    /// uses it to reconcile the stored fan profile with the helper (a CLI or
+    /// MCP `fan profile system` must still end helper-driven governing).
+    public func setHeartbeatObserver(_ observer: (@Sendable () -> Void)?) {
+        lock.lock()
+        heartbeatObserver = observer
+        lock.unlock()
+    }
+
     public func stopGovernor() throws {
         stopHeartbeat()
         lock.lock()
         let current = transport
+        status = .idle
+        lastProfile = nil
         lock.unlock()
         defer { dropTransport() }
         try current?.stopGovernor()
@@ -127,6 +156,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         lock.lock()
         let old = transport
         transport = nil
+        status = .idle
         lock.unlock()
         old?.invalidate()
     }
@@ -135,7 +165,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard heartbeat == nil else { return }
-        let timer = DispatchSource.makeTimerSource(queue: heartbeatQueue)
+        let timer = DispatchSource.makeTimerSource(flags: .strict, queue: heartbeatQueue)
         timer.schedule(deadline: .now() + heartbeatInterval, repeating: heartbeatInterval)
         timer.setEventHandler { [weak self] in self?.beat() }
         heartbeat = timer
@@ -155,10 +185,46 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         let current = transport
         lock.unlock()
         guard let current else { return stopHeartbeat() }
-        do { try current.heartbeat() } catch {
+        let stillGoverning: Bool
+        do { stillGoverning = try current.heartbeat() } catch {
             // The helper restores the fans itself once the pings stop; there
             // is nothing more to do here than not pretend to still govern.
+            Self.log("heartbeat failed, handing the fans back: \(error)")
+            dropTransport()
+            return
+        }
+        if !stillGoverning { healLostGovernor(via: current) }
+        lock.lock()
+        let observer = heartbeatObserver
+        lock.unlock()
+        observer?()
+    }
+
+    /// The helper answered but no longer governs (its governor gave up, or it
+    /// restarted). Re-send the last profile a bounded number of times per user
+    /// action; after that, stop pretending and let the UI report it.
+    private func healLostGovernor(via transport: any FanHelperTransport) {
+        lock.lock()
+        let profile = lastProfile
+        let attempt = healAttempts
+        lock.unlock()
+        guard let profile, attempt < Self.maxHealAttempts else {
+            Self.log("the helper's governor stopped and was not restarted")
+            stopHeartbeat()
+            lock.lock()
+            status = .idle
+            lock.unlock()
+            return
+        }
+        lock.lock(); healAttempts += 1; lock.unlock()
+        Self.log("the helper's governor stopped; restarting (\(attempt + 1)/\(Self.maxHealAttempts))")
+        do { try transport.startGovernor(profile: profile.rawValue) } catch {
+            Self.log("restart failed: \(error)")
             dropTransport()
         }
+    }
+
+    private static func log(_ message: String) {
+        fputs("symaira fan helper client: \(message)\n", stderr)
     }
 }

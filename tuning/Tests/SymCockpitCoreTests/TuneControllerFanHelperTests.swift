@@ -7,17 +7,24 @@ private final class FakeFanHelper: FanHelperControlling, @unchecked Sendable {
     var startError: Error?
     private(set) var started: [FanProfile] = []
     private(set) var stops = 0
+    var status = FanHelperGovernorStatus.idle
 
     init(_ state: FanHelperAvailability) { self.state = state }
+
+    func governorStatus() -> FanHelperGovernorStatus {
+        lock.lock(); defer { lock.unlock() }
+        return status
+    }
 
     func availability() -> FanHelperAvailability { state }
     func startGovernor(profile: FanProfile) throws {
         lock.lock(); defer { lock.unlock() }
         if let startError { throw startError }
         started.append(profile)
+        status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
     }
     func stopGovernor() throws {
-        lock.lock(); stops += 1; lock.unlock()
+        lock.lock(); stops += 1; status = .idle; lock.unlock()
     }
 }
 
@@ -146,5 +153,80 @@ final class TuneControllerFanHelperTests: XCTestCase {
         let controller = try makeController(helper: helper, launches: launches)
         controller.resumeFanProfileViaHelper()
         XCTAssertTrue(helper.started.isEmpty)
+    }
+
+    // MARK: - F3: the "is a governor running" check sees the helper
+
+    func testGovernorRunningCheckSeesTheHelperGoverning() throws {
+        let launches = GovernorLaunches()
+        let helper = FakeFanHelper(.enabled)
+        let controller = try makeController(helper: helper, launches: launches)
+        XCTAssertFalse(controller.isFanGovernorRunning())
+        try controller.applyFanProfile(.comfort, allowPrivilegeEscalation: true)
+        XCTAssertTrue(controller.isFanGovernorRunning(), "the UI/HUD must not say 'no governor is running'")
+        try controller.applyFanProfile(.system, allowPrivilegeEscalation: true)
+        XCTAssertFalse(controller.isFanGovernorRunning())
+    }
+
+    func testGovernorRunningCheckIsUnchangedWithoutAHelper() throws {
+        let launches = GovernorLaunches()
+        let plain = try makeController(helper: nil, launches: launches, legacyGovernorRunning: false)
+        XCTAssertFalse(plain.isFanGovernorRunning())
+        let legacy = try makeController(helper: nil, launches: launches, legacyGovernorRunning: true)
+        XCTAssertTrue(legacy.isFanGovernorRunning())
+    }
+
+    func testAGoverningHelperIsNotDuplicatedByALegacyGovernorAfterAFailedRetarget() throws {
+        struct Unreachable: Error {}
+        let launches = GovernorLaunches()
+        let helper = FakeFanHelper(.enabled)
+        let controller = try makeController(helper: helper, launches: launches)
+        try controller.applyFanProfile(.comfort, allowPrivilegeEscalation: true)
+        helper.startError = Unreachable()
+        try controller.applyFanProfile(.performance, allowPrivilegeEscalation: true)
+        XCTAssertTrue(launches.urls.isEmpty, "the helper still governs; no osascript governor beside it")
+    }
+
+    // MARK: - F2: the stored profile still reaches a helper-driven governor
+
+    func testStoringSystemFromAnotherProcessStopsTheHelperGovernor() throws {
+        let launches = GovernorLaunches()
+        let helper = FakeFanHelper(.enabled)
+        let controller = try makeController(helper: helper, launches: launches)
+        try controller.applyFanProfile(.performance, allowPrivilegeEscalation: true)
+        // `symcockpit fan profile system` / MCP: only the stored file changes.
+        try controller.fanProfileStore.write(.system)
+        controller.reconcileFanProfileWithHelper()
+        XCTAssertEqual(helper.stops, 1)
+        XCTAssertFalse(controller.isFanGovernorRunning())
+        XCTAssertEqual(controller.activeFanProfile, .system)
+    }
+
+    func testStoringAnotherPositionFromAnotherProcessRetargetsTheHelper() throws {
+        let launches = GovernorLaunches()
+        let helper = FakeFanHelper(.enabled)
+        let controller = try makeController(helper: helper, launches: launches)
+        try controller.applyFanProfile(.comfort, allowPrivilegeEscalation: true)
+        try controller.fanProfileStore.write(.performance)
+        controller.reconcileFanProfileWithHelper()
+        XCTAssertEqual(helper.started, [.comfort, .performance])
+        controller.reconcileFanProfileWithHelper()
+        XCTAssertEqual(helper.started.count, 2, "already in line: nothing more to send")
+    }
+
+    func testReconcileNeverStartsAGovernorTheHelperIsNotRunning() throws {
+        let launches = GovernorLaunches()
+        let helper = FakeFanHelper(.enabled)
+        let controller = try makeController(helper: helper, launches: launches)
+        try controller.fanProfileStore.write(.performance) // e.g. set by the CLI
+        controller.reconcileFanProfileWithHelper()
+        XCTAssertTrue(helper.started.isEmpty)
+        XCTAssertEqual(helper.stops, 0)
+        XCTAssertTrue(launches.urls.isEmpty)
+    }
+
+    func testReconcileIsANoOpWithoutAHelper() throws {
+        let controller = try makeController(helper: nil, launches: GovernorLaunches())
+        controller.reconcileFanProfileWithHelper()
     }
 }

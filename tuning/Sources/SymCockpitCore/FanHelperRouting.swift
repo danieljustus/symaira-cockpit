@@ -91,13 +91,40 @@ public enum FanHelperDefaults {
     }
 }
 
+/// What the app knows about the helper's governor right now. Cached from the
+/// last reply, so reading it never blocks on XPC.
+public struct FanHelperGovernorStatus: Sendable, Equatable {
+    public var isGoverning: Bool
+    /// The profile the helper is governing, when it is.
+    public var profile: FanProfile?
+
+    public init(isGoverning: Bool, profile: FanProfile? = nil) {
+        self.isGoverning = isGoverning
+        self.profile = profile
+    }
+
+    public static let idle = FanHelperGovernorStatus(isGoverning: false)
+}
+
 /// What ``TuneController`` needs from a fan helper. The concrete client (XPC,
 /// `SMAppService`) lives in `SymCockpitHelperKit`; the CLI and MCP server never
 /// receive one, so only the GUI can ever take this path.
 public protocol FanHelperControlling: Sendable {
     func availability() -> FanHelperAvailability
     /// Start the helper's governor on `profile`, or retarget a running one.
+    ///
+    /// Success means the helper accepted the request, not that the first
+    /// governor tick succeeded: the governor reports an immediate failure
+    /// (SMC unavailable, no thermal headroom) through the helper's `status`
+    /// and, via the next heartbeat, through ``governorStatus()``.
     func startGovernor(profile: FanProfile) throws
     /// Hand the fans back to the firmware and stop heartbeating.
     func stopGovernor() throws
+    /// Whether the helper is governing the fans, from the last reply. Used so
+    /// the UI/HUD do not claim "no governor is running" while it is.
+    func governorStatus() -> FanHelperGovernorStatus
+}
+
+extension FanHelperControlling {
+    public func governorStatus() -> FanHelperGovernorStatus { .idle }
 }
