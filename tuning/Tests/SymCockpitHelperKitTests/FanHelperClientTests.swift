@@ -32,17 +32,27 @@ private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
     private(set) var stops = 0
     private(set) var invalidated = false
     var failHeartbeats = false
+    var failStarts = false
+    var failStops = false
     /// What the helper answers to a heartbeat: does it still govern?
     var governing = true
 
-    func startGovernor(profile: String) throws { lock.lock(); started.append(profile); lock.unlock() }
+    func startGovernor(profile: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        if failStarts { throw FanHelperTransportError.unreachable("gone") }
+        started.append(profile)
+    }
     func heartbeat() throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         beats += 1
         if failHeartbeats { throw FanHelperTransportError.unreachable("gone") }
         return governing
     }
-    func stopGovernor() throws { lock.lock(); stops += 1; lock.unlock() }
+    func stopGovernor() throws {
+        lock.lock(); defer { lock.unlock() }
+        stops += 1
+        if failStops { throw FanHelperTransportError.unreachable("gone") }
+    }
     func invalidate() { lock.lock(); invalidated = true; lock.unlock() }
     var beatCount: Int { lock.lock(); defer { lock.unlock() }; return beats }
 }
@@ -54,6 +64,22 @@ private final class TransportFactory: @unchecked Sendable {
     func make(team: String) -> FakeTransport {
         lock.lock(); defer { lock.unlock() }
         let t = FakeTransport(); made.append(t); teamIDs.append(team); return t
+    }
+}
+
+private final class TestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var date = Date(timeIntervalSince1970: 1_000_000)
+    var now: Date { lock.lock(); defer { lock.unlock() }; return date }
+    func advance(_ seconds: TimeInterval) { lock.lock(); date += seconds; lock.unlock() }
+}
+
+private final class MutableBundleProblem: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    var current: String? {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); value = newValue; lock.unlock() }
     }
 }
 
@@ -73,12 +99,15 @@ final class FanHelperClientTests: XCTestCase {
         optedIn: Bool,
         factory: TransportFactory,
         interval: TimeInterval = 0.01,
-        bundleProblem: String? = nil
+        bundleProblem: String? = nil,
+        bundleCheck: (@Sendable () -> String?)? = nil,
+        clock: TestClock? = nil
     ) -> FanHelperClient {
         FanHelperClient(
             daemon: daemon, signing: { signing }, optedIn: { optedIn },
             heartbeatInterval: interval,
-            bundleCheck: { bundleProblem },
+            bundleCheck: bundleCheck ?? { bundleProblem },
+            now: { clock?.now ?? Date() },
             makeTransport: { factory.make(team: $0) }
         )
     }
@@ -237,7 +266,10 @@ final class FanHelperClientTests: XCTestCase {
         try c.startGovernor(profile: .comfort)
         let transport = try XCTUnwrap(factory.made.last)
         transport.failHeartbeats = true
-        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+        // Unreachable is not stopped: the helper may still govern until its
+        // watchdog fires, so the client keeps saying so for that window.
+        XCTAssertTrue(waitUntil { !c.governorStatus().isGoverning })
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe())
     }
 
     func testALostGovernorIsRestartedABoundedNumberOfTimes() throws {
@@ -278,5 +310,102 @@ final class FanHelperClientTests: XCTestCase {
         XCTAssertThrowsError(try c.startGovernor(profile: .comfort)) { error in
             guard case TuneError.permission = error else { return XCTFail("\(error)") }
         }
+    }
+
+    // MARK: - D4: a helper that lost contact may still be governing
+
+    func testAFailedRetargetKeepsTheHelperCountedAsGoverningForTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        try XCTUnwrap(factory.made.first).failStarts = true
+        XCTAssertThrowsError(try c.startGovernor(profile: .performance))
+
+        let status = c.governorStatus()
+        XCTAssertFalse(status.isGoverning, "the app no longer drives it")
+        XCTAssertTrue(status.isGoverningOrMayBe(at: clock.now), "but the helper may still write the SMC")
+        let deadline = try XCTUnwrap(status.mayStillGovernUntil)
+        XCTAssertEqual(
+            deadline.timeIntervalSince(clock.now), FanHelperClient.watchdogWindow, accuracy: 0.001
+        )
+        XCTAssertGreaterThan(
+            FanHelperClient.watchdogWindow, FanHelperConstants.heartbeatTimeout,
+            "the window must cover the helper's own timeout"
+        )
+
+        clock.advance(FanHelperClient.watchdogWindow - 0.5)
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now), "still inside the window")
+
+        clock.advance(1)
+        let expired = c.governorStatus()
+        XCTAssertEqual(expired, .idle, "after the watchdog window the helper is gone")
+        XCTAssertFalse(expired.isGoverningOrMayBe(at: clock.now))
+    }
+
+    func testAFailedFirstStartIsNotTreatedAsGoverning() {
+        let daemon = FakeDaemon(.enabled)
+        let signed = FanHelperSigning.releaseSigned(teamID: team)
+        // Nothing governed before, so a failure leaves nothing to wait for.
+        let failing = FanHelperClient(
+            daemon: daemon, signing: { signed }, optedIn: { true }, bundleCheck: { nil },
+            makeTransport: { _ in throw FanHelperTransportError.unreachable("down") }
+        )
+        XCTAssertThrowsError(try failing.startGovernor(profile: .comfort))
+        XCTAssertEqual(failing.governorStatus(), .idle)
+        XCTAssertFalse(failing.governorStatus().isGoverningOrMayBe())
+    }
+
+    func testAStartRefusedByTheBundleCheckSendsNothingAndKeepsTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let problem = MutableBundleProblem()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, bundleCheck: { problem.current }, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        XCTAssertEqual(factory.made[0].started, ["comfort"])
+
+        problem.current = "The bundle directory is writable by other users"
+        XCTAssertThrowsError(try c.startGovernor(profile: .performance)) { error in
+            guard case TuneError.permission(let message) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(message.contains("writable"))
+        }
+        XCTAssertEqual(factory.made[0].started, ["comfort"], "nothing was sent to the helper")
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now), "comfort may still be running")
+    }
+
+    func testStartIsRefusedWhenTheBundleBecameWritableAfterRegistering() {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, bundleProblem: "The bundle directory is writable by other users"
+        )
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort))
+        XCTAssertTrue(factory.made.isEmpty, "no connection to the root helper is opened")
+        XCTAssertEqual(c.governorStatus(), .idle)
+    }
+
+    func testAFailedStopKeepsTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        try XCTUnwrap(factory.made.first).failStops = true
+        XCTAssertThrowsError(try c.stopGovernor())
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now))
+        clock.advance(FanHelperClient.watchdogWindow + 1)
+        XCTAssertEqual(c.governorStatus(), .idle)
     }
 }

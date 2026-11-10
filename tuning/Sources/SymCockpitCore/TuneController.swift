@@ -672,8 +672,11 @@ extension TuneController {
         fanGovernorRunning()
     }
 
+    /// True while the helper governs, and for the watchdog window after the
+    /// app lost contact with a governing helper: it keeps writing the SMC until
+    /// its heartbeat watchdog fires, so a legacy governor must not start beside it.
     private func isFanHelperGoverning() -> Bool {
-        fanHelper?.governorStatus().isGoverning ?? false
+        fanHelper?.governorStatus().isGoverningOrMayBe() ?? false
     }
 
     /// Move the fan control to `profile`.
@@ -763,10 +766,17 @@ extension TuneController {
     /// trigger. A no-op without an enabled helper.
     public func reconcileFanProfileWithHelper() {
         guard let fanHelper, !privilegeIsRoot() else { return }
+        // An unreadable profile file is not `.system`: skip rather than hand
+        // the fans back (or move them) on a guess. The next heartbeat retries.
+        let store = fanProfileStore
+        guard let stored = try? store.readStrict() else { return }
         let status = fanHelper.governorStatus()
         guard status.isGoverning else { return }
-        let stored = activeFanProfile
         if stored == .system {
+            // The profile may have changed since the read above (the user
+            // picked a governed position meanwhile): re-read right before
+            // acting and leave a changed selection to the next pass.
+            guard (try? store.readStrict()) == stored else { return }
             do {
                 try fanHelper.stopGovernor()
                 logHistory(action: "fan.profile.system", result: "success")
@@ -776,6 +786,7 @@ extension TuneController {
                 logHistory(action: "fan.profile.system", result: "failed", error: error)
             }
         } else if status.profile != stored {
+            guard (try? store.readStrict()) == stored else { return }
             do { try fanHelper.startGovernor(profile: stored) } catch {
                 logHistory(action: "fan.profile.\(stored.rawValue)", result: "failed", error: error)
             }

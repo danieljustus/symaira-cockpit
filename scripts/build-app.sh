@@ -62,7 +62,21 @@ if [[ -n "$EXPECTED_TEAM_ID" ]]; then
   }
   EMBED_BACKUP="$(mktemp)"
   cp "$EMBED_FILE" "$EMBED_BACKUP"
-  trap 'cp "$EMBED_BACKUP" "$EMBED_FILE"; rm -f "$EMBED_BACKUP"' EXIT
+  # Restore the tracked file on every exit. A failed restore must fail the
+  # build (not leave a rewritten source file behind unnoticed).
+  restore_embed_file() {
+    local status=$?
+    trap - EXIT
+    if cp "$EMBED_BACKUP" "$EMBED_FILE" && cmp -s "$EMBED_BACKUP" "$EMBED_FILE"; then
+      rm -f "$EMBED_BACKUP"
+    else
+      printf 'Could not restore %s from %s; revert it with git checkout.\n' \
+        "$EMBED_FILE" "$EMBED_BACKUP" >&2
+      [[ $status -ne 0 ]] || status=1
+    fi
+    exit "$status"
+  }
+  trap restore_embed_file EXIT
   EMBED_TMP="$(mktemp)"
   sed "s|^\(    public static let value: String? = \).*// EMBEDDED-TEAM-ID\$|\1\"$EXPECTED_TEAM_ID\" // EMBEDDED-TEAM-ID|" \
     "$EMBED_FILE" > "$EMBED_TMP"

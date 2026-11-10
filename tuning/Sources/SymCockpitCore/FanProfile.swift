@@ -185,10 +185,15 @@ public struct FanProfileStore: Sendable {
     /// The stored profile, or `.system` when nothing is stored or the file is
     /// unreadable/corrupt — the safe default is always "don't override".
     public func read() -> FanProfile {
-        guard let data = try? Data(contentsOf: url),
-              let payload = try? JSONDecoder().decode(Payload.self, from: data)
-        else { return .system }
-        return payload.profile
+        (try? readStrict()) ?? .system
+    }
+
+    /// The stored profile, throwing when it cannot be read or decoded. Callers
+    /// that act on the value (reconciling a running helper) use this so a
+    /// failure is not mistaken for the user choosing `.system`.
+    public func readStrict() throws -> FanProfile {
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(Payload.self, from: data).profile
     }
 
     public func write(_ profile: FanProfile) throws {

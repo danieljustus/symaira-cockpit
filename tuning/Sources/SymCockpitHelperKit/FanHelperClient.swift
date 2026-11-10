@@ -14,6 +14,11 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     private let makeTransport: @Sendable (_ teamID: String) throws -> any FanHelperTransport
     private let heartbeatInterval: TimeInterval
     private let bundleCheck: @Sendable () -> String?
+    private let now: @Sendable () -> Date
+    /// How long a helper that lost contact with the app may keep governing:
+    /// its heartbeat timeout plus one watchdog check interval.
+    static let watchdogWindow = FanHelperConstants.heartbeatTimeout
+        + FanHelperConstants.watchdogCheckInterval
 
     private let lock = NSLock()
     private var transport: (any FanHelperTransport)?
@@ -23,6 +28,9 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// that the helper lost its governor.
     private var lastProfile: FanProfile?
     private var healAttempts = 0
+    /// The helper may still be governing until this instant although the app
+    /// lost contact with it (see ``FanHelperGovernorStatus/mayStillGovernUntil``).
+    private var mayStillGovernUntil: Date?
     private var heartbeatObserver: (@Sendable () -> Void)?
     /// Bound for re-starting a governor the helper dropped, per user action.
     static let maxHealAttempts = 3
@@ -34,6 +42,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         optedIn: @escaping @Sendable () -> Bool = { FanHelperDefaults.isEnabled() },
         heartbeatInterval: TimeInterval = FanHelperConstants.heartbeatInterval,
         bundleCheck: (@Sendable () -> String?)? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
         makeTransport: (@Sendable (_ teamID: String) throws -> any FanHelperTransport)? = nil
     ) {
         self.bundleCheck = bundleCheck ?? {
@@ -43,6 +52,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
                     .appendingPathComponent(FanHelperConstants.helperBundleProgram)
             )
         }
+        self.now = now
         self.daemon = daemon
         self.signing = signing
         self.optedIn = optedIn
@@ -89,24 +99,38 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         guard availability() == .enabled, case .releaseSigned(let teamID) = signing() else {
             throw TuneError.permission("the privileged fan helper is not enabled")
         }
+        lock.lock()
+        let wasGoverning = status.isGoverning
+        lock.unlock()
         do {
+            // Re-checked on every start, not only at register: the bundle may
+            // have been rewritten since.
+            if let problem = bundleCheck() { throw TuneError.permission(problem) }
             let transport = try connectedTransport(teamID: teamID)
             try transport.startGovernor(profile: profile.rawValue)
             lock.lock()
             status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
             lastProfile = profile
             healAttempts = 0
+            mayStillGovernUntil = nil
             lock.unlock()
             startHeartbeat()
         } catch {
-            dropTransport()
+            // A failed retarget leaves the helper governing its previous
+            // profile until its watchdog fires: keep reporting that.
+            dropTransport(helperMayStillGovern: wasGoverning)
+            if let error = error as? TuneError { throw error }
             throw TuneError.permission("\(error)")
         }
     }
 
     public func governorStatus() -> FanHelperGovernorStatus {
         lock.lock(); defer { lock.unlock() }
-        return status
+        var current = status
+        if !current.isGoverning, let until = mayStillGovernUntil {
+            if now() < until { current.mayStillGovernUntil = until } else { mayStillGovernUntil = nil }
+        }
+        return current
     }
 
     /// Called on the heartbeat queue after every answered heartbeat. The app
@@ -122,11 +146,20 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         stopHeartbeat()
         lock.lock()
         let current = transport
+        let wasGoverning = status.isGoverning
         status = .idle
         lastProfile = nil
+        mayStillGovernUntil = nil
         lock.unlock()
-        defer { dropTransport() }
-        try current?.stopGovernor()
+        do {
+            try current?.stopGovernor()
+            dropTransport()
+        } catch {
+            // The stop did not reach the helper; it hands the fans back on
+            // its own once the heartbeats have stopped.
+            dropTransport(helperMayStillGovern: wasGoverning)
+            throw error
+        }
     }
 
     // MARK: - Registration management (preferences UI)
@@ -177,12 +210,16 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         return created
     }
 
-    private func dropTransport() {
+    /// Closes the connection and forgets the governor. With
+    /// `helperMayStillGovern` the helper is assumed to keep governing until its
+    /// watchdog fires, and ``governorStatus()`` says so for that window.
+    private func dropTransport(helperMayStillGovern: Bool = false) {
         stopHeartbeat()
         lock.lock()
         let old = transport
         transport = nil
         status = .idle
+        mayStillGovernUntil = helperMayStillGovern ? now().addingTimeInterval(Self.watchdogWindow) : nil
         lock.unlock()
         old?.invalidate()
     }
@@ -216,7 +253,9 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
             // The helper restores the fans itself once the pings stop; there
             // is nothing more to do here than not pretend to still govern.
             Self.log("heartbeat failed, handing the fans back: \(error)")
-            dropTransport()
+            // Unreachable is not stopped: the helper governs until its
+            // watchdog notices the missing pings.
+            dropTransport(helperMayStillGovern: true)
             return
         }
         if !stillGoverning { healLostGovernor(via: current) }
@@ -236,6 +275,14 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         lock.unlock()
         guard let profile, attempt < Self.maxHealAttempts else {
             Self.log("the helper's governor stopped and was not restarted")
+            stopHeartbeat()
+            lock.lock()
+            status = .idle
+            lock.unlock()
+            return
+        }
+        if let problem = bundleCheck() {
+            Self.log("not restarting the helper's governor: \(problem)")
             stopHeartbeat()
             lock.lock()
             status = .idle

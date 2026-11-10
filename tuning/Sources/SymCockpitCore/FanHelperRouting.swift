@@ -97,10 +97,23 @@ public struct FanHelperGovernorStatus: Sendable, Equatable {
     public var isGoverning: Bool
     /// The profile the helper is governing, when it is.
     public var profile: FanProfile?
+    /// Set when the app lost contact with a governing helper (a failed
+    /// retarget, a dropped connection). The helper keeps governing until its
+    /// heartbeat watchdog fires, so until this instant it must still count as
+    /// governing: nothing else may write the SMC beside it.
+    public var mayStillGovernUntil: Date?
 
-    public init(isGoverning: Bool, profile: FanProfile? = nil) {
+    public init(isGoverning: Bool, profile: FanProfile? = nil, mayStillGovernUntil: Date? = nil) {
         self.isGoverning = isGoverning
         self.profile = profile
+        self.mayStillGovernUntil = mayStillGovernUntil
+    }
+
+    /// Governing for sure, or possibly still governing at `date`.
+    public func isGoverningOrMayBe(at date: Date = Date()) -> Bool {
+        if isGoverning { return true }
+        guard let until = mayStillGovernUntil else { return false }
+        return date < until
     }
 
     public static let idle = FanHelperGovernorStatus(isGoverning: false)
