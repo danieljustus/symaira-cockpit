@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.1] (2026-11-10)
+
 ### Fixed
 - **GUI fan control no longer elevates a stale root-owned `symcockpit` (#409):**
   after an upgrade, `/usr/local/bin/symcockpit` stayed at the old release
