@@ -272,13 +272,40 @@ services the CLI calls, so the window and the shell cannot disagree.
 > its own grants the first time you use those features — separately from the
 > CLI, even on the same Mac.
 
+### AI usage
+
+The AI usage card shows subscription and token usage per provider (Claude,
+Codex, GitHub Copilot, Cursor, Kimi Code, Moonshot, Nous Portal, OpenCode Go,
+OpenRouter, Antigravity, Z.ai, Devin, Grok and Ollama Cloud). Provider
+discovery, auth status and credential resolution belong to `symbrain`; Cockpit
+passes it opaque `symvault://` references only, and API keys entered in
+Preferences are stored in SymVault, never in `config.toml` or Cockpit's
+Keychain items.
+
+- **Providers are opt-in.** Only providers you enable in Preferences →
+  *AI Usage* are queried by the app; you can star, reorder and hide them.
+- **Local cost history is opt-in per source.** Reading local Claude, Codex,
+  Grok or OpenCode session usage is off until you switch it on, and recorded
+  and estimated costs are shown separately.
+- **Local usage API (off by default).** The card's *Local usage API* switch, or
+  `symcockpit ai-usage serve [--port 6737]`, serves the cached snapshots as
+  JSON on `127.0.0.1` only: `GET /v1/limits` and `GET /v1/usage`, optionally
+  followed by `/<provider-id>`. It never contacts a provider, serves only the
+  providers enabled in the app, refuses browser-origin requests and any host
+  other than the literal `127.0.0.1:<port>`. Other local processes can read
+  it while it runs.
+
+From the shell, `symcockpit ai-usage [provider] [--json] [--force]` prints the
+same report. Without a provider argument it, and the MCP `get_ai_usage` tool,
+query every catalog provider regardless of the app's selection.
+
 ## Commands
 
 Direct `symcockpit` commands expose thermals, power, battery, display, fan,
 brightness, profiles, diagnostics and the MCP server. The old
-`symcockpit tune <command>` spelling prints a warning to stderr and remains
-supported through v0.9 (the next two minor releases, v0.8 and v0.9); migrate
-clients to the direct spelling before its planned removal in v0.10.
+`symcockpit tune <command>` spelling prints a warning to stderr and is still
+supported in v0.10; its removal waits for the remaining migration checks
+(#259). Migrate clients to the direct spelling now.
 
 ```text
 symcockpit doctor

@@ -98,7 +98,7 @@ guard args.first != nil else {
 let code: Int32
 switch args[0] {
 case "tune":
-    FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (supported through v0.9).\n".utf8))
+    FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (still supported; removal is planned).\n".utf8))
     code = SymCockpitMain.run(Array(args.dropFirst()))
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)

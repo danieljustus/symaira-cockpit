@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
+## [0.10.0] (2026-11-10)
+
 ### Added
+- **AI usage provider controls and local cost history (#394):** the provider
+  catalog adds Z.ai, Devin, Grok and Ollama Cloud; providers are opt-in and
+  can be starred, reordered and hidden. Reading local Claude, Codex, Grok and
+  OpenCode session usage is a reversible opt-in, with recorded and estimated
+  costs kept apart. An opt-in loopback API (`symcockpit ai-usage serve`, or the
+  card's *Local usage API* switch, port 6737) serves cached snapshots on
+  `127.0.0.1` only, for providers enabled in the app.
 - **Total system power:** `symcockpit metrics` reports `power.system_watts`
   (SMC `PSTR`, falling back to the battery's `PowerTelemetryData.SystemLoad`)
   with `power.system_source` naming the origin. It is the whole Mac's
@@ -41,6 +50,36 @@
   documented as adapter DC-in input only (about 0 on battery). The MCP
   `get_system_metrics` description and the `doctor` `power.draw.read` text say
   what each value measures (#403).
+- **Login keychain for provider credentials (#396):** Cockpit has no
+  keychain-access-groups entitlement, so the data-protection keychain refused
+  every save (-34018). Items now use the login keychain through
+  symaira-corekit 0.20, which replaces the symaira-appkit dependency.
+- **Interface guidelines:** the menu-bar and HUD panels use the shared Symaira
+  typography, colour and icon roles, and icon-only buttons carry accessibility
+  labels and tooltips (#395).
+- The `symcockpit tune …` prefix still works in this release; its removal waits
+  for the remaining migration checks (#259).
+
+### Fixed
+- **Fan governor:** it hands the fans back to the firmware after three ticks
+  without a governing temperature instead of holding the last speed, and it
+  re-asserts or restores the fans when a read-back shows the firmware took over.
+- **AI usage:** `ai-usage serve` only serves providers enabled in the app,
+  disabling a provider deletes its cached snapshot, an oversized provider row
+  fails on its own instead of turning the whole API into a 503, and the local
+  server cannot race a quick disable/enable.
+- The tuning XcodeGen project targets macOS 26 like the SwiftPM packages, so
+  the menu-bar scheme builds again (#406).
+
+### Security
+- **Release workflow:** token permissions are scoped per job instead of
+  workflow-wide `contents: write`, two pushes of the same tag can no longer race,
+  and the Homebrew update waits up to 45 minutes for the tap PR (#404, #393).
+- **Fan helper trust:** when the app bundle is owned by your user account (cask
+  or drag install), software running as you could replace the helper, and a
+  replaced helper runs as root once registered. The pinned team only stops it
+  from pairing with the app. macOS App Management guards against this;
+  `sudo chown -R root:wheel '/Applications/Symaira Cockpit.app'` closes it (#405).
 
 ## [0.9.0] (2026-10-26)
 

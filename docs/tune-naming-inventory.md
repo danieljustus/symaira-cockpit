@@ -5,10 +5,10 @@ renaming. Each identifier has a verdict: **grandfathered** (never rename, or
 only via its own tested migration with rollback) or **migratable** (safe to
 rename in one mechanical sweep).
 
-Deprecation window: the `symcockpit tune …` prefix is supported through
-Cockpit v0.9 and prints a deprecation warning
-(`Sources/symcockpit/main.swift`). Removing the prefix entirely is gated on
-that window ending and is intentionally not part of the v0.8.2 work.
+Deprecation window: the `symcockpit tune …` prefix was announced as supported
+through Cockpit v0.9. It still works in v0.10 and prints a deprecation warning
+(`Sources/symcockpit/main.swift`); removing it waits for the remaining
+migration checks (#259).
 
 ## Grandfathered — do not rename here
 
