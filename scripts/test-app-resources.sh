@@ -18,4 +18,13 @@ fi
 grep -Fq 'Missing required AppKit resource: GoogleSansFlex.ttf' "$TEST_DIR/missing.log"
 mv "$TEST_DIR/font.ttf" "$FONT"
 "$SCRIPT_DIR/smoke-app.sh" "$COPY"
-printf 'Resource packaging regression passed (missing font rejected, restored app accepted).\n'
+HELPER="$COPY/Contents/Library/LaunchServices/com.symaira.symtune-helper"
+mv "$HELPER" "$TEST_DIR/helper"
+if "$SCRIPT_DIR/smoke-app.sh" "$COPY" > "$TEST_DIR/missing-helper.log" 2>&1; then
+  printf 'Smoke check incorrectly accepted an app without its fan helper.\n' >&2
+  exit 1
+fi
+grep -Fq 'Fan helper executable is missing or not executable' "$TEST_DIR/missing-helper.log"
+mv "$TEST_DIR/helper" "$HELPER"
+"$SCRIPT_DIR/smoke-app.sh" "$COPY"
+printf 'Resource packaging regression passed (missing font and fan helper rejected, restored app accepted).\n'

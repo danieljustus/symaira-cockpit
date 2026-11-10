@@ -51,7 +51,9 @@ let package = Package(
             dependencies: [
                 .product(name: "SymCockpitHelperKit", package: "tuning"),
                 .product(name: "SymCockpitCore", package: "tuning"),
-            ]
+            ],
+            // Embedded into the app bundle by scripts/build-app.sh, not a SwiftPM resource.
+            exclude: ["com.symaira.symtune-helper.plist"]
         ),
         .testTarget(
             name: "SymCockpitE2ETests",

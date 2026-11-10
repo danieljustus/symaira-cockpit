@@ -22,6 +22,13 @@
   readout and HUD item list. It is excluded from the default sets, so existing
   configs are unchanged, and a Mac that publishes no utilization shows no GPU
   row instead of 0 % (#402).
+- **Optional privileged fan helper (#405):** a signed, notarized
+  `Symaira Cockpit.app` can register an opt-in `SMAppService` daemon
+  (`com.symaira.symtune-helper`) so fan changes need no administrator
+  password and no root-owned CLI copy. Off by default; XPC is pinned to the
+  Developer ID team on both sides; an app heartbeat (2 s) with a 7 s dead-man
+  timeout, connection invalidation and SIGTERM hand the fans back to the
+  system curve. Unsigned and local builds keep the `osascript` path unchanged.
 
 ### Changed
 - The existing `power.volts`/`amps`/`watts` fields are unchanged and are now

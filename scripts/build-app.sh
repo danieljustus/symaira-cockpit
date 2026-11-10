@@ -21,6 +21,10 @@ REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
 APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
+# Optional privileged fan helper (issue #405): registered by the app through
+# SMAppService.daemon. The identifier is the grandfathered helper identity.
+HELPER_PRODUCT="SymCockpitFanHelper"
+HELPER_ID="com.symaira.symtune-helper"
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -54,11 +58,29 @@ BIN_PATH="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/$PRODUCT"
   exit 1
 }
 
+# Same flags, other product (BUILD_ARGS[1] is the product name).
+HELPER_BUILD_ARGS=("${BUILD_ARGS[@]}")
+HELPER_BUILD_ARGS[1]="$HELPER_PRODUCT"
+swift build "${HELPER_BUILD_ARGS[@]}"
+HELPER_BIN_PATH="$(swift build "${HELPER_BUILD_ARGS[@]}" --show-bin-path)/$HELPER_PRODUCT"
+[[ -x "$HELPER_BIN_PATH" ]] || {
+  printf 'Expected helper was not produced: %s\n' "$HELPER_BIN_PATH" >&2
+  exit 1
+}
+
 APP_PATH="$OUTPUT_DIR/$APP_NAME.app"
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+
+# The helper and its launchd plist, in the places SMAppService.daemon expects:
+# the plist under Contents/Library/LaunchDaemons, the executable (named like
+# the Mach service) under Contents/Library/LaunchServices.
+mkdir -p "$APP_PATH/Contents/Library/LaunchServices" "$APP_PATH/Contents/Library/LaunchDaemons"
+cp "$HELPER_BIN_PATH" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+cp "$REPO_ROOT/Sources/$HELPER_PRODUCT/$HELPER_ID.plist" "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+plutil -lint "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist" >/dev/null
 # Bundle.module searches Contents/Resources in an assembled app. Copy every
 # package resource bundle, not just the executable: fonts, shaders and provider
 # descriptors must work after moving the app away from its build directory.
@@ -126,6 +148,16 @@ printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
 #   Certificate Assistant → Create a Certificate…
 #   name: Symaira Dev · type: Code Signing · self-signed
 IDENTITY="${CODE_SIGN_IDENTITY:--}"
+
+# Nested code first: the helper is signed under its own identifier (the one
+# the app's XPC requirement pins) before the bundle seals it. The app only
+# ever registers the helper when it is itself Developer-ID signed, so an
+# ad-hoc or self-signed helper here is inert.
+HELPER_SIGN_ARGS=(--force --sign "$IDENTITY" --identifier "$HELPER_ID" --timestamp=none)
+if [[ "$IDENTITY" != "-" ]]; then
+  HELPER_SIGN_ARGS+=(--options runtime)
+fi
+codesign "${HELPER_SIGN_ARGS[@]}" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none "$APP_PATH"
 
 if [[ "$IDENTITY" == "-" ]]; then

@@ -128,6 +128,6 @@ SymCockpitMenuBarApp                         →  SymCockpitUI   →  SymCockpit
 reads + keep-awake + MCP scaffold. v0.2 = standalone menu-bar app + EDR/extended
 brightness + dim overlay + SMC sensor reads. v0.3 = fan control and battery
 charge limiting shipped directly in the open Apache-2.0 core (no separate Pro
-tier or privileged helper required); an optional `symtune-helper` daemon remains
-a future convenience, not a gate. The package already builds in Swift 6 language
+tier or privileged helper required); the optional `com.symaira.symtune-helper`
+`SMAppService` fan daemon (#405) is an opt-in convenience for signed builds, not a gate. The package already builds in Swift 6 language
 mode (`swiftLanguageModes: [.v6]` in `Package.swift`).

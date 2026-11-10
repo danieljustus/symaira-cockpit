@@ -210,18 +210,57 @@ jobs:
         run: |
           set -euo pipefail
           strip "build/app/Symaira Cockpit.app/Contents/MacOS/SymCockpitApp"
+          strip "build/app/Symaira Cockpit.app/Contents/Library/LaunchServices/com.symaira.symtune-helper"
 
       - name: Sign and verify app bundle
         run: |
           set -euo pipefail
           APP_PATH="build/app/Symaira Cockpit.app"
+          # The privileged fan helper is signed first, with hardened runtime and
+          # under its own code-signing identifier: the app's XPC requirement
+          # pins exactly this identifier plus the team of this identity.
+          HELPER_ID="com.symaira.symtune-helper"
+          HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+          test -x "$HELPER_PATH"
+          test -f "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+          codesign --force --sign "$CODESIGN_IDENTITY" --identifier "$HELPER_ID" \
+            --timestamp --options runtime "$HELPER_PATH"
           while IFS= read -r -d '' item; do
+            if [ "$item" = "$HELPER_PATH" ]; then
+              continue
+            fi
             if file "$item" | grep -q "Mach-O"; then
               codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$item"
             fi
           done < <(find "$APP_PATH/Contents" -type f -print0)
           codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Verify the fan helper identity and hardened runtime
+        # The helper accepts only an app of the same team and the app accepts
+        # only a helper of the same team (derived from the signature at
+        # runtime, never hardcoded). Fail the release rather than ship a pair
+        # that would refuse to talk to each other, or a helper that lacks the
+        # hardened runtime.
+        run: |
+          set -euo pipefail
+          APP_PATH="build/app/Symaira Cockpit.app"
+          HELPER_ID="com.symaira.symtune-helper"
+          HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+          TEAM=$(codesign -dvv "$APP_PATH" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          HELPER_TEAM=$(codesign -dvv "$HELPER_PATH" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          if [ -z "$TEAM" ] || [ "$TEAM" != "$HELPER_TEAM" ]; then
+            echo "::error::App team '$TEAM' and helper team '$HELPER_TEAM' must match and be non-empty."
+            exit 1
+          fi
+          codesign -dvv "$HELPER_PATH" 2>&1 | grep -q "^Identifier=$HELPER_ID$"
+          codesign -dvv "$HELPER_PATH" 2>&1 | grep -Eq "flags=0x[0-9a-f]+\(.*runtime.*\)"
+          codesign --verify --strict --verbose=2 \
+            -R="anchor apple generic and identifier \"$HELPER_ID\" and certificate leaf[subject.OU] = \"$TEAM\"" \
+            "$HELPER_PATH"
+          codesign --verify --strict --verbose=2 \
+            -R="anchor apple generic and identifier \"com.symaira.cockpit\" and certificate leaf[subject.OU] = \"$TEAM\"" \
+            "$APP_PATH"
 
       - name: Notarize and staple app
         env:

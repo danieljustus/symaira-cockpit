@@ -214,13 +214,30 @@ need root or any entitlement beyond the standard AppKit sandbox exemption.
 | `battery.chargeLimit` | Core tier. Root privileges for the SMC write — run with `sudo`. |
 | DDC/CI external brightness | Not implemented. Being evaluated. |
 
-### Optional future helper
+### Optional privileged fan helper
 
-Today, SMC writes run in the `symtune` process itself, which therefore needs
-root (`sudo`). An optional `symtune-helper` daemon (installed via
-`SMAppService`, communicating over XPC) may be added later so the main binary
-no longer has to run as root. It will ship from this same Apache-2.0
-repository as a convenience wrapper around the existing core logic — not as a
-separate product tier. `SMCHelperProtocol` already defines the XPC contract.
+By default SMC writes run in the `symcockpit` process itself, which therefore
+needs root: `sudo` on the command line, `osascript … with administrator
+privileges` from the GUI (against a root-owned copy of the CLI only).
+
+The signed and notarized `Symaira Cockpit.app` can additionally ship an
+**opt-in** `SMAppService` daemon (issue #405). It is part of this Apache-2.0
+repository, not a separate tier.
+
+| Aspect | Behaviour |
+|---|---|
+| Identity | `com.symaira.symtune-helper` (grandfathered): launchd label, Mach service and code-signing identifier. Executable `Contents/Library/LaunchServices/com.symaira.symtune-helper`, plist `Contents/Library/LaunchDaemons/com.symaira.symtune-helper.plist`. |
+| Opt-in | Off by default. Preference `com.symaira.symtune.fanHelper.enabled`, toggled in Preferences → *Privileged fan helper*. With it off, fan control is unchanged (`osascript`). |
+| Registration | `SMAppService.daemon(plistName:)`. `requiresApproval` is shown as such, with a shortcut to System Settings → Login Items & Extensions; until approved, the `osascript` path stays in use. |
+| Signed builds only | Unsigned, ad-hoc or self-signed builds never register and never connect. The decision is made from the app's own signature (Developer ID chain, team identifier, `com.symaira.cockpit` identifier). |
+| XPC authentication | `NSXPCConnection.setCodeSigningRequirement` on both sides. The helper accepts only `identifier "com.symaira.cockpit"`; the app accepts only `identifier "com.symaira.symtune-helper"`; both on `anchor apple generic`, the Developer ID leaf/CA OIDs and `certificate leaf[subject.OU]` equal to the team id read from the running binary's own signature. Peers with `allow-dyld-environment-variables`, `disable-library-validation`, `allow-unsigned-executable-memory` or `allow-jit` are refused. The app also checks the helper embedded in its bundle against the same requirement before connecting. |
+| Wire surface | `startGovernor(profile:)` with one of `system`/`comfort`/`performance`, `heartbeat`, `stopGovernor`, `status`. No raw RPM or SMC key can be expressed; every write still goes through `FanGovernor` and `SMCWritePolicy`/`SafetyPolicy`. Charge-limit writes are not part of it. |
+| Governor | The existing `FanGovernor` loop, including its bounded failure policy (missing temperature, SMC not holding the state): on giving up it restores the captured fan state and the helper reports `failed`. |
+| Dead-man switch | The app pings every 2 s. No ping for more than 7 s (checked every 1 s), an invalidated/interrupted connection, or SIGTERM makes the governor unwind through its own restore, returning the fans to the state it found. |
+| Removal | Preferences toggle off (restores, unregisters). Manual: delete the app and remove its Login Items entry, or `sudo launchctl bootout system/com.symaira.symtune-helper`. |
+
+Hardware-validated behaviour (a signed registration on a real Mac, rejection of
+a wrongly signed peer, restore after killing the app) is still to be recorded
+here once measured; the unit tests cover the decision logic with fakes only.
 
 `symtune permissions` reports the current permission and SMC write status.
