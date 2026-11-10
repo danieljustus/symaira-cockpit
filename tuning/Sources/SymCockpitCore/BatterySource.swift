@@ -32,6 +32,10 @@ public struct BatteryProperties: Sendable, Equatable {
     public let cycleCount: Int?
     /// Temperature in centidegrees (divide by 100.0 for Celsius).
     public let temperatureCentidegrees: Int?
+    /// Total system load in milliwatts (`PowerTelemetryData.SystemLoad`).
+    /// Unlike the DC-in rail it is also meaningful on battery. Absent on
+    /// models without power telemetry.
+    public let systemLoadMilliwatts: Int?
 
     public init(
         isCharging: Bool? = nil,
@@ -41,7 +45,8 @@ public struct BatteryProperties: Sendable, Equatable {
         rawCurrentCapacity: Int? = nil,
         chargePercent: Int? = nil,
         cycleCount: Int? = nil,
-        temperatureCentidegrees: Int? = nil
+        temperatureCentidegrees: Int? = nil,
+        systemLoadMilliwatts: Int? = nil
     ) {
         self.isCharging = isCharging
         self.externalConnected = externalConnected
@@ -51,6 +56,7 @@ public struct BatteryProperties: Sendable, Equatable {
         self.chargePercent = chargePercent
         self.cycleCount = cycleCount
         self.temperatureCentidegrees = temperatureCentidegrees
+        self.systemLoadMilliwatts = systemLoadMilliwatts
     }
 }
 
@@ -171,7 +177,8 @@ public struct HardwareBatterySource: BatterySource, Sendable {
                 ?? (topLevelIsPercentage ? nil : props["CurrentCapacity"] as? Int),
             chargePercent: topLevelIsPercentage ? props["CurrentCapacity"] as? Int : nil,
             cycleCount: props["CycleCount"] as? Int,
-            temperatureCentidegrees: props["Temperature"] as? Int
+            temperatureCentidegrees: props["Temperature"] as? Int,
+            systemLoadMilliwatts: (props["PowerTelemetryData"] as? [String: Any])?["SystemLoad"] as? Int
         )
     }
 

@@ -83,9 +83,23 @@ public protocol SystemMetricsSource: Sendable { func readSnapshot() -> SystemMet
 
 public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
     private let smc: SMCService
+    private let batterySource: any BatterySource
 
-    public init(smc: SMCService = SMCService()) {
+    public init(
+        smc: SMCService = SMCService(),
+        batterySource: any BatterySource = HardwareBatterySource()
+    ) {
         self.smc = smc
+        self.batterySource = batterySource
+    }
+
+    /// The battery's total system load, used when the SMC has no `PSTR`.
+    private var systemLoadFallback: () -> Int? {
+        let source = batterySource
+        return {
+            guard case .success(let properties) = source.readProperties() else { return nil }
+            return properties.systemLoadMilliwatts
+        }
     }
 
     public func readSnapshot() -> SystemMetricsSnapshot {
@@ -95,7 +109,7 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
             memory: readMemory(),
             disk: readDisk(),
             network: readNetwork(),
-            power: smc.readSystemPower(),
+            power: smc.readSystemPower(systemLoadFallbackMilliwatts: systemLoadFallback),
             volumes: StorageVolumeService().read()
         )
     }

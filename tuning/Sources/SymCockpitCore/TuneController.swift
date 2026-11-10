@@ -8,6 +8,7 @@ public final class TuneController: Sendable {
     private let smc: SMCService
     private let sensors: SensorService
     private let battery: BatteryService
+    private let powerBatterySource: any BatterySource
     private let displays = DisplayService()
     private let power: PowerService
     private let edrOverlay = EDROverlayService()
@@ -74,8 +75,10 @@ public final class TuneController: Sendable {
         self.sensors = SensorService(smc: smc)
         self.fanControl = FanControlService(smc: smc, sensors: sensors)
         self.chargeLimit = ChargeLimitService(smc: smc)
+        let resolvedBatterySource = batterySource ?? HardwareBatterySource()
+        self.powerBatterySource = resolvedBatterySource
         self.battery = BatteryService(
-            source: batterySource ?? HardwareBatterySource(),
+            source: resolvedBatterySource,
             // The system_profiler read is cached (TTL), so it never lands on a hot
             // loop. Injected battery sources (test seams) get no provider, keeping
             // unit tests free of subprocess calls.
@@ -95,7 +98,7 @@ public final class TuneController: Sendable {
         let powerSource = keepAwakeSource ?? HardwarePowerAssertionSource()
         self.power = PowerService(source: powerSource)
         self.keepAwakeCoordinator = KeepAwakeCoordinator(source: powerSource)
-        self.metricsService = SystemMetricsService(source: metricsSource ?? HardwareSystemMetricsSource(smc: smc))
+        self.metricsService = SystemMetricsService(source: metricsSource ?? HardwareSystemMetricsSource(smc: smc, batterySource: resolvedBatterySource))
         self.processUsage = ProcessUsageService(source: processSource ?? LibprocProcessSampleSource())
         self.fanGovernorRunning = fanGovernorRunning ?? {
             guard let result = try? BoundedProcessRunner.run(
@@ -790,15 +793,46 @@ extension TuneController {
     }
 
     private func powerDrawCapability() -> Capability {
-        let available = smc.readSystemPower() != nil
+        let source = powerBatterySource
+        let report = smc.readSystemPower(systemLoadFallbackMilliwatts: {
+            guard case .success(let properties) = source.readProperties() else { return nil }
+            return properties.systemLoadMilliwatts
+        })
         return Capability(
             id: "power.draw.read",
-            available: available,
+            available: report != nil,
             tier: "core",
-            detail: available
-                ? "Live DC-in power draw (volts/amps/watts) via SMC keys VD0R/ID0R/PDTR."
-                : "SMC DC-in power keys (VD0R/ID0R/PDTR) not exposed on this Mac — live power draw unavailable."
+            detail: Self.powerDrawDetail(report)
         )
+    }
+
+    /// What each reported power value measures, and which of them this Mac
+    /// actually exposes. Total system power and adapter input are different
+    /// quantities: only the latter is ~0 on battery.
+    static func powerDrawDetail(_ report: PowerReport?) -> String {
+        guard let report else {
+            return "No power readings exposed on this Mac — neither total system power (SMC PSTR / "
+                + "battery SystemLoad) nor adapter input (SMC VD0R/ID0R/PDTR/PD0R) is readable."
+        }
+        var parts = [String]()
+        switch report.systemSource {
+        case .smcPSTR?:
+            parts.append("total system power (system_watts) via SMC PSTR")
+        case .batterySystemLoad?:
+            parts.append("total system power (system_watts) via battery PowerTelemetryData.SystemLoad")
+        case nil:
+            parts.append("total system power (system_watts) unavailable")
+        }
+        if report.volts != nil || report.amps != nil || report.watts != nil {
+            let key = report.adapterSource == .smcPD0R ? "PD0R" : "PDTR"
+            parts.append(
+                "adapter DC-in input only (volts/amps/watts, SMC VD0R/ID0R/\(key)) — "
+                + "near 0 on battery, not the Mac's consumption"
+            )
+        } else {
+            parts.append("adapter DC-in input (volts/amps/watts) unavailable")
+        }
+        return "Live power: " + parts.joined(separator: "; ") + "."
     }
 
     /// The configured charge limit (the value this process applied) and its

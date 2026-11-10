@@ -130,7 +130,11 @@ struct MetricsTool: TuneTool {
     let description = """
         Read system metrics: CPU utilization, memory pressure, boot disk usage, \
         mounted storage volumes (names, paths, capacity), network throughput, and \
-        live power draw (volts/amps/watts, when the SMC exposes them).
+        power. The power block separates two quantities: system_watts is the \
+        total power the whole Mac consumes (SMC PSTR, else the battery's \
+        SystemLoad; also valid on battery), while volts/amps/watts \
+        (adapter_watts) are adapter DC-in input only and read ~0 on battery. \
+        Fields the Mac does not expose are absent.
         """
     let inputSchema = MCPJSONSchema()
     var isReadOnly: Bool { true }

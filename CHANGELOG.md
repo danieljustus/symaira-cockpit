@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Total system power:** `symcockpit metrics` reports `power.system_watts`
+  (SMC `PSTR`, falling back to the battery's `PowerTelemetryData.SystemLoad`)
+  with `power.system_source` naming the origin. It is the whole Mac's
+  consumption and stays meaningful on battery (#403).
+- `power.adapter_watts` / `power.adapter_source` label the DC-in adapter input
+  explicitly; `PD0R` is the fallback when `PDTR` reads 0 or is absent
+  (desktops such as the Mac Studio) (#403).
+
+### Changed
+- The existing `power.volts`/`amps`/`watts` fields are unchanged and are now
+  documented as adapter DC-in input only (about 0 on battery). The MCP
+  `get_system_metrics` description and the `doctor` `power.draw.read` text say
+  what each value measures (#403).
+
 ## [0.9.0] (2026-10-26)
 
 ### Changed

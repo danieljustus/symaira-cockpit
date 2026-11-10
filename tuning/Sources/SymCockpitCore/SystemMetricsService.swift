@@ -54,7 +54,7 @@ public final class SystemMetricsService: @unchecked Sendable {
         if current.memory.usedBytes == nil { notes.append("Memory metrics unavailable.") }
         if current.disk == nil { notes.append("Boot-volume disk metrics unavailable.") }
         if current.network.isEmpty { notes.append("Network metrics unavailable.") }
-        if current.power == nil { notes.append("Live power draw unavailable — SMC DC-in keys (VD0R/ID0R/PDTR) not exposed.") }
+        if current.power == nil { notes.append("Power unavailable — neither SMC power keys (PSTR, PDTR/PD0R, VD0R/ID0R) nor battery SystemLoad are exposed.") }
         return SystemMetricsReport(
             cpu: cpu,
             memory: memory,

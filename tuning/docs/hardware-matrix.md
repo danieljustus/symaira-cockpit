@@ -19,7 +19,7 @@ what's available on your machine.
 | `power.keepAwake` | All | All | Prevent idle sleep via IOKit power assertion. Works on every Mac. Ships in v0.1. |
 | `fan.control` | Macs with fans | Macs with fans | Core tier. SMC writes require root — run with `sudo`. Not available on fanless models (MacBook Air). |
 | `battery.chargeLimit` | Apple Silicon notebooks | Some Intel notebooks | Core tier. SMC writes require root — run with `sudo`. The IOKit/SMC keys differ between architectures. |
-| `power.draw.read` | DC-in rail only | DC-in rail only | Live volts/amps/watts via read-only SMC keys `VD0R`/`ID0R`/`PDTR`. Unprivileged. Absent (`nil`) on Macs that do not expose the keys — `doctor` reports the reason. |
+| `power.draw.read` | Total (`PSTR`, else battery `SystemLoad`) + DC-in rail | Total (`PSTR`) + DC-in rail | `system_watts` is the whole Mac's consumption (SMC `PSTR`, falling back to `AppleSmartBattery` `PowerTelemetryData.SystemLoad` on laptops) and is valid on battery. `volts`/`amps`/`watts` (also `adapter_watts`) are adapter DC-in input only (`VD0R`/`ID0R`/`PDTR`, `PD0R` when `PDTR` reads 0) and are about 0 on battery. Unprivileged, read-only. Each field is absent on Macs that do not expose its key — `doctor` reports which values are readable. |
 
 ### Tier and status legend
 

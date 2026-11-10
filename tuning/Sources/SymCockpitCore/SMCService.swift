@@ -599,23 +599,65 @@ public struct SMCService: Sendable {
              | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
     }
 
-    // MARK: - System Power (DC-in rail)
+    // MARK: - System Power (DC-in rail + total)
 
-    /// Read live power draw from the DC-in rail: `VD0R` (volts), `ID0R`
-    /// (amps) and `PDTR` (watts). Strictly read-only — no SMC writes, no
-    /// elevated privileges, no `SafetyPolicy` surface.
+    /// Read live power: the adapter (DC-in) rail — `VD0R` (volts), `ID0R`
+    /// (amps), `PDTR` (watts, falling back to `PD0R` when `PDTR` reads 0 or is
+    /// absent, as on desktops) — and total system power from `PSTR`. When
+    /// `PSTR` is absent or non-positive, `systemLoadFallbackMilliwatts` (the
+    /// battery's `PowerTelemetryData.SystemLoad`) supplies the total.
+    /// Strictly read-only — no SMC writes, no elevated privileges, no
+    /// `SafetyPolicy` surface.
     ///
-    /// Returns nil when the connection is closed or when none of the three
-    /// keys is readable (many Macs do not expose the DC-in keys), so callers
-    /// can report honest unavailability instead of zeros. Values are reported
-    /// as read; `PDTR` is the direct wattage read, not a V×A derivation.
-    public func readSystemPower() -> PowerReport? {
-        guard connection.isOpen else { return nil }
-        let volts = readKeyValue("VD0R")
-        let amps = readKeyValue("ID0R")
-        let watts = readKeyValue("PDTR")
-        guard volts != nil || amps != nil || watts != nil else { return nil }
-        return PowerReport(volts: volts, amps: amps, watts: watts)
+    /// Returns nil when nothing is readable, so callers report honest
+    /// unavailability instead of zeros. Adapter watts are the direct key
+    /// read, not a V×A derivation.
+    public func readSystemPower(
+        systemLoadFallbackMilliwatts: (() -> Int?)? = nil
+    ) -> PowerReport? {
+        var volts: Double?
+        var amps: Double?
+        var adapterWatts: Double?
+        var adapterSource: AdapterPowerSource?
+        var systemWatts: Double?
+        var systemSource: SystemPowerSource?
+
+        if connection.isOpen {
+            volts = readKeyValue("VD0R")
+            amps = readKeyValue("ID0R")
+            let pdtr = readKeyValue("PDTR")
+            if let pdtr, pdtr != 0 {
+                adapterWatts = pdtr
+                adapterSource = .smcPDTR
+            } else if let pd0r = readKeyValue("PD0R"), pd0r.isFinite, pd0r > 0 {
+                adapterWatts = pd0r
+                adapterSource = .smcPD0R
+            } else if let pdtr {
+                // PDTR is readable and genuinely 0 (e.g. on battery).
+                adapterWatts = pdtr
+                adapterSource = .smcPDTR
+            }
+            if let pstr = readKeyValue("PSTR"), pstr.isFinite, pstr > 0 {
+                systemWatts = pstr
+                systemSource = .smcPSTR
+            }
+        }
+        if systemWatts == nil,
+           let milliwatts = systemLoadFallbackMilliwatts?(), milliwatts > 0 {
+            systemWatts = Double(milliwatts) / 1000.0
+            systemSource = .batterySystemLoad
+        }
+        guard volts != nil || amps != nil || adapterWatts != nil || systemWatts != nil else {
+            return nil
+        }
+        return PowerReport(
+            volts: volts,
+            amps: amps,
+            watts: adapterWatts,
+            adapterSource: adapterSource,
+            systemWatts: systemWatts,
+            systemSource: systemSource
+        )
     }
 
     // MARK: - Key Writing (privileged, used by helper IPC)

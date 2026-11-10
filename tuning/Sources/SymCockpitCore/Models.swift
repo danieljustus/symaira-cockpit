@@ -431,21 +431,66 @@ public struct NetworkReport: Codable, Sendable, Equatable {
     public let aggregateBytesOutPerSecond: Double?
 }
 
-/// Live power draw from the SMC DC-in rail. Every field is optional: the
-/// `VD0R`/`ID0R`/`PDTR` keys are not exposed on every Mac, and the whole
-/// block is omitted from JSON when nothing is readable — no zeros, no guesses.
+/// Which SMC key supplied the adapter (DC-in) wattage.
+public enum AdapterPowerSource: String, Codable, Sendable, Equatable {
+    /// `PDTR`, the DC-in total power key.
+    case smcPDTR = "smc_pdtr"
+    /// `PD0R`, the DC-in power key desktops expose when `PDTR` reads 0.
+    case smcPD0R = "smc_pd0r"
+}
+
+/// Where the total system power came from.
+public enum SystemPowerSource: String, Codable, Sendable, Equatable {
+    /// SMC `PSTR` — total system power.
+    case smcPSTR = "smc_pstr"
+    /// `AppleSmartBattery` `PowerTelemetryData.SystemLoad` (laptops).
+    case batterySystemLoad = "battery_system_load"
+}
+
+/// Live power readings. Two different quantities, never conflated:
+///
+/// - **Adapter input (DC-in rail):** `volts`/`amps`/`watts` (`VD0R`/`ID0R`/
+///   `PDTR`, falling back to `PD0R` for watts). `adapterWatts` repeats
+///   `watts` under an unambiguous name. On battery this is ~0 even though the
+///   Mac is drawing power.
+/// - **Total system power:** `systemWatts` (SMC `PSTR`, else the battery's
+///   `SystemLoad`). This is what the whole machine consumes whichever source
+///   (adapter or battery) supplies it.
+///
+/// Every field is optional and the block is omitted from JSON when nothing is
+/// readable — no zeros, no guesses.
 public struct PowerReport: Codable, Sendable, Equatable {
     /// DC-in rail voltage in volts (`VD0R`).
     public let volts: Double?
     /// DC-in rail current in amps (`ID0R`).
     public let amps: Double?
-    /// DC-in rail power draw in watts (`PDTR`).
+    /// Adapter (DC-in) input power in watts (`PDTR`, else `PD0R`). Existing
+    /// field; identical to ``adapterWatts``.
     public let watts: Double?
+    /// Adapter (DC-in) input power in watts — same value as ``watts``.
+    public let adapterWatts: Double?
+    /// The SMC key ``adapterWatts`` was read from.
+    public let adapterSource: AdapterPowerSource?
+    /// Total system power draw in watts (`PSTR`, else battery `SystemLoad`).
+    public let systemWatts: Double?
+    /// Where ``systemWatts`` came from.
+    public let systemSource: SystemPowerSource?
 
-    public init(volts: Double? = nil, amps: Double? = nil, watts: Double? = nil) {
+    public init(
+        volts: Double? = nil,
+        amps: Double? = nil,
+        watts: Double? = nil,
+        adapterSource: AdapterPowerSource? = nil,
+        systemWatts: Double? = nil,
+        systemSource: SystemPowerSource? = nil
+    ) {
         self.volts = volts
         self.amps = amps
         self.watts = watts
+        self.adapterWatts = watts
+        self.adapterSource = adapterSource
+        self.systemWatts = systemWatts
+        self.systemSource = systemSource
     }
 }
 
@@ -454,7 +499,8 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
     public let memory: MemoryReport
     public let disk: DiskReport?
     public let network: NetworkReport
-    /// Live power draw; absent when the SMC does not expose the DC-in keys.
+    /// Adapter (DC-in) and total system power; absent when neither the SMC nor
+    /// the battery exposes any of it.
     public let power: PowerReport?
     /// User-visible mounted filesystems; the separate `disk` stays boot-only.
     public let volumes: [StorageVolumeReport]
