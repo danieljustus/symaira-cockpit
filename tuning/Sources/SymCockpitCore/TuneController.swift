@@ -27,6 +27,7 @@ public final class TuneController: Sendable {
     private let privilegedFanGovernor: @Sendable (URL) throws -> Void
     private let privilegeIsRoot: @Sendable () -> Bool
     private let fanProfileURL: URL?
+    private let fanHelper: (any FanHelperControlling)?
     public let metricsHistory: MetricsHistoryService
 
     public let dataDir: URL
@@ -60,7 +61,8 @@ public final class TuneController: Sendable {
         privilegedFanSet: (@Sendable (Double) throws -> Void)? = nil,
         privilegedFanGovernor: (@Sendable (URL) throws -> Void)? = nil,
         privilegeIsRoot: (@Sendable () -> Bool)? = nil,
-        fanProfileURL: URL? = nil
+        fanProfileURL: URL? = nil,
+        fanHelper: (any FanHelperControlling)? = nil
     ) {
         self.config = config
         self.displayWrite = displayWrite ?? HardwareDisplayWriteService(
@@ -136,6 +138,7 @@ public final class TuneController: Sendable {
         }
         self.privilegeIsRoot = privilegeIsRoot ?? { PrivilegedElevation.isRunningAsRoot }
         self.fanProfileURL = fanProfileURL
+        self.fanHelper = fanHelper
         self.metricsHistory = MetricsHistoryService(capacity: 120)
         // Sync enabled metrics from config into the history buffers
         metricsHistory.ensureBuffers(for: config.enabledMetrics)
@@ -675,6 +678,31 @@ extension TuneController {
         try fanProfileStore.write(profile)
         logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
 
+        // Optional helper path (issue #405): only when the GUI injected a
+        // helper, the user opted in, and it is registered and approved. Every
+        // other state — including none at all — takes the unchanged path below.
+        if let fanHelper, !privilegeIsRoot(),
+           FanHelperRouting.route(for: fanHelper.availability()) == .helper {
+            if profile == .system {
+                // Best effort: if the connection is gone, the helper's own
+                // heartbeat watchdog restores the firmware curve.
+                do { try fanHelper.stopGovernor() } catch {
+                    logHistory(action: "fan.profile.system", result: "failed", error: error)
+                }
+                return
+            }
+            // A legacy (osascript) governor that is still running already
+            // follows the stored profile; starting a second one would fight it.
+            if isFanGovernorRunning() { return }
+            do {
+                try fanHelper.startGovernor(profile: profile)
+                return
+            } catch {
+                logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
+                // Fall through to the administrator-prompt path.
+            }
+        }
+
         guard profile != .system, !isFanGovernorRunning() else { return }
 
         guard allowPrivilegeEscalation, !privilegeIsRoot() else { return }
@@ -687,6 +715,25 @@ extension TuneController {
             try? fanProfileStore.write(.system)
             logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
             throw TuneError.permission(error.description)
+        }
+    }
+
+    /// Re-establishes the stored governed profile through the helper, e.g. at
+    /// GUI launch. The helper hands the fans back when the app stops
+    /// heartbeating, so after a relaunch nothing governs until this runs.
+    /// A no-op without an enabled helper, so the legacy detached governor
+    /// (which outlives the app) is never duplicated.
+    public func resumeFanProfileViaHelper() {
+        guard let fanHelper, !privilegeIsRoot(),
+              FanHelperRouting.route(for: fanHelper.availability()) == .helper
+        else { return }
+        let profile = activeFanProfile
+        guard profile != .system, !isFanGovernorRunning() else { return }
+        do {
+            try fanHelper.startGovernor(profile: profile)
+            logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
+        } catch {
+            logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
         }
     }
 

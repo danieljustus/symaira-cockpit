@@ -14,6 +14,9 @@ struct PreferencesView: View {
     /// Called after an AI-usage credential is saved or cleared, so the
     /// caller can drop the cache and refresh immediately (issue #324).
     let onCredentialChange: () -> Void
+    /// The optional privileged fan helper. Nil hides the section (hosts that
+    /// cannot offer it, and render tests).
+    var fanHelper: FanHelperPreferences?
 
     @State private var refreshText: String = ""
     @State private var applyMessage: String?
@@ -68,6 +71,13 @@ struct PreferencesView: View {
 
                     Divider()
                         .background(SymairaTokens.line)
+
+                    if let fanHelper {
+                        FanHelperPreferencesSection(preferences: fanHelper)
+
+                        Divider()
+                            .background(SymairaTokens.line)
+                    }
 
                     // Auto-update
                     updateSection

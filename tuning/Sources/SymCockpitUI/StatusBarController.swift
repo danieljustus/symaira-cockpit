@@ -1,6 +1,7 @@
 @preconcurrency import AppKit
 import Combine
 import SymCockpitCore
+import SymCockpitHelperKit
 import SwiftUI
 import SymairaUpdateCheck
 
@@ -42,6 +43,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private let preferencesManager: PreferencesManager
     public let appearancePreferences = CockpitAppearancePreferences()
     let aiUsagePreferences = AIUsagePreferences()
+    let fanHelperPreferences: FanHelperPreferences
     private(set) lazy var aiUsageModel = AIUsageViewModel(
         controller: controller,
         preferences: aiUsagePreferences
@@ -176,7 +178,12 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // survive a relaunch (issue #357). The CLI uses the same loader
         // (main.swift:457); the app must too.
         let config = ConfigPaths().loadConfig()
-        self.controller = TuneController(config: config)
+        // The optional privileged fan helper (issue #405). Creating the client
+        // has no side effects; it only routes fan changes once the user opted
+        // in and the helper is registered and approved.
+        let fanHelperClient = FanHelperClient()
+        self.fanHelperPreferences = FanHelperPreferences(client: fanHelperClient)
+        self.controller = TuneController(config: config, fanHelper: fanHelperClient)
         let preferences = PreferencesManager(config: config)
         self.preferencesManager = preferences
         self.model = TuneViewModel(controller: controller, preferences: preferences)
@@ -186,6 +193,10 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         configureButton()
         setupPopover()
         observePreferences()
+        // With the helper enabled, a stored governed position is re-applied
+        // at launch (the helper restored the fans when the app last quit).
+        let resumeController = controller
+        Task.detached(priority: .utility) { resumeController.resumeFanProfileViaHelper() }
         model.onStatusItemTextChanged = { [weak self] segments in
             self?.renderStatusItem(segments: segments)
         }
@@ -695,7 +706,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 // refreshed so the live state shows immediately (issue #324).
                 self?.controller.resetAIUsageCache()
                 self?.aiUsageModel.refreshNow()
-            }
+            },
+            fanHelper: fanHelperPreferences
         )
         let hosting = NSHostingController(rootView: prefsView)
 

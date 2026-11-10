@@ -36,6 +36,20 @@ targets:
           - "-framework"
           - "IOKit"
 
+  # Shared pieces of the optional privileged fan helper (issue #405); the
+  # helper executable itself is a root-package SPM target.
+  SymCockpitHelperKit:
+    type: library.static
+    platform: macOS
+    sources:
+      - Sources/SymCockpitHelperKit
+    dependencies:
+      - target: SymCockpitCore
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+
   # The menu-bar UI, as its own module — symcockpit's GUI embeds the same
   # library through SPM, so the Xcode project mirrors that split instead of
   # compiling the views straight into the app target.
@@ -46,6 +60,7 @@ targets:
       - Sources/SymCockpitUI
     dependencies:
       - target: SymCockpitCore
+      - target: SymCockpitHelperKit
       - package: symaira-corekit
         product: SymairaProviderKit
       - package: symaira-corekit
@@ -68,6 +83,7 @@ targets:
     dependencies:
       - target: SymCockpitUI
       - target: SymCockpitCore
+      - target: SymCockpitHelperKit
       - package: history
         product: SymCockpitHistory
       - package: symaira-corekit

@@ -67,6 +67,7 @@ let package = Package(
             name: "SymCockpitUI",
             dependencies: [
                 "SymCockpitCore",
+                "SymCockpitHelperKit",
                 .product(name: "SymairaProviderKit", package: "symaira-corekit"),
                 .product(name: "SymairaKeychain", package: "symaira-corekit"),
                 .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
