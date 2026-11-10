@@ -108,19 +108,33 @@ func runProcesses(_ args: [String], controller: TuneController) throws {
 }
 
 func runAIUsage(_ args: [String], controller: TuneController) throws {
+    if args.first == "serve" {
+        try runAIUsageServe(Array(args.dropFirst()), controller: controller)
+        return
+    }
     if args.contains(where: { $0 == "--help" || $0 == "-h" }) {
-        emit("Usage: symcockpit ai-usage [--json]")
+        emit("Usage: symcockpit ai-usage [provider] [--json] [--force]")
         emit("")
         emit("AI subscription/token usage via symbrain. Read-only;")
         emit("no credentials are ever printed. --json emits the machine-readable")
         emit("legacy per-provider result form shared with MCP get_ai_usage.")
+        emit("Reuses snapshots younger than five minutes; --force refreshes now.")
+        emit("A provider argument limits credential discovery and requests to that provider.")
         return
     }
     let wantsJSON = args.contains("--json")
-    for arg in args where arg != "--json" {
-        throw TuneError.usage("ai-usage: unexpected argument '\(arg)'")
+    let positional = args.filter { $0 != "--json" && $0 != "--force" }
+    guard positional.count <= 1, !positional.contains(where: { $0.hasPrefix("-") }) else {
+        throw TuneError.usage("ai-usage: expected one provider and optional --json/--force")
     }
-    let results = controller.aiUsageReport()
+    var selection: Set<String>?
+    if let providerID = positional.first {
+        guard controller.aiUsageProviderCatalog.contains(where: { $0.id == providerID }) else {
+            throw TuneError.usage("ai-usage: unknown provider '\(providerID)'")
+        }
+        selection = [providerID]
+    }
+    let results = controller.aiUsageReport(providerIDs: selection, force: args.contains("--force"))
     if wantsJSON {
         try emitJSON(results)
         return
@@ -130,7 +144,8 @@ func runAIUsage(_ args: [String], controller: TuneController) throws {
     }
     for result in results {
         if let snapshot = result.snapshot {
-            emit("\(snapshot.providerID) (source: \(snapshot.source)):")
+            emit("\(snapshot.providerID) (source: \(snapshot.source), fetched: \(snapshot.fetchedAt.ISO8601Format())):")
+            if let error = result.error { emit("  Stale cached data: \(error)") }
             for meter in snapshot.meters {
                 let reset = meter.resetsAt.map { ISO8601DateFormatter().string(from: $0) } ?? "—"
                 emit("  \(meter.label): \(fmt(meter.used)) / \(fmt(meter.limit)) \(meter.unit.unitLabel) (resets \(reset))")

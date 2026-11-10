@@ -116,7 +116,7 @@ public enum AIUsageFormatting {
     ) -> String? {
         guard let error, !error.isEmpty else { return nil }
         if error == AIUsageService.notConfiguredMessage,
-           SymVaultEntryPaths.supportedProviderIDs.contains(providerID) {
+           entryPaths.reference(for: providerID) != nil {
             return "No SymVault entry at \(entryPaths.path(for: providerID))"
         }
         return error

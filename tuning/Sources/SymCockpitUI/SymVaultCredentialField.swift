@@ -27,7 +27,8 @@ struct SymVaultCredentialField: View {
     @State private var isConfirmingRemoval = false
 
     private var customPath: String? {
-        preferences.entryPaths.customPath(for: providerID)
+        let path = preferences.entryPaths.customPath(for: providerID)
+        return path == SymVaultCredentialStore.defaultEntryPath(for: providerID) ? nil : path
     }
 
     var body: some View {
@@ -46,7 +47,9 @@ struct SymVaultCredentialField: View {
         .accessibilityElement(children: .contain)
         .onAppear {
             pathDraft = customPath ?? ""
-            if customPath == nil { migrateLegacyCredential() }
+            if customPath == nil && !SymVaultEntryPaths.usesLocalDiscovery(for: providerID) {
+                migrateLegacyCredential()
+            }
         }
     }
 
@@ -65,8 +68,8 @@ struct SymVaultCredentialField: View {
                 .onSubmit(applyEntryPath)
                 Button("Use entry", action: applyEntryPath)
                     .disabled(pathDraft.trimmingCharacters(in: .whitespacesAndNewlines) == (customPath ?? ""))
-                if customPath != nil {
-                    Button("Use default") {
+                if preferences.entryPaths.customPath(for: providerID) != nil {
+                    Button(SymVaultEntryPaths.usesLocalDiscovery(for: providerID) ? "Use local auth" : "Use default") {
                         pathDraft = ""
                         applyEntryPath()
                     }
@@ -92,7 +95,15 @@ struct SymVaultCredentialField: View {
 
     @ViewBuilder
     private var ownedEntryContent: some View {
-        Text("Stored in SymVault as \(store.reference(for: providerID))")
+        if SymVaultEntryPaths.usesLocalDiscovery(for: providerID), preferences.entryPaths.reference(for: providerID) == nil {
+            Text(providerID == "opencode"
+                 ? "Using native OpenCode auth or configured cookie/workspace auth via symbrain. "
+                   + "Saving a Go API key explicitly selects the Cockpit SymVault entry; "
+                   + "a failed key never falls back to another credential."
+                 : "Using local CLI auth via symbrain. Saving a credential explicitly selects the Cockpit SymVault entry.")
+                .font(.caption)
+        }
+        Text("Cockpit SymVault entry: \(store.reference(for: providerID))")
             .symairaText(.caption)
             .foregroundStyle(SymairaTokens.ink2)
             .textSelection(.enabled)
@@ -131,7 +142,7 @@ struct SymVaultCredentialField: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            try store.save(trimmed, for: providerID)
+            try preferences.saveCredential(trimmed, for: providerID, store: store)
             value = ""
             statusMessage = "Saved to SymVault."
             saved = true
@@ -147,7 +158,7 @@ struct SymVaultCredentialField: View {
     }
 
     private func delete() {
-        guard store.delete(for: providerID) else {
+        guard preferences.deleteCredential(for: providerID, store: store) else {
             statusMessage = "The SymVault credential could not be removed."
             return
         }

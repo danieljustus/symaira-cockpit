@@ -1,95 +1,158 @@
 import Foundation
 import Observation
+import Combine
 import SymCockpitCore
 
-/// One rendered AI-usage row: a provider's latest snapshot (or error) plus
-/// its sparkline history.
 struct AIUsageRow: Identifiable, Equatable {
     let providerID: String
     let displayName: String
     let snapshot: AIUsageSnapshot?
-    /// Redacted error description (already secret-free at the service).
+    /// Already redacted at the service boundary.
     let error: String?
-    /// When the provider last succeeded — shown with the error state so a
-    /// stale value is never mistaken for a fresh zero.
     let lastSuccessAt: Date?
-    /// Rolling usage history for the sparkline (primary meter percent).
     let history: [MetricSample]
-
+    var recordedHistory: AIUsageRecordedHistory?
     var id: String { providerID }
-
     var isUnavailable: Bool { snapshot == nil }
+    var isStale: Bool { snapshot != nil && error != nil }
 }
 
-/// Fetches AI usage for the enabled providers and formats it for the
-/// popover card, the preferences catalog, and the optional menu-bar readout.
-///
-/// Only providers the user enabled are fetched — an all-off preference set
-/// performs zero network calls. The refresh loop runs at the configured
-/// interval (default 5 minutes).
+struct AIUsagePin: Equatable {
+    let label: String
+    let value: String
+    let fraction: Double?
+    let stale: Bool
+    var text: String { "\(label) \(value)\(stale ? " (stale)" : "")" }
+}
+
 @MainActor
 @Observable
 final class AIUsageViewModel {
-    // MARK: - Published state
-
     private(set) var rows: [AIUsageRow] = []
-    /// Compact menu-bar readout for the primary enabled provider.
-    private(set) var statusItemText: String = ""
-    /// Provider catalog for preferences — exposes full provider instances
-    /// so the UI can render credential inputs and auth state (issue #360).
+    private(set) var statusItemText = ""
+    private(set) var statusPins: [AIUsagePin] = []
     let providers: [any AIUsageProvider]
-
+    let preferences: AIUsagePreferences
+    let localAPI = AIUsageAPIHost()
     var onStatusItemTextChanged: (() -> Void)?
 
-    // MARK: - Dependencies
-
-    private let controller: TuneController
-    /// Exposed so an embedding host can offer the menu-bar readout switch
-    /// next to the metric switches instead of only in Preferences.
-    let preferences: AIUsagePreferences
-
+    private let fetch: @Sendable (Set<String>, Bool) async -> [AIUsageService.ProviderResult]
+    private let fetchEstimatedHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])?
+    private let fetchClaudeHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])?
+    private let fetchHistory: (@Sendable (Set<String>, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])?
+    private let cached: @Sendable (Set<String>) -> [AIUsageService.ProviderResult]
+    private var preferenceObserver: AnyCancellable?
     private var historyBuffers: [String: MetricsRingBuffer] = [:]
-    private var lastSuccessAt: [String: Date] = [:]
     private var refreshTask: Task<Void, Never>?
-    /// Guards against overlapping fetches — the refresh loop and the card's
-    /// refresh button can both fire while a report is still in flight.
-    private var isRefreshing = false
+    private(set) var isRefreshing = false
+    private var isStopped = false
 
-    init(controller: TuneController, preferences: AIUsagePreferences) {
-        self.controller = controller
-        self.preferences = preferences
-        self.providers = controller.aiUsageService.providers
+    convenience init(controller: TuneController, preferences: AIUsagePreferences) {
+        let service = controller.aiUsageService
+        self.init(providers: service.providers, preferences: preferences,
+            cached: { service.cachedResults(providerIDs: $0) },
+            fetchEstimatedHistory: { await service.usageAll(providerIDs: $0, force: $1, grokHistoryEnabled: $2,
+                opencodeHistoryEnabled: $3, claudeHistoryEnabled: $4, claudeHistoryOnly: $5,
+                codexHistoryEnabled: $6, codexHistoryOnly: $7) },
+            fetch: { await service.usageAll(providerIDs: $0, force: $1) })
     }
 
-    // MARK: - Lifecycle
+    init(providers: [any AIUsageProvider], preferences: AIUsagePreferences,
+         cached: @escaping @Sendable (Set<String>) -> [AIUsageService.ProviderResult] = { _ in [] },
+         fetchEstimatedHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
+         fetchClaudeHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
+         fetchHistory: (@Sendable (Set<String>, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
+         fetch: @escaping @Sendable (Set<String>, Bool) async -> [AIUsageService.ProviderResult]) {
+        self.providers = providers
+        self.preferences = preferences
+        self.cached = cached
+        self.fetch = fetch
+        self.fetchHistory = fetchHistory
+        self.fetchClaudeHistory = fetchClaudeHistory
+        self.fetchEstimatedHistory = fetchEstimatedHistory
+        preferences.onUsageSelectionChanged = { [weak self] in
+            guard let self else { return }
+            self.rows.removeAll { !self.preferences.isEnabled($0.id) }
+            for index in self.rows.indices where !self.preferences.consentedHistoryProviders.contains(self.rows[index].id) {
+                self.rows[index].recordedHistory = nil
+            }
+            self.updateStatusItem()
+            self.refreshNow()
+        }
+        preferenceObserver = preferences.objectWillChange.sink { [weak self] _ in
+            // Published emits before mutation. Read the new preferences on the next main-actor turn.
+            Task { @MainActor [weak self] in self?.updateStatusItem() }
+        }
+    }
+
+    var orderedRows: [AIUsageRow] {
+        AIUsageLayout.ordered(preferences.effectiveDisplayOrder(for: providers), available: rows.map(\.id))
+            .compactMap { id in rows.first { $0.id == id } }
+    }
+
+    var visibleRows: [AIUsageRow] {
+        orderedRows.filter { row in
+            preferences.isEnabled(row.id) && preferences.isVisible(row.id,
+                isConfigured: providers.first { $0.id == row.id }?.isConfigured ?? false)
+        }
+    }
+
+    var localRecordedSpend: AIUsageLocalRecordedSpend {
+        AIUsageLocalRecordedSpend(providerIDs: preferences.consentedHistoryProviders,
+            histories: Dictionary(rows.compactMap { row in row.recordedHistory.map { (row.id, $0) } }, uniquingKeysWith: { first, _ in first }),
+            period: preferences.localSpendPeriod, mode: preferences.localSpendMode)
+    }
+
+    func metrics(for row: AIUsageRow) -> [AIUsageMetric] {
+        let metrics = row.snapshot.map { AIUsageMetric.metrics(snapshot: $0) } ?? []
+        let order = AIUsageLayout.ordered(preferences.layout.metricOrder[row.id] ?? [], available: metrics.map(\.id))
+        let ordered = order.compactMap { id in metrics.first { $0.id == id } }
+        return ordered.filter { !preferences.layout.onDemand.contains($0.id) }
+            + ordered.filter { preferences.layout.onDemand.contains($0.id) }
+    }
+
+    func moveProvider(_ id: String, before target: String) {
+        let order = preferences.effectiveDisplayOrder(for: providers)
+        preferences.displayOrder = AIUsageLayout.moving(id, before: target, in: order)
+    }
+
+    func moveMetric(_ id: String, before target: String, row: AIUsageRow) {
+        let order = metrics(for: row).map(\.id)
+        preferences.layout.metricOrder[row.id] = AIUsageLayout.moving(id, before: target, in: order)
+        if preferences.layout.onDemand.contains(target) { preferences.layout.onDemand.insert(id) } else {
+            preferences.layout.onDemand.remove(id)
+        }
+    }
 
     func start() {
         guard refreshTask == nil else { return }
+        isStopped = false
+        apply(cached(preferences.enabledProviders).map {
+            .init(providerID: $0.providerID, snapshot: $0.snapshot, error: $0.error ?? "Cached usage; awaiting refresh")
+        }, recordSamples: false)
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.refresh()
-                let interval = self.preferences.refreshInterval
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                let interval = max(1, self.preferences.refreshInterval)
+                try? await Task.sleep(for: .seconds(interval))
             }
         }
     }
 
     func stop() {
+        isStopped = true
         refreshTask?.cancel()
         refreshTask = nil
+        localAPI.stop()
     }
 
-    /// One immediate refresh (also used right after preference changes).
-    func refreshNow() {
-        Task { await refresh() }
-    }
+    func refreshNow(providerID: String? = nil) { Task { await refresh(providerID: providerID) } }
 
-    // MARK: - Fetch
-
-    private func refresh() async {
+    func refresh(providerID: String? = nil, force: Bool = true) async {
+        guard !isStopped else { return }
         let enabled = preferences.enabledProviders
-        let entryPaths = preferences.entryPaths
+        let revision = preferences.enabledRevision
         guard !enabled.isEmpty else {
             rows = []
             updateStatusItem()
@@ -98,87 +161,99 @@ final class AIUsageViewModel {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-
-        // `usageAll()` is nonisolated and wraps a subprocess that can take
-        // seconds, so awaiting it runs the fetch on the cooperative pool and
-        // leaves the popover interactive. The old code called the controller's
-        // synchronous bridge, which parked the main thread on a semaphore for
-        // the whole `symbrain` call.
-        let service = controller.aiUsageService
-        let report = await service.usageAll()
-        let enabledResults = report.filter { enabled.contains($0.providerID) }
-        let now = Date()
-
-        var newRows: [AIUsageRow] = []
-        for result in enabledResults {
-            let id = result.providerID
-            let provider = providers.first { $0.id == id }
-            let displayName = provider?.displayName ?? id
-            // An enabled provider that cannot report stays on the card with the
-            // reason, even when "hide unconfigured" is on (issue #376).
-            guard preferences.isVisible(id, isConfigured: provider?.isConfigured ?? false) else { continue }
-            if let snapshot = result.snapshot {
-                lastSuccessAt[id] = now
-                recordHistory(id: id, snapshot: snapshot, at: now)
-            } else {
-                if historyBuffers[id] == nil {
-                    historyBuffers[id] = MetricsRingBuffer(capacity: 120)
-                }
-                historyBuffers[id]?.recordGap(reason: "unavailable", timestamp: now)
-            }
-            newRows.append(AIUsageRow(
-                providerID: id,
-                displayName: displayName,
-                snapshot: result.snapshot,
-                error: AIUsageFormatting.unavailableReason(
-                    providerID: id,
-                    error: result.error,
-                    entryPaths: entryPaths
-                ),
-                lastSuccessAt: lastSuccessAt[id],
-                history: historyBuffers[id]?.samples ?? []
-            ))
+        let selected = providerID.map { enabled.intersection([$0]) } ?? enabled
+        guard !selected.isEmpty else { return }
+        let results: [AIUsageService.ProviderResult]
+        if let fetchEstimatedHistory {
+            let consent = preferences.consentedHistoryProviders.intersection(selected)
+            results = await fetchEstimatedHistory(selected, force, consent.contains("grok"), consent.contains("opencode"),
+                consent.contains("claude"), consent.contains("claude") && preferences.claudeHistoryOnly,
+                consent.contains("codex"), consent.contains("codex") && preferences.codexHistoryOnly)
+        } else if let fetchClaudeHistory {
+            let consent = preferences.consentedHistoryProviders.intersection(selected)
+            results = await fetchClaudeHistory(selected, force, consent.contains("grok"), consent.contains("opencode"),
+                                              consent.contains("claude"), consent.contains("claude") && preferences.claudeHistoryOnly)
+        } else if let fetchHistory {
+            results = await fetchHistory(selected, force, preferences.consentedHistoryProviders.contains("grok") && selected.contains("grok"),
+                                         preferences.consentedHistoryProviders.contains("opencode") && selected.contains("opencode"))
+        } else {
+            results = await fetch(selected, force)
         }
-        rows = newRows
+        guard !isStopped, !Task.isCancelled else { return }
+        guard revision == preferences.enabledRevision else {
+            rows.removeAll { !preferences.enabledProviders.contains($0.id) }
+            updateStatusItem()
+            refreshNow()
+            return
+        }
+        let untouched = rows.filter { !selected.contains($0.id) && enabled.contains($0.id) }.map {
+            AIUsageService.ProviderResult(providerID: $0.id, snapshot: $0.snapshot, error: $0.error, history: $0.recordedHistory)
+        }
+        apply(untouched + results.filter { selected.contains($0.providerID) })
+    }
+
+    func apply(_ results: [AIUsageService.ProviderResult], recordSamples: Bool = true) {
+        let previous = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var seen: Set<String> = []
+        rows = results.compactMap { result in
+            let id = result.providerID
+            guard seen.insert(id).inserted else { return nil }
+            let snapshot = result.snapshot
+            if recordSamples, let snapshot, result.error == nil, previous[id]?.snapshot?.fetchedAt != snapshot.fetchedAt {
+                recordHistory(id: id, snapshot: snapshot)
+            }
+            return AIUsageRow(providerID: id,
+                displayName: providers.first { $0.id == id }?.displayName ?? id,
+                snapshot: snapshot,
+                error: AIUsageFormatting.unavailableReason(providerID: id, error: result.error,
+                    entryPaths: preferences.entryPaths),
+                lastSuccessAt: snapshot?.fetchedAt ?? previous[id]?.lastSuccessAt,
+                history: historyBuffers[id]?.samples ?? [],
+                recordedHistory: preferences.consentedHistoryProviders.contains(id) ? result.history : nil)
+        }
         updateStatusItem()
     }
 
-    /// Records the primary meter's used fraction (0…1) into the provider's
-    /// history buffer for the sparkline.
-    private func recordHistory(id: String, snapshot: AIUsageSnapshot, at date: Date) {
-        let buffer = historyBuffers[id] ?? {
-            let buffer = MetricsRingBuffer(capacity: 120)
-            historyBuffers[id] = buffer
-            return buffer
-        }()
+    private func recordHistory(id: String, snapshot: AIUsageSnapshot) {
+        let buffer = historyBuffers[id] ?? MetricsRingBuffer(capacity: 120)
+        historyBuffers[id] = buffer
         guard let meter = snapshot.meters.first,
-              let fraction = AIUsageFormatting.progressFraction(for: meter)
-        else {
-            buffer.recordGap(reason: "no meter", timestamp: date)
+              let fraction = AIUsageFormatting.progressFraction(for: meter) else {
+            buffer.recordGap(reason: "no meter", timestamp: snapshot.fetchedAt)
             return
         }
-        buffer.recordValue(fraction * 100, timestamp: date)
+        buffer.recordValue(fraction * 100, timestamp: snapshot.fetchedAt)
     }
 
-    /// The readout follows the first provider that has something to say, not
-    /// merely the first that answered: a provider can return a snapshot with
-    /// no meters (an unlimited plan, or an account type that exposes none),
-    /// and stopping there left the menu bar blank while a later provider had
-    /// a perfectly good number.
-    private func updateStatusItem() {
-        guard preferences.menuBarEnabled else {
-            statusItemText = ""
-            onStatusItemTextChanged?()
-            return
+    func updateStatusItem() {
+        let apiRows = providers.filter { preferences.isEnabled($0.id) }.map { provider in
+            let row = rows.first { $0.id == provider.id }
+            return AIUsageService.ProviderResult(providerID: provider.id, snapshot: row?.snapshot, error: row?.error)
         }
-        let text = rows.lazy
-            .compactMap { row -> String? in
-                guard row.snapshot != nil else { return nil }
-                let text = AIUsageFormatting.statusItemText(for: row.snapshot)
-                return text == "—" ? nil : text
+        localAPI.update(enabled: preferences.localAPIEnabled && !isStopped, rows: apiRows)
+        statusPins = preferences.menuBarEnabled ? visibleRows.flatMap { row -> [AIUsagePin] in
+            let metrics = metrics(for: row).filter { !preferences.layout.hidden.contains($0.id) }
+            let selected = Set((preferences.layout.pins[row.id] ?? []).prefix(2))
+            return metrics.filter { selected.contains($0.id) }.compactMap { metric in
+                guard let value = metric.value(remaining: preferences.layout.remaining) else { return nil }
+                let fraction = metric.fraction(remaining: preferences.layout.remaining)
+                guard !preferences.layout.bars || fraction != nil else { return nil }
+                return AIUsagePin(label: "\(row.displayName) \(metric.meter.label)", value: value,
+                    fraction: fraction, stale: row.isStale)
             }
-            .first
-        statusItemText = text.map { "AI \($0)" } ?? ""
+        } : []
+        // Legacy opt-in: with no explicit pins, pin the first readable metric only.
+        if statusPins.isEmpty, preferences.menuBarEnabled, preferences.displayPinnedProvider,
+           preferences.layout.pins.isEmpty,
+           let row = visibleRows.first,
+           let metric = metrics(for: row).first(where: { !preferences.layout.hidden.contains($0.id) }),
+           let value = metric.value(remaining: preferences.layout.remaining),
+           !preferences.layout.bars || metric.fraction(remaining: preferences.layout.remaining) != nil {
+            statusPins = [AIUsagePin(label: "\(row.displayName) \(metric.meter.label)", value: value,
+                fraction: metric.fraction(remaining: preferences.layout.remaining), stale: row.isStale)]
+        }
+        if preferences.layout.bars { statusPins = Array(statusPins.prefix(4)) }
+        statusItemText = statusPins.map(\.text).joined(separator: " · ")
         onStatusItemTextChanged?()
     }
 }

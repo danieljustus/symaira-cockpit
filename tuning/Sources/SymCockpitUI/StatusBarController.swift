@@ -256,12 +256,21 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 Task { @MainActor in self?.aiUsageModel.refreshNow() }
             }
             .store(in: &cancellables)
+        aiUsagePreferences.$refreshInterval
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.aiUsageModel.stop()
+                    self?.aiUsageModel.start()
+                }
+            }
+            .store(in: &cancellables)
         aiUsagePreferences.$menuBarEnabled
             .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
-                    self.aiUsageModel.refreshNow()
+                    self.aiUsageModel.updateStatusItem()
                     self.renderStatusItem(segments: self.model.statusItemSegments, force: true)
                 }
             }
@@ -410,7 +419,11 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         for segment in combined {
             switch segment {
             case .text(let text):
-                attributed.append(NSAttributedString(string: text, attributes: Self.titleAttributes))
+                if text == aiUsageModel.statusItemText, aiUsagePreferences.layout.bars {
+                    attributed.append(Self.aiMiniBars(aiUsageModel.statusPins))
+                } else {
+                    attributed.append(NSAttributedString(string: text, attributes: Self.titleAttributes))
+                }
             case .symbol(let name):
                 attributed.append(Self.symbolAttachment(named: name))
             }
@@ -427,6 +440,30 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         button.toolTip = plainText
         button.setAccessibilityLabel(statusItemAccessibilityLabel)
         button.setAccessibilityValue(plainText)
+    }
+
+    /// Real proportional bars, not Unicode blocks. Tooltips/AX retain the metric names and exact readings.
+    static func aiMiniBars(_ pins: [AIUsagePin]) -> NSAttributedString {
+        let fractions = pins.compactMap(\.fraction)
+        guard !fractions.isEmpty else { return NSAttributedString(string: "") }
+        let size = NSSize(width: fractions.count * 10, height: 16)
+        let image = NSImage(size: size, flipped: false) { _ in
+            NSColor.labelColor.set()
+            for (index, fraction) in fractions.enumerated() {
+                let rect = NSRect(x: index * 10 + 1, y: 1, width: 7, height: 14)
+                NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).stroke()
+                NSRect(x: rect.minX + 1, y: 2, width: 5, height: 12 * fraction).fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        attachment.bounds = NSRect(origin: NSPoint(x: 0, y: -3), size: size)
+        let result = NSMutableAttributedString(string: pins.contains(where: \.stale) ? "AI stale " : "AI ",
+            attributes: titleAttributes)
+        result.append(NSAttributedString(attachment: attachment))
+        return result
     }
 
     /// An SF Symbol drawn inline in the status-item title.

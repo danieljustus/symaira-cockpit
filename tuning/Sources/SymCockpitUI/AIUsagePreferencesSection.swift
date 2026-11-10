@@ -29,11 +29,17 @@ struct AIUsagePreferencesSection: View {
                 .symairaText(.subheading)
                 .foregroundStyle(SymairaTokens.ink)
 
-            Text("Track AI subscription usage per provider. Symbrain owns provider discovery, auth status, and credential resolution; API keys entered here are stored in SymVault, never in config.toml or cockpit's Keychain.")
+            Text("""
+                Track AI subscription usage per provider. Symbrain owns provider discovery, auth status, and credential resolution; \
+                API keys entered here are stored in SymVault, never in config.toml or cockpit's Keychain.
+                """)
                 .symairaText(.caption)
                 .foregroundStyle(SymairaTokens.ink2)
 
-            ForEach(providers, id: \.id) { provider in
+            ForEach(providers.filter {
+                AIUsageVisibility.isVisible(hideUnconfigured: preferences.displayHideUnconfigured,
+                    isEnabled: preferences.isEnabled($0.id), isConfigured: $0.isConfigured)
+            }, id: \.id) { provider in
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle(isOn: binding(for: provider.id)) {
                         HStack(spacing: 6) {
@@ -58,17 +64,7 @@ struct AIUsagePreferencesSection: View {
                 }
             }
 
-            // Display options (issue #361)
-            if preferences.menuBarEnabled {
-                displayOptionsSection
-            }
-
-            Toggle(isOn: $preferences.menuBarEnabled) {
-                Text("Show AI usage in the menu bar")
-                    .symairaText(.body)
-                    .foregroundStyle(SymairaTokens.ink)
-            }
-            .tint(SymairaTokens.selected)
+            displayOptionsSection
 
             HStack {
                 Text("Refresh interval")
@@ -94,7 +90,8 @@ struct AIUsagePreferencesSection: View {
                 .symairaText(.caption)
                 .foregroundStyle(SymairaTokens.ink2)
 
-            Toggle("Pin active provider to menu bar", isOn: $preferences.displayPinnedProvider)
+            AIUsageDisplayControls(preferences: preferences)
+            Toggle("Use first metric when no stars are set", isOn: $preferences.displayPinnedProvider)
                 .tint(SymairaTokens.selected)
             Toggle("Reorder providers by drag", isOn: $preferences.displayAllowReorder)
                 .tint(SymairaTokens.selected)
@@ -123,6 +120,9 @@ struct ProviderCredentialView: View {
                             // "<providerID>-api-key" in the given keychain service —
                             // the same slot convention the previous local field used,
                             // so existing stored keys keep working (issue #42).
+                Text(descriptor.sourceLabel)
+                    .font(.caption)
+                    .padding(.leading, 20)
                 let field = Self.apiKeyField(for: provider.id)
                 SymVaultCredentialField(
                     providerID: provider.id,
@@ -174,6 +174,14 @@ struct ProviderCredentialView: View {
     /// Providers whose credentials are plain API keys stored in the Keychain.
     private static func apiKeyField(for providerID: String) -> (label: String, placeholder: String)? {
         switch providerID {
+        case "zai":
+            return ("Z.ai API key", "")
+        case "devin":
+            return ("Codeium-compatible Devin CLI credential", "")
+        case "grok":
+            return ("Grok access token", "")
+        case "opencode":
+            return ("OpenCode Go API key (optional)", "")
         case "moonshot":
             return ("Moonshot API key", "sk-…")
         case "openrouter":

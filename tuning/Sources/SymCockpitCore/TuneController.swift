@@ -133,7 +133,8 @@ public final class TuneController: Sendable {
         // Sync enabled metrics from config into the history buffers
         metricsHistory.ensureBuffers(for: config.enabledMetrics)
         self.aiUsageService = AIUsageService(
-            client: aiUsageClient ?? SymBrainUsageClient()
+            client: aiUsageClient ?? SymBrainUsageClient(),
+            cache: aiUsageClient == nil ? .persistent : nil
         )
         self.restoreTracker = OverrideTracker(
             displayWrite: self.displayWrite,
@@ -200,11 +201,11 @@ public final class TuneController: Sendable {
     /// Synchronous bridge over the async service: the service bounds every
     /// provider fetch with its own timeout, so this call is guaranteed to
     /// return within (providerTimeout × depth) — never hangs the CLI/MCP.
-    public func aiUsageReport() -> [AIUsageService.ProviderResult] {
+    public func aiUsageReport(providerIDs: Set<String>? = nil, force: Bool = true) -> [AIUsageService.ProviderResult] {
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var results: [AIUsageService.ProviderResult] = []
         Task {
-            results = await aiUsageService.usageAll()
+            results = await aiUsageService.usageAll(providerIDs: providerIDs, force: force)
             semaphore.signal()
         }
         semaphore.wait()

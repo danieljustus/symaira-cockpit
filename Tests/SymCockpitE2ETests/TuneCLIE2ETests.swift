@@ -111,17 +111,23 @@ final class SymCockpitCLIE2ETests: XCTestCase {
     }
 
     func testAIUsageJSONListsProviders() throws {
-        // Hermetic (issue #341): override OPENROUTER_API_KEY to an empty
-        // value so the spawned binary short-circuits to "not configured"
-        // before any Keychain read or network fetch — a machine with a real
-        // key used to make this test perform a live openrouter.ai fetch and
-        // take ~4 minutes.
+        // The subprocess runner also searches managed install locations, so
+        // PATH exclusion alone is not hermetic. A fixture executable wins
+        // resolution without opening any real credential source.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let stub = root.appendingPathComponent("symbrain")
+        try "#!/bin/sh\nprintf '%s\\n' '{\"schema_version\":1,\"providers\":[]}'\n".write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stub.path)
         let output = try runCommand(
             args: ["ai-usage", "--json"],
-            environment: ["OPENROUTER_API_KEY": ""]
+            environment: ["PATH": root.path + ":/usr/bin:/bin", "XDG_CACHE_HOME": root.appendingPathComponent("cache").path,
+                          "XDG_DATA_HOME": root.appendingPathComponent("data").path]
         )
         XCTAssert(output.contains("openrouter"))
         XCTAssert(output.contains("provider_id"))
+        XCTAssert(output.contains("AI usage unavailable."))
     }
 
     // MARK: - Always-JSON read commands (doctor, sensors, battery, displays, permissions)

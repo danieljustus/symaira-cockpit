@@ -94,7 +94,7 @@ final class AIUsageVaultReferenceTests: XCTestCase {
     }
 
     func testSupportedProvidersAreTheOnesThatReceiveAReference() {
-        XCTAssertEqual(Set(SymVaultEntryPaths.supportedProviderIDs), ["openrouter", "moonshot", "kimi"])
+        XCTAssertEqual(Set(SymVaultEntryPaths.supportedProviderIDs), ["openrouter", "moonshot", "kimi", "zai", "devin", "grok", "opencode"])
     }
 
     // MARK: Entry-path normalization
