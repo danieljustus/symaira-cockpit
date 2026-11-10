@@ -15,6 +15,9 @@ let package = Package(
         .executable(name: "symcockpit", targets: ["symcockpit"]),
         // The GUI: one menu-bar item plus a tune-only cockpit window.
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
+        // The optional privileged fan helper (issue #405), embedded in the app
+        // bundle and registered through SMAppService. Never installed on its own.
+        .executable(name: "SymCockpitFanHelper", targets: ["SymCockpitFanHelper"]),
     ],
     dependencies: [
         .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.20.0"),
@@ -41,6 +44,13 @@ let package = Package(
             exclude: ["Info.plist"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
+            ]
+        ),
+        .executableTarget(
+            name: "SymCockpitFanHelper",
+            dependencies: [
+                .product(name: "SymCockpitHelperKit", package: "tuning"),
+                .product(name: "SymCockpitCore", package: "tuning"),
             ]
         ),
         .testTarget(

@@ -10,6 +10,10 @@ let package = Package(
         .library(name: "SymCockpitCore", targets: ["SymCockpitCore"]),
         .library(name: "SymCockpitMCP", targets: ["SymCockpitMCP"]),
         .library(name: "SymCockpitCLI", targets: ["SymCockpitCLI"]),
+        // Shared pieces of the optional privileged fan helper (issue #405):
+        // XPC contract, signing requirements, heartbeat watchdog. The helper
+        // executable itself is a root-package target.
+        .library(name: "SymCockpitHelperKit", targets: ["SymCockpitHelperKit"]),
         .executable(name: "symtune", targets: ["symtune"]),
         .executable(name: "SymCockpitMenuBarApp", targets: ["SymCockpitMenuBarApp"]),
         // The menu-bar UI as a library so symcockpit's GUI can embed the very
@@ -32,6 +36,10 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("IOKit"),
             ]
+        ),
+        .target(
+            name: "SymCockpitHelperKit",
+            dependencies: ["SymCockpitCore"]
         ),
         .target(
             name: "SymCockpitMCP",
@@ -84,6 +92,10 @@ let package = Package(
             name: "SymCockpitCoreTests",
             dependencies: ["SymCockpitCore"],
             resources: [.copy("Fixtures")]
+        ),
+        .testTarget(
+            name: "SymCockpitHelperKitTests",
+            dependencies: ["SymCockpitHelperKit", "SymCockpitCore"]
         ),
         .testTarget(
             name: "SymCockpitMCPTests",
