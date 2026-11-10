@@ -25,6 +25,8 @@ public final class TuneController: Sendable {
     private let fanGovernorRunning: @Sendable () -> Bool
     private let privilegedFanSet: @Sendable (Double) throws -> Void
     private let privilegedFanGovernor: @Sendable (URL) throws -> Void
+    /// Inspects the root-owned `symcockpit` the GUI would elevate, for `doctor`.
+    private let privilegedExecutableStatus: @Sendable () -> PrivilegedElevation.PrivilegedExecutableStatus
     private let privilegeIsRoot: @Sendable () -> Bool
     private let fanProfileURL: URL?
     private let fanHelper: (any FanHelperControlling)?
@@ -61,6 +63,7 @@ public final class TuneController: Sendable {
         privilegedFanSet: (@Sendable (Double) throws -> Void)? = nil,
         privilegedFanGovernor: (@Sendable (URL) throws -> Void)? = nil,
         privilegeIsRoot: (@Sendable () -> Bool)? = nil,
+        privilegedExecutableStatus: (@Sendable () -> PrivilegedElevation.PrivilegedExecutableStatus)? = nil,
         fanProfileURL: URL? = nil,
         fanHelper: (any FanHelperControlling)? = nil
     ) {
@@ -137,6 +140,9 @@ public final class TuneController: Sendable {
             ])
         }
         self.privilegeIsRoot = privilegeIsRoot ?? { PrivilegedElevation.isRunningAsRoot }
+        self.privilegedExecutableStatus = privilegedExecutableStatus ?? {
+            PrivilegedElevation.inspectPrivilegedExecutable()
+        }
         self.fanProfileURL = fanProfileURL
         self.fanHelper = fanHelper
         self.metricsHistory = MetricsHistoryService(capacity: 120)
@@ -1047,6 +1053,7 @@ extension TuneController {
         let smcAvailable = sensors.smcAvailable
         let smcWritable = smc.isAvailable && PrivilegedElevation.isRunningAsRoot
 
+        let privilegedStatus = privilegedExecutableStatus()
         let caps: [Capability] = [
             Capability(id: "sensors.thermalPressure", available: true, tier: "core",
                        detail: "Coarse thermal pressure from ProcessInfo (nominal…critical)."),
@@ -1092,10 +1099,14 @@ extension TuneController {
                             : smcAvailable
                                 ? "Battery charge limiting via SMC. Requires root (run the CLI with `sudo`)."
                                 : "SMC unavailable — charge limiting not possible."),
+            privilegedExecutableCapability(privilegedStatus),
             powerDrawCapability(),
         ]
 
         var recommendations: [String] = []
+        if privilegedStatus.state == .stale || privilegedStatus.state == .unverifiable {
+            recommendations.append(privilegedStatus.detail)
+        }
         if !edrCapable {
             recommendations.append("No EDR-capable display detected; extended brightness will be unavailable here.")
         }
@@ -1115,6 +1126,17 @@ extension TuneController {
             permissions: permissions(),
             recommendations: recommendations,
             credentialSources: aiUsageService.credentialSources()
+        )
+    }
+
+    /// Reports the privileged fan path honestly: the resolved root-owned binary,
+    /// its version, and whether it matches this release. Never elevates.
+    func privilegedExecutableCapability(_ status: PrivilegedElevation.PrivilegedExecutableStatus) -> Capability {
+        Capability(
+            id: "fan.privilegedExecutable",
+            available: status.usable,
+            tier: "core",
+            detail: "[\(status.state.rawValue)] " + status.detail
         )
     }
 

@@ -1,5 +1,6 @@
 @preconcurrency import AppKit
 import SwiftUI
+import SymCockpitCore
 import SymCockpitUI
 
 /// Application delegate for Symaira Cockpit.
@@ -35,6 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("Symaira Cockpit \(CockpitAppVersion.current)")
             return
         }
+
+        // Fan control elevates a root-owned `symcockpit`; refuse one that is
+        // not this release (#409). The tuning package cannot know the version.
+        PrivilegedElevation.setExpectedVersion(CockpitAppVersion.current)
 
         let app = NSApplication.shared
         let delegate = AppDelegate()

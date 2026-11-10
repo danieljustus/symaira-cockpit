@@ -75,9 +75,27 @@ sudo install -o root -g wheel -m 755 "$(brew --prefix)/bin/symcockpit" /usr/loca
 ```
 
 The app prefers this copy for elevation and keeps using the Homebrew one for
-everything else. `brew upgrade` does not touch `/usr/local/bin`, so repeat the
-command after every upgrade — otherwise fan control silently keeps driving the
-older CLI while the rest of the app has moved on.
+everything else. `brew upgrade` does not touch `/usr/local/bin`, so **refresh
+the root-owned copy after every upgrade** by repeating the command above
+(`install` follows Homebrew's symlink, so no `readlink` is needed).
+
+Before it asks for your password, the app runs the root-owned copy
+unprivileged (`version --json`, five-second limit, no network) and compares its
+version with its own. If they differ, or the version cannot be read, fan control
+refuses to elevate and tells you why instead of running older code as root:
+
+```
+refusing to run /usr/local/bin/symcockpit as an administrator: it is
+symcockpit 0.6.1, but this build is 0.10.0, so fan control would run different
+code. Enable the optional fan helper in Preferences, or refresh the root-owned
+copy with `sudo install -m 755 -o root -g wheel "$(brew --prefix)/bin/symcockpit" /usr/local/bin/symcockpit`
+```
+
+`symcockpit doctor` reports the same without elevating: the
+`fan.privilegedExecutable` capability names the resolved root-owned binary, its
+version and whether it matches (`[matching]`, `[stale]`, `[unverifiable]`,
+`[untrusted]` or `[notInstalled]`), and a stale copy is added to the
+recommendations. The optional helper below needs none of this.
 
 ### Optional: the privileged fan helper (no password prompts)
 

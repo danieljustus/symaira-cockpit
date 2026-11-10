@@ -21,6 +21,12 @@ public enum PrivilegedElevation: Sendable {
     public enum ElevationError: Error, Sendable, CustomStringConvertible, Equatable {
         case executableUnavailable
         case untrustedExecutable(String)
+        /// The root-owned copy is trustworthy but reports a different version
+        /// than the host that is about to elevate it (issue #409).
+        case staleExecutable(path: String, found: String, expected: String)
+        /// The root-owned copy's version could not be established, so it is
+        /// not elevated either: an unknown binary is not a matching one.
+        case unverifiableExecutable(path: String, reason: String)
         case cancelledByUser
         case failed(String)
 
@@ -32,11 +38,250 @@ public enum PrivilegedElevation: Sendable {
                     + "`sudo install -o root -g wheel -m 755 \"$(brew --prefix)/bin/symcockpit\" /usr/local/bin/symcockpit`"
             case .untrustedExecutable(let reason):
                 return reason
+            case .staleExecutable(let path, let found, let expected):
+                return "refusing to run \(path) as an administrator: it is symcockpit \(found), but this build is "
+                    + "\(expected), so fan control would run different code. Enable the optional fan helper in "
+                    + "Preferences, or refresh the root-owned copy with `\(PrivilegedElevation.refreshCommand(for: path))`"
+            case .unverifiableExecutable(let path, let reason):
+                return "refusing to run \(path) as an administrator: its version could not be verified "
+                    + "(\(reason)). Enable the optional fan helper in Preferences, or refresh the root-owned copy "
+                    + "with `\(PrivilegedElevation.refreshCommand(for: path))`"
             case .cancelledByUser:
                 return "cancelled — administrator password was not provided"
             case .failed(let message):
                 return message
             }
+        }
+    }
+
+    // MARK: - Expected version (issue #409)
+
+    /// The `symcockpit` release this host ships, injected by the hosts that
+    /// know it (the root `symcockpit` dispatcher and `SymCockpitApp`). This
+    /// package only knows the Tune component version, which is not the shipped
+    /// CLI version, so it cannot guess. While nothing was injected — the
+    /// package-local `symtune` and `SymCockpitMenuBarApp` — the version check
+    /// is skipped rather than compared against a made-up value.
+    private final class ExpectedVersionStore: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: String?
+
+        func get() -> String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+
+        func set(_ newValue: String?) {
+            lock.lock()
+            defer { lock.unlock() }
+            value = newValue
+        }
+    }
+
+    private static let expectedVersionStore = ExpectedVersionStore()
+
+    /// Registers the `symcockpit` version a root-owned copy must report before
+    /// it is elevated. Pass `nil` to clear it.
+    public static func setExpectedVersion(_ version: String?) {
+        let trimmed = version?.trimmingCharacters(in: .whitespacesAndNewlines)
+        expectedVersionStore.set(trimmed?.isEmpty == false ? trimmed : nil)
+    }
+
+    /// The injected expected version, if any.
+    public static var expectedVersion: String? { expectedVersionStore.get() }
+
+    /// How long the unprivileged `version --json` probe may run.
+    static let versionProbeTimeoutSeconds: TimeInterval = 5
+
+    /// The shell command that refreshes the root-owned copy at `path`.
+    /// `install` follows the Homebrew symlink, so the source needs no
+    /// `readlink`; `-m 755 -o root -g wheel` keeps the ownership the
+    /// elevation checks demand.
+    static func refreshCommand(for path: String) -> String {
+        "sudo install -m 755 -o root -g wheel \"$(brew --prefix)/bin/symcockpit\" \(path)"
+    }
+
+    /// What an unprivileged `<path> version --json` probe established.
+    enum VersionProbeOutcome: Sendable, Equatable {
+        case version(String)
+        case unreadable(String)
+    }
+
+    /// Runs one bounded, unprivileged subprocess and returns its result. A
+    /// seam so tests never execute a real binary.
+    typealias VersionProbeRunner = @Sendable (
+        _ executable: String,
+        _ arguments: [String],
+        _ timeoutSeconds: TimeInterval,
+        _ environment: [String: String]
+    ) throws -> BoundedProcessResult
+
+    static let defaultVersionProbeRunner: VersionProbeRunner = { executable, arguments, timeout, environment in
+        try BoundedProcessRunner.run(
+            executable: executable,
+            arguments: arguments,
+            timeoutSeconds: timeout,
+            environment: environment
+        )
+    }
+
+    /// Asks the already-trusted binary at `path` for its version without
+    /// elevation and without touching the network.
+    ///
+    /// The update check is disabled both ways it can be: `--no-update-check`
+    /// and `SYMCOCKPIT_CHECK_UPDATES=0`. Older releases ignore an unknown
+    /// flag, and the environment is scrubbed down to what the probe needs so
+    /// nothing in the caller's environment steers the child.
+    static func probeVersion(
+        of path: String,
+        runner: VersionProbeRunner = defaultVersionProbeRunner
+    ) -> VersionProbeOutcome {
+        let environment = [
+            "PATH": "/usr/bin:/bin",
+            "HOME": NSHomeDirectory(),
+            "SYMCOCKPIT_CHECK_UPDATES": "0",
+        ]
+        let result: BoundedProcessResult
+        do {
+            result = try runner(
+                path,
+                ["version", "--json", "--no-update-check"],
+                versionProbeTimeoutSeconds,
+                environment
+            )
+        } catch {
+            return .unreadable("could not run `version --json`: \(error.localizedDescription)")
+        }
+        if result.timedOut {
+            return .unreadable("`version --json` did not answer within \(Int(versionProbeTimeoutSeconds)) s")
+        }
+        guard result.terminationStatus == 0 else {
+            return .unreadable("`version --json` exited with status \(result.terminationStatus)")
+        }
+        if result.truncated {
+            return .unreadable("`version --json` produced more output than expected")
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any],
+              let version = (object["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !version.isEmpty
+        else {
+            return .unreadable("`version --json` did not print a version")
+        }
+        return .version(version)
+    }
+
+    /// Refuses `path` unless it reports exactly `expected`. A no-op while no
+    /// expected version was injected. The caller must already have validated
+    /// `path` as root-owned: this never relaxes that check.
+    static func requireMatchingVersion(
+        path: String,
+        expected: String?,
+        runner: VersionProbeRunner = defaultVersionProbeRunner
+    ) throws {
+        guard let expected else { return }
+        switch probeVersion(of: path, runner: runner) {
+        case .version(let found):
+            guard found == expected else {
+                throw ElevationError.staleExecutable(path: path, found: found, expected: expected)
+            }
+        case .unreadable(let reason):
+            throw ElevationError.unverifiableExecutable(path: path, reason: reason)
+        }
+    }
+
+    /// The trusted binary, additionally proven to be the release this host
+    /// ships. Every elevation goes through here.
+    static func resolveVerifiedSymCockpit(
+        resolve: () throws -> String = {
+            try BoundedProcessRunner.resolvePrivilegedExecutablePath("symcockpit")
+        },
+        expectedVersion: String? = PrivilegedElevation.expectedVersion,
+        runner: VersionProbeRunner = defaultVersionProbeRunner
+    ) throws -> String {
+        let path = try resolveTrustedSymCockpit(resolve: resolve)
+        try requireMatchingVersion(path: path, expected: expectedVersion, runner: runner)
+        return path
+    }
+
+    /// The state of the privileged fan path, for `doctor`. Never elevates.
+    public struct PrivilegedExecutableStatus: Sendable, Equatable {
+        public enum State: String, Sendable, Equatable {
+            /// Root-owned, and its version equals the expected one.
+            case matching
+            /// Root-owned, but a different version.
+            case stale
+            /// Root-owned and readable, but this host knows no expected version.
+            case unchecked
+            /// Root-owned, but its version could not be established.
+            case unverifiable
+            /// A copy exists but fails the root-ownership checks.
+            case untrusted
+            /// No copy found.
+            case notInstalled
+        }
+
+        public let state: State
+        public let path: String?
+        public let foundVersion: String?
+        public let expectedVersion: String?
+        public let detail: String
+
+        /// True only when elevation would actually go ahead.
+        public var usable: Bool { state == .matching || state == .unchecked }
+    }
+
+    /// Inspects the privileged fan path the same way an elevation would,
+    /// without running anything as root.
+    static func inspectPrivilegedExecutable(
+        resolve: () throws -> String = {
+            try BoundedProcessRunner.resolvePrivilegedExecutablePath("symcockpit")
+        },
+        expectedVersion: String? = PrivilegedElevation.expectedVersion,
+        runner: VersionProbeRunner = defaultVersionProbeRunner
+    ) -> PrivilegedExecutableStatus {
+        let path: String
+        do {
+            path = try resolveTrustedSymCockpit(resolve: resolve)
+        } catch ElevationError.executableUnavailable {
+            return PrivilegedExecutableStatus(
+                state: .notInstalled, path: nil, foundVersion: nil, expectedVersion: expectedVersion,
+                detail: "No root-owned symcockpit found; the administrator-prompt fan path is unavailable. "
+                    + "Install one with `\(refreshCommand(for: "/usr/local/bin/symcockpit"))`, or enable the "
+                    + "optional fan helper."
+            )
+        } catch {
+            return PrivilegedExecutableStatus(
+                state: .untrusted, path: nil, foundVersion: nil, expectedVersion: expectedVersion,
+                detail: "\(error)"
+            )
+        }
+        switch probeVersion(of: path, runner: runner) {
+        case .unreadable(let reason):
+            return PrivilegedExecutableStatus(
+                state: .unverifiable, path: path, foundVersion: nil, expectedVersion: expectedVersion,
+                detail: "Root-owned copy \(path): version could not be verified (\(reason)); it will not be elevated."
+            )
+        case .version(let found):
+            guard let expectedVersion else {
+                return PrivilegedExecutableStatus(
+                    state: .unchecked, path: path, foundVersion: found, expectedVersion: nil,
+                    detail: "Root-owned copy \(path) is \(found); this host does not know its own "
+                        + "release version, so the match was not checked."
+                )
+            }
+            if found == expectedVersion {
+                return PrivilegedExecutableStatus(
+                    state: .matching, path: path, foundVersion: found, expectedVersion: expectedVersion,
+                    detail: "Root-owned copy \(path) is \(found), matching this release (\(expectedVersion))."
+                )
+            }
+            return PrivilegedExecutableStatus(
+                state: .stale, path: path, foundVersion: found, expectedVersion: expectedVersion,
+                detail: "Root-owned copy \(path) is \(found), but this release is \(expectedVersion); "
+                    + "GUI fan control refuses it. Refresh it with `\(refreshCommand(for: path))`, or enable "
+                    + "the optional fan helper."
+            )
         }
     }
 
@@ -83,7 +328,7 @@ public enum PrivilegedElevation: Sendable {
         _ arguments: [String],
         timeoutSeconds: TimeInterval = 120
     ) throws -> Data {
-        let binaryPath = try resolveTrustedSymCockpit()
+        let binaryPath = try resolveVerifiedSymCockpit()
 
         let quotedParts = ([binaryPath] + arguments).map {
             "(quoted form of \(appleScriptStringLiteral($0)))"
@@ -128,7 +373,7 @@ public enum PrivilegedElevation: Sendable {
     /// Arguments are quoted exactly as in `runSymCockpit`; the only unquoted
     /// text is the fixed redirection-and-background suffix assembled here.
     public static func runSymCockpitDetached(_ arguments: [String]) throws {
-        let binaryPath = try resolveTrustedSymCockpit()
+        let binaryPath = try resolveVerifiedSymCockpit()
 
         let quotedParts = ([binaryPath] + arguments).map {
             "(quoted form of \(appleScriptStringLiteral($0)))"

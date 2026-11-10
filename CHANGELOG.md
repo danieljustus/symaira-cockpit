@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+- **GUI fan control no longer elevates a stale root-owned `symcockpit` (#409):**
+  after an upgrade, `/usr/local/bin/symcockpit` stayed at the old release
+  (observed: 0.6.1 next to a 0.10.0 app) and was authenticated into root
+  unchanged. Before the administrator prompt the app now runs the root-owned
+  copy unprivileged (`version --json`, update check off, 5 s limit) and refuses
+  a version that differs from its own, or one it cannot read, naming the path,
+  both versions and the refresh command. `symcockpit doctor` gains the
+  `fan.privilegedExecutable` capability reporting the resolved binary, its
+  version and whether it matches. The root-ownership checks are unchanged.
+
 ## [0.10.0] (2026-11-10)
 
 ### Added

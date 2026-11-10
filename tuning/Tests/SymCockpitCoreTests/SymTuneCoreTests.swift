@@ -27,7 +27,11 @@ final class SafetyPolicyTests: XCTestCase {
 
 final class CapabilityTests: XCTestCase {
     func testCapabilitiesShape() {
-        let report = TuneController().capabilities()
+        let report = TuneController(
+            privilegedExecutableStatus: {
+                .init(state: .notInstalled, path: nil, foundVersion: nil, expectedVersion: nil, detail: "none")
+            }
+        ).capabilities()
         XCTAssertEqual(report.tool, "symcockpit")
         XCTAssertEqual(report.version, TuneVersion.current)
         XCTAssertFalse(report.capabilities.isEmpty)
