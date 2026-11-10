@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Launch daemon for the optional privileged fan helper (issue #405).
+  Registered from the app with SMAppService.daemon(plistName:); embedded by
+  scripts/build-app.sh as Contents/Library/LaunchDaemons/com.symaira.symtune-helper.plist.
+  Label, Mach service and executable name are the grandfathered
+  com.symaira.symtune-helper identity and must not be renamed.
+  There is deliberately no KeepAlive/RunAtLoad: launchd starts the helper on
+  the first XPC lookup. It stays idle (as root, doing nothing) until reboot
+  or unregistration; when the app is gone the governor hands the fans back,
+  but the process itself does not exit.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.symaira.symtune-helper</string>
+    <key>BundleProgram</key>
+    <string>Contents/Library/LaunchServices/com.symaira.symtune-helper</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.symaira.cockpit</string>
+    </array>
+    <key>MachServices</key>
+    <dict>
+        <key>com.symaira.symtune-helper</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

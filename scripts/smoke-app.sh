@@ -41,6 +41,42 @@ EXECUTABLE="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify-app-icon.sh" "$APP_PATH"
 
+# Optional privileged fan helper (issue #405): executable and launchd plist
+# must be embedded where SMAppService.daemon looks for them, and the plist
+# must agree with the grandfathered helper identity.
+HELPER_ID="com.symaira.symtune-helper"
+HELPER_EXECUTABLE="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+HELPER_PLIST="$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+[[ -x "$HELPER_EXECUTABLE" ]] || {
+  printf 'Fan helper executable is missing or not executable: %s\n' "$HELPER_EXECUTABLE" >&2
+  exit 1
+}
+[[ -f "$HELPER_PLIST" ]] || {
+  printf 'Fan helper launchd plist is missing: %s\n' "$HELPER_PLIST" >&2
+  exit 1
+}
+plutil -lint "$HELPER_PLIST" >/dev/null || {
+  printf 'Fan helper launchd plist is malformed: %s\n' "$HELPER_PLIST" >&2
+  exit 1
+}
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :Label' "$HELPER_PLIST")" == "$HELPER_ID" ]] || {
+  printf 'Fan helper plist Label must be %s\n' "$HELPER_ID" >&2
+  exit 1
+}
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$HELPER_PLIST")" == "Contents/Library/LaunchServices/$HELPER_ID" ]] || {
+  printf 'Fan helper plist BundleProgram does not point at the embedded executable.\n' >&2
+  exit 1
+}
+/usr/libexec/PlistBuddy -c "Print :MachServices:$HELPER_ID" "$HELPER_PLIST" >/dev/null 2>&1 || {
+  printf 'Fan helper plist must declare the Mach service %s\n' "$HELPER_ID" >&2
+  exit 1
+}
+HELPER_SIGNATURE=$(codesign --display --verbose=2 "$HELPER_EXECUTABLE" 2>&1 || true)
+grep -q "^Identifier=$HELPER_ID$" <<<"$HELPER_SIGNATURE" || {
+  printf 'Fan helper must be signed with identifier %s\n' "$HELPER_ID" >&2
+  exit 1
+}
+
 THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-corekit_SymairaTheme.bundle/Contents/Resources"
 for resource in GoogleSansFlex.ttf GoogleSansFlex-OFL.txt GoogleSansFlex-TRADEMARKS.md default.metallib; do
   [[ -s "$THEME_RESOURCES/$resource" ]] || {

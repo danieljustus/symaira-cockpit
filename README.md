@@ -79,6 +79,72 @@ everything else. `brew upgrade` does not touch `/usr/local/bin`, so repeat the
 command after every upgrade — otherwise fan control silently keeps driving the
 older CLI while the rest of the app has moved on.
 
+### Optional: the privileged fan helper (no password prompts)
+
+The signed, notarized `Symaira Cockpit.app` can instead register a small
+background helper with macOS (`SMAppService`, label
+`com.symaira.symtune-helper`). Fan changes then need no administrator password
+and no root-owned copy of the CLI, so a `brew upgrade` can no longer leave fan
+control on an older binary.
+
+It is **off by default**. To use it, open Preferences → *Privileged fan helper*
+and switch it on:
+
+1. Symaira Cockpit registers the helper. macOS asks you to approve it once
+   under **System Settings → General → Login Items & Extensions**; the section
+   shows *Waiting for your approval* with an *Open System Settings…* button
+   until you do. While approval is pending, fan control keeps using the
+   administrator prompt above, unchanged.
+2. Once approved, fan changes go to the helper. It runs the same fan governor
+   as the CLI, with the same safety clamps, and never turns off the Mac's own
+   thermal protection.
+
+What it will and will not do:
+
+- The helper and the app each accept only the other: both ends of the XPC
+  connection are pinned to the Developer ID team the release build was made
+  for. That team identifier is baked into the build from the signing
+  certificate and must equal the team in the binary's own signature; a build
+  without it never registers or serves the helper. The helper additionally
+  refuses peers that carry a hardened-runtime escape entitlement.
+- Before registering, Cockpit refuses if the app bundle or the helper
+  executable is writable by anyone but its owner (group/other-writable), is a
+  symlink, or is owned by another user (every path component from the bundle
+  root down to the helper, and again before each start). **Remaining trust
+  assumption:** the helper runs as root from inside `Symaira Cockpit.app`. When
+  you drag the app into `/Applications` it stays owned by you, so malware
+  running as you can modify the bundle, and a modified helper would then run
+  as root once the helper is registered. The pinned team only stops such a
+  swapped helper from *pairing* with the app over XPC; it does not stop it from
+  being executed. macOS App Management protection is the guard against other
+  apps modifying a signed bundle, and it is not a boundary against malware that
+  already runs as you with full disk access. To close the gap, make the bundle
+  root-owned:
+  `sudo chown -R root:wheel '/Applications/Symaira Cockpit.app'`
+  (or keep the helper off).
+- A `fan profile system` (or any `fan profile …`) from the CLI or an MCP
+  client reaches a running helper too: the app compares the stored profile
+  with the helper on every ping and stops or retargets it within about 2 s.
+  The helper itself never reads files. It uses the built-in safety limits only
+  (`SafetyPolicy` defaults); `SYMTUNE_FAN_*` and `config.toml` fan limits apply
+  to the `osascript` path, not to the helper.
+- The app pings the helper every ~2 s. If the pings stop for more than 7 s —
+  the app was force-quit or crashed — the helper hands the fans back to the
+  system curve, and it does the same on SIGTERM or when the connection drops.
+  So the fans return to the system curve a few seconds after the app quits; with
+  the helper on, the stored position is applied again the next time the app
+  starts.
+- It only changes fan profiles. Battery charge limits still use the
+  administrator prompt.
+- Unsigned, ad-hoc or locally built copies never register the helper and
+  always use the `osascript` path, including its root-owned-binary checks.
+
+**Removing it:** switch the toggle off in Preferences. Cockpit hands the fans
+back, unregisters the helper and macOS removes the login-item entry. If the app
+is no longer around, delete `Symaira Cockpit.app` and remove its entry under
+System Settings → General → Login Items & Extensions, or run
+`sudo launchctl bootout system/com.symaira.symtune-helper`.
+
 The CLI, the MCP server, and reading sensors work from any install location.
 Only elevation is restricted, and `sudo symcockpit fan set …` from a terminal
 is unaffected, because there you name the binary yourself.

@@ -6,9 +6,10 @@ import Foundation
 /// never disables firmware thermal protection.
 ///
 /// In the current direct-write model this protocol is not used by the CLI.
-/// It remains as the contract for a future optional helper daemon that runs
-/// with elevated privileges so users do not have to run the whole `symtune`
-/// binary as root.
+/// The optional fan helper (issue #405) does not implement it: its XPC surface
+/// is the narrower `FanHelperXPCProtocol` in `SymCockpitHelperKit`, which
+/// carries a fan *profile* instead of raw values and has no charge-limit
+/// calls. This protocol remains the contract for a possible wider helper.
 ///
 /// The helper is installed/managed via `SMAppService`:
 /// - Bundle identifier: `com.symaira.symtune-helper`

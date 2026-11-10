@@ -5,12 +5,20 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+# No workflow-wide token scope: each job declares exactly what it uses, so the
+# secret-bearing `release` environment jobs cannot write more than they need.
+permissions: {}
+
+# Two pushes of the same tag must not race the release upload or the tap bump.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Build and publish
+    permissions:
+      contents: write # gh release create
     # macOS-only by construction: the cockpit families drive AppKit, IOKit,
     # Accessibility and ScreenCaptureKit. macos-latest rather than a pinned
     # runner because tuning targets Swift 6.4, matching the CI workflow.
@@ -103,6 +111,8 @@ jobs:
     runs-on: macos-26
     environment: release
     needs: release
+    permissions:
+      contents: write # gh release upload / download
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -162,15 +172,30 @@ jobs:
             echo "::error::No Developer ID Application identity found in the configured certificate."
             exit 1
           fi
-          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          # The expected team is read from the certificate itself (subject OU),
+          # never typed in: the app and the fan helper embed it at build time
+          # and will pair with no other team. It is checked again against the
+          # signed bundle below.
+          TEAM_ID=$(security find-certificate -c "$IDENTITY" -p "$KEYCHAIN_PATH" \
+            | openssl x509 -noout -subject -nameopt RFC2253 \
+            | sed -n 's/.*OU=\([0-9A-Z]\{10\}\)\(,.*\)\{0,1\}$/\1/p')
+          if ! [[ "$TEAM_ID" =~ ^[0-9A-Z]{10}$ ]]; then
+            echo "::error::Could not read a ten-character team identifier from the Developer ID certificate."
+            exit 1
+          fi
+          {
+            echo "CODESIGN_IDENTITY=$IDENTITY"
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "EXPECTED_TEAM_ID=$TEAM_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Build universal app bundle
         env:
           CODE_SIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
+          EXPECTED_TEAM_ID: ${{ env.EXPECTED_TEAM_ID }}
         run: |
           set -euo pipefail
-          REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
+          REQUIRE_EMBEDDED_TEAM_ID=true REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
           test -d "build/app/Symaira Cockpit.app"
           REQUIRE_COMPILED_ICON=true ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
 
@@ -200,18 +225,65 @@ jobs:
         run: |
           set -euo pipefail
           strip "build/app/Symaira Cockpit.app/Contents/MacOS/SymCockpitApp"
+          strip "build/app/Symaira Cockpit.app/Contents/Library/LaunchServices/com.symaira.symtune-helper"
 
       - name: Sign and verify app bundle
         run: |
           set -euo pipefail
           APP_PATH="build/app/Symaira Cockpit.app"
+          # The privileged fan helper is signed first, with hardened runtime and
+          # under its own code-signing identifier: the app's XPC requirement
+          # pins exactly this identifier plus the team of this identity.
+          HELPER_ID="com.symaira.symtune-helper"
+          HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+          test -x "$HELPER_PATH"
+          test -f "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+          codesign --force --sign "$CODESIGN_IDENTITY" --identifier "$HELPER_ID" \
+            --timestamp --options runtime "$HELPER_PATH"
           while IFS= read -r -d '' item; do
+            if [ "$item" = "$HELPER_PATH" ]; then
+              continue
+            fi
             if file "$item" | grep -q "Mach-O"; then
               codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$item"
             fi
           done < <(find "$APP_PATH/Contents" -type f -print0)
           codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Verify the fan helper identity and hardened runtime
+        # The helper accepts only the app and the app accepts only the helper,
+        # both pinned to the team embedded at build time (read from the
+        # certificate) *and* to the team of their own signature. Fail the
+        # release rather than ship a pair that would refuse to talk to each
+        # other, a helper without the hardened runtime, or a signature that is
+        # weaker than the requirement the code enforces at runtime. The
+        # requirement strings come from the helper binary itself, so this step
+        # cannot drift from CodeSigningRequirements.
+        run: |
+          set -euo pipefail
+          APP_PATH="build/app/Symaira Cockpit.app"
+          HELPER_ID="com.symaira.symtune-helper"
+          HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+          APP_INFO=$(codesign -dvv "$APP_PATH" 2>&1)
+          HELPER_INFO=$(codesign -dvv "$HELPER_PATH" 2>&1)
+          TEAM=$(sed -n 's/^TeamIdentifier=//p' <<<"$APP_INFO")
+          HELPER_TEAM=$(sed -n 's/^TeamIdentifier=//p' <<<"$HELPER_INFO")
+          if [ -z "$TEAM" ] || [ "$TEAM" != "$HELPER_TEAM" ] || [ "$TEAM" != "$EXPECTED_TEAM_ID" ]; then
+            echo "::error::App team '$TEAM', helper team '$HELPER_TEAM' and the certificate team '$EXPECTED_TEAM_ID' must match and be non-empty."
+            exit 1
+          fi
+          EMBEDDED=$("$HELPER_PATH" --print-embedded-team)
+          if [ "$EMBEDDED" != "$TEAM" ]; then
+            echo "::error::The helper embeds team '$EMBEDDED', but the bundle is signed by '$TEAM'."
+            exit 1
+          fi
+          grep -q "^Identifier=$HELPER_ID$" <<<"$HELPER_INFO"
+          grep -Eq "flags=0x[0-9a-f]+\(.*runtime.*\)" <<<"$HELPER_INFO"
+          HELPER_REQUIREMENT=$("$HELPER_PATH" --print-requirement helper "$TEAM")
+          APP_REQUIREMENT=$("$HELPER_PATH" --print-requirement app "$TEAM")
+          codesign --verify --strict --verbose=2 -R="$HELPER_REQUIREMENT" "$HELPER_PATH"
+          codesign --verify --strict --verbose=2 -R="$APP_REQUIREMENT" "$APP_PATH"
 
       - name: Notarize and staple app
         env:
@@ -351,6 +423,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     needs: release-macos-app
+    # GITHUB_TOKEN only downloads release assets here; the tap is written with
+    # HOMEBREW_TAP_GITHUB_TOKEN.
+    permissions:
+      contents: read
     steps:
       - name: Checkout Homebrew tap
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -474,7 +550,12 @@ jobs:
             --body "Update CLI and GUI from the published Cockpit v${VERSION} assets and their exact SHA-256 checksums.")
           gh pr merge "$pr" --repo danieljustus/homebrew-tap \
             --squash --auto --match-head-commit "$head"
-          for ((attempt = 0; attempt < 60; attempt++)); do
+          # Tap CI can queue for a long time under runner contention; v0.9.0
+          # gave up 7 s before its tap PR merged. Wait up to 45 minutes, then
+          # read the state once more so a just-merged PR is not a failure.
+          deadline=$((SECONDS + 45 * 60))
+          state=""
+          while [ "$SECONDS" -lt "$deadline" ]; do
             state=$(gh pr view "$pr" --repo danieljustus/homebrew-tap --json state --jq .state)
             if [ "$state" = MERGED ]; then
               exit 0
@@ -483,7 +564,11 @@ jobs:
               echo "::error::Homebrew update PR was closed without merging: $pr"
               exit 1
             fi
-            sleep 10
+            sleep 20
           done
-          echo "::error::Homebrew update is still pending required checks: $pr"
+          state=$(gh pr view "$pr" --repo danieljustus/homebrew-tap --json state --jq .state)
+          if [ "$state" = MERGED ]; then
+            exit 0
+          fi
+          echo "::error::Homebrew update PR is still ${state} after 45 minutes: $pr"
           exit 1

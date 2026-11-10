@@ -8,8 +8,15 @@ import SymairaKeychain
 /// other plain-text file. This type exists so the usage axis (which is
 /// out of scope of the provider-UI consolidation, issue #42) keeps its
 /// established API and its headless-safety guarantees without owning any
-/// storage code: the storage itself is `SymairaKeychain`'s
-/// data-protection-keychain implementation.
+/// storage code: the storage itself is `SymairaKeychain`'s file-based
+/// login-keychain implementation.
+///
+/// Cockpit is an unsandboxed Developer ID app (and an unsigned CLI) without a
+/// `keychain-access-groups` entitlement, so the data-protection keychain
+/// rejects every save with `errSecMissingEntitlement` (-34018). The login
+/// keychain protects items with its per-app ACL instead and is also where
+/// items written before the `SymairaKeychain` adapter live, so the legacy
+/// SymVault migration can still find them.
 ///
 /// Task#358/#42 behaviour preserved by the adapter:
 /// - reads are **bounded** (`read(key:timeout:)`): a wedged `securityd`
@@ -34,8 +41,11 @@ public enum KeychainCredentials {
     }
 
     private static func keychain(service: String) -> SymairaKeychain {
-        SymairaKeychain(service: service)
+        SymairaKeychain(service: service, storage: storage)
     }
+
+    /// Storage backend for every Cockpit Keychain item. Exposed for tests.
+    static let storage: SymairaKeychainStorage = .loginKeychain
 
     /// Reads a generic-password item, or `nil` when absent.
     ///

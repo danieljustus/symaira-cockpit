@@ -27,6 +27,7 @@ public final class TuneController: Sendable {
     private let privilegedFanGovernor: @Sendable (URL) throws -> Void
     private let privilegeIsRoot: @Sendable () -> Bool
     private let fanProfileURL: URL?
+    private let fanHelper: (any FanHelperControlling)?
     public let metricsHistory: MetricsHistoryService
 
     public let dataDir: URL
@@ -60,7 +61,8 @@ public final class TuneController: Sendable {
         privilegedFanSet: (@Sendable (Double) throws -> Void)? = nil,
         privilegedFanGovernor: (@Sendable (URL) throws -> Void)? = nil,
         privilegeIsRoot: (@Sendable () -> Bool)? = nil,
-        fanProfileURL: URL? = nil
+        fanProfileURL: URL? = nil,
+        fanHelper: (any FanHelperControlling)? = nil
     ) {
         self.config = config
         self.displayWrite = displayWrite ?? HardwareDisplayWriteService(
@@ -136,6 +138,7 @@ public final class TuneController: Sendable {
         }
         self.privilegeIsRoot = privilegeIsRoot ?? { PrivilegedElevation.isRunningAsRoot }
         self.fanProfileURL = fanProfileURL
+        self.fanHelper = fanHelper
         self.metricsHistory = MetricsHistoryService(capacity: 120)
         // Sync enabled metrics from config into the history buffers
         metricsHistory.ensureBuffers(for: config.enabledMetrics)
@@ -655,8 +658,25 @@ extension TuneController {
     /// benefit. A running governor re-reads the profile file every tick, so
     /// this is what decides whether changing position needs a password
     /// prompt at all.
+    ///
+    /// Also true while the opt-in fan helper governs (#405): its governor is a
+    /// thread inside the helper process, which the command-line match above
+    /// cannot see. Without a helper this is exactly the command-line match.
     public func isFanGovernorRunning() -> Bool {
+        fanGovernorRunning() || isFanHelperGoverning()
+    }
+
+    /// Only a detached `osascript` governor. Used where the question is
+    /// whether a *legacy* governor already follows the stored profile.
+    private func isLegacyFanGovernorRunning() -> Bool {
         fanGovernorRunning()
+    }
+
+    /// True while the helper governs, and for the watchdog window after the
+    /// app lost contact with a governing helper: it keeps writing the SMC until
+    /// its heartbeat watchdog fires, so a legacy governor must not start beside it.
+    private func isFanHelperGoverning() -> Bool {
+        fanHelper?.governorStatus().isGoverningOrMayBe() ?? false
     }
 
     /// Move the fan control to `profile`.
@@ -675,6 +695,31 @@ extension TuneController {
         try fanProfileStore.write(profile)
         logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
 
+        // Optional helper path (issue #405): only when the GUI injected a
+        // helper, the user opted in, and it is registered and approved. Every
+        // other state — including none at all — takes the unchanged path below.
+        if let fanHelper, !privilegeIsRoot(),
+           FanHelperRouting.route(for: fanHelper.availability()) == .helper {
+            if profile == .system {
+                // Best effort: if the connection is gone, the helper's own
+                // heartbeat watchdog restores the firmware curve.
+                do { try fanHelper.stopGovernor() } catch {
+                    logHistory(action: "fan.profile.system", result: "failed", error: error)
+                }
+                return
+            }
+            // A legacy (osascript) governor that is still running already
+            // follows the stored profile; starting a second one would fight it.
+            if isLegacyFanGovernorRunning() { return }
+            do {
+                try fanHelper.startGovernor(profile: profile)
+                return
+            } catch {
+                logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
+                // Fall through to the administrator-prompt path.
+            }
+        }
+
         guard profile != .system, !isFanGovernorRunning() else { return }
 
         guard allowPrivilegeEscalation, !privilegeIsRoot() else { return }
@@ -687,6 +732,64 @@ extension TuneController {
             try? fanProfileStore.write(.system)
             logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
             throw TuneError.permission(error.description)
+        }
+    }
+
+    /// Re-establishes the stored governed profile through the helper, e.g. at
+    /// GUI launch. The helper hands the fans back when the app stops
+    /// heartbeating, so after a relaunch nothing governs until this runs.
+    /// A no-op without an enabled helper, so the legacy detached governor
+    /// (which outlives the app) is never duplicated.
+    public func resumeFanProfileViaHelper() {
+        guard let fanHelper, !privilegeIsRoot(),
+              FanHelperRouting.route(for: fanHelper.availability()) == .helper
+        else { return }
+        let profile = activeFanProfile
+        guard profile != .system, !isFanGovernorRunning() else { return }
+        do {
+            try fanHelper.startGovernor(profile: profile)
+            logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
+        } catch {
+            logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
+        }
+    }
+
+    /// Brings a helper-driven governor back in line with the stored profile.
+    ///
+    /// The legacy governor re-reads `fan-profile.json` every tick, so a CLI or
+    /// MCP `fan profile …` reaches it. The root helper must not read a
+    /// user-writable file, so the app does it: the GUI calls this on every
+    /// helper heartbeat. `system` stops the helper (the UI would otherwise show
+    /// Standard while the fans stay overridden); a different governed position
+    /// retargets it. Never starts a helper governor that is not running — that
+    /// is the user's choice in the app, not something another process may
+    /// trigger. A no-op without an enabled helper.
+    public func reconcileFanProfileWithHelper() {
+        guard let fanHelper, !privilegeIsRoot() else { return }
+        // An unreadable profile file is not `.system`: skip rather than hand
+        // the fans back (or move them) on a guess. The next heartbeat retries.
+        let store = fanProfileStore
+        guard let stored = try? store.readStrict() else { return }
+        let status = fanHelper.governorStatus()
+        guard status.isGoverning else { return }
+        if stored == .system {
+            // The profile may have changed since the read above (the user
+            // picked a governed position meanwhile): re-read right before
+            // acting and leave a changed selection to the next pass.
+            guard (try? store.readStrict()) == stored else { return }
+            do {
+                try fanHelper.stopGovernor()
+                logHistory(action: "fan.profile.system", result: "success")
+            } catch {
+                // Heartbeats stop with the call, so the helper's own watchdog
+                // hands the fans back within seconds regardless.
+                logHistory(action: "fan.profile.system", result: "failed", error: error)
+            }
+        } else if status.profile != stored {
+            guard (try? store.readStrict()) == stored else { return }
+            do { try fanHelper.startGovernor(profile: stored) } catch {
+                logHistory(action: "fan.profile.\(stored.rawValue)", result: "failed", error: error)
+            }
         }
     }
 

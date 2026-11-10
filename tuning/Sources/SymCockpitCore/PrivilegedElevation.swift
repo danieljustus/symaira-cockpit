@@ -11,9 +11,10 @@ import SymCockpitHistory
 /// (and Homebrew's own installer) use for occasional privileged actions
 /// without installing a persistent daemon. Nothing is cached, stored, or
 /// re-used across calls: every invocation pops the system's own password
-/// dialog. ``SMCHelperProtocol`` remains the contract for a future signed XPC
-/// daemon that would avoid the repeated prompt; this is the pragmatic path
-/// available today, and it is deliberately opt-in per call site — CLI and MCP
+/// dialog. The signed app can instead opt in to an `SMAppService` fan helper
+/// (``FanHelperRouting``) that avoids the repeated prompt; this stays the
+/// path for unsigned and local builds and whenever the helper is off, and it
+/// is deliberately opt-in per call site — CLI and MCP
 /// callers never trigger it implicitly, since a blocking GUI password prompt
 /// would hang a headless/agent invocation with no human present to answer it.
 public enum PrivilegedElevation: Sendable {

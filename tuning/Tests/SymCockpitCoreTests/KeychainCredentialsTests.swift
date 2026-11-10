@@ -1,5 +1,6 @@
 import XCTest
 @testable import SymCockpitCore
+import SymairaKeychain
 
 final class KeychainCredentialsTests: XCTestCase {
     private let service = "com.symaira.symtune.test"
@@ -22,11 +23,10 @@ final class KeychainCredentialsTests: XCTestCase {
         }
         let secret = "test-secret-\(UUID().uuidString)"
         let writeResult = KeychainCredentials.write(service: service, account: account, value: secret)
-        // Unsigned test binaries have no keychain-access-groups entitlement;
-        // SymairaKeychain's data-protection writes then fail with -34018.
-        // The verified round-trip runs for real in signed app builds — here
-        // the environment decides, not the code (same pattern as the appkit
-        // SymairaKeychainTests).
+        // The login keychain needs no entitlement, so an interactive session
+        // completes the round-trip. A locked or absent login keychain still
+        // fails the write; then the environment decides, not the code (same
+        // pattern as the appkit SymairaKeychainTests).
         guard writeResult.success else {
             throw XCTSkip("keychain write failed in this environment: \(writeResult.errorMessage ?? "unknown")")
         }
@@ -43,6 +43,12 @@ final class KeychainCredentialsTests: XCTestCase {
 
         XCTAssertTrue(KeychainCredentials.delete(service: service, account: account))
         XCTAssertNil(KeychainCredentials.read(service: service, account: account))
+    }
+
+    /// Cockpit ships without a keychain-access-groups entitlement; the
+    /// data-protection keychain would reject every save with -34018 (#396).
+    func testUsesLoginKeychainStorage() {
+        XCTAssertEqual(KeychainCredentials.storage, .loginKeychain)
     }
 
     func testDeleteIsIdempotent() {

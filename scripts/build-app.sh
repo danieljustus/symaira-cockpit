@@ -13,14 +13,25 @@ set -euo pipefail
 #   UNIVERSAL      1 to build arm64 + x86_64 (default: 1)
 #   OUTPUT_DIR     where the .app lands (default: build/app)
 #   SWIFT_SCRATCH_PATH optional isolated SwiftPM build directory
+#   EXPECTED_TEAM_ID  Apple team identifier (10 upper-case alphanumerics) baked
+#                  into the app and the fan helper as the only team they will
+#                  pair with (issue #405). Release builds derive it from the
+#                  Developer ID certificate. Without it the helper is inert.
+#   REQUIRE_EMBEDDED_TEAM_ID  true to fail when EXPECTED_TEAM_ID is unset
 
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
 REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
+EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-}"
+REQUIRE_EMBEDDED_TEAM_ID="${REQUIRE_EMBEDDED_TEAM_ID:-false}"
 APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
+# Optional privileged fan helper (issue #405): registered by the app through
+# SMAppService.daemon. The identifier is the grandfathered helper identity.
+HELPER_PRODUCT="SymCockpitFanHelper"
+HELPER_ID="com.symaira.symtune-helper"
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -35,6 +46,47 @@ COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)
   printf 'Could not read cockpit version from Sources/SymCockpitVersion/CockpitVersion.swift\n' >&2
   exit 1
 }
+
+# Bake the expected team identifier into the build (fan helper trust root).
+# The committed constant is nil; the literal is rewritten for this build only
+# and the file is restored on exit, so the working tree stays clean.
+EMBED_FILE="$REPO_ROOT/tuning/Sources/SymCockpitHelperKit/EmbeddedTeamIdentifier.swift"
+if [[ -z "$EXPECTED_TEAM_ID" && "$REQUIRE_EMBEDDED_TEAM_ID" == "true" ]]; then
+  printf 'EXPECTED_TEAM_ID is required (REQUIRE_EMBEDDED_TEAM_ID=true).\n' >&2
+  exit 1
+fi
+if [[ -n "$EXPECTED_TEAM_ID" ]]; then
+  [[ "$EXPECTED_TEAM_ID" =~ ^[0-9A-Z]{10}$ ]] || {
+    printf 'EXPECTED_TEAM_ID must be ten upper-case alphanumerics.\n' >&2
+    exit 1
+  }
+  EMBED_BACKUP="$(mktemp)"
+  cp "$EMBED_FILE" "$EMBED_BACKUP"
+  # Restore the tracked file on every exit. A failed restore must fail the
+  # build (not leave a rewritten source file behind unnoticed).
+  restore_embed_file() {
+    local status=$?
+    trap - EXIT
+    if cp "$EMBED_BACKUP" "$EMBED_FILE" && cmp -s "$EMBED_BACKUP" "$EMBED_FILE"; then
+      rm -f "$EMBED_BACKUP"
+    else
+      printf 'Could not restore %s from %s; revert it with git checkout.\n' \
+        "$EMBED_FILE" "$EMBED_BACKUP" >&2
+      [[ $status -ne 0 ]] || status=1
+    fi
+    exit "$status"
+  }
+  trap restore_embed_file EXIT
+  EMBED_TMP="$(mktemp)"
+  sed "s|^\(    public static let value: String? = \).*// EMBEDDED-TEAM-ID\$|\1\"$EXPECTED_TEAM_ID\" // EMBEDDED-TEAM-ID|" \
+    "$EMBED_FILE" > "$EMBED_TMP"
+  cat "$EMBED_TMP" > "$EMBED_FILE"
+  rm -f "$EMBED_TMP"
+  grep -Fq "value: String? = \"$EXPECTED_TEAM_ID\" // EMBEDDED-TEAM-ID" "$EMBED_FILE" || {
+    printf 'Could not embed the team identifier into %s\n' "$EMBED_FILE" >&2
+    exit 1
+  }
+fi
 
 # Use the toolchain's default build system (Swift Build on Xcode 27). The
 # resource gate below rejects an uncompiled .metal source-only bundle.
@@ -54,11 +106,29 @@ BIN_PATH="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/$PRODUCT"
   exit 1
 }
 
+# Same flags, other product (BUILD_ARGS[1] is the product name).
+HELPER_BUILD_ARGS=("${BUILD_ARGS[@]}")
+HELPER_BUILD_ARGS[1]="$HELPER_PRODUCT"
+swift build "${HELPER_BUILD_ARGS[@]}"
+HELPER_BIN_PATH="$(swift build "${HELPER_BUILD_ARGS[@]}" --show-bin-path)/$HELPER_PRODUCT"
+[[ -x "$HELPER_BIN_PATH" ]] || {
+  printf 'Expected helper was not produced: %s\n' "$HELPER_BIN_PATH" >&2
+  exit 1
+}
+
 APP_PATH="$OUTPUT_DIR/$APP_NAME.app"
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+
+# The helper and its launchd plist, in the places SMAppService.daemon expects:
+# the plist under Contents/Library/LaunchDaemons, the executable (named like
+# the Mach service) under Contents/Library/LaunchServices.
+mkdir -p "$APP_PATH/Contents/Library/LaunchServices" "$APP_PATH/Contents/Library/LaunchDaemons"
+cp "$HELPER_BIN_PATH" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+cp "$REPO_ROOT/Sources/$HELPER_PRODUCT/$HELPER_ID.plist" "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+plutil -lint "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist" >/dev/null
 # Bundle.module searches Contents/Resources in an assembled app. Copy every
 # package resource bundle, not just the executable: fonts, shaders and provider
 # descriptors must work after moving the app away from its build directory.
@@ -126,6 +196,16 @@ printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
 #   Certificate Assistant → Create a Certificate…
 #   name: Symaira Dev · type: Code Signing · self-signed
 IDENTITY="${CODE_SIGN_IDENTITY:--}"
+
+# Nested code first: the helper is signed under its own identifier (the one
+# the app's XPC requirement pins) before the bundle seals it. The app only
+# ever registers the helper when it is itself Developer-ID signed, so an
+# ad-hoc or self-signed helper here is inert.
+HELPER_SIGN_ARGS=(--force --sign "$IDENTITY" --identifier "$HELPER_ID" --timestamp=none)
+if [[ "$IDENTITY" != "-" ]]; then
+  HELPER_SIGN_ARGS+=(--options runtime)
+fi
+codesign "${HELPER_SIGN_ARGS[@]}" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none "$APP_PATH"
 
 if [[ "$IDENTITY" == "-" ]]; then

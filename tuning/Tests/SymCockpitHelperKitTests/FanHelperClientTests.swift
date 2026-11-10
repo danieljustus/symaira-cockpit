@@ -1,0 +1,411 @@
+import SymCockpitCore
+import XCTest
+@testable import SymCockpitHelperKit
+
+private final class FakeDaemon: FanHelperDaemonService, @unchecked Sendable {
+    private let lock = NSLock()
+    var state: FanHelperRegistration
+    var stateAfterRegister: FanHelperRegistration?
+    var registerThrows = false
+    private(set) var registerCalls = 0
+    private(set) var unregisterCalls = 0
+    private(set) var settingsOpened = 0
+
+    init(_ state: FanHelperRegistration) { self.state = state }
+
+    var registration: FanHelperRegistration { lock.lock(); defer { lock.unlock() }; return state }
+    func register() throws {
+        lock.lock(); registerCalls += 1
+        if let stateAfterRegister { state = stateAfterRegister }
+        let throwing = registerThrows
+        lock.unlock()
+        if throwing { throw NSError(domain: "SMAppService", code: 1) }
+    }
+    func unregister() throws { lock.lock(); unregisterCalls += 1; state = .notRegistered; lock.unlock() }
+    func openSystemSettings() { lock.lock(); settingsOpened += 1; lock.unlock() }
+}
+
+private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var started: [String] = []
+    private(set) var beats = 0
+    private(set) var stops = 0
+    private(set) var invalidated = false
+    var failHeartbeats = false
+    var failStarts = false
+    var failStops = false
+    /// What the helper answers to a heartbeat: does it still govern?
+    var governing = true
+
+    func startGovernor(profile: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        if failStarts { throw FanHelperTransportError.unreachable("gone") }
+        started.append(profile)
+    }
+    func heartbeat() throws -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        beats += 1
+        if failHeartbeats { throw FanHelperTransportError.unreachable("gone") }
+        return governing
+    }
+    func stopGovernor() throws {
+        lock.lock(); defer { lock.unlock() }
+        stops += 1
+        if failStops { throw FanHelperTransportError.unreachable("gone") }
+    }
+    func invalidate() { lock.lock(); invalidated = true; lock.unlock() }
+    var beatCount: Int { lock.lock(); defer { lock.unlock() }; return beats }
+}
+
+private final class TransportFactory: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var made: [FakeTransport] = []
+    private(set) var teamIDs: [String] = []
+    func make(team: String) -> FakeTransport {
+        lock.lock(); defer { lock.unlock() }
+        let t = FakeTransport(); made.append(t); teamIDs.append(team); return t
+    }
+}
+
+private final class TestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var date = Date(timeIntervalSince1970: 1_000_000)
+    var now: Date { lock.lock(); defer { lock.unlock() }; return date }
+    func advance(_ seconds: TimeInterval) { lock.lock(); date += seconds; lock.unlock() }
+}
+
+private final class MutableBundleProblem: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    var current: String? {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); value = newValue; lock.unlock() }
+    }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    func increment() { lock.lock(); n += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+}
+
+final class FanHelperClientTests: XCTestCase {
+    private let team = "ABCDE12345"
+
+    private func client(
+        daemon: FakeDaemon,
+        signing: FanHelperSigning,
+        optedIn: Bool,
+        factory: TransportFactory,
+        interval: TimeInterval = 0.01,
+        bundleProblem: String? = nil,
+        bundleCheck: (@Sendable () -> String?)? = nil,
+        clock: TestClock? = nil
+    ) -> FanHelperClient {
+        FanHelperClient(
+            daemon: daemon, signing: { signing }, optedIn: { optedIn },
+            heartbeatInterval: interval,
+            bundleCheck: bundleCheck ?? { bundleProblem },
+            now: { clock?.now ?? Date() },
+            makeTransport: { factory.make(team: $0) }
+        )
+    }
+
+    private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 2) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+        return condition()
+    }
+
+    // MARK: - Unsigned / local builds
+
+    func testUnsignedBuildNeverRegistersAndNeverConnects() {
+        let daemon = FakeDaemon(.notRegistered)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .unsigned, optedIn: true, factory: factory)
+        XCTAssertEqual(c.availability(), .unavailable(.unsigned))
+        XCTAssertThrowsError(try c.register())
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort))
+        XCTAssertEqual(daemon.registerCalls, 0)
+        XCTAssertTrue(factory.made.isEmpty)
+    }
+
+    func testOptedOutNeverConnectsEvenWhenRegisteredAndSigned() {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: false, factory: factory)
+        XCTAssertEqual(c.availability(), .off)
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort))
+        XCTAssertTrue(factory.made.isEmpty)
+    }
+
+    // MARK: - Registration
+
+    func testRegisterSurfacesPendingApprovalInsteadOfFailing() throws {
+        let daemon = FakeDaemon(.notRegistered)
+        daemon.stateAfterRegister = .requiresApproval
+        daemon.registerThrows = true // SMAppService throws while approval is pending
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: TransportFactory())
+        XCTAssertEqual(try c.register(), .requiresApproval)
+        c.openSystemSettings()
+        XCTAssertEqual(daemon.settingsOpened, 1)
+    }
+
+    func testRegisterRefusesAWritableBundleBeforeTouchingSMAppService() {
+        let daemon = FakeDaemon(.notRegistered)
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: TransportFactory(), bundleProblem: "The app bundle is writable by other users"
+        )
+        XCTAssertThrowsError(try c.register()) { error in
+            guard case TuneError.permission(let message) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(message.contains("writable"))
+        }
+        XCTAssertEqual(daemon.registerCalls, 0)
+    }
+
+    func testUnregisterIsNotBlockedByAWritableBundle() throws {
+        let daemon = FakeDaemon(.enabled)
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: TransportFactory(), bundleProblem: "writable"
+        )
+        try c.unregister()
+        XCTAssertEqual(daemon.unregisterCalls, 1)
+    }
+
+    func testUnregisterWithNothingRegisteredIsANoOp() throws {
+        let daemon = FakeDaemon(.notRegistered)
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: TransportFactory())
+        try c.unregister()
+        XCTAssertEqual(daemon.unregisterCalls, 0)
+    }
+
+    func testRegisterPropagatesRealFailures() {
+        let daemon = FakeDaemon(.notRegistered)
+        daemon.registerThrows = true
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: TransportFactory())
+        XCTAssertThrowsError(try c.register())
+    }
+
+    func testUnregisterStopsTheGovernorThenRemovesTheDaemon() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        try c.unregister()
+        XCTAssertEqual(factory.made.first?.stops, 1)
+        XCTAssertEqual(daemon.unregisterCalls, 1)
+        XCTAssertTrue(factory.made.first?.invalidated ?? false)
+    }
+
+    // MARK: - Heartbeat
+
+    func testStartingTheGovernorSendsTheProfileAndHeartbeatsUntilStopped() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .performance)
+        let transport = try XCTUnwrap(factory.made.first)
+        XCTAssertEqual(factory.teamIDs, [team])
+        XCTAssertEqual(transport.started, ["performance"])
+        XCTAssertTrue(waitUntil { transport.beatCount >= 3 })
+
+        try c.stopGovernor()
+        let afterStop = transport.beatCount
+        Thread.sleep(forTimeInterval: 0.08)
+        XCTAssertEqual(transport.beatCount, afterStop, "heartbeats must stop with the governor")
+        XCTAssertEqual(transport.stops, 1)
+    }
+
+    func testRetargetingReusesTheConnection() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        try c.startGovernor(profile: .performance)
+        XCTAssertEqual(factory.made.count, 1)
+        XCTAssertEqual(factory.made[0].started, ["comfort", "performance"])
+        try c.stopGovernor()
+    }
+
+    func testFailingHeartbeatDropsTheConnectionAndStopsPinging() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        let transport = try XCTUnwrap(factory.made.first)
+        transport.failHeartbeats = true
+        XCTAssertTrue(waitUntil { transport.invalidated })
+        let beats = transport.beatCount
+        Thread.sleep(forTimeInterval: 0.08)
+        XCTAssertEqual(transport.beatCount, beats)
+
+        // The next fan change reconnects with a fresh transport.
+        try c.startGovernor(profile: .comfort)
+        XCTAssertEqual(factory.made.count, 2)
+        try c.stopGovernor()
+    }
+
+    // MARK: - Governor status (F3) and lost governor (m1)
+
+    func testGovernorStatusFollowsStartStopAndDrop() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        XCTAssertEqual(c.governorStatus(), .idle)
+        try c.startGovernor(profile: .performance)
+        XCTAssertEqual(c.governorStatus(), FanHelperGovernorStatus(isGoverning: true, profile: .performance))
+        try c.stopGovernor()
+        XCTAssertEqual(c.governorStatus(), .idle)
+
+        try c.startGovernor(profile: .comfort)
+        let transport = try XCTUnwrap(factory.made.last)
+        transport.failHeartbeats = true
+        // Unreachable is not stopped: the helper may still govern until its
+        // watchdog fires, so the client keeps saying so for that window.
+        XCTAssertTrue(waitUntil { !c.governorStatus().isGoverning })
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe())
+    }
+
+    func testALostGovernorIsRestartedABoundedNumberOfTimes() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        let transport = try XCTUnwrap(factory.made.first)
+        transport.governing = false // the helper's governor gave up every time
+        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+        XCTAssertEqual(
+            transport.started.count, 1 + FanHelperClient.maxHealAttempts,
+            "one user start plus a bounded number of restarts"
+        )
+        let beats = transport.beatCount
+        Thread.sleep(forTimeInterval: 0.08)
+        XCTAssertEqual(transport.beatCount, beats, "heartbeats stop once the client gives up")
+    }
+
+    func testHeartbeatObserverRunsOnEveryAnsweredBeat() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        let calls = Counter()
+        c.setHeartbeatObserver { calls.increment() }
+        try c.startGovernor(profile: .comfort)
+        XCTAssertTrue(waitUntil { calls.value >= 3 })
+        try c.stopGovernor()
+    }
+
+    func testAnUnreachableHelperSurfacesAsAPermissionError() {
+        let daemon = FakeDaemon(.enabled)
+        let signed = FanHelperSigning.releaseSigned(teamID: team)
+        let c = FanHelperClient(
+            daemon: daemon, signing: { signed }, optedIn: { true },
+            makeTransport: { _ in throw FanHelperTransportError.rejected("not release-signed") }
+        )
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort)) { error in
+            guard case TuneError.permission = error else { return XCTFail("\(error)") }
+        }
+    }
+
+    // MARK: - D4: a helper that lost contact may still be governing
+
+    func testAFailedRetargetKeepsTheHelperCountedAsGoverningForTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        try XCTUnwrap(factory.made.first).failStarts = true
+        XCTAssertThrowsError(try c.startGovernor(profile: .performance))
+
+        let status = c.governorStatus()
+        XCTAssertFalse(status.isGoverning, "the app no longer drives it")
+        XCTAssertTrue(status.isGoverningOrMayBe(at: clock.now), "but the helper may still write the SMC")
+        let deadline = try XCTUnwrap(status.mayStillGovernUntil)
+        XCTAssertEqual(
+            deadline.timeIntervalSince(clock.now), FanHelperClient.watchdogWindow, accuracy: 0.001
+        )
+        XCTAssertGreaterThan(
+            FanHelperClient.watchdogWindow, FanHelperConstants.heartbeatTimeout,
+            "the window must cover the helper's own timeout"
+        )
+
+        clock.advance(FanHelperClient.watchdogWindow - 0.5)
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now), "still inside the window")
+
+        clock.advance(1)
+        let expired = c.governorStatus()
+        XCTAssertEqual(expired, .idle, "after the watchdog window the helper is gone")
+        XCTAssertFalse(expired.isGoverningOrMayBe(at: clock.now))
+    }
+
+    func testAFailedFirstStartIsNotTreatedAsGoverning() {
+        let daemon = FakeDaemon(.enabled)
+        let signed = FanHelperSigning.releaseSigned(teamID: team)
+        // Nothing governed before, so a failure leaves nothing to wait for.
+        let failing = FanHelperClient(
+            daemon: daemon, signing: { signed }, optedIn: { true }, bundleCheck: { nil },
+            makeTransport: { _ in throw FanHelperTransportError.unreachable("down") }
+        )
+        XCTAssertThrowsError(try failing.startGovernor(profile: .comfort))
+        XCTAssertEqual(failing.governorStatus(), .idle)
+        XCTAssertFalse(failing.governorStatus().isGoverningOrMayBe())
+    }
+
+    func testAStartRefusedByTheBundleCheckSendsNothingAndKeepsTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let problem = MutableBundleProblem()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, bundleCheck: { problem.current }, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        XCTAssertEqual(factory.made[0].started, ["comfort"])
+
+        problem.current = "The bundle directory is writable by other users"
+        XCTAssertThrowsError(try c.startGovernor(profile: .performance)) { error in
+            guard case TuneError.permission(let message) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(message.contains("writable"))
+        }
+        XCTAssertEqual(factory.made[0].started, ["comfort"], "nothing was sent to the helper")
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now), "comfort may still be running")
+    }
+
+    func testStartIsRefusedWhenTheBundleBecameWritableAfterRegistering() {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, bundleProblem: "The bundle directory is writable by other users"
+        )
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort))
+        XCTAssertTrue(factory.made.isEmpty, "no connection to the root helper is opened")
+        XCTAssertEqual(c.governorStatus(), .idle)
+    }
+
+    func testAFailedStopKeepsTheWatchdogWindow() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let clock = TestClock()
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: factory, interval: 60, clock: clock
+        )
+        try c.startGovernor(profile: .comfort)
+        try XCTUnwrap(factory.made.first).failStops = true
+        XCTAssertThrowsError(try c.stopGovernor())
+        XCTAssertTrue(c.governorStatus().isGoverningOrMayBe(at: clock.now))
+        clock.advance(FanHelperClient.watchdogWindow + 1)
+        XCTAssertEqual(c.governorStatus(), .idle)
+    }
+}
