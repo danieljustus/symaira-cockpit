@@ -11,7 +11,7 @@ final class CockpitWorkspaceSizingTests: XCTestCase {
         let root = CockpitWorkspaceView(
             version: "test", openPreferences: {}, appearance: CockpitAppearancePreferences(defaults: nil),
             content: {
-                TuneSliderRow(title: "Test", systemImage: "sun.max", value: 0.43, range: 0...1, onCommit: { _ in })
+                TuneSliderRow(title: "Test", icon: .lightMode, value: 0.43, range: 0...1, onCommit: { _ in })
             })
         let window = NSWindow(contentViewController: NSHostingController(rootView: root))
         window.setContentSize(NSSize(width: 1080, height: 760))

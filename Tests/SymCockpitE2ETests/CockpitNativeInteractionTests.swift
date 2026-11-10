@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import SwiftUI
 import SymCockpitCore
+import SymairaTheme
 import SymairaUpdateCheck
 import XCTest
 @testable import SymCockpitUI
@@ -142,7 +143,7 @@ private final class SliderState {
 private struct SliderContent: View {
     let state: SliderState
     var body: some View {
-        TuneSliderRow(title: "Screen Brightness", systemImage: "sun.max.fill", value: state.value,
+        TuneSliderRow(title: "Screen Brightness", icon: .lightMode, value: state.value,
                       range: 0...1, onCommit: { state.value = $0 })
             .cardStyle()
     }

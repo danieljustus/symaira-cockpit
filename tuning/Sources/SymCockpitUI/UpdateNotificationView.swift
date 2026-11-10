@@ -45,7 +45,7 @@ struct UpdateNotificationView: View {
         if case .available(let release) = updateChecker.status {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.circle.fill")
+                    SymairaIconView(.download, size: 20)
                         .foregroundStyle(SymairaTokens.selected)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Update Available")
@@ -93,7 +93,7 @@ struct UpdateNotificationView: View {
                         ProgressView()
                             .scaleEffect(0.7)
                             .controlSize(.small)
-                        Text("Installiere...")
+                        Text("Installiere…")
                             .symairaText(.caption)
                             .foregroundStyle(SymairaTokens.ink2)
                     }

@@ -107,8 +107,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
     private func sidebar(_ scroll: ScrollViewProxy) -> some View {
         VStack(alignment: showsLabels ? .leading : .center, spacing: SymairaSpacing.large) {
             HStack(spacing: SymairaSpacing.small) {
-                Image(systemName: "gauge.with.dots.needle.50percent")
-                    .font(.system(size: 20, weight: .semibold))
+                SymairaIconView(.productCockpit, size: 24)
                     .foregroundStyle(SymairaTokens.ink2)
                     .frame(width: 32, height: 36)
                     .accessibilityHidden(true)
@@ -131,8 +130,7 @@ public struct CockpitWorkspaceView<Content: View>: View {
                 ForEach(TuneWorkspaceAnchor.allCases) { anchor in
                     Button { jump(to: anchor, in: scroll) } label: {
                         HStack(spacing: SymairaSpacing.medium) {
-                            Image(systemName: anchor.symbol)
-                                .font(.system(size: 16, weight: .semibold))
+                            SymairaIconView(symbol: anchor.symbol, size: 20)
                                 .frame(width: 24)
                                 .accessibilityHidden(true)
                             if showsLabels {

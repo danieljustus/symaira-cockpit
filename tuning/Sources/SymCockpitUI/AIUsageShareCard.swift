@@ -15,7 +15,7 @@ struct AIUsageShareCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(row.displayName).font(.title2.bold())
-            if let error = row.error { Text(error).font(.caption).foregroundStyle(.secondary) }
+            if let error = row.error { Text(error).font(SymairaTypography.caption).foregroundStyle(.secondary) }
             ForEach(metrics) { metric in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -27,7 +27,7 @@ struct AIUsageShareCard: View {
                         ProgressView(value: fraction).progressViewStyle(CockpitProgressStyle())
                     }
                     if let reset = metric.reset(absolute: layout.absoluteReset, now: now) {
-                        Text(reset).font(.caption).foregroundStyle(.secondary)
+                        Text(reset).font(SymairaTypography.caption).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -37,7 +37,7 @@ struct AIUsageShareCard: View {
             }
             if let date = row.lastSuccessAt {
                 Text("Updated \(date.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(SymairaTypography.caption).foregroundStyle(.secondary)
             }
             Divider()
             Text("Symaira Cockpit").font(.caption.bold()).frame(maxWidth: .infinity)

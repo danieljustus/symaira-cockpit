@@ -26,7 +26,7 @@ struct KeepAwakeCard: View {
     var body: some View {
         VStack(spacing: SymairaSpacing.small) {
             HStack {
-                Label("Keep Awake", systemImage: active ? "lock.fill" : "lock.open.fill")
+                Label("Keep Awake", symairaIcon: active ? .lock : .unlock, iconSize: 16)
                     .symairaText(.subheading)
                     .foregroundStyle(active ? SymairaTokens.selected : SymairaTokens.ink2)
                 Spacer()

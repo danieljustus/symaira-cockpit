@@ -73,7 +73,7 @@ struct StorageVolumesCard: View {
     private func volumeRow(_ volume: StorageVolumeReport) -> some View {
         VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
             HStack(spacing: SymairaSpacing.small) {
-                Image(systemName: volume.isInternal == true ? "internaldrive" : "externaldrive")
+                SymairaIconView(volume.isInternal == true ? .storage : .device, size: 16)
                     .foregroundStyle(SymairaTokens.selected)
                     .accessibilityHidden(true)
                 Text(volume.name)
@@ -98,7 +98,7 @@ struct StorageVolumesCard: View {
                     .accessibilityLabel("Storage used on \(volume.name)")
                     .accessibilityValue(String(format: "%.0f%%", fraction * 100))
                 if fraction >= 0.9 {
-                    Label("Storage almost full", systemImage: "exclamationmark.triangle")
+                    Label("Storage almost full", symairaIcon: .warning, iconSize: 14)
                         .symairaText(.caption, respectsForeground: false)
                         .foregroundStyle(SymairaTokens.warning)
                 }

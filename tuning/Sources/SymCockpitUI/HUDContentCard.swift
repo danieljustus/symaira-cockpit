@@ -95,8 +95,7 @@ struct HUDContentCard: View {
             && !(kind.metric.map { preferences.enabledMetrics.contains($0) } ?? true)
 
         return HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: kind.symbolName)
-                .symairaText(.caption)
+            SymairaIconView(symbol: kind.symbolName, size: 14)
                 .frame(width: 18)
                 .foregroundStyle(placement.isEnabled ? SymairaTokens.selected : SymairaTokens.ink3)
 

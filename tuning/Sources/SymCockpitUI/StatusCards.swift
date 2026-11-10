@@ -86,8 +86,7 @@ struct LiveSummaryStrip: View {
         tint: Color = SymairaTokens.selected
     ) -> some View {
         HStack(spacing: isExpanded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
-            Image(systemName: symbol)
-                .font(.system(size: isExpanded ? 18 : 9, weight: .semibold))
+            SymairaIconView(symbol: symbol, size: isExpanded ? 24 : 12)
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
@@ -227,7 +226,7 @@ struct SystemStatusCard: View, Equatable {
 
     private var batteryBlock: some View {
         HStack(spacing: 8) {
-            Image(systemName: batteryIcon)
+            SymairaIconView(symbol: batteryIcon, size: 18)
                 .foregroundStyle(SymairaTokens.selected)
             VStack(alignment: .leading, spacing: 1) {
                 Text(batteryState)
@@ -244,7 +243,7 @@ struct SystemStatusCard: View, Equatable {
 
     private var thermalBlock: some View {
         HStack(spacing: 8) {
-            Image(systemName: "gauge.with.needle.fill")
+            SymairaIconView(.temperature, size: 18)
                 .foregroundStyle(SymairaTokens.selected)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {

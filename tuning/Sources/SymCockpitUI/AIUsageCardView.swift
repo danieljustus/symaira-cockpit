@@ -24,11 +24,10 @@ struct AIUsageCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("AI Usage", systemImage: "sparkles").font(.headline)
+                Label("AI Usage", symairaIcon: .ai, iconSize: 16).font(SymairaTypography.subheading)
                 Spacer()
                 Button(customizing ? "Done" : "Customize…") { customizing.toggle() }
-                Button("Refresh", systemImage: "arrow.clockwise") { model.refreshNow() }
-                    .labelStyle(.iconOnly).help("Refresh enabled AI providers")
+                SymairaIconButton("Refresh enabled AI providers", icon: .refresh, size: 16) { model.refreshNow() }
                     .keyboardShortcut("r", modifiers: .command)
                 Menu {
                     Button("Undo customization") { preferences.undoManager.undo() }
@@ -38,7 +37,7 @@ struct AIUsageCardView: View {
                         resetProvider = nil
                         confirmingReset = true
                     }
-                } label: { Image(systemName: "ellipsis") }
+                } label: { SymairaIconView(.more, size: 16) }
                 .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("AI usage actions")
             }
             if customizing {
@@ -54,8 +53,8 @@ struct AIUsageCardView: View {
                     Text("Choose providers in Customize to show usage.").foregroundStyle(.secondary)
                 }
             }
-            if pinNotice { Text("Up to 2 stars per provider. Unstar a metric first.").font(.caption) }
-            if let shareNotice { Text(shareNotice).font(.caption) }
+            if pinNotice { Text("Up to 2 stars per provider. Unstar a metric first.").font(SymairaTypography.caption) }
+            if let shareNotice { Text(shareNotice).font(SymairaTypography.caption) }
         }
         .confirmationDialog("Reset AI usage customization?", isPresented: $confirmingReset) {
             Button("Reset", role: .destructive) { preferences.resetCustomization(providerID: resetProvider) }
@@ -91,12 +90,12 @@ struct AIUsageCardView: View {
     private func providerCard(_ row: AIUsageRow, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(row.displayName).font(.headline)
-                if let source = row.snapshot?.source { Text("via \(source)").font(.caption).foregroundStyle(.secondary) }
+                Text(row.displayName).font(SymairaTypography.subheading)
+                if let source = row.snapshot?.source { Text("via \(source)").font(SymairaTypography.caption).foregroundStyle(.secondary) }
                 Spacer()
                 if row.error != nil {
                     Text(row.isStale ? "Stale cached usage" : (row.recordedHistory != nil ? "Quota source unavailable" : "Source unavailable"))
-                        .font(.caption).foregroundStyle(.orange)
+                        .font(SymairaTypography.caption).foregroundStyle(SymairaTokens.warning)
                 }
             }
             .contentShape(Rectangle())
@@ -114,10 +113,10 @@ struct AIUsageCardView: View {
                 providerMoves(row.id)
             }
             if let error = row.error {
-                Text(error).font(.caption).foregroundStyle(.secondary)
+                Text(error).font(SymairaTypography.caption).foregroundStyle(.secondary)
                 if let date = row.lastSuccessAt {
                     Text("Last success: \(date.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(SymairaTypography.caption).foregroundStyle(.secondary)
                 }
             }
             ForEach(visibleMetrics(row, onDemand: false)) { metric in
@@ -130,17 +129,17 @@ struct AIUsageCardView: View {
                 }
                 HStack {
                     ForEach(AIUsageProviderLink.links(for: row.id)) { link in
-                        Link(link.title, destination: link.url).font(.caption)
+                        Link(link.title, destination: link.url).font(SymairaTypography.caption)
                     }
                 }
             }
             if !visibleMetrics(row, onDemand: true).isEmpty || !AIUsageProviderLink.links(for: row.id).isEmpty {
                 Button(preferences.layout.expanded.contains(row.id) ? "Show less" : "Show on-demand metrics") {
                     toggle(row.id, in: &preferences.layout.expanded)
-                }.font(.caption)
+                }.font(SymairaTypography.caption)
             }
             if let snapshot = row.snapshot {
-                if let empty = AIUsageFormatting.emptySnapshotText(for: snapshot) { Text(empty).font(.caption) }
+                if let empty = AIUsageFormatting.emptySnapshotText(for: snapshot) { Text(empty).font(SymairaTypography.caption) }
             }
             if preferences.consentedHistoryProviders.contains(row.id) {
                 if model.isRefreshing {
@@ -173,7 +172,10 @@ struct AIUsageCardView: View {
             HStack {
                 Text(metric.meter.label)
                 if preferences.layout.pins[row.id]?.contains(metric.id) == true {
-                    Image(systemName: "star.fill").accessibilityLabel("Pinned to menu bar")
+                    SymairaIconView(.favorite, size: 14)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Pinned to menu bar")
+                        .help("Pinned to menu bar")
                 }
                 Spacer()
                 Button {
@@ -193,7 +195,7 @@ struct AIUsageCardView: View {
                     .help("Switch countdown / exact reset time for all metrics")
             }
         }
-        .font(.caption).monospacedDigit()
+        .font(SymairaTypography.caption.monospacedDigit())
         .contentShape(Rectangle())
         .draggable(metric.id)
         .dropDestination(for: String.self) { items, _ in return dropMetric(items, target: metric.id, row: row) }
@@ -218,7 +220,7 @@ struct AIUsageCardView: View {
     private var customization: some View {
         VStack(alignment: .leading, spacing: 10) {
             AIUsageDisplayControls(preferences: preferences)
-            Text(model.localAPI.status).font(.caption).foregroundStyle(.secondary)
+            Text(model.localAPI.status).font(SymairaTypography.caption).foregroundStyle(.secondary)
             Toggle("Allow drag reordering", isOn: $preferences.displayAllowReorder)
             ForEach(preferences.effectiveDisplayOrder(for: model.providers), id: \.self) { id in
                 if let provider = model.providers.first(where: { $0.id == id }) {
@@ -242,7 +244,7 @@ struct AIUsageCardView: View {
                                 metricSection(row, onDemand: true)
                             } else {
                                 Text("Enable the provider and refresh to discover its metrics. Saved customization is retained.")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(SymairaTypography.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -255,9 +257,9 @@ struct AIUsageCardView: View {
     private func metricSection(_ row: AIUsageRow, onDemand: Bool) -> some View {
         let metrics = model.metrics(for: row).filter { preferences.layout.onDemand.contains($0.id) == onDemand }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(onDemand ? "On Demand" : "Always Visible").font(.subheadline)
+            Text(onDemand ? "On Demand" : "Always Visible").font(SymairaTypography.callout)
             ForEach(metrics) { metric in customizationRow(metric, row: row) }
-            if metrics.isEmpty { Text("Drag metrics here").font(.caption).foregroundStyle(.secondary) }
+            if metrics.isEmpty { Text("Drag metrics here").font(SymairaTypography.caption).foregroundStyle(.secondary) }
         }
         .padding(8).frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
@@ -285,7 +287,7 @@ struct AIUsageCardView: View {
                 Toggle("On demand", isOn: metricBinding(metric.id, hidden: false))
             }
         }
-        .font(.caption).padding(.leading, 8)
+        .font(SymairaTypography.caption).padding(.leading, 8)
         .draggable(metric.id)
         .dropDestination(for: String.self) { items, _ in return dropMetric(items, target: metric.id, row: row) }
     }
@@ -304,14 +306,13 @@ struct AIUsageCardView: View {
     private func moveButtons(_ id: String, order: [String], move: @escaping (String, String) -> Void) -> some View {
         let index = order.firstIndex(of: id) ?? 0
         return Group {
-            Button("Move up", systemImage: "arrow.up") {
+            SymairaIconButton("Move up", icon: .collapse, size: 16) {
                 if index > 0 { move(id, order[index - 1]) }
             }.disabled(index == 0)
-            Button("Move down", systemImage: "arrow.down") {
+            SymairaIconButton("Move down", icon: .expand, size: 16) {
                 if index + 1 < order.count { move(order[index + 1], id) }
             }.disabled(index + 1 >= order.count)
         }
-        .labelStyle(.iconOnly)
     }
 
     private func dropProvider(_ items: [String], target: String) -> Bool {
@@ -363,6 +364,6 @@ struct AIUsageDisplayControls: View {
         Toggle("Menu-bar mini-bars (off: text)", isOn: $preferences.layout.bars)
         Toggle("Local usage API (port 6737)", isOn: $preferences.localAPIEnabled)
         Text("Off by default. Other local processes can read enabled providers' usage, never credentials. Browser-origin requests are blocked.")
-            .font(.caption).foregroundStyle(.secondary)
+            .font(SymairaTypography.caption).foregroundStyle(.secondary)
     }
 }

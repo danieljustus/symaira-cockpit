@@ -39,8 +39,7 @@ struct TopProcessesCard: View {
             isExpanded.toggle()
         } label: {
             HStack(spacing: SymairaSpacing.xSmall) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+                SymairaIconView(isExpanded ? .expand : .forward, size: 12)
                     .foregroundStyle(SymairaTokens.ink3)
                 Text("TOP PROCESSES")
                     .symairaText(.sectionLabel)

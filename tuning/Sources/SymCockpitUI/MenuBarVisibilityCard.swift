@@ -103,7 +103,7 @@ struct MenuBarVisibilityCard: View {
         Group {
             if model.statusItemText.isEmpty {
                 HStack(spacing: 4) {
-                    Image(systemName: "slider.horizontal.3")
+                    SymairaIconView(.tune, size: 14)
                     Text("icon only")
                         .symairaText(.caption)
                 }
@@ -130,8 +130,7 @@ struct MenuBarVisibilityCard: View {
         let isVisible = preferences.visibleMetrics.contains(metric)
 
         return HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: metric.statusItemSymbol)
-                .symairaText(.caption)
+            SymairaIconView(symbol: metric.statusItemSymbol, size: 14)
                 .frame(width: 18)
                 .foregroundStyle(isVisible ? SymairaTokens.selected : SymairaTokens.ink3)
 
@@ -176,8 +175,7 @@ struct MenuBarVisibilityCard: View {
 
     private var calendarWeekRow: some View {
         HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: "calendar")
-                .symairaText(.caption)
+            SymairaIconView(.calendar, size: 14)
                 .frame(width: 18)
                 .foregroundStyle(
                     preferences.showCalendarWeek
@@ -208,8 +206,7 @@ struct MenuBarVisibilityCard: View {
 
     private var aiUsageRow: some View {
         HStack(spacing: SymairaSpacing.medium) {
-            Image(systemName: "sparkles")
-                .symairaText(.caption)
+            SymairaIconView(.ai, size: 14)
                 .frame(width: 18)
                 .foregroundStyle(
                     aiUsage.menuBarEnabled && hasEnabledAIProviders
@@ -277,10 +274,7 @@ struct MenuBarVisibilityCard: View {
 
             return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
                 HStack(spacing: SymairaSpacing.medium) {
-                    Image(systemName: readout.surface == .notch && available
-                        ? "rectangle.topthird.inset.filled"
-                        : "menubar.rectangle")
-                        .symairaText(.caption)
+                    SymairaIconView(readout.surface == .notch && available ? .device : .window, size: 14)
                         .frame(width: 18)
                         .foregroundStyle(SymairaTokens.selected)
 
@@ -334,8 +328,7 @@ struct MenuBarVisibilityCard: View {
             let notchAvailable = HUDDockController.isAvailable(dock: .notch)
 
             return HStack(spacing: SymairaSpacing.medium) {
-                Image(systemName: "rectangle.3.group")
-                    .symairaText(.caption)
+                SymairaIconView(.dashboard, size: 14)
                     .frame(width: 18)
                     .foregroundStyle(SymairaTokens.selected)
 

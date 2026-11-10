@@ -1,4 +1,5 @@
 import SwiftUI
+import SymairaTheme
 import SymCockpitCore
 
 /// Same production slider row in the live fan card and passive design preview.
@@ -11,7 +12,7 @@ struct FanProfileSliderRow: View {
     var body: some View {
         TuneSliderRow(
             title: "Fan Profile",
-            systemImage: "fanblades.fill",
+            icon: .fan,
             value: Double(profile.step),
             range: 0...Double(FanProfile.ordered.count - 1),
             isEnabled: isEnabled,

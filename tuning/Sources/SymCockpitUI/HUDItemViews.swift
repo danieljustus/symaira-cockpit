@@ -35,8 +35,7 @@ struct HUDCompactItem: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: item.symbolName)
-                .font(.system(size: 9, weight: SymairaTokens.iconWeight))
+            SymairaIconView(symbol: item.symbolName, size: 12)
                 .foregroundStyle(item.isActive
                     ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
             Text(text)
@@ -74,8 +73,7 @@ struct HUDStackedItem: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Image(systemName: item.symbolName)
-                .font(.system(size: 10, weight: SymairaTokens.iconWeight))
+            SymairaIconView(symbol: item.symbolName, size: 11)
                 .foregroundStyle(item.isActive
                     ? SymairaTheme.accent(for: .dark) : SymairaTheme.foregroundSecondary(for: .dark))
             Text(text)
@@ -101,8 +99,7 @@ struct HUDCardRow: View {
 
     var body: some View {
         HStack(spacing: SymairaSpacing.xSmall) {
-            Image(systemName: item.symbolName)
-                .font(.system(size: 12, weight: SymairaTokens.iconWeight))
+            SymairaIconView(symbol: item.symbolName, size: 16)
                 .frame(width: 16)
                 .foregroundStyle(item.isActive
                     ? SymairaTheme.selected(for: colorScheme) : SymairaTheme.foregroundSecondary(for: colorScheme))
@@ -134,12 +131,12 @@ struct HUDCardActions: View {
     var body: some View {
         HStack(spacing: SymairaSpacing.small) {
             Button(action: openPanel) {
-                Label("Panel", systemImage: "slider.horizontal.3")
+                Label("Panel", symairaIcon: .tune, iconSize: 16)
             }
             .symairaButtonStyle(.secondary)
             .accessibilityIdentifier("hud-open-panel")
             Button(action: openCockpit) {
-                Label(openCockpitTitle, systemImage: "gauge.with.dots.needle.bottom.50percent")
+                Label(openCockpitTitle, symairaIcon: .productCockpit, iconSize: 16)
             }
             .symairaButtonStyle(.primary)
             .accessibilityIdentifier("hud-open-cockpit")

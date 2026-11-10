@@ -158,8 +158,7 @@ struct PreferencesView: View {
     /// below the metrics rather than among them.
     private var calendarWeekRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: "calendar")
-                .symairaText(.caption)
+            SymairaIconView(.calendar, size: 14)
                 .frame(width: 20)
                 .foregroundStyle(
                     manager.showCalendarWeek
@@ -211,8 +210,7 @@ struct PreferencesView: View {
             // Move up/down buttons
             VStack(spacing: 2) {
                 Button(action: { moveMetric(metric, up: true) }, label: {
-                    Image(systemName: "chevron.up")
-                        .symairaText(.caption)
+                    SymairaIconView(.collapse, size: 14)
                         .frame(width: 20, height: 14)
                 })
                 .buttonStyle(.plain)
@@ -222,8 +220,7 @@ struct PreferencesView: View {
                 .foregroundStyle(SymairaTokens.ink2)
 
                 Button(action: { moveMetric(metric, up: false) }, label: {
-                    Image(systemName: "chevron.down")
-                        .symairaText(.caption)
+                    SymairaIconView(.expand, size: 14)
                         .frame(width: 20, height: 14)
                 })
                 .buttonStyle(.plain)
@@ -428,8 +425,7 @@ struct PreferencesView: View {
 
             // Keep the range visible next to the editable value.
             HStack {
-                Image(systemName: "info.circle.fill")
-                    .symairaText(.caption)
+                SymairaIconView(.info, size: 14)
                     .foregroundStyle(SymairaTokens.ink3)
                 Text(refreshIntervalHint)
                     .symairaText(.caption)
@@ -511,8 +507,7 @@ struct PreferencesView: View {
             // Validation stays visible even when the input has scrolled out of view.
             if let message = refreshIntervalError ?? applyMessage {
                 HStack(spacing: 4) {
-                    Image(systemName: applySuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .symairaText(.caption)
+                    SymairaIconView(applySuccess ? .success : .failure, size: 14)
                         .foregroundStyle(applySuccess ? SymairaTokens.positive : SymairaTokens.critical)
                     Text(message)
                         .symairaText(.caption)

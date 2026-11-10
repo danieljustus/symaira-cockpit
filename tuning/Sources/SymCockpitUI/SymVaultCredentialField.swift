@@ -77,8 +77,8 @@ struct SymVaultCredentialField: View {
             }
             if let pathMessage {
                 Text(pathMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                    .font(SymairaTypography.caption)
+                    .foregroundStyle(SymairaTokens.critical)
             }
         }
     }
@@ -101,7 +101,7 @@ struct SymVaultCredentialField: View {
                    + "Saving a Go API key explicitly selects the Cockpit SymVault entry; "
                    + "a failed key never falls back to another credential."
                  : "Using local CLI auth via symbrain. Saving a credential explicitly selects the Cockpit SymVault entry.")
-                .font(.caption)
+                .font(SymairaTypography.caption)
         }
         Text("Cockpit SymVault entry: \(store.reference(for: providerID))")
             .symairaText(.caption)
@@ -114,8 +114,8 @@ struct SymVaultCredentialField: View {
                 .onSubmit(save)
             if saved {
                 Text("Saved")
-                    .foregroundStyle(.green)
-                    .font(.caption)
+                    .foregroundStyle(SymairaTokens.positive)
+                    .font(SymairaTypography.caption)
             } else {
                 Button("Save", action: save)
                     .disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -125,15 +125,15 @@ struct SymVaultCredentialField: View {
         Button("Remove saved credential", role: .destructive) {
             isConfirmingRemoval = true
         }
-        .font(.caption)
+        .font(SymairaTypography.caption)
         .confirmationDialog("Remove saved credential?", isPresented: $isConfirmingRemoval) {
             Button("Remove saved credential", role: .destructive, action: delete)
         }
         if let statusMessage {
             Text(statusMessage)
-                .font(.caption)
+                .font(SymairaTypography.caption)
                 .foregroundStyle(statusMessage.hasPrefix("Saved") || statusMessage.hasPrefix("Migrated")
-                                 || statusMessage.hasPrefix("Removed") ? .green : .red)
+                                 || statusMessage.hasPrefix("Removed") ? SymairaTokens.positive : SymairaTokens.critical)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -121,7 +121,7 @@ struct ProviderCredentialView: View {
                             // the same slot convention the previous local field used,
                             // so existing stored keys keep working (issue #42).
                 Text(descriptor.sourceLabel)
-                    .font(.caption)
+                    .font(SymairaTypography.caption)
                     .padding(.leading, 20)
                 let field = Self.apiKeyField(for: provider.id)
                 SymVaultCredentialField(
@@ -159,7 +159,7 @@ struct ProviderCredentialView: View {
             // No credential descriptor — the provider auto-detects or uses
             // env vars. Show an informational hint.
             HStack {
-                Image(systemName: "info.circle")
+                SymairaIconView(.info, size: 14)
                     .foregroundStyle(SymairaTokens.ink2)
                 Text("\(provider.displayName) auto-detects credentials or reads environment variables.")
                     .symairaText(.caption)
@@ -218,7 +218,7 @@ struct ExternalAuthStateRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: iconName)
+            SymairaIconView(icon, size: 16)
                 .foregroundStyle(iconColor)
                 .frame(width: 16)
 
@@ -229,7 +229,7 @@ struct ExternalAuthStateRow: View {
 
                 if let detail = authState?.detail {
                     Text(detail)
-                        .font(.caption2)
+                        .font(SymairaTypography.caption)
                         .foregroundStyle(SymairaTokens.ink2)
                 }
             }
@@ -240,13 +240,8 @@ struct ExternalAuthStateRow: View {
                 statusBadge(for: state.status)
             }
 
-            Button(action: refresh) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption2)
-                    .foregroundStyle(SymairaTokens.ink2)
-            }
-            .buttonStyle(.borderless)
-            .help("Refresh auth state")
+            SymairaIconButton("Refresh auth state", icon: .refresh, size: 14, action: refresh)
+                .foregroundStyle(SymairaTokens.ink2)
         }
         .padding(.leading, 20)
         .onAppear { refresh() }
@@ -261,21 +256,21 @@ struct ExternalAuthStateRow: View {
         }
     }
 
-    private var iconName: String {
+    private var icon: SymairaIcon {
         switch authState?.status ?? .missing {
-        case .available: return "checkmark.circle.fill"
-        case .missing: return "exclamationmark.circle"
-        case .expired: return "clock.badge.xmark"
-        case .partial: return "exclamationmark.octagon"
+        case .available: return .success
+        case .missing: return .warning
+        case .expired: return .time
+        case .partial: return .error
         }
     }
 
     private var iconColor: Color {
         switch authState?.status ?? .missing {
-        case .available: return Color.green
-        case .missing: return Color.red
-        case .expired: return Color.orange
-        case .partial: return Color.orange
+        case .available: return SymairaTokens.positive
+        case .missing: return SymairaTokens.critical
+        case .expired: return SymairaTokens.warning
+        case .partial: return SymairaTokens.warning
         }
     }
 
@@ -284,16 +279,16 @@ struct ExternalAuthStateRow: View {
         switch status {
         case .available:
             Text("Ready")
-                .font(.caption2).bold()
+                .font(SymairaTypography.micro)
                 .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.green.opacity(0.15), in: Capsule())
-                .foregroundStyle(Color.green)
+                .background(SymairaTokens.positive.opacity(0.15), in: Capsule())
+                .foregroundStyle(SymairaTokens.positive)
         default:
             Text(status == .partial ? "Partial" : (status == .expired ? "Expired" : "Missing"))
-                .font(.caption2).bold()
+                .font(SymairaTypography.micro)
                 .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.red.opacity(0.15), in: Capsule())
-                .foregroundStyle(Color.red)
+                .background(SymairaTokens.critical.opacity(0.15), in: Capsule())
+                .foregroundStyle(SymairaTokens.critical)
         }
     }
 }

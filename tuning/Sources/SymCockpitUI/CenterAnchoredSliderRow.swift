@@ -11,7 +11,7 @@ import SymCockpitCore
 /// rather than as an absolute level.
 struct CenterAnchoredSliderRow: View {
     let title: String
-    let systemImage: String
+    let icon: SymairaIcon
     /// Position reported by the model, in ``BeyondNormalBrightness/positionRange``.
     let position: Double
     /// Labels under the two ends, e.g. "Darker" / "Brighter".
@@ -32,7 +32,7 @@ struct CenterAnchoredSliderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             HStack {
-                Label(title, systemImage: systemImage)
+                Label(title, symairaIcon: icon, iconSize: 14)
                     .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                     .foregroundStyle(SymairaTokens.ink2)
                 Spacer()

@@ -10,7 +10,7 @@ import SymairaTheme
 /// did every few seconds.
 struct TuneSliderRow: View {
     let title: String
-    let systemImage: String
+    let icon: SymairaIcon
     /// Value reported by the model. Adopted whenever it changes externally.
     let value: Double
     let range: ClosedRange<Double>
@@ -40,7 +40,7 @@ struct TuneSliderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.small : SymairaSpacing.xSmall) {
             HStack {
-                Label(title, systemImage: systemImage)
+                Label(title, symairaIcon: icon, iconSize: 14)
                     .symairaText(chrome == .embedded ? .body : .caption, respectsForeground: false)
                     .foregroundStyle(labelColor)
                 Spacer()

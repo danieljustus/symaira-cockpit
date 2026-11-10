@@ -299,15 +299,13 @@ struct MainStatusView: View {
     private func openCockpitRow(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "macwindow")
-                    .font(.system(size: 12))
+                SymairaIconView(.window, size: 16)
                     .foregroundStyle(SymairaTokens.selected)
                 Text(openCockpitTitle)
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.ink)
                 Spacer()
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10))
+                SymairaIconView(.openExternal, size: 14)
                     .foregroundStyle(SymairaTokens.ink3)
             }
             .padding(.horizontal, SymairaSpacing.medium)

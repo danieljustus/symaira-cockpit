@@ -28,7 +28,7 @@ struct DisplayControlsCard: View {
         VStack(alignment: .leading, spacing: chrome == .embedded ? SymairaSpacing.xLarge : SymairaSpacing.small) {
             TuneSliderRow(
                 title: "Screen Brightness",
-                systemImage: "sun.max.fill",
+                icon: .lightMode,
                 value: model.builtinBrightness,
                 range: 0.0...1.0
             ) { value in
@@ -46,7 +46,7 @@ struct DisplayControlsCard: View {
             // and why OS brightness above stays separate.
             CenterAnchoredSliderRow(
                 title: "Beyond Normal",
-                systemImage: "circle.lefthalf.filled",
+                icon: .appearance,
                 position: beyondNormalPosition,
                 minimumLabel: "Darker",
                 maximumLabel: "Brighter",
@@ -66,7 +66,7 @@ struct DisplayControlsCard: View {
 
             TuneSliderRow(
                 title: "Color Warmth",
-                systemImage: "thermometer.sun.fill",
+                icon: .temperature,
                 value: model.warmth,
                 range: 0.0...1.0
             ) { value in
@@ -101,8 +101,7 @@ struct DisplayControlsCard: View {
         var body: some View {
             VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
                 HStack(spacing: SymairaSpacing.medium) {
-                    Image(systemName: "keyboard")
-                        .symairaText(.caption)
+                    SymairaIconView(.keyboard, size: 14)
                         .frame(width: 18)
                         .foregroundStyle(SymairaTokens.selected)
 
@@ -261,7 +260,7 @@ struct FanControlCard: View {
         if hasFans {
             VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                 HStack {
-                    Label("Fan Control", systemImage: "fanblades.fill")
+                    Label("Fan Control", symairaIcon: .fan, iconSize: 16)
                         .symairaText(.subheading)
                         .foregroundStyle(SymairaTokens.ink2)
                     Spacer()
@@ -310,7 +309,7 @@ struct FanControlCard: View {
         } else {
             VStack(spacing: 6) {
                 HStack {
-                    Label("Fan Control", systemImage: "fanblades.fill")
+                    Label("Fan Control", symairaIcon: .fan, iconSize: 16)
                         .symairaText(.subheading)
                         .foregroundStyle(SymairaTokens.ink2)
                     Spacer()

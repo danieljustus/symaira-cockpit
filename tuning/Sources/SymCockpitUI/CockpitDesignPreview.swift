@@ -35,7 +35,7 @@ public struct CockpitDesignPreview: View {
                         .symairaText(.title, respectsForeground: false)
                         .foregroundStyle(SymairaTokens.ink)
                         .cockpitProtected()
-                    Label("PREVIEW · Beispieldaten · Keine Hardwarezugriffe", systemImage: "eye")
+                    Label("PREVIEW · Beispieldaten · Keine Hardwarezugriffe", symairaIcon: .visible, iconSize: 14)
                         .symairaText(.caption, respectsForeground: false)
                         .foregroundStyle(SymairaTokens.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -94,7 +94,7 @@ public struct CockpitDesignPreview: View {
             }
         }
         .alert("Design preview", isPresented: $showsPreviewPreferences) {
-            Button("OK", role: .cancel) { }
+            Button("Dismiss", role: .cancel) { }
         } message: {
             Text("Preferences are available in the running app. This preview writes no settings.")
         }
@@ -131,16 +131,16 @@ public struct CockpitDesignPreview: View {
     private var displayControls: some View {
         VStack(alignment: .leading, spacing: SymairaSpacing.xLarge) {
             TuneSliderRow(
-                title: "Screen Brightness", systemImage: "sun.max.fill",
+                title: "Screen Brightness", icon: .lightMode,
                 value: brightness, range: 0...1, onCommit: { brightness = $0 }
             )
             CenterAnchoredSliderRow(
-                title: "Beyond Normal", systemImage: "circle.lefthalf.filled",
+                title: "Beyond Normal", icon: .appearance,
                 position: beyondNormal, minimumLabel: "Darker", maximumLabel: "Brighter",
                 onCommit: { beyondNormal = $0 }
             )
             TuneSliderRow(
-                title: "Color Warmth", systemImage: "thermometer.sun.fill",
+                title: "Color Warmth", icon: .temperature,
                 value: warmth, range: 0...1, onCommit: { warmth = $0 }
             )
         }
