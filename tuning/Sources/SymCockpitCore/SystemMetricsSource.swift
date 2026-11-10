@@ -58,6 +58,8 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
     public let network: [NetworkInterfaceStatistics]
     /// Live DC-in power draw; nil when the SMC does not expose the keys.
     public let power: PowerReport?
+    /// GPU device utilization; nil when the IORegistry publishes none.
+    public let gpu: GPUReport?
     public let volumes: [StorageVolumeReport]
     public init(
         timestamp: TimeInterval = 0,
@@ -66,6 +68,7 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
         disk: DiskStatistics?,
         network: [NetworkInterfaceStatistics],
         power: PowerReport? = nil,
+        gpu: GPUReport? = nil,
         volumes: [StorageVolumeReport] = []
     ) {
         self.timestamp = timestamp
@@ -74,6 +77,7 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
         self.disk = disk
         self.network = network
         self.power = power
+        self.gpu = gpu
         self.volumes = volumes
     }
     public static let empty = SystemMetricsSnapshot(timestamp: 0, cpu: .init(total: [], perCore: []), memory: .empty, disk: nil, network: [])
@@ -84,13 +88,16 @@ public protocol SystemMetricsSource: Sendable { func readSnapshot() -> SystemMet
 public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
     private let smc: SMCService
     private let batterySource: any BatterySource
+    private let gpu: any GPUUtilizationReading
 
     public init(
         smc: SMCService = SMCService(),
-        batterySource: any BatterySource = HardwareBatterySource()
+        batterySource: any BatterySource = HardwareBatterySource(),
+        gpu: any GPUUtilizationReading = IORegistryGPUReader()
     ) {
         self.smc = smc
         self.batterySource = batterySource
+        self.gpu = gpu
     }
 
     /// The battery's total system load, used when the SMC has no `PSTR`.
@@ -110,6 +117,7 @@ public struct HardwareSystemMetricsSource: SystemMetricsSource, Sendable {
             disk: readDisk(),
             network: readNetwork(),
             power: smc.readSystemPower(systemLoadFallbackMilliwatts: systemLoadFallback),
+            gpu: gpu.readUtilizationPercent().map(GPUReport.init(utilizationPercent:)),
             volumes: StorageVolumeService().read()
         )
     }

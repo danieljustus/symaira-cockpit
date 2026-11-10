@@ -502,6 +502,8 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
     /// Adapter (DC-in) and total system power; absent when neither the SMC nor
     /// the battery exposes any of it.
     public let power: PowerReport?
+    /// GPU device utilization from the IORegistry; absent when not published.
+    public let gpu: GPUReport?
     /// User-visible mounted filesystems; the separate `disk` stays boot-only.
     public let volumes: [StorageVolumeReport]
     public let notes: [String]
@@ -511,6 +513,7 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
         disk: DiskReport?,
         network: NetworkReport,
         power: PowerReport? = nil,
+        gpu: GPUReport? = nil,
         volumes: [StorageVolumeReport] = [],
         notes: [String] = []
     ) {
@@ -519,12 +522,13 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
         self.disk = disk
         self.network = network
         self.power = power
+        self.gpu = gpu
         self.volumes = volumes
         self.notes = notes
     }
 
     private enum CodingKeys: String, CodingKey {
-        case cpu, memory, disk, network, power, volumes, notes
+        case cpu, memory, disk, network, power, gpu, volumes, notes
     }
 
     /// Reports from older versions have no volume list.
@@ -536,6 +540,7 @@ public struct SystemMetricsReport: Codable, Sendable, Equatable {
             disk: try values.decodeIfPresent(DiskReport.self, forKey: .disk),
             network: try values.decode(NetworkReport.self, forKey: .network),
             power: try values.decodeIfPresent(PowerReport.self, forKey: .power),
+            gpu: try values.decodeIfPresent(GPUReport.self, forKey: .gpu),
             volumes: try values.decodeIfPresent([StorageVolumeReport].self, forKey: .volumes) ?? [],
             notes: try values.decode([String].self, forKey: .notes)
         )

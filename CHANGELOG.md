@@ -10,6 +10,12 @@
 - `power.adapter_watts` / `power.adapter_source` label the DC-in adapter input
   explicitly; `PD0R` is the fallback when `PDTR` reads 0 or is absent
   (desktops such as the Mac Studio) (#403).
+- **GPU without root:** `symcockpit metrics` and the MCP `get_system_metrics`
+  tool report GPU device utilization (`gpu.utilization_percent`, absent when
+  the IORegistry publishes none), and `processes --sort gpu` ranks processes by
+  GPU time read from the IORegistry's `AppUsage` counters, sampled twice. The
+  root-only `powermetrics` path stays as the fallback when the registry exposes
+  no `AppUsage`; the process card polls GPU like CPU and RAM (#402).
 
 ### Changed
 - The existing `power.volts`/`amps`/`watts` fields are unchanged and are now

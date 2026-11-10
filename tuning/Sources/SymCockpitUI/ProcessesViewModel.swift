@@ -100,17 +100,23 @@ final class ProcessesViewModel {
     private func sample() async {
         let sort = sortedBy
         if sort == .gpu {
-            // GPU has no cheap, unprivileged sample to poll: powermetrics
-            // refuses to run without root at all. Only the explicit
-            // ``loadGPUUsageWithElevation()`` action populates real data;
-            // this just clears a stale non-GPU report when the tab is first
-            // selected, so the empty state shows instead of leftover rows
-            // under the wrong label. Once a GPU report is already showing
-            // (empty-with-note, or real elevated data), later ticks leave it
-            // alone rather than re-running the in-process (always
-            // unprivileged) sampler and clobbering it every couple seconds.
-            if report.sortedBy != .gpu {
-                report = ProcessUsageReport(sortedBy: .gpu, processes: [], sampledProcessCount: 0, unreadableProcessCount: 0)
+            // The IORegistry source reads GPU time unprivileged, so poll it
+            // like CPU/memory and show any rows it returns. Its absence
+            // (powermetrics fallback, which needs root) comes back as an
+            // empty report: then only the explicit
+            // ``loadGPUUsageWithElevation()`` action populates real data, and
+            // an already-showing GPU report is left alone rather than
+            // clobbered every couple seconds by that empty one. A stale
+            // non-GPU report is still cleared when the tab is first selected.
+            let limit = self.limit
+            let controller = self.controller
+            let fresh = await Task.detached(priority: .utility) {
+                controller.topProcesses(sortedBy: .gpu, limit: limit)
+            }.value
+            if !fresh.processes.isEmpty {
+                if report != fresh { report = fresh }
+            } else if report.sortedBy != .gpu {
+                report = fresh
             }
             return
         }

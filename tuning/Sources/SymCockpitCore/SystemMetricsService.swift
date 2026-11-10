@@ -55,12 +55,14 @@ public final class SystemMetricsService: @unchecked Sendable {
         if current.disk == nil { notes.append("Boot-volume disk metrics unavailable.") }
         if current.network.isEmpty { notes.append("Network metrics unavailable.") }
         if current.power == nil { notes.append("Power unavailable — neither SMC power keys (PSTR, PDTR/PD0R, VD0R/ID0R) nor battery SystemLoad are exposed.") }
+        if current.gpu == nil { notes.append("GPU utilization unavailable — the IORegistry publishes no \"Device Utilization %\".") }
         return SystemMetricsReport(
             cpu: cpu,
             memory: memory,
             disk: disk,
             network: network,
             power: current.power,
+            gpu: current.gpu,
             volumes: current.volumes,
             notes: notes
         )

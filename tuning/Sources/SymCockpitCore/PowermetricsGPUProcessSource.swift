@@ -4,16 +4,22 @@ import SymCockpitHistory
 
 /// Supplies a GPU-ranked process report. Separate from ``ProcessSampleSource``
 /// (libproc's CPU/memory sweep) because GPU data comes from a fundamentally
-/// different, privileged source.
+/// different source.
 public protocol GPUProcessReporting: Sendable {
     func report(limit: Int) -> ProcessUsageReport
+    /// Forget any sampling baseline so the next report starts a fresh one.
+    func resetBaseline()
 }
 
-/// Per-process GPU usage via `powermetrics` — macOS's only public source for
-/// it. There is no libproc/IOKit call for this the way there is for CPU time
-/// and resident memory; Activity Monitor's own "% GPU" column and every
-/// third-party tool that shows one reads it from the same place. Unlike CPU
-/// and memory sampling, this requires root: `powermetrics` refuses to sample
+public extension GPUProcessReporting {
+    func resetBaseline() {}
+}
+
+/// Per-process GPU usage via `powermetrics`: the explicit, root-only fallback
+/// for when the IORegistry exposes no `AppUsage` (see ``DefaultGPUProcessSource``
+/// and ``IORegistryGPUProcessSource``, the unprivileged default). There is no
+/// libproc call for this the way there is for CPU time and resident memory.
+/// Unlike CPU and memory sampling, this requires root: `powermetrics` refuses to sample
 /// anything at all otherwise (confirmed empirically — it exits immediately
 /// with "must be invoked as the superuser", even for a single non-privileged
 /// sampler). Sampling here therefore only ever produces data when this

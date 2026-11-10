@@ -130,7 +130,8 @@ struct MetricsTool: TuneTool {
     let description = """
         Read system metrics: CPU utilization, memory pressure, boot disk usage, \
         mounted storage volumes (names, paths, capacity), network throughput, and \
-        power. The power block separates two quantities: system_watts is the \
+        GPU device utilization percent (gpu.utilization_percent, when the IORegistry publishes it), \
+        and power. The power block separates two quantities: system_watts is the \
         total power the whole Mac consumes (SMC PSTR, else the battery's \
         SystemLoad; also valid on battery), while volts/amps/watts \
         (adapter_watts) are adapter DC-in input only and read ~0 on battery. \
@@ -147,7 +148,7 @@ struct MetricsTool: TuneTool {
 struct TopProcessesTool: TuneTool {
     let name = "get_top_processes"
     let description = """
-        List the processes currently using the most CPU or memory — the answer to \
+        List the processes currently using the most CPU, memory or GPU — the answer to \
         "what is making this Mac hot/slow?". CPU is a rate measured between two \
         samples taken about a second apart. Processes owned by another user (root) \
         are counted in unreadable_process_count but cannot be inspected without \
@@ -160,7 +161,7 @@ struct TopProcessesTool: TuneTool {
             properties: [
                 "sort_by": MCPJSONSchemaProperty(
                     type: "string",
-                    description: "Ranking key: 'cpu' (default) or 'memory'."
+                    description: "Ranking key: 'cpu' (default), 'memory' or 'gpu'."
                 ),
                 "limit": MCPJSONSchemaProperty(
                     type: "integer",
@@ -175,7 +176,7 @@ struct TopProcessesTool: TuneTool {
     func invoke(arguments: [String: MCPJSONValue], controller: TuneController) throws -> any Encodable {
         let sortRaw = arguments["sort_by"]?.stringValue ?? ProcessSortKey.cpu.rawValue
         guard let sort = ProcessSortKey(rawValue: sortRaw.lowercased()) else {
-            throw TuneError.usage("sort_by must be 'cpu' or 'memory'.")
+            throw TuneError.usage("sort_by must be 'cpu', 'memory' or 'gpu'.")
         }
         let limit = arguments["limit"]?.intValue.map(Int.init) ?? ProcessUsageService.defaultLimit
 

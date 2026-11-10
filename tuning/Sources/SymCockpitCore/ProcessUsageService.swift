@@ -117,7 +117,7 @@ public final class ProcessUsageService: @unchecked Sendable {
 
     public init(
         source: any ProcessSampleSource = LibprocProcessSampleSource(),
-        gpuSource: any GPUProcessReporting = PowermetricsGPUProcessSource()
+        gpuSource: any GPUProcessReporting = DefaultGPUProcessSource()
     ) {
         self.source = source
         self.gpuSource = gpuSource
@@ -126,8 +126,8 @@ public final class ProcessUsageService: @unchecked Sendable {
     /// Take a sweep and rank it against the previous one.
     ///
     /// `.gpu` bypasses the libproc sweep entirely and defers to `gpuSource`:
-    /// it is a wholly different, privileged data source with no CPU-time
-    /// baseline to difference against.
+    /// it is a wholly different data source (the IORegistry by default, with
+    /// its own baseline) and has no libproc CPU-time sweep to difference.
     public func report(
         sortedBy: ProcessSortKey = .cpu,
         limit: Int = ProcessUsageService.defaultLimit
@@ -171,5 +171,6 @@ public final class ProcessUsageService: @unchecked Sendable {
         lock.lock()
         previous = nil
         lock.unlock()
+        gpuSource.resetBaseline()
     }
 }

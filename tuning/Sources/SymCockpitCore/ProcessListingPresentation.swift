@@ -45,8 +45,9 @@ public enum ProcessListingPresentation: Sendable {
         "Rank running processes by CPU, memory (RAM), or GPU usage. CPU is a rate,",
         "so the command samples twice --interval seconds apart (default 1.0) before",
         "reporting. Processes owned by another user are counted but not readable",
-        "without elevation. GPU sampling additionally requires root (powermetrics",
-        "refuses to run otherwise) — run this command with sudo to get GPU figures.",
+        "without elevation. GPU time is read from the IORegistry without root;",
+        "only when the registry exposes no per-process GPU usage does the root-only",
+        "powermetrics fallback apply (run this command with sudo then).",
     ]
 
     /// Parse the command's arguments.
@@ -141,7 +142,7 @@ public enum ProcessListingPresentation: Sendable {
         return String(format: "%.1f", percent)
     }
 
-    /// GPU column for one row: `n/a` when powermetrics did not report a
+    /// GPU column for one row: `n/a` when the source did not report a
     /// figure for this process (e.g. it used none this sample).
     static func gpuText(for process: ProcessUsage) -> String {
         guard let percent = process.gpuPercent else { return "n/a" }

@@ -20,6 +20,8 @@ what's available on your machine.
 | `fan.control` | Macs with fans | Macs with fans | Core tier. SMC writes require root — run with `sudo`. Not available on fanless models (MacBook Air). |
 | `battery.chargeLimit` | Apple Silicon notebooks | Some Intel notebooks | Core tier. SMC writes require root — run with `sudo`. The IOKit/SMC keys differ between architectures. |
 | `power.draw.read` | Total (`PSTR`, else battery `SystemLoad`) + DC-in rail | Total (`PSTR`) + DC-in rail | `system_watts` is the whole Mac's consumption (SMC `PSTR`, falling back to `AppleSmartBattery` `PowerTelemetryData.SystemLoad` on laptops) and is valid on battery. `volts`/`amps`/`watts` (also `adapter_watts`) are adapter DC-in input only (`VD0R`/`ID0R`/`PDTR`, `PD0R` when `PDTR` reads 0) and are about 0 on battery. Unprivileged, read-only. Each field is absent on Macs that do not expose its key — `doctor` reports which values are readable. |
+| `gpu.utilization.read` | All Macs with an `IOAccelerator` | All Macs with an `IOAccelerator` | Device utilization percent from the IORegistry's `PerformanceStatistics` (`Device Utilization %`), as `gpu.utilization_percent` in `metrics` / `get_system_metrics`. Unprivileged. The `gpu` block is absent when the registry publishes no value. |
+| `gpu.processes.read` | Apple Silicon (verified on M4 Pro) | Not verified | Per-process GPU share from the `AppUsage` / `accumulatedGPUTime` counters of the accelerator's user clients (`processes --sort gpu`), rated between two samples. Unprivileged. The first sample reports no percentage ("measuring"). Falls back to root-only `powermetrics` when the registry exposes no `AppUsage`. |
 
 ### Tier and status legend
 

@@ -5,9 +5,10 @@ public enum ProcessSortKey: String, Codable, Sendable, CaseIterable {
     case cpu
     case memory
     /// Per-process GPU time. Unlike ``cpu``/``memory``, this cannot be read
-    /// via libproc — macOS exposes it only through `powermetrics`, which
-    /// refuses to run unprivileged. See ``ProcessUsageService`` and
-    /// ``PowermetricsGPUProcessSource``.
+    /// via libproc — it comes from the IORegistry's `AppUsage` counters
+    /// (unprivileged, ``IORegistryGPUProcessSource``) and, only when those are
+    /// not exposed, from `powermetrics`, which needs root
+    /// (``PowermetricsGPUProcessSource``). See ``ProcessUsageService``.
     case gpu
 
     public var displayName: String {
@@ -33,7 +34,7 @@ public struct ProcessUsage: Codable, Equatable, Sendable, Identifiable {
     public let memoryBytes: UInt64
     /// Thread count, when the kernel reported it.
     public let threadCount: Int?
-    /// Share of GPU time powermetrics attributed to this process, as a
+    /// Share of GPU time attributed to this process, as a
     /// percentage of the sample window. `nil` unless this report came from
     /// ``ProcessSortKey/gpu`` sampling — the CPU/memory (libproc) source never
     /// populates it.
@@ -210,7 +211,7 @@ public enum ProcessUsageRanking: Sendable {
             ranked = usages.sorted { $0.memoryBytes > $1.memoryBytes }
         case .gpu:
             // Unreachable via `ProcessUsageService.report`, which routes
-            // `.gpu` to `PowermetricsGPUProcessSource` instead — libproc
+            // `.gpu` to the GPU process source instead — libproc
             // sweeps never populate `gpuPercent`. Handled here anyway so the
             // switch stays exhaustive and behaves sanely if ever called
             // directly with `.gpu`.

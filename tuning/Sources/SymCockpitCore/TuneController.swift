@@ -55,6 +55,7 @@ public final class TuneController: Sendable {
         metricsSource: (any SystemMetricsSource)? = nil,
         aiUsageClient: (any SymBrainUsageClientProtocol)? = nil,
         processSource: (any ProcessSampleSource)? = nil,
+        gpuProcessSource: (any GPUProcessReporting)? = nil,
         fanGovernorRunning: (@Sendable () -> Bool)? = nil,
         privilegedFanSet: (@Sendable (Double) throws -> Void)? = nil,
         privilegedFanGovernor: (@Sendable (URL) throws -> Void)? = nil,
@@ -99,7 +100,10 @@ public final class TuneController: Sendable {
         self.power = PowerService(source: powerSource)
         self.keepAwakeCoordinator = KeepAwakeCoordinator(source: powerSource)
         self.metricsService = SystemMetricsService(source: metricsSource ?? HardwareSystemMetricsSource(smc: smc, batterySource: resolvedBatterySource))
-        self.processUsage = ProcessUsageService(source: processSource ?? LibprocProcessSampleSource())
+        self.processUsage = ProcessUsageService(
+            source: processSource ?? LibprocProcessSampleSource(),
+            gpuSource: gpuProcessSource ?? DefaultGPUProcessSource()
+        )
         self.fanGovernorRunning = fanGovernorRunning ?? {
             guard let result = try? BoundedProcessRunner.run(
                 executable: "/usr/bin/pgrep",
