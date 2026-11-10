@@ -82,6 +82,16 @@ final class PrivilegedElevationRefusalTests: XCTestCase {
         XCTAssertTrue(
             PrivilegedElevation.ElevationError.cancelledByUser.description.contains("cancelled")
         )
+        XCTAssertTrue(
+            PrivilegedElevation.ElevationError
+                .staleExecutable(path: "/usr/local/bin/symcockpit", found: "0.6.1", expected: "0.10.0")
+                .description.contains("0.6.1")
+        )
+        XCTAssertTrue(
+            PrivilegedElevation.ElevationError
+                .unverifiableExecutable(path: "/usr/local/bin/symcockpit", reason: "timeout")
+                .description.contains("timeout")
+        )
         XCTAssertEqual(
             PrivilegedElevation.ElevationError.failed("boom").description,
             "boom"

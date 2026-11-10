@@ -8,6 +8,7 @@
 import Foundation
 import SymCockpitVersion
 import SymCockpitCLI
+import SymCockpitCore
 import SymairaUpdateCheck
 
 let usage = """
@@ -87,6 +88,10 @@ func cockpitVersionJSON(update: CockpitUpdateReport? = nil) async throws -> Stri
     let data = try encoder.encode(report)
     return String(decoding: data, as: UTF8.self)
 }
+
+// The tuning package cannot know the shipped CLI version; tell it, so a stale
+// root-owned copy is refused before elevation and reported by `doctor` (#409).
+PrivilegedElevation.setExpectedVersion(CockpitVersion.current)
 
 let args = Array(CommandLine.arguments.dropFirst())
 
