@@ -42,7 +42,9 @@ final class CockpitNativeInteractionTests: XCTestCase {
         XCTAssertTrue(slider.sendAction(slider.action, to: slider.target))
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(state.value, 0.43)
-        for label in ["Collapse sidebar", "Expand sidebar", "Collapse sidebar", "Expand sidebar"] {
+        let collapse = appKitString("sidebar.toggle.collapse", "Collapse sidebar")
+        let expand = appKitString("sidebar.toggle.expand", "Expand sidebar")
+        for label in [collapse, expand, collapse, expand] {
             try press(label, in: window)
             try await Task.sleep(for: .milliseconds(100))
             let current = try XCTUnwrap(views(window.contentView).compactMap { $0 as? NSSlider }.first)
@@ -105,6 +107,16 @@ final class CockpitNativeInteractionTests: XCTestCase {
             return children.flatMap(walk) + [node]
         }
         return walk(root)
+    }
+
+    /// symaira-corekit (AppKit) localizes its shared controls (English and German), so
+    /// resolve the label from its resource bundle the way SymairaTheme does
+    /// instead of assuming an English host locale.
+    private func appKitString(_ key: String, _ english: String) -> String {
+        let url = Bundle(for: Self.self).bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("symaira-corekit_SymairaTheme.bundle")
+        guard let bundle = Bundle(url: url) else { return english }
+        return bundle.localizedString(forKey: key, value: english, table: nil)
     }
 
     @MainActor
