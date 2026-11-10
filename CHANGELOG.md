@@ -29,6 +29,12 @@
   Developer ID team on both sides; an app heartbeat (2 s) with a 7 s dead-man
   timeout, connection invalidation and SIGTERM hand the fans back to the
   system curve. Unsigned and local builds keep the `osascript` path unchanged.
+  The expected Developer ID team is embedded at build time (read from the
+  signing certificate in `release.yml`) and required on both ends; registration
+  is refused while the bundle or helper is group/other-writable. The app keeps a
+  helper-driven governor in line with the stored fan profile, so CLI/MCP
+  `fan profile system` still ends it, and the card/HUD report the helper's
+  governor as running.
 
 ### Changed
 - The existing `power.volts`/`amps`/`watts` fields are unchanged and are now

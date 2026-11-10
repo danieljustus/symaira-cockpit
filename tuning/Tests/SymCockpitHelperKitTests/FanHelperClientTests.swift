@@ -72,11 +72,13 @@ final class FanHelperClientTests: XCTestCase {
         signing: FanHelperSigning,
         optedIn: Bool,
         factory: TransportFactory,
-        interval: TimeInterval = 0.01
+        interval: TimeInterval = 0.01,
+        bundleProblem: String? = nil
     ) -> FanHelperClient {
         FanHelperClient(
             daemon: daemon, signing: { signing }, optedIn: { optedIn },
             heartbeatInterval: interval,
+            bundleCheck: { bundleProblem },
             makeTransport: { factory.make(team: $0) }
         )
     }
@@ -122,6 +124,36 @@ final class FanHelperClientTests: XCTestCase {
         XCTAssertEqual(try c.register(), .requiresApproval)
         c.openSystemSettings()
         XCTAssertEqual(daemon.settingsOpened, 1)
+    }
+
+    func testRegisterRefusesAWritableBundleBeforeTouchingSMAppService() {
+        let daemon = FakeDaemon(.notRegistered)
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: TransportFactory(), bundleProblem: "The app bundle is writable by other users"
+        )
+        XCTAssertThrowsError(try c.register()) { error in
+            guard case TuneError.permission(let message) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(message.contains("writable"))
+        }
+        XCTAssertEqual(daemon.registerCalls, 0)
+    }
+
+    func testUnregisterIsNotBlockedByAWritableBundle() throws {
+        let daemon = FakeDaemon(.enabled)
+        let c = client(
+            daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true,
+            factory: TransportFactory(), bundleProblem: "writable"
+        )
+        try c.unregister()
+        XCTAssertEqual(daemon.unregisterCalls, 1)
+    }
+
+    func testUnregisterWithNothingRegisteredIsANoOp() throws {
+        let daemon = FakeDaemon(.notRegistered)
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: TransportFactory())
+        try c.unregister()
+        XCTAssertEqual(daemon.unregisterCalls, 0)
     }
 
     func testRegisterPropagatesRealFailures() {

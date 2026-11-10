@@ -58,7 +58,7 @@ public struct SelfCodeRequirementValidator: CodeRequirementValidating {
 }
 
 /// Checks code on disk (e.g. the helper embedded in the app) against a
-/// requirement, strictly and including nested code.
+/// requirement, strictly, for every architecture slice.
 public struct StaticCodeRequirementValidator: Sendable {
     public let url: URL
 

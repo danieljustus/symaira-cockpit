@@ -31,20 +31,31 @@ public enum FanHelperConnectionDecision: Sendable, Equatable {
 
 /// Decides whether this process may take part in a helper connection at all,
 /// and with which peer requirement. Fails closed: a missing or malformed team
-/// identifier, or an own signature that does not itself satisfy the pinned
-/// Developer ID requirement (an ad-hoc or self-signed build claiming a team),
-/// rejects every connection.
+/// identifier, a build without the team identifier embedded at build time, a
+/// runtime-derived team that differs from the embedded one, or an own
+/// signature that does not itself satisfy the pinned Developer ID requirement
+/// (an ad-hoc or self-signed build claiming a team) rejects every connection.
 public enum FanHelperConnectionPolicy {
     public static func decide(
         role: FanHelperPeerRole,
         ownTeamID: String?,
+        embeddedTeamID: String?,
         selfValidator: any CodeRequirementValidating
     ) -> FanHelperConnectionDecision {
+        guard let embeddedTeamID else {
+            return .reject(reason: "this build has no embedded team identifier")
+        }
+        guard CodeSigningRequirements.isValidTeamIdentifier(embeddedTeamID) else {
+            return .reject(reason: "malformed embedded team identifier")
+        }
         guard let ownTeamID else {
             return .reject(reason: "this binary carries no team identifier (unsigned or ad-hoc)")
         }
         guard CodeSigningRequirements.isValidTeamIdentifier(ownTeamID) else {
             return .reject(reason: "malformed team identifier")
+        }
+        guard ownTeamID == embeddedTeamID else {
+            return .reject(reason: "signing team does not match the team embedded at build time")
         }
 
         let peerRequirement: String?
@@ -75,9 +86,13 @@ public enum FanHelperConnectionPolicy {
         _ connection: some XPCRequirementApplying,
         role: FanHelperPeerRole,
         ownTeamID: String?,
+        embeddedTeamID: String?,
         selfValidator: any CodeRequirementValidating
     ) -> Bool {
-        switch decide(role: role, ownTeamID: ownTeamID, selfValidator: selfValidator) {
+        switch decide(
+            role: role, ownTeamID: ownTeamID, embeddedTeamID: embeddedTeamID,
+            selfValidator: selfValidator
+        ) {
         case .accept(let requirement):
             connection.applyCodeSigningRequirement(requirement)
             return true

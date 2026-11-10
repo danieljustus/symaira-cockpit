@@ -76,6 +76,7 @@ final class XPCFanHelperTransport: FanHelperTransport, @unchecked Sendable {
         teamID: String,
         bundledHelper: URL?,
         timeout: TimeInterval = 5,
+        embeddedTeamID: String? = EmbeddedTeamIdentifier.value,
         selfValidator: any CodeRequirementValidating = SelfCodeRequirementValidator()
     ) throws {
         self.timeout = timeout
@@ -94,7 +95,8 @@ final class XPCFanHelperTransport: FanHelperTransport, @unchecked Sendable {
         )
         connection.remoteObjectInterface = NSXPCInterface(with: FanHelperXPCProtocol.self)
         guard FanHelperConnectionPolicy.secure(
-            connection, role: .appAcceptingHelper, ownTeamID: teamID, selfValidator: selfValidator
+            connection, role: .appAcceptingHelper, ownTeamID: teamID,
+            embeddedTeamID: embeddedTeamID, selfValidator: selfValidator
         ) else {
             connection.invalidate()
             throw FanHelperTransportError.rejected("this app is not release-signed")

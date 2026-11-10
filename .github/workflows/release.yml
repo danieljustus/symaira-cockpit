@@ -172,15 +172,30 @@ jobs:
             echo "::error::No Developer ID Application identity found in the configured certificate."
             exit 1
           fi
-          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          # The expected team is read from the certificate itself (subject OU),
+          # never typed in: the app and the fan helper embed it at build time
+          # and will pair with no other team. It is checked again against the
+          # signed bundle below.
+          TEAM_ID=$(security find-certificate -c "$IDENTITY" -p "$KEYCHAIN_PATH" \
+            | openssl x509 -noout -subject -nameopt RFC2253 \
+            | sed -n 's/.*OU=\([0-9A-Z]\{10\}\)\(,.*\)\{0,1\}$/\1/p')
+          if ! [[ "$TEAM_ID" =~ ^[0-9A-Z]{10}$ ]]; then
+            echo "::error::Could not read a ten-character team identifier from the Developer ID certificate."
+            exit 1
+          fi
+          {
+            echo "CODESIGN_IDENTITY=$IDENTITY"
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "EXPECTED_TEAM_ID=$TEAM_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Build universal app bundle
         env:
           CODE_SIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
+          EXPECTED_TEAM_ID: ${{ env.EXPECTED_TEAM_ID }}
         run: |
           set -euo pipefail
-          REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
+          REQUIRE_EMBEDDED_TEAM_ID=true REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
           test -d "build/app/Symaira Cockpit.app"
           REQUIRE_COMPILED_ICON=true ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
 
@@ -237,30 +252,38 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Verify the fan helper identity and hardened runtime
-        # The helper accepts only an app of the same team and the app accepts
-        # only a helper of the same team (derived from the signature at
-        # runtime, never hardcoded). Fail the release rather than ship a pair
-        # that would refuse to talk to each other, or a helper that lacks the
-        # hardened runtime.
+        # The helper accepts only the app and the app accepts only the helper,
+        # both pinned to the team embedded at build time (read from the
+        # certificate) *and* to the team of their own signature. Fail the
+        # release rather than ship a pair that would refuse to talk to each
+        # other, a helper without the hardened runtime, or a signature that is
+        # weaker than the requirement the code enforces at runtime. The
+        # requirement strings come from the helper binary itself, so this step
+        # cannot drift from CodeSigningRequirements.
         run: |
           set -euo pipefail
           APP_PATH="build/app/Symaira Cockpit.app"
           HELPER_ID="com.symaira.symtune-helper"
           HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
-          TEAM=$(codesign -dvv "$APP_PATH" 2>&1 | sed -n 's/^TeamIdentifier=//p')
-          HELPER_TEAM=$(codesign -dvv "$HELPER_PATH" 2>&1 | sed -n 's/^TeamIdentifier=//p')
-          if [ -z "$TEAM" ] || [ "$TEAM" != "$HELPER_TEAM" ]; then
-            echo "::error::App team '$TEAM' and helper team '$HELPER_TEAM' must match and be non-empty."
+          APP_INFO=$(codesign -dvv "$APP_PATH" 2>&1)
+          HELPER_INFO=$(codesign -dvv "$HELPER_PATH" 2>&1)
+          TEAM=$(sed -n 's/^TeamIdentifier=//p' <<<"$APP_INFO")
+          HELPER_TEAM=$(sed -n 's/^TeamIdentifier=//p' <<<"$HELPER_INFO")
+          if [ -z "$TEAM" ] || [ "$TEAM" != "$HELPER_TEAM" ] || [ "$TEAM" != "$EXPECTED_TEAM_ID" ]; then
+            echo "::error::App team '$TEAM', helper team '$HELPER_TEAM' and the certificate team '$EXPECTED_TEAM_ID' must match and be non-empty."
             exit 1
           fi
-          codesign -dvv "$HELPER_PATH" 2>&1 | grep -q "^Identifier=$HELPER_ID$"
-          codesign -dvv "$HELPER_PATH" 2>&1 | grep -Eq "flags=0x[0-9a-f]+\(.*runtime.*\)"
-          codesign --verify --strict --verbose=2 \
-            -R="anchor apple generic and identifier \"$HELPER_ID\" and certificate leaf[subject.OU] = \"$TEAM\"" \
-            "$HELPER_PATH"
-          codesign --verify --strict --verbose=2 \
-            -R="anchor apple generic and identifier \"com.symaira.cockpit\" and certificate leaf[subject.OU] = \"$TEAM\"" \
-            "$APP_PATH"
+          EMBEDDED=$("$HELPER_PATH" --print-embedded-team)
+          if [ "$EMBEDDED" != "$TEAM" ]; then
+            echo "::error::The helper embeds team '$EMBEDDED', but the bundle is signed by '$TEAM'."
+            exit 1
+          fi
+          grep -q "^Identifier=$HELPER_ID$" <<<"$HELPER_INFO"
+          grep -Eq "flags=0x[0-9a-f]+\(.*runtime.*\)" <<<"$HELPER_INFO"
+          HELPER_REQUIREMENT=$("$HELPER_PATH" --print-requirement helper "$TEAM")
+          APP_REQUIREMENT=$("$HELPER_PATH" --print-requirement app "$TEAM")
+          codesign --verify --strict --verbose=2 -R="$HELPER_REQUIREMENT" "$HELPER_PATH"
+          codesign --verify --strict --verbose=2 -R="$APP_REQUIREMENT" "$APP_PATH"
 
       - name: Notarize and staple app
         env:

@@ -49,6 +49,7 @@ final class FanHelperService: NSObject, FanHelperXPCProtocol, @unchecked Sendabl
 public final class FanHelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let engine: FanHelperEngine
     private let ownTeamID: String?
+    private let embeddedTeamID: String?
     private let selfValidator: any CodeRequirementValidating
     private let lock = NSLock()
     private var current: NSXPCConnection?
@@ -56,10 +57,12 @@ public final class FanHelperListenerDelegate: NSObject, NSXPCListenerDelegate, @
     public init(
         engine: FanHelperEngine,
         ownTeamID: String? = CodeSignatureInspector.ownTeamIdentifier(),
+        embeddedTeamID: String? = EmbeddedTeamIdentifier.value,
         selfValidator: any CodeRequirementValidating = SelfCodeRequirementValidator()
     ) {
         self.engine = engine
         self.ownTeamID = ownTeamID
+        self.embeddedTeamID = embeddedTeamID
         self.selfValidator = selfValidator
     }
 
@@ -69,7 +72,7 @@ public final class FanHelperListenerDelegate: NSObject, NSXPCListenerDelegate, @
     ) -> Bool {
         guard FanHelperConnectionPolicy.secure(
             newConnection, role: .helperAcceptingApp,
-            ownTeamID: ownTeamID, selfValidator: selfValidator
+            ownTeamID: ownTeamID, embeddedTeamID: embeddedTeamID, selfValidator: selfValidator
         ) else { return false }
 
         newConnection.exportedInterface = NSXPCInterface(with: FanHelperXPCProtocol.self)

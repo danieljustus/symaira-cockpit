@@ -62,8 +62,11 @@ final class FanHelperPreferences: ObservableObject {
             defaults.set(true, forKey: FanHelperDefaults.enabledKey)
             run("Could not register the helper") { try self.client.register() }
         } else {
-            defaults.set(false, forKey: FanHelperDefaults.enabledKey)
-            run("Could not remove the helper") {
+            // The opt-in is cleared only once the daemon is really gone: a
+            // failed unregister must not leave it registered with the UI off.
+            run("Could not remove the helper", onSuccess: {
+                self.defaults.set(false, forKey: FanHelperDefaults.enabledKey)
+            }) {
                 try self.client.unregister()
                 return self.client.availability()
             }
@@ -75,6 +78,7 @@ final class FanHelperPreferences: ObservableObject {
 
     private func run(
         _ failure: String,
+        onSuccess: (@MainActor () -> Void)? = nil,
         _ work: @escaping @Sendable () throws -> FanHelperAvailability
     ) {
         isWorking = true
@@ -83,8 +87,10 @@ final class FanHelperPreferences: ObservableObject {
             do {
                 let result = try await Task.detached(priority: .userInitiated) { try work() }.value
                 availability = result
+                onSuccess?()
             } catch {
-                message = "\(failure): \(error.localizedDescription)"
+                let detail = "\(failure): \(error.localizedDescription)"
+                message = onSuccess == nil ? detail : detail + " The helper stays registered and the setting stays on."
                 availability = client.availability()
             }
             isWorking = false

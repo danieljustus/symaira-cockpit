@@ -1,3 +1,4 @@
+import SymCockpitCore
 import XCTest
 @testable import SymCockpitHelperKit
 
@@ -75,7 +76,7 @@ final class CodeSigningRequirementsTests: XCTestCase {
         let connection = FakeConnection()
         let seen = SeenBox()
         let accepted = FanHelperConnectionPolicy.secure(
-            connection, role: .helperAcceptingApp, ownTeamID: team,
+            connection, role: .helperAcceptingApp, ownTeamID: team, embeddedTeamID: team,
             selfValidator: FakeValidator(accepts: true, seen: seen)
         )
         XCTAssertTrue(accepted)
@@ -88,7 +89,7 @@ final class CodeSigningRequirementsTests: XCTestCase {
         let connection = FakeConnection()
         let seen = SeenBox()
         let accepted = FanHelperConnectionPolicy.secure(
-            connection, role: .appAcceptingHelper, ownTeamID: team,
+            connection, role: .appAcceptingHelper, ownTeamID: team, embeddedTeamID: team,
             selfValidator: FakeValidator(accepts: true, seen: seen)
         )
         XCTAssertTrue(accepted)
@@ -100,7 +101,7 @@ final class CodeSigningRequirementsTests: XCTestCase {
         let connection = FakeConnection()
         for role in [FanHelperPeerRole.helperAcceptingApp, .appAcceptingHelper] {
             XCTAssertFalse(FanHelperConnectionPolicy.secure(
-                connection, role: role, ownTeamID: nil,
+                connection, role: role, ownTeamID: nil, embeddedTeamID: team,
                 selfValidator: FakeValidator(accepts: true)
             ))
         }
@@ -110,12 +111,12 @@ final class CodeSigningRequirementsTests: XCTestCase {
     func testOwnSignatureThatFailsTheRequirementRejects() {
         let connection = FakeConnection()
         let decision = FanHelperConnectionPolicy.decide(
-            role: .helperAcceptingApp, ownTeamID: team,
+            role: .helperAcceptingApp, ownTeamID: team, embeddedTeamID: team,
             selfValidator: FakeValidator(accepts: false)
         )
         guard case .reject = decision else { return XCTFail("expected reject, got \(decision)") }
         XCTAssertFalse(FanHelperConnectionPolicy.secure(
-            connection, role: .helperAcceptingApp, ownTeamID: team,
+            connection, role: .helperAcceptingApp, ownTeamID: team, embeddedTeamID: team,
             selfValidator: FakeValidator(accepts: false)
         ))
         XCTAssertTrue(connection.applied.isEmpty)
@@ -123,7 +124,7 @@ final class CodeSigningRequirementsTests: XCTestCase {
 
     func testMalformedOwnTeamIdentifierRejects() {
         let decision = FanHelperConnectionPolicy.decide(
-            role: .appAcceptingHelper, ownTeamID: "not-a-team",
+            role: .appAcceptingHelper, ownTeamID: "not-a-team", embeddedTeamID: team,
             selfValidator: FakeValidator(accepts: true)
         )
         guard case .reject = decision else { return XCTFail("expected reject, got \(decision)") }
@@ -134,5 +135,62 @@ final class CodeSigningRequirementsTests: XCTestCase {
         // the real validator must say no rather than throw or crash.
         let requirement = CodeSigningRequirements.appRequirement(teamID: team) ?? ""
         XCTAssertFalse(SelfCodeRequirementValidator().satisfies(requirement: requirement))
+    }
+
+    // MARK: - Embedded team identifier (F4)
+
+    func testBuildWithoutAnEmbeddedTeamNeverServesOrConnects() {
+        let connection = FakeConnection()
+        for role in [FanHelperPeerRole.helperAcceptingApp, .appAcceptingHelper] {
+            XCTAssertFalse(FanHelperConnectionPolicy.secure(
+                connection, role: role, ownTeamID: team, embeddedTeamID: nil,
+                selfValidator: FakeValidator(accepts: true)
+            ), "\(role)")
+        }
+        XCTAssertTrue(connection.applied.isEmpty)
+    }
+
+    func testRuntimeTeamThatDiffersFromTheEmbeddedOneIsRejectedOnBothSides() {
+        let connection = FakeConnection()
+        for role in [FanHelperPeerRole.helperAcceptingApp, .appAcceptingHelper] {
+            let decision = FanHelperConnectionPolicy.decide(
+                role: role, ownTeamID: "ZZZZZ99999", embeddedTeamID: team,
+                selfValidator: FakeValidator(accepts: true)
+            )
+            guard case .reject = decision else { return XCTFail("\(role): \(decision)") }
+            XCTAssertFalse(FanHelperConnectionPolicy.secure(
+                connection, role: role, ownTeamID: "ZZZZZ99999", embeddedTeamID: team,
+                selfValidator: FakeValidator(accepts: true)
+            ))
+        }
+        XCTAssertTrue(connection.applied.isEmpty)
+    }
+
+    func testMalformedEmbeddedTeamIsRejected() {
+        let decision = FanHelperConnectionPolicy.decide(
+            role: .helperAcceptingApp, ownTeamID: team, embeddedTeamID: "abc",
+            selfValidator: FakeValidator(accepts: true)
+        )
+        guard case .reject = decision else { return XCTFail("\(decision)") }
+    }
+
+    /// The committed constant must stay nil: a real team id is written only by
+    /// scripts/build-app.sh from the signing identity, never committed.
+    func testTheCommittedEmbeddedTeamIsNil() {
+        XCTAssertNil(EmbeddedTeamIdentifier.value)
+        XCTAssertNil(FanHelperClient.detectSigning().teamIDForTests)
+    }
+
+    func testDetectSigningNeedsEmbeddedAndMatchingTeam() {
+        XCTAssertEqual(FanHelperClient.detectSigning(embeddedTeamID: nil), .unsigned)
+        XCTAssertEqual(FanHelperClient.detectSigning(embeddedTeamID: team), .unsigned,
+                       "the unsigned test runner has no matching signature")
+    }
+}
+
+private extension FanHelperSigning {
+    var teamIDForTests: String? {
+        if case .releaseSigned(let id) = self { return id }
+        return nil
     }
 }

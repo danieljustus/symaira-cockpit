@@ -13,6 +13,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     private let optedIn: @Sendable () -> Bool
     private let makeTransport: @Sendable (_ teamID: String) throws -> any FanHelperTransport
     private let heartbeatInterval: TimeInterval
+    private let bundleCheck: @Sendable () -> String?
 
     private let lock = NSLock()
     private var transport: (any FanHelperTransport)?
@@ -29,11 +30,19 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
 
     public init(
         daemon: any FanHelperDaemonService = SMAppServiceDaemon(),
-        signing: @escaping @Sendable () -> FanHelperSigning = FanHelperClient.detectSigning,
+        signing: @escaping @Sendable () -> FanHelperSigning = { FanHelperClient.detectSigning() },
         optedIn: @escaping @Sendable () -> Bool = { FanHelperDefaults.isEnabled() },
         heartbeatInterval: TimeInterval = FanHelperConstants.heartbeatInterval,
+        bundleCheck: (@Sendable () -> String?)? = nil,
         makeTransport: (@Sendable (_ teamID: String) throws -> any FanHelperTransport)? = nil
     ) {
+        self.bundleCheck = bundleCheck ?? {
+            BundleTrustCheck.problem(
+                appBundle: Bundle.main.bundleURL,
+                helperExecutable: Bundle.main.bundleURL
+                    .appendingPathComponent(FanHelperConstants.helperBundleProgram)
+            )
+        }
         self.daemon = daemon
         self.signing = signing
         self.optedIn = optedIn
@@ -53,8 +62,15 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// CA with a team identifier *and* satisfies the app requirement for that
     /// team. Local, ad-hoc and self-signed builds are `.unsigned` and never
     /// touch the helper.
-    public static func detectSigning() -> FanHelperSigning {
-        guard let team = CodeSignatureInspector.ownTeamIdentifier(),
+    public static func detectSigning(
+        embeddedTeamID: String? = EmbeddedTeamIdentifier.value
+    ) -> FanHelperSigning {
+        // Both the team read from this binary's signature and the one baked
+        // in at build time must agree; a build without the latter never
+        // registers or serves the helper.
+        guard let embeddedTeamID,
+              let team = CodeSignatureInspector.ownTeamIdentifier(),
+              team == embeddedTeamID,
               let requirement = CodeSigningRequirements.appRequirement(teamID: team),
               SelfCodeRequirementValidator().satisfies(requirement: requirement)
         else { return .unsigned }
@@ -124,6 +140,11 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
                 "the privileged fan helper needs a release-signed Symaira Cockpit build"
             )
         }
+        // The registered helper runs as root from inside this bundle: refuse
+        // while anyone but the owner could swap it (see BundleTrustCheck).
+        if let problem = bundleCheck() {
+            throw TuneError.permission(problem)
+        }
         do { try daemon.register() } catch {
             // `register()` throws when approval is still pending; that state
             // is reported through the status, not as a failure.
@@ -135,7 +156,12 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// Hands the fans back, then unregisters and removes the daemon.
     public func unregister() throws {
         try? stopGovernor()
-        try daemon.unregister()
+        // Nothing registered (never registered, or the bundle moved): there
+        // is nothing to remove, and SMAppService would throw.
+        switch daemon.registration {
+        case .notRegistered, .notFound: return
+        case .enabled, .requiresApproval: try daemon.unregister()
+        }
     }
 
     public func openSystemSettings() { daemon.openSystemSettings() }

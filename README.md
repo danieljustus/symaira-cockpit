@@ -102,9 +102,28 @@ and switch it on:
 What it will and will not do:
 
 - The helper and the app each accept only the other: both ends of the XPC
-  connection are pinned to the app's Developer ID team, derived from the
-  signature at runtime, and the helper additionally refuses peers that carry a
-  hardened-runtime escape entitlement.
+  connection are pinned to the Developer ID team the release build was made
+  for. That team identifier is baked into the build from the signing
+  certificate and must equal the team in the binary's own signature; a build
+  without it never registers or serves the helper. The helper additionally
+  refuses peers that carry a hardened-runtime escape entitlement.
+- Before registering, Cockpit refuses if the app bundle or the helper
+  executable is writable by anyone but its owner (group/other-writable), is a
+  symlink, or is owned by another user. **Remaining trust assumption:** the
+  helper runs as root from inside `Symaira Cockpit.app`. When you drag the app
+  into `/Applications` it stays owned by you, so a process running as you could
+  in principle rewrite it. The pinned team makes a swapped helper from another
+  Developer ID useless and macOS App Management protection guards signed apps
+  against modification by other apps, but neither is a boundary against
+  malware that already runs as you with full disk access. If that matters,
+  install the app as root (`sudo chown -R root:wheel` the bundle) or keep the
+  helper off.
+- A `fan profile system` (or any `fan profile …`) from the CLI or an MCP
+  client reaches a running helper too: the app compares the stored profile
+  with the helper on every ping and stops or retargets it within about 2 s.
+  The helper itself never reads files. It uses the built-in safety limits only
+  (`SafetyPolicy` defaults); `SYMTUNE_FAN_*` and `config.toml` fan limits apply
+  to the `osascript` path, not to the helper.
 - The app pings the helper every ~2 s. If the pings stop for more than 7 s —
   the app was force-quit or crashed — the helper hands the fans back to the
   system curve, and it does the same on SIGTERM or when the connection drops.

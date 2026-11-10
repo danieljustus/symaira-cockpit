@@ -13,11 +13,18 @@ set -euo pipefail
 #   UNIVERSAL      1 to build arm64 + x86_64 (default: 1)
 #   OUTPUT_DIR     where the .app lands (default: build/app)
 #   SWIFT_SCRATCH_PATH optional isolated SwiftPM build directory
+#   EXPECTED_TEAM_ID  Apple team identifier (10 upper-case alphanumerics) baked
+#                  into the app and the fan helper as the only team they will
+#                  pair with (issue #405). Release builds derive it from the
+#                  Developer ID certificate. Without it the helper is inert.
+#   REQUIRE_EMBEDDED_TEAM_ID  true to fail when EXPECTED_TEAM_ID is unset
 
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
 REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
+EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-}"
+REQUIRE_EMBEDDED_TEAM_ID="${REQUIRE_EMBEDDED_TEAM_ID:-false}"
 APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
@@ -39,6 +46,33 @@ COCKPIT_VERSION="$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)
   printf 'Could not read cockpit version from Sources/SymCockpitVersion/CockpitVersion.swift\n' >&2
   exit 1
 }
+
+# Bake the expected team identifier into the build (fan helper trust root).
+# The committed constant is nil; the literal is rewritten for this build only
+# and the file is restored on exit, so the working tree stays clean.
+EMBED_FILE="$REPO_ROOT/tuning/Sources/SymCockpitHelperKit/EmbeddedTeamIdentifier.swift"
+if [[ -z "$EXPECTED_TEAM_ID" && "$REQUIRE_EMBEDDED_TEAM_ID" == "true" ]]; then
+  printf 'EXPECTED_TEAM_ID is required (REQUIRE_EMBEDDED_TEAM_ID=true).\n' >&2
+  exit 1
+fi
+if [[ -n "$EXPECTED_TEAM_ID" ]]; then
+  [[ "$EXPECTED_TEAM_ID" =~ ^[0-9A-Z]{10}$ ]] || {
+    printf 'EXPECTED_TEAM_ID must be ten upper-case alphanumerics.\n' >&2
+    exit 1
+  }
+  EMBED_BACKUP="$(mktemp)"
+  cp "$EMBED_FILE" "$EMBED_BACKUP"
+  trap 'cp "$EMBED_BACKUP" "$EMBED_FILE"; rm -f "$EMBED_BACKUP"' EXIT
+  EMBED_TMP="$(mktemp)"
+  sed "s|^\(    public static let value: String? = \).*// EMBEDDED-TEAM-ID\$|\1\"$EXPECTED_TEAM_ID\" // EMBEDDED-TEAM-ID|" \
+    "$EMBED_FILE" > "$EMBED_TMP"
+  cat "$EMBED_TMP" > "$EMBED_FILE"
+  rm -f "$EMBED_TMP"
+  grep -Fq "value: String? = \"$EXPECTED_TEAM_ID\" // EMBEDDED-TEAM-ID" "$EMBED_FILE" || {
+    printf 'Could not embed the team identifier into %s\n' "$EMBED_FILE" >&2
+    exit 1
+  }
+fi
 
 # Use the toolchain's default build system (Swift Build on Xcode 27). The
 # resource gate below rejects an uncompiled .metal source-only bundle.
