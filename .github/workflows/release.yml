@@ -5,12 +5,20 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+# No workflow-wide token scope: each job declares exactly what it uses, so the
+# secret-bearing `release` environment jobs cannot write more than they need.
+permissions: {}
+
+# Two pushes of the same tag must not race the release upload or the tap bump.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Build and publish
+    permissions:
+      contents: write # gh release create
     # macOS-only by construction: the cockpit families drive AppKit, IOKit,
     # Accessibility and ScreenCaptureKit. macos-latest rather than a pinned
     # runner because tuning targets Swift 6.4, matching the CI workflow.
@@ -103,6 +111,8 @@ jobs:
     runs-on: macos-26
     environment: release
     needs: release
+    permissions:
+      contents: write # gh release upload / download
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -351,6 +361,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     needs: release-macos-app
+    # GITHUB_TOKEN only downloads release assets here; the tap is written with
+    # HOMEBREW_TAP_GITHUB_TOKEN.
+    permissions:
+      contents: read
     steps:
       - name: Checkout Homebrew tap
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -474,7 +488,12 @@ jobs:
             --body "Update CLI and GUI from the published Cockpit v${VERSION} assets and their exact SHA-256 checksums.")
           gh pr merge "$pr" --repo danieljustus/homebrew-tap \
             --squash --auto --match-head-commit "$head"
-          for ((attempt = 0; attempt < 60; attempt++)); do
+          # Tap CI can queue for a long time under runner contention; v0.9.0
+          # gave up 7 s before its tap PR merged. Wait up to 45 minutes, then
+          # read the state once more so a just-merged PR is not a failure.
+          deadline=$((SECONDS + 45 * 60))
+          state=""
+          while [ "$SECONDS" -lt "$deadline" ]; do
             state=$(gh pr view "$pr" --repo danieljustus/homebrew-tap --json state --jq .state)
             if [ "$state" = MERGED ]; then
               exit 0
@@ -483,7 +502,11 @@ jobs:
               echo "::error::Homebrew update PR was closed without merging: $pr"
               exit 1
             fi
-            sleep 10
+            sleep 20
           done
-          echo "::error::Homebrew update is still pending required checks: $pr"
+          state=$(gh pr view "$pr" --repo danieljustus/homebrew-tap --json state --jq .state)
+          if [ "$state" = MERGED ]; then
+            exit 0
+          fi
+          echo "::error::Homebrew update PR is still ${state} after 45 minutes: $pr"
           exit 1
