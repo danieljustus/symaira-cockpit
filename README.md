@@ -109,15 +109,19 @@ What it will and will not do:
   refuses peers that carry a hardened-runtime escape entitlement.
 - Before registering, Cockpit refuses if the app bundle or the helper
   executable is writable by anyone but its owner (group/other-writable), is a
-  symlink, or is owned by another user. **Remaining trust assumption:** the
-  helper runs as root from inside `Symaira Cockpit.app`. When you drag the app
-  into `/Applications` it stays owned by you, so a process running as you could
-  in principle rewrite it. The pinned team makes a swapped helper from another
-  Developer ID useless and macOS App Management protection guards signed apps
-  against modification by other apps, but neither is a boundary against
-  malware that already runs as you with full disk access. If that matters,
-  install the app as root (`sudo chown -R root:wheel` the bundle) or keep the
-  helper off.
+  symlink, or is owned by another user (every path component from the bundle
+  root down to the helper, and again before each start). **Remaining trust
+  assumption:** the helper runs as root from inside `Symaira Cockpit.app`. When
+  you drag the app into `/Applications` it stays owned by you, so malware
+  running as you can modify the bundle, and a modified helper would then run
+  as root once the helper is registered. The pinned team only stops such a
+  swapped helper from *pairing* with the app over XPC; it does not stop it from
+  being executed. macOS App Management protection is the guard against other
+  apps modifying a signed bundle, and it is not a boundary against malware that
+  already runs as you with full disk access. To close the gap, make the bundle
+  root-owned:
+  `sudo chown -R root:wheel '/Applications/Symaira Cockpit.app'`
+  (or keep the helper off).
 - A `fan profile system` (or any `fan profile …`) from the CLI or an MCP
   client reaches a running helper too: the app compares the stored profile
   with the helper on every ping and stops or retargets it within about 2 s.
