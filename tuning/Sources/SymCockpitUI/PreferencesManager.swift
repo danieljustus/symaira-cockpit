@@ -49,7 +49,7 @@ final class PreferencesManager: ObservableObject {
         self.metricsRefreshInterval = config.metricsRefreshInterval
         self.enabledMetrics = config.enabledMetrics
         self.visibleMetrics = config.visibleMetrics
-        self.metricOrder = config.metricOrder
+        self.metricOrder = MetricOrdering.completed(config.metricOrder)
         self.networkUnit = config.networkUnit
         self.temperatureUnit = config.temperatureUnit
         self.metricStyles = config.metricStyles

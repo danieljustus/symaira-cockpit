@@ -16,6 +16,12 @@
   GPU time read from the IORegistry's `AppUsage` counters, sampled twice. The
   root-only `powermetrics` path stays as the fallback when the registry exposes
   no `AppUsage`; the process card polls GPU like CPU and RAM (#402).
+  GPU is also an opt-in metric row (`MetricIdentifier.gpu`): selectable in
+  Preferences and `config.toml` (`[metrics] enabled/visible/order = [..., "gpu"]`),
+  sampled into the metric history and shown in the history card, menu-bar
+  readout and HUD item list. It is excluded from the default sets, so existing
+  configs are unchanged, and a Mac that publishes no utilization shows no GPU
+  row instead of 0 % (#402).
 
 ### Changed
 - The existing `power.volts`/`amps`/`watts` fields are unchanged and are now

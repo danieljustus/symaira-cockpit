@@ -104,6 +104,7 @@ extension MetricIdentifier {
         case .memory: return "RAM"
         case .disk: return "Disk"
         case .network: return "Net"
+        case .gpu: return "GPU"
         default: return rawValue.uppercased()
         }
     }
@@ -115,6 +116,9 @@ extension MetricIdentifier {
         case .memory: return "memorychip"
         case .disk: return "internaldrive"
         case .network: return "arrow.up.arrow.down"
+        // SF Symbols has no GPU glyph; a chart reads as "load" and differs from
+        // the CPU chip.
+        case .gpu: return "chart.xyaxis.line"
         default: return "gauge"
         }
     }
@@ -223,7 +227,8 @@ public enum MetricStyleFormatting {
     ///
     /// A live reading would make the preview flicker while the user is reading
     /// it, and would show nothing at all for a metric with no data.
-    /// 42% CPU, 8 GB of 16 GB memory, 256 GB of 512 GB disk, 2 MB/s down.
+    /// 42% CPU, 8 GB of 16 GB memory, 256 GB of 512 GB disk, 2 MB/s down,
+    /// 31% GPU.
     /// The disk figures are round in decimal GB — the convention storage is
     /// counted in — so the preview reads `256.0 GB`, not `238.4 GB`.
     public static let sampleReport = SystemMetricsReport(
@@ -246,7 +251,8 @@ public enum MetricStyleFormatting {
             aggregateBytesOut: 0,
             aggregateBytesInPerSecond: 2_097_152,
             aggregateBytesOutPerSecond: 524_288
-        )
+        ),
+        gpu: GPUReport(utilizationPercent: 31)
     )
 
     /// Flatten segments to plain text, with symbols rendered as their label.
@@ -305,6 +311,10 @@ public enum MetricStyleFormatting {
                 text += "\u{2191}\(rate(up, style: style))"
             }
             return text
+
+        case .gpu:
+            guard let gpu = report.gpu else { return nil }
+            return percent(gpu.utilizationPercent, style: style)
 
         default:
             return nil

@@ -17,6 +17,7 @@ public enum MetricFormatting {
         case .network:
             return report.network.aggregateBytesInPerSecond != nil
                 || report.network.aggregateBytesOutPerSecond != nil
+        case .gpu: return report.gpu != nil
         default: return false
         }
     }
@@ -46,7 +47,7 @@ public enum MetricFormatting {
         totalBytes: UInt64? = nil
     ) -> String {
         switch id {
-        case .cpu:
+        case .cpu, .gpu:
             return String(format: "%.0f%%", value)
         case .disk:
             let usedShare = style.basis == .free ? (100 - value) : value
@@ -122,6 +123,9 @@ public enum MetricFormatting {
         case .cpu:
             guard let utilization = report.cpu.totalUtilization else { return nil }
             return String(format: "%.0f%%", utilization * 100)
+        case .gpu:
+            guard let gpu = report.gpu else { return nil }
+            return String(format: "%.0f%%", gpu.utilizationPercent)
         case .memory:
             guard let used = report.memory.usedBytes else { return nil }
             let free = report.memory.freeBytes
@@ -238,6 +242,10 @@ public enum MetricFormatting {
             case .cpu:
                 if let utilization = report.cpu.totalUtilization {
                     parts.append("CPU \(String(format: "%2d%%", Int(utilization * 100)))")
+                }
+            case .gpu:
+                if let gpu = report.gpu {
+                    parts.append("GPU \(String(format: "%2d%%", Int(gpu.utilizationPercent)))")
                 }
             case .memory:
                 if let used = report.memory.usedBytes {

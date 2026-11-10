@@ -153,6 +153,10 @@ leaving the panel. Its **Menu bar** card is the quick way to change the status
 item: one switch per metric for *Monitor* (sample it) and one for *Menu bar*
 (show it), with a live preview of the result. Changes hit the menu bar
 immediately and are written to `config.toml`, so they survive a relaunch.
+**GPU** is a fifth, opt-in metric: it is off in a fresh or existing setup until
+you switch it on there (or list `"gpu"` in `[metrics] enabled` / `visible` /
+`order`). Where a Mac publishes no GPU utilization the row is simply absent,
+never a 0 %.
 
 Display and fan controls use native sliders with rounded rails, guide dots
 and light circular knobs in the shared neutral Liquid Topography palette.

@@ -67,7 +67,7 @@ public final class HUDDemoController: NSObject, NSWindowDelegate {
     static func exampleValues(_ kinds: [HUDItemKind]) -> [HUDItemValue] {
         let values: [HUDItemKind: String] = [
             .metric(.cpu): "24 %", .metric(.memory): "62 %", .metric(.disk): "48 %",
-            .metric(.network): "2 MB/s", .battery: "76 %", .calendarWeek: "W 42",
+            .metric(.network): "2 MB/s", .metric(.gpu): "31 %", .battery: "76 %", .calendarWeek: "W 42",
             .keepAwake: "Sleep allowed", .fanProfile: "Balanced (idle)"
         ]
         return kinds.compactMap { kind in

@@ -150,6 +150,9 @@ public struct HUDItemLayout: Equatable, Sendable {
         .metric(.memory): HUDItemPlacement(isEnabled: true, side: .right, stage: .collapsed),
         .metric(.disk): HUDItemPlacement(isEnabled: true, side: .left, stage: .peek),
         .metric(.network): HUDItemPlacement(isEnabled: true, side: .right, stage: .peek),
+        // Opt-in (issue #402): has a place once the user turns it on, but is
+        // off until then so nothing new appears over the menu bar.
+        .metric(.gpu): HUDItemPlacement(isEnabled: false, side: .left, stage: .expanded),
         // Not on the peeking shoulder: memory and network are already there, and
         // a shoulder fits two readouts. A third is drawn and then clipped,
         // which looks like a bug rather than like a budget.

@@ -37,7 +37,20 @@ public struct MetricRowData: Identifiable, Equatable, Sendable {
 /// the app's view model so the ordering rule is unit-testable.
 public enum MetricOrdering {
 
+    /// `order` with every opt-in metric it does not mention appended, in
+    /// ``MetricIdentifier/optInCases`` order.
+    ///
+    /// A stored order predates opt-in metrics (`gpu`): without this a user who
+    /// enables one in `config.toml`, or finds it in Preferences, would never
+    /// see a row for it. Metrics already in `order` keep their place, and a
+    /// default metric the order omits stays omitted, as before.
+    public static func completed(_ order: [MetricIdentifier]) -> [MetricIdentifier] {
+        guard !order.isEmpty else { return order }
+        return order + MetricIdentifier.optInCases.filter { !order.contains($0) }
+    }
+
     /// The metrics in `order` that are also in `selected`, preserving `order`.
+    /// Opt-in metrics `order` does not mention follow it (see ``completed(_:)``).
     ///
     /// Falls back to `fallback` when nothing is selected or no order is
     /// configured — the status item then shows its default metrics instead of
@@ -48,6 +61,6 @@ public enum MetricOrdering {
         fallback: [MetricIdentifier] = []
     ) -> [MetricIdentifier] {
         guard !selected.isEmpty, !order.isEmpty else { return fallback }
-        return order.filter { selected.contains($0) }
+        return completed(order).filter { selected.contains($0) }
     }
 }

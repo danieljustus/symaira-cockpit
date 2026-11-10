@@ -51,7 +51,9 @@ public struct ConfigPaths: Sendable {
 // MARK: - Metric Identifiers
 
 /// Identifies a system metric category.
-/// The four base categories map to fields of ``SystemMetricsReport``.
+/// The four base categories map to fields of ``SystemMetricsReport``; ``gpu``
+/// is a fifth, opt-in category (issue #402) that is selectable but never part
+/// of the defaults.
 public struct MetricIdentifier: RawRepresentable, Hashable, Codable, Sendable, CaseIterable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -60,8 +62,22 @@ public struct MetricIdentifier: RawRepresentable, Hashable, Codable, Sendable, C
     public static let memory = MetricIdentifier(rawValue: "memory")
     public static let disk = MetricIdentifier(rawValue: "disk")
     public static let network = MetricIdentifier(rawValue: "network")
+    /// GPU device utilization. Opt-in: selectable in Preferences and
+    /// `config.toml`, but absent from ``defaultCases`` so an existing setup
+    /// shows nothing new until the user asks for it.
+    public static let gpu = MetricIdentifier(rawValue: "gpu")
 
-    public static var allCases: [MetricIdentifier] { [.cpu, .memory, .disk, .network] }
+    /// What a configuration that never mentions metrics enables, shows and
+    /// orders. Deliberately not ``allCases``: a metric added later must not
+    /// appear on its own.
+    public static let defaultCases: [MetricIdentifier] = [.cpu, .memory, .disk, .network]
+
+    /// Metrics that exist but stay off until the user selects them.
+    public static let optInCases: [MetricIdentifier] = [.gpu]
+
+    /// Every metric the user can select: the defaults first, then the opt-in
+    /// ones.
+    public static var allCases: [MetricIdentifier] { defaultCases + optInCases }
 
     public var displayName: String {
         switch self {
@@ -69,6 +85,7 @@ public struct MetricIdentifier: RawRepresentable, Hashable, Codable, Sendable, C
         case .memory: return "Memory"
         case .disk: return "Disk"
         case .network: return "Network"
+        case .gpu: return "GPU"
         default: return rawValue
         }
     }
@@ -168,7 +185,7 @@ public struct TuneConfig: Equatable, Sendable {
     }
 
     /// Default metrics order.
-    public static let defaultMetricOrder: [MetricIdentifier] = MetricIdentifier.allCases
+    public static let defaultMetricOrder: [MetricIdentifier] = MetricIdentifier.defaultCases
 
     public var isMCPReadOnly: Bool {
         let mode = mcpMode.lowercased()
@@ -190,9 +207,9 @@ public struct TuneConfig: Equatable, Sendable {
         defaultProfile: String = "default",
         mcpMode: String = "full",
         metricsRefreshInterval: TimeInterval = 3.0,
-        enabledMetrics: Set<MetricIdentifier> = Set(MetricIdentifier.allCases),
-        visibleMetrics: Set<MetricIdentifier> = Set(MetricIdentifier.allCases),
-        metricOrder: [MetricIdentifier] = MetricIdentifier.allCases,
+        enabledMetrics: Set<MetricIdentifier> = Set(MetricIdentifier.defaultCases),
+        visibleMetrics: Set<MetricIdentifier> = Set(MetricIdentifier.defaultCases),
+        metricOrder: [MetricIdentifier] = MetricIdentifier.defaultCases,
         networkUnit: NetworkUnit = .bytesPerSecond,
         temperatureUnit: TemperatureUnit = .celsius,
         metricStyles: [MetricIdentifier: MetricStyle] = [:],
@@ -324,9 +341,9 @@ public struct TuneConfig: Equatable, Sendable {
             metricsRefreshInterval: doubleVal(
                 "metrics", "refresh_interval_seconds",
                 "SYMTUNE_METRICS_INTERVAL", 3.0),
-            enabledMetrics: metricSetVal("metrics", "enabled", MetricIdentifier.allCases),
-            visibleMetrics: metricSetVal("metrics", "visible", MetricIdentifier.allCases),
-            metricOrder: metricOrderVal("metrics", "order", MetricIdentifier.allCases),
+            enabledMetrics: metricSetVal("metrics", "enabled", MetricIdentifier.defaultCases),
+            visibleMetrics: metricSetVal("metrics", "visible", MetricIdentifier.defaultCases),
+            metricOrder: metricOrderVal("metrics", "order", MetricIdentifier.defaultCases),
             networkUnit: networkUnitVal("metrics", "network_unit", .bytesPerSecond),
             temperatureUnit: temperatureUnitVal("metrics", "temperature_unit", .celsius),
             metricStyles: Self.parseMetricStyles(table: table, section: "metrics"),

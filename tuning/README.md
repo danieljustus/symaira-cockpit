@@ -78,6 +78,14 @@ view; the selection is persisted in `~/.config/symtune/config.toml` under
 `[popover] cards = [...]` (an explicit empty list shows an empty panel; a card
 added by a later release joins a non-empty list rather than staying hidden).
 
+The metric rows (menu-bar readout, history card, HUD) are chosen in
+`[metrics]` of the same file: `enabled` (sampled), `visible` (menu bar) and
+`order` take any of `"cpu"`, `"memory"`, `"disk"`, `"network"` and `"gpu"`.
+Without those keys the first four are used. `"gpu"` is opt-in — it is never
+part of the defaults, so an existing config behaves exactly as before — and
+reads `gpu.utilization_percent`; a Mac that publishes none shows no GPU row
+rather than 0 %.
+
 **Top Processes** answers "what is making this Mac hot/slow?" with one click:
 expand the card and it ranks processes by CPU or memory, click a row for its
 PID, thread count and the other resource. It only samples while expanded and
@@ -116,7 +124,7 @@ symtune sensors                       # thermal pressure + temps/fan RPM via App
 symtune battery                       # charge %, cycles, capacity, health, condition (JSON)
 symtune displays                      # displays + EDR headroom / extended-brightness capability (JSON)
 symtune permissions                   # permission & SMC write status (JSON)
-symtune metrics                      # system metrics: CPU, memory, disk, network (JSON)
+symtune metrics                      # system metrics: CPU, memory, disk, network, GPU (JSON)
 symtune processes [--sort cpu|memory] [--limit N]
                                      # processes using the most CPU / memory
 symtune ai-usage                     # AI subscription/token usage per provider (read-only)

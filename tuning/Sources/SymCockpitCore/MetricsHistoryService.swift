@@ -92,6 +92,16 @@ public final class MetricsHistoryService: @unchecked Sendable {
             }
         }
 
+        // GPU (opt-in). The block is absent when the registry publishes no
+        // utilization, which is a gap — never a recorded 0 %.
+        if let buf = buffers[.gpu] {
+            if let gpu = report.gpu {
+                buf.recordValue(gpu.utilizationPercent, timestamp: timestamp)
+            } else {
+                buf.recordGap(reason: "unavailable", timestamp: timestamp)
+            }
+        }
+
         // Memory
         if let buf = buffers[.memory] {
             if let used = report.memory.usedBytes {
