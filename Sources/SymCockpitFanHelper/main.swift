@@ -34,7 +34,11 @@ listener.delegate = delegate
 signal(SIGTERM, SIG_IGN)
 let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
 termination.setEventHandler {
-    engine.terminate()
+    if !engine.terminate() {
+        // The governor is blocked (e.g. in an SMC call) and did not restore
+        // within the grace period; say so in launchd's log before exiting.
+        fputs("symaira fan helper: SIGTERM grace expired before the fans were restored\n", stderr)
+    }
     exit(0)
 }
 termination.resume()

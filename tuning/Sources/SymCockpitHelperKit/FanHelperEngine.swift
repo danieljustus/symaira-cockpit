@@ -42,8 +42,11 @@ public final class FanHelperEngine: @unchecked Sendable {
         private var _profile: FanProfile
         private var _stopped = false
         private var _finished = false
+        /// Entered at creation, left when the governor has unwound (the fans
+        /// are restored). A successor run waits on it before touching the SMC.
+        private let unwound = DispatchGroup()
 
-        init(profile: FanProfile) { _profile = profile }
+        init(profile: FanProfile) { _profile = profile; unwound.enter() }
 
         var profile: FanProfile {
             get { lock.lock(); defer { lock.unlock() }; return _profile }
@@ -52,7 +55,15 @@ public final class FanHelperEngine: @unchecked Sendable {
         var isStopped: Bool { lock.lock(); defer { lock.unlock() }; return _stopped }
         func stop() { lock.lock(); _stopped = true; lock.unlock() }
         var isFinished: Bool { lock.lock(); defer { lock.unlock() }; return _finished }
-        func markFinished() { lock.lock(); _finished = true; lock.unlock() }
+        func markFinished() {
+            lock.lock()
+            let first = !_finished
+            _finished = true
+            lock.unlock()
+            if first { unwound.leave() }
+        }
+        /// Blocks until this run has fully unwound.
+        func waitUntilUnwound() { unwound.wait() }
     }
 
     private let watchdog: HeartbeatWatchdog
@@ -90,6 +101,11 @@ public final class FanHelperEngine: @unchecked Sendable {
             watchdog.beat()
             return
         }
+        // A stopped run that is still restoring the fans must finish first:
+        // two governors would write the SMC concurrently, and the new one
+        // would capture the half-restored state as the "original" to hand
+        // back (leaving the fans pinned when it ends).
+        let previous = run
         let newRun = Run(profile: profile)
         run = newRun
         failure = nil
@@ -100,13 +116,18 @@ public final class FanHelperEngine: @unchecked Sendable {
         let slice = sleepSlice
         let runner = self.runner
         let thread = Thread { [weak self] in
+            previous?.waitUntilUnwound()
             var error: Error?
             do {
-                try runner(
-                    { newRun.profile },
-                    { !newRun.isStopped },
-                    { Self.interruptibleSleep($0, slice: slice, run: newRun) }
-                )
+                // Stopped while still queued behind the previous run: never
+                // start, so nothing is captured or overridden.
+                if !newRun.isStopped {
+                    try runner(
+                        { newRun.profile },
+                        { !newRun.isStopped },
+                        { Self.interruptibleSleep($0, slice: slice, run: newRun) }
+                    )
+                }
             } catch let thrown {
                 error = thrown
             }
@@ -168,9 +189,11 @@ public final class FanHelperEngine: @unchecked Sendable {
     }
 
     /// SIGTERM: stop the run and wait (bounded) for the restore to finish.
-    public func terminate(grace: TimeInterval = FanHelperConstants.terminationGrace) {
+    /// Returns whether the restore completed within `grace`.
+    @discardableResult
+    public func terminate(grace: TimeInterval = FanHelperConstants.terminationGrace) -> Bool {
         stop(reason: .terminated)
-        _ = waitUntilIdle(timeout: grace)
+        return waitUntilIdle(timeout: grace)
     }
 
     // MARK: - Observation

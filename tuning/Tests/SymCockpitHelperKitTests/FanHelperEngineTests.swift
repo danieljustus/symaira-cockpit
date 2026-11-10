@@ -28,16 +28,75 @@ final class FakeGovernorRunner: @unchecked Sendable {
     }
 }
 
+/// A governor whose unwind (the restore) is held until the test releases it,
+/// and which records whether two runs ever overlapped and what each run found.
+final class SlowUnwindRunner: @unchecked Sendable {
+    private let lock = NSLock()
+    private let release = DispatchSemaphore(value: 0)
+    private var active = 0
+    private(set) var maxActive = 0
+    private(set) var started = 0
+    private(set) var unwound = 0
+    /// Number of runs that finished unwinding before the n-th run began.
+    private(set) var unwoundWhenStarted: [Int] = []
+
+    func releaseOneUnwind() { release.signal() }
+
+    func runner() -> FanHelperEngine.GovernorRunner {
+        { [self] _, shouldContinue, sleep in
+            lock.lock()
+            active += 1; maxActive = max(maxActive, active)
+            started += 1; unwoundWhenStarted.append(unwound)
+            lock.unlock()
+            while shouldContinue() { sleep(0.01) }
+            // The restore: slow, as a governor blocked in an SMC call is.
+            release.wait()
+            lock.lock(); active -= 1; unwound += 1; lock.unlock()
+        }
+    }
+}
+
 final class FanHelperEngineTests: XCTestCase {
-    private func makeEngine(
-        clock: FakeClock,
-        runner: FakeGovernorRunner
-    ) -> FanHelperEngine {
-        FanHelperEngine(
-            watchdog: HeartbeatWatchdog(timeout: 7, clock: { clock.read() }),
-            sleepSlice: 0.005,
-            runner: runner.runner()
+    func testRestartRightAfterStopWaitsForThePreviousRestoreBeforeStarting() {
+        let slow = SlowUnwindRunner()
+        let engine = FanHelperEngine(
+            watchdog: HeartbeatWatchdog(timeout: 7, clock: { FakeClock().read() }),
+            sleepSlice: 0.005, runner: slow.runner()
         )
+        engine.start(profile: .comfort)
+        XCTAssertTrue(waitUntil { slow.started == 1 })
+        engine.stop(reason: .requested)
+        // No waiting for idle: the first run is still restoring.
+        engine.start(profile: .performance)
+        Thread.sleep(forTimeInterval: 0.15)
+        XCTAssertEqual(slow.started, 1, "the second governor must not start while the first restores")
+        XCTAssertEqual(slow.maxActive, 1)
+        XCTAssertTrue(engine.snapshot.isGoverning, "the pending run counts as governing")
+
+        slow.releaseOneUnwind()
+        XCTAssertTrue(waitUntil { slow.started == 2 })
+        XCTAssertEqual(slow.unwoundWhenStarted, [0, 1], "the 2nd run starts only after the 1st restored")
+        XCTAssertEqual(slow.maxActive, 1)
+
+        engine.stop(reason: .requested)
+        slow.releaseOneUnwind()
+        XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
+    }
+
+    func testARunStoppedWhileQueuedBehindARestoringRunNeverStarts() {
+        let slow = SlowUnwindRunner()
+        let engine = FanHelperEngine(
+            watchdog: HeartbeatWatchdog(timeout: 7, clock: { FakeClock().read() }),
+            sleepSlice: 0.005, runner: slow.runner()
+        )
+        engine.start(profile: .comfort)
+        XCTAssertTrue(waitUntil { slow.started == 1 })
+        engine.stop(reason: .requested)
+        engine.start(profile: .performance)
+        engine.stop(reason: .requested) // cancelled before it ever ran
+        slow.releaseOneUnwind()
+        XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
+        XCTAssertEqual(slow.started, 1, "a cancelled queued run must never capture or override fan state")
     }
 
     private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 2) -> Bool {
@@ -47,6 +106,17 @@ final class FanHelperEngineTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.005)
         }
         return condition()
+    }
+
+    private func makeEngine(
+        clock: FakeClock,
+        runner: FakeGovernorRunner
+    ) -> FanHelperEngine {
+        FanHelperEngine(
+            watchdog: HeartbeatWatchdog(timeout: 7, clock: { clock.read() }),
+            sleepSlice: 0.005,
+            runner: runner.runner()
+        )
     }
 
     func testStartRunsTheGovernorOnTheRequestedProfile() {
