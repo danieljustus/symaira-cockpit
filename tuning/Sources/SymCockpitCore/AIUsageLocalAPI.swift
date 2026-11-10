@@ -7,6 +7,9 @@ import Foundation
 /// containing provider_id, fetched_at, stale, and normalized `meters` arrays.
 /// Missing values are omitted, never synthesized as zero. Currency units retain
 /// their supplied code. Failures preserve cached timestamps and expose only a code.
+/// Failure codes: `usage_unavailable` (provider error) and `snapshot_too_large`
+/// (that provider's row exceeds the per-provider bounds and is omitted; other
+/// providers are unaffected). More than 64 rows or a body over 1 MiB is a 503.
 /// Resource IDs encode the exact UTF-8 meter label, not a lossy slug. Duplicate
 /// labels sort by scalar content and receive occurrence suffixes. shortcut: labels
 /// (and duplicate ordinals) are identity until Brain supplies stable resource IDs;
@@ -22,7 +25,9 @@ public enum AIUsageLocalAPI {
                           413: "Content Too Large", 431: "Request Header Fields Too Large",
                           500: "Internal Server Error", 503: "Service Unavailable"][status] ?? "Error"
             var header = "HTTP/1.1 \(status) \(reason)\r\nContent-Type: application/json\r\n"
-            header += "Content-Length: \(body.count)\r\nConnection: close\r\nCache-Control: no-store\r\n"
+            // RFC 9110 §8.6: a 204 response must not carry Content-Length.
+            if status != 204 { header += "Content-Length: \(body.count)\r\n" }
+            header += "Connection: close\r\nCache-Control: no-store\r\n"
             header += "X-Content-Type-Options: nosniff\r\nCross-Origin-Resource-Policy: same-origin\r\n"
             if status == 405 { header += "Allow: GET, OPTIONS\r\n" }
             return Data((header + "\r\n").utf8) + body
@@ -98,7 +103,7 @@ public enum AIUsageLocalAPI {
         for line in lines.dropFirst().dropLast(2) {
             guard let colon = line.firstIndex(of: ":") else { return error(400, "bad_request") }
             let name = String(line[..<colon]).lowercased()
-            guard !name.isEmpty, name.utf8.allSatisfy({ (97...122).contains($0) || $0 == 45 }),
+            guard !name.isEmpty, name.utf8.allSatisfy({ (97...122).contains($0) || (48...57).contains($0) || $0 == 45 }),
                   fields[name] == nil else { return error(400, "bad_request") }
             fields[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
@@ -123,16 +128,13 @@ public enum AIUsageLocalAPI {
             filter = decoded
         }
         if request[0] == "OPTIONS" { return Response(status: 204, body: Data()) }
-        let rows = snapshots()
-        guard rows.count <= 64, rows.allSatisfy({ row in
-            !row.providerID.isEmpty && row.providerID.utf8.count <= 128
-                && row.providerID.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }
-                && (row.snapshot.map { snapshot in
-                snapshot.meters.count <= 128 && snapshot.meters.allSatisfy {
-                    $0.label.utf8.count <= 256 && $0.unit.unitLabel.utf8.count <= 32
-                } && (snapshot.currency?.utf8.count ?? 0) <= 32
-            } ?? true)
-        }) else { return error(503, "snapshot_too_large") }
+        let allRows = snapshots()
+        // Global cap: the whole cache is refused. Per-provider problems below
+        // only affect the provider that has them.
+        guard allRows.count <= 64 else { return error(503, "snapshot_too_large") }
+        // A provider ID outside the allowed charset can be neither addressed
+        // nor named safely in a response, so such a row is dropped.
+        let rows = allRows.filter { isValidProviderID($0.providerID) }
         if let filter, !rows.contains(where: { $0.providerID == filter }) {
             return error(404, "provider_not_found")
         }
@@ -142,6 +144,10 @@ public enum AIUsageLocalAPI {
         var seen = Set<String>()
         for row in rows where filter == nil || row.providerID == filter {
             guard seen.insert(row.providerID).inserted else { continue }
+            if exceedsBounds(row) {
+                failures.append(Failure(providerId: row.providerID, code: "snapshot_too_large"))
+                continue
+            }
             if row.error != nil { failures.append(Failure(providerId: row.providerID, code: "usage_unavailable")) }
             guard let snapshot = row.snapshot, snapshot.providerID == row.providerID else { continue }
             providers[row.providerID] = Provider(
@@ -169,6 +175,19 @@ public enum AIUsageLocalAPI {
             guard body.count <= 1_048_576 else { return error(503, "snapshot_too_large") }
             return Response(status: 200, body: body)
         } catch { return Self.error(500, "encoding_failed") }
+    }
+
+    private static func isValidProviderID(_ id: String) -> Bool {
+        !id.isEmpty && id.utf8.count <= 128
+            && id.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }
+    }
+
+    /// Per-provider bounds: at most 128 meters, short labels and units.
+    private static func exceedsBounds(_ row: AIUsageService.ProviderResult) -> Bool {
+        guard let snapshot = row.snapshot else { return false }
+        return snapshot.meters.count > 128
+            || (snapshot.currency?.utf8.count ?? 0) > 32
+            || !snapshot.meters.allSatisfy { $0.label.utf8.count <= 256 && $0.unit.unitLabel.utf8.count <= 32 }
     }
 
     private static func resources(_ snapshot: AIUsageSnapshot) -> [String: Resource] {

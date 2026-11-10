@@ -27,15 +27,15 @@ final class AIUsageAPIHost {
         Task { [weak self] in
             let result = await Task.detached { try instance.start() }.result
             guard let self, self.server === instance, self.requestedEnabled else {
-                instance.stop()
+                Self.stopOffMain(instance)
                 return
             }
             switch result {
             case .success(let port): self.status = "Local API: 127.0.0.1:\(port)"
             case .failure:
-                instance.stop()
+                Self.stopOffMain(instance)
                 self.server = nil
-                self.status = "Could not start local API on port 6737. Disable it, free the port, then retry."
+                self.status = "Could not start local API on port \(self.port). Disable it, free the port, then retry."
             }
         }
     }
@@ -43,10 +43,19 @@ final class AIUsageAPIHost {
     func stop() {
         requestedEnabled = false
         snapshots.replace([])
-        server?.stop()
+        if let old = server { Self.stopOffMain(old) }
         server = nil
         status = "Local API is off"
     }
 
-    isolated deinit { server?.stop() }
+    /// `AIUsageLocalServer.stop()` can wait up to three seconds for its queue,
+    /// so it never runs on the main actor. Stopping is final and idempotent:
+    /// an instance whose start is still pending cannot listen afterwards.
+    private nonisolated static func stopOffMain(_ server: AIUsageLocalServer) {
+        server.invalidate()  // Synchronous and non-blocking: a pending start can no longer bind.
+        Task.detached { server.stop() }
+    }
+
+    /// Best effort: the stop and the final release both happen off the main actor.
+    isolated deinit { if let server { Self.stopOffMain(server) } }
 }

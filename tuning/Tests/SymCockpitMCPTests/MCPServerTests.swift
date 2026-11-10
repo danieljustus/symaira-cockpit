@@ -158,6 +158,16 @@ final class MCPServerToolSchemaTests: XCTestCase {
         XCTAssertTrue(tool.inputSchema.required.isEmpty)
     }
 
+    func testGetAIUsageDescriptionStatesItQueriesEveryCatalogProvider() async throws {
+        let harness = try MCPTestHarness.make()
+        defer { try? harness.clientWrite.close() }
+        let tools = try await mcpListTools(harness)
+        let tool = try XCTUnwrap(tools.tools.first { $0.name == "get_ai_usage" })
+        XCTAssertTrue((tool.description ?? "").contains("every catalog provider"))
+        XCTAssertTrue((tool.description ?? "").contains("regardless of which providers are enabled"))
+        XCTAssertTrue((tool.description ?? "").contains("symcockpit ai-usage <provider>"))
+    }
+
     func testToolListCarriesSafetyBoundsOverTheWire() async throws {
         let harness = try MCPTestHarness.make()
         defer { try? harness.clientWrite.close() }

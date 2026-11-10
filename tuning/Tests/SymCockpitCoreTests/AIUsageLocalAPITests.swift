@@ -281,9 +281,10 @@ final class AIUsageLocalAPITests: XCTestCase {
         XCTAssertEqual(probe.reads, 1)
         assertRefused(port)
 
-        let rebound = AIUsageLocalServer(port: port) { [] }
-        defer { rebound.stop() }
         for _ in 0..<3 {
+            // Stopping is final, so every rebind needs a fresh instance.
+            let rebound = AIUsageLocalServer(port: port) { [] }
+            defer { rebound.stop() }
             XCTAssertEqual(try rebound.start(), port)
             let fd = try connect(port)
             defer { Darwin.close(fd) }
@@ -332,6 +333,67 @@ final class AIUsageLocalAPITests: XCTestCase {
         defer { rebound.stop() }
         XCTAssertEqual(try rebound.start(), port)
         XCTAssertTrue(rebound.stop())
+    }
+
+    func testStoppedServerCanNeverStartAgain() throws {
+        let server = AIUsageLocalServer(port: 0) { [] }
+        XCTAssertTrue(server.stop()) // Stop before start: the instance is spent.
+        XCTAssertThrowsError(try server.start()) { error in
+            XCTAssertEqual(error as? AIUsageLocalServer.ServerError, .stopped)
+        }
+        let running = AIUsageLocalServer(port: 0) { [] }
+        _ = try running.start()
+        XCTAssertTrue(running.stop())
+        XCTAssertThrowsError(try running.start()) { error in
+            XCTAssertEqual(error as? AIUsageLocalServer.ServerError, .stopped)
+        }
+        // invalidate() alone is the non-blocking half: a scheduled start must not bind.
+        let pending = AIUsageLocalServer(port: 0) { [] }
+        pending.invalidate()
+        XCTAssertThrowsError(try pending.start()) { error in
+            XCTAssertEqual(error as? AIUsageLocalServer.ServerError, .stopped)
+        }
+    }
+
+    func testOversizedProviderRowIsSkippedWithoutFailingTheWholeAPI() throws {
+        let good = AIUsageService.ProviderResult(providerID: "good", snapshot: .init(
+            providerID: "good", meters: [.init(label: "Session", used: 1, limit: 2, unit: .requests)],
+            fetchedAt: instant, source: "fixture"), error: nil)
+        func row(_ id: String, label: String = "Session", meters: Int = 1) -> AIUsageService.ProviderResult {
+            .init(providerID: id, snapshot: .init(providerID: id, meters: (0..<meters).map {
+                .init(label: "\(label)\($0)", used: 1, unit: .tokens)
+            }, fetchedAt: instant, source: "fixture"), error: nil)
+        }
+        let rows = [good, row("long-label", label: String(repeating: "x", count: 300)),
+                    row("many-meters", meters: 129), row("Bad ID!")]
+        let limits = AIUsageLocalAPI.route(header: request(), port: 6737, now: instant) { rows }
+        XCTAssertEqual(limits.status, 200)
+        let body = try json(limits)
+        let providers = try XCTUnwrap(body["providers"] as? [String: Any])
+        XCTAssertEqual(Set(providers.keys), ["good"])
+        let errors = try XCTUnwrap(body["errors"] as? [[String: String]])
+        XCTAssertEqual(Set(errors.map { $0["provider_id"] ?? "" }), ["long-label", "many-meters"])
+        XCTAssertTrue(errors.allSatisfy { $0["code"] == "snapshot_too_large" })
+        XCTAssertFalse(String(decoding: limits.body, as: UTF8.self).contains("Bad ID"))
+        // The same applies to /v1/usage and to an exact-provider request.
+        let usage = try json(AIUsageLocalAPI.route(header: request("/v1/usage"), port: 6737, now: instant) { rows })
+        XCTAssertEqual((usage["snapshots"] as? [[String: Any]])?.count, 1)
+        let single = AIUsageLocalAPI.route(header: request("/v1/limits/long-label"), port: 6737, now: instant) { rows }
+        XCTAssertEqual(single.status, 200)
+        XCTAssertEqual((try json(single)["providers"] as? [String: Any])?.count, 0)
+        XCTAssertEqual(AIUsageLocalAPI.route(header: request("/v1/limits/Bad%20ID!"), port: 6737,
+                                             snapshots: { rows }).status, 404)
+    }
+
+    func testHeaderNamesMayContainDigitsAndNoContentIsBodyless() throws {
+        let digits = AIUsageLocalAPI.route(header: request(extra: "X-B3-TraceId: abc\r\n"), port: 6737) { [] }
+        XCTAssertEqual(digits.status, 200)
+        let options = AIUsageLocalAPI.route(header: request(method: "OPTIONS"), port: 6737) { [] }
+        XCTAssertEqual(options.status, 204)
+        let wire = String(decoding: options.httpData(), as: UTF8.self)
+        XCTAssertFalse(wire.lowercased().contains("content-length"))
+        let ok = String(decoding: AIUsageLocalAPI.route(header: request(), port: 6737) { [] }.httpData(), as: UTF8.self)
+        XCTAssertTrue(ok.contains("Content-Length:"))
     }
 
     func testBindFailureIsVisible() throws {

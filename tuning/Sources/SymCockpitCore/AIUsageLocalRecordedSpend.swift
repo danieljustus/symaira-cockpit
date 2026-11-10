@@ -47,7 +47,7 @@ public struct AIUsageLocalRecordedSpend: Sendable, Equatable {
         let incompatible = calendars.count > 1
         contributions = selected.map { id in
             guard let history = histories[id] else {
-                return Contribution(id: id, value: nil, detail: "History absent or invalid; refresh to retry")
+                return Contribution(id: id, value: nil, detail: "History absent or invalid; an older symbrain may not return it. Update symbrain, then refresh")
             }
             guard !incompatible else { return Contribution(id: id, value: nil, detail: "Incompatible history calendars") }
             guard history.status == .available || (mode == .tokens && history.status == .partial), history.excludedEvents == 0 else {

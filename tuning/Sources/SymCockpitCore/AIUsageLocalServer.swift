@@ -9,6 +9,8 @@ import Network
 public final class AIUsageLocalServer: @unchecked Sendable {
     public enum ServerError: Error, Equatable {
         case alreadyStarted
+        /// `stop()` is final: a stopped instance never listens again.
+        case stopped
         case startupTimeout
         case bindFailed(String)
     }
@@ -30,6 +32,12 @@ public final class AIUsageLocalServer: @unchecked Sendable {
     private var clients: [UUID: Client] = [:]
     private var boundPort: UInt16?
     private var startupError: ServerError?
+    private let stoppedLock = NSLock()
+    private var stoppedFlag = false
+    private var stopped: Bool {
+        get { stoppedLock.withLock { stoppedFlag } }
+        set { stoppedLock.withLock { stoppedFlag = newValue } }
+    }
 
     /// Port zero asks the OS for an ephemeral port (tests); CLI opt-in uses 6737.
     public init(port: UInt16 = 6737, snapshots: @escaping @Sendable () -> [AIUsageService.ProviderResult]) {
@@ -44,6 +52,7 @@ public final class AIUsageLocalServer: @unchecked Sendable {
     public func start() throws -> UInt16 {
         let ready = DispatchSemaphore(value: 0)
         try queue.sync {
+            guard !stopped else { throw ServerError.stopped }
             guard listener == nil else { throw ServerError.alreadyStarted }
             let parameters = NWParameters.tcp
             parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: requestedPort)!)
@@ -86,15 +95,24 @@ public final class AIUsageLocalServer: @unchecked Sendable {
         }
     }
 
+    /// Non-blocking, synchronous half of `stop()`: after it returns, `start()`
+    /// throws `ServerError.stopped` even if a start is already scheduled but has
+    /// not yet reached the server queue. Call `stop()` afterwards to tear down.
+    public func invalidate() { stopped = true }
+
     /// Revokes access on the callback queue and waits up to three seconds total
-    /// for queue admission and native cancellation. False means shutdown is still
+    /// for queue admission and native cancellation. Final: once `stop()` has
+    /// been requested, `start()` throws `ServerError.stopped`; create a new
+    /// instance to listen again. False means shutdown is still
     /// pending (including on-queue calls); off-queue stop() can observe completion.
     @discardableResult
     public func stop() -> Bool {
         if DispatchQueue.getSpecific(key: queueKey) == true {
+            stopped = true
             close()
             return cancellations.wait(timeout: .now()) == .success
         }
+        invalidate()
         let deadline = DispatchTime.now() + 3
         let closed = DispatchSemaphore(value: 0)
         queue.async { [weak self] in self?.close(); closed.signal() }

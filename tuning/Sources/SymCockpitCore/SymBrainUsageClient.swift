@@ -176,7 +176,9 @@ public enum SymBrainUsageError: Error, LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .providerSelectionUnsupported: return "Update symbrain to use provider-specific refresh safely"
+        case .providerSelectionUnsupported:
+            return "Installed symbrain is too old for provider-specific refresh; update symbrain "
+                + "(needs \(SymBrainUsageClient.requiredContract))"
         case .binaryUnavailable: return "symbrain is not installed"
         case .commandFailed: return "symbrain usage failed"
         case .emptyOutput: return "symbrain usage returned no output"
@@ -281,6 +283,19 @@ public extension SymBrainUsageClientProtocol {
 
 /// Runtime adapter for the published symbrain usage contract.
 public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
+    /// The minimum contract Cockpit relies on, named in user-facing errors:
+    /// `symbrain usage --providers a,b` (selection) and the per-provider
+    /// `SYMBRAIN_USAGE_*_HISTORY` environment flags (recorded history).
+    public static let requiredContract = "`symbrain usage --providers` and the SYMBRAIN_USAGE_*_HISTORY consent flags"
+
+    /// Stderr phrases an older Brain prints when it rejects an unknown flag.
+    /// Only matched in-process; stderr is never surfaced.
+    static func looksLikeUnsupportedSelection(_ standardError: Data) -> Bool {
+        let text = String(decoding: standardError.prefix(4096), as: UTF8.self).lowercased()
+        return ["unknown flag", "unknown option", "unrecognized option", "unrecognized argument",
+                "unexpected argument", "flag provided but not defined"].contains { text.contains($0) }
+    }
+
     private let runner: any SymBrainCommandRunner
     private let environment: [String: String]
     private let credentialReference: @Sendable (String) -> String?
@@ -352,7 +367,10 @@ public struct SymBrainUsageClient: SymBrainUsageClientProtocol, Sendable {
                                           codexHistoryEnabled: codexHistoryEnabled, codexHistoryOnly: codexHistoryOnly)
         )
         guard result.terminationStatus == 0 else {
-            if selection != nil && result.terminationStatus == 2 {
+            // Brains without `--providers` reject the flag, usually with usage
+            // status 2 but not always; the stderr phrase covers other statuses.
+            if selection != nil && (result.terminationStatus == 2
+                || Self.looksLikeUnsupportedSelection(result.standardError)) {
                 throw SymBrainUsageError.providerSelectionUnsupported
             }
             throw SymBrainUsageError.commandFailed(result.terminationStatus)

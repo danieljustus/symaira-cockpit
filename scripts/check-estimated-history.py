@@ -18,23 +18,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['go', 'rust', 'receipt', 'test-bundle', 'run-root', 'evidence']:
         parser.add_argument('--' + name, type=Path, required=True)
-    args = parser.parse_args()
     helpers = runpy.run_path(str(Path(__file__).with_name('check-paired-history.py')))
-    digest, inventory = helpers['digest'], helpers['inventory']
+    digest, inventory, require = helpers['digest'], helpers['inventory'], helpers['require']
+    helpers['add_environment_options'](parser, ['/Volumes/1TB_NVMe_SN850X/Dev/Symaira_Dev/builds'])
+    args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     root = args.run_root.resolve()
-    assert root.is_relative_to(Path('/Volumes/1TB_NVMe_SN850X/Dev/Symaira_Dev/builds'))
-    assert not root.exists()
-    assert shutil.disk_usage(root.parent).free >= 5 * 1024**3
+    require(any(root.is_relative_to(base) for base in helpers['allowed_roots'](args)),
+            'run root %s is not below an allowed build root' % root)
+    require(not root.exists(), 'Refuse to overwrite a previous run')
+    require(shutil.disk_usage(root.parent).free >= 5 * 1024**3, '5 GiB reserve')
     receipt_bytes = args.receipt.read_bytes()
     receipt = json.loads(receipt_bytes)
     binaries = {lane: getattr(args, lane).resolve(strict=True) for lane in ['go', 'rust']}
     hashes = {lane: digest(binary) for lane, binary in binaries.items()}
     for lane in binaries:
-        assert {c['binary_sha256'] for c in receipt['checks'] if c['lane'] == lane} == {hashes[lane]}
-    assert args.test_bundle.is_dir() and args.test_bundle.suffix == '.xctest'
+        require({c['binary_sha256'] for c in receipt['checks'] if c['lane'] == lane} == {hashes[lane]})
+    require(args.test_bundle.is_dir() and args.test_bundle.suffix == '.xctest')
     args.evidence.mkdir(parents=True, exist_ok=True)
-    assert not (args.evidence / 'receipt.json').exists()
+    require(not (args.evidence / 'receipt.json').exists())
     paths = subprocess.check_output(['git', 'ls-files', '-co', '--exclude-standard', '-z'], cwd=repo).decode().split('\0')
     source = {p: digest(repo / p) for p in sorted(set(paths)) if p and (repo / p).is_file()}
     bundle = inventory(args.test_bundle)
@@ -108,8 +110,8 @@ def main():
         skipped = re.findall(r"Test Case '-\[([^]]+)\]' skipped", text)
         records.append(dict(name=name, command=command, exit=result.returncode, passed=passed, skipped=skipped))
         (args.evidence / 'commands.json').write_text(json.dumps(records, indent=2))
-        assert result.returncode == 0 and passed == ['SymCockpitE2ETests.AIUsageEstimatedHistoryPairTests ' + method] and not skipped, name
-        assert 'Executed 1 test, with 0 failures' in text
+        require(result.returncode == 0 and passed == ['SymCockpitE2ETests.AIUsageEstimatedHistoryPairTests ' + method] and not skipped, name)
+        require('Executed 1 test, with 0 failures' in text)
         return text
     # Verify cfprefsd's actual isolated file before any production preference writes.
     env['ESTIMATED_HISTORY_RUNNER'] = str(binaries['go'])
@@ -118,16 +120,16 @@ def main():
         text = run('preferences-' + phase, 'testSeparateProcessConsents', dict(env, ESTIMATED_HISTORY_PHASE=phase))
         pids.append(int(re.search(r'pid=(\d+)', text).group(1)))
         persisted = plistlib.loads((root / 'preferences/Estimated.persistence.plist').read_bytes())
-        assert persisted['sentinel'] == 'isolated-estimated-history'
+        require(persisted['sentinel'] == 'isolated-estimated-history')
         (args.evidence / ('preferences-' + phase + '.json')).write_text(json.dumps(persisted, indent=2))
-    assert len(set(pids)) == 4
+    require(len(set(pids)) == 4)
     for provider in ['claude', 'codex']:
         for suffix in ['HistoryEnabled', 'HistoryOnly']:
-            assert persisted['com.symaira.symtune.aiUsage.' + provider + suffix] is False
+            require(persisted['com.symaira.symtune.aiUsage.' + provider + suffix] is False)
     for lane, binary in binaries.items():
         profile = root / (lane + '.sb')
         profile.write_text('(version 1)(allow default)(deny network*)'
-            '(deny file-read* (subpath "/Users/daniel") (subpath "/Library/Keychains")'
+            '(deny file-read* (subpath ' + json.dumps(str(args.deny_home)) + ') (subpath "/Library/Keychains")'
             '(subpath (param "DENIED_CLAUDE")) (subpath (param "DENIED_CODEX")))'
             '(deny file-write*)(allow file-write* (subpath ' + json.dumps(str(root)) + '))'
             '(deny process-exec)(allow process-exec (literal ' + json.dumps(str(binary)) + '))')
@@ -143,11 +145,11 @@ def main():
             ' "$@" > "$capture.stdout.json" 2> "$capture.stderr"\nstatus=$?\n/bin/cat "$capture.stdout.json"\n/bin/cat "$capture.stderr" >&2\nexit "$status"\n')
         wrapper.chmod(0o700)
         run(lane + '-paired', 'testNativeClientServiceModelAndOverview', dict(env, ESTIMATED_HISTORY_RUNNER=str(wrapper)))
-    assert fixtures == {name: inventory(root / name) for name in fixtures}
-    assert not (root / 'TRAP').exists()
-    assert source == {p: digest(repo / p) for p in source}
-    assert bundle == inventory(args.test_bundle)
-    assert hashes == {lane: digest(binary) for lane, binary in binaries.items()}
+    require(fixtures == {name: inventory(root / name) for name in fixtures})
+    require(not (root / 'TRAP').exists())
+    require(source == {p: digest(repo / p) for p in source})
+    require(bundle == inventory(args.test_bundle))
+    require(hashes == {lane: digest(binary) for lane, binary in binaries.items()})
     result = dict(source_class='synthetic canonical local JSONL through native production Swift client/service/view-model and Go/Rust',
                   binaries=hashes, parent_receipt_sha256=hashlib.sha256(receipt_bytes).hexdigest(),
                   records=records, preference_pids=pids, source_unchanged=True, bundle_unchanged=True, fixtures_unchanged=True, skips=0)

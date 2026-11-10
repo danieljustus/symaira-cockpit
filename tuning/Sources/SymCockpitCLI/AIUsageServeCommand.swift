@@ -2,12 +2,16 @@ import Foundation
 import SymCockpitCore
 
 /// Explicit opt-in HTTP reader. Requests never fetch providers: the running GUI
-/// or `ai-usage --force` writes the shared cache independently.
+/// or `ai-usage --force` writes the shared cache independently. Only providers
+/// the user enabled in the GUI are served (re-read on every refresh tick).
 func runAIUsageServe(_ args: [String], controller: TuneController) throws {
     if args.contains("--help") || args.contains("-h") {
         emit("Usage: symcockpit ai-usage serve [--port 6737]")
         emit("Serves cached usage on 127.0.0.1 only. No provider requests. Stop with Ctrl-C.")
+        emit("Only providers enabled in the Symaira Cockpit app's AI usage settings are served;")
+        emit("providers disabled there, and all providers when none is enabled, are not.")
         emit("GET /v1/limits and /v1/usage, optionally followed by /provider-id.")
+        emit("Clients must use the literal host 127.0.0.1:<port> (localhost and [::1] are refused).")
         emit("Browser-origin requests are refused. Other local processes can read the data.")
         return
     }
@@ -20,7 +24,7 @@ func runAIUsageServe(_ args: [String], controller: TuneController) throws {
         throw TuneError.usage("ai-usage serve: expected --port 0...65535")
     }
     let snapshots = AIUsageLocalSnapshots()
-    snapshots.replace(controller.cachedAIUsageReport())
+    snapshots.replace(controller.cachedAIUsageReport(providerIDs: AIUsageEnabledProviders.loadPersisted()))
     let server = AIUsageLocalServer(port: port, snapshots: snapshots.read)
     let done = DispatchSemaphore(value: 0)
     let oldInt = signal(SIGINT, SIG_IGN)
@@ -40,6 +44,6 @@ func runAIUsageServe(_ args: [String], controller: TuneController) throws {
     let boundPort = try server.start()
     emit("AI usage API: http://127.0.0.1:\(boundPort) (cache only; Ctrl-C to stop)")
     while done.wait(timeout: .now() + 2) == .timedOut {
-        snapshots.replace(controller.cachedAIUsageReport())
+        snapshots.replace(controller.cachedAIUsageReport(providerIDs: AIUsageEnabledProviders.loadPersisted()))
     }
 }

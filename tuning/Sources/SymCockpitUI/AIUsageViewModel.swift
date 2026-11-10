@@ -41,16 +41,19 @@ final class AIUsageViewModel {
     private let fetchClaudeHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])?
     private let fetchHistory: (@Sendable (Set<String>, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])?
     private let cached: @Sendable (Set<String>) -> [AIUsageService.ProviderResult]
+    private let purge: @Sendable (Set<String>) -> Void
     private var preferenceObserver: AnyCancellable?
     private var historyBuffers: [String: MetricsRingBuffer] = [:]
     private var refreshTask: Task<Void, Never>?
     private(set) var isRefreshing = false
+    private var queuedProviders: Set<String> = []
     private var isStopped = false
 
     convenience init(controller: TuneController, preferences: AIUsagePreferences) {
         let service = controller.aiUsageService
         self.init(providers: service.providers, preferences: preferences,
             cached: { service.cachedResults(providerIDs: $0) },
+            purge: { service.purgeCache(providerIDs: $0) },
             fetchEstimatedHistory: { await service.usageAll(providerIDs: $0, force: $1, grokHistoryEnabled: $2,
                 opencodeHistoryEnabled: $3, claudeHistoryEnabled: $4, claudeHistoryOnly: $5,
                 codexHistoryEnabled: $6, codexHistoryOnly: $7) },
@@ -59,6 +62,7 @@ final class AIUsageViewModel {
 
     init(providers: [any AIUsageProvider], preferences: AIUsagePreferences,
          cached: @escaping @Sendable (Set<String>) -> [AIUsageService.ProviderResult] = { _ in [] },
+         purge: @escaping @Sendable (Set<String>) -> Void = { _ in },
          fetchEstimatedHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
          fetchClaudeHistory: (@Sendable (Set<String>, Bool, Bool, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
          fetchHistory: (@Sendable (Set<String>, Bool, Bool, Bool) async -> [AIUsageService.ProviderResult])? = nil,
@@ -66,10 +70,12 @@ final class AIUsageViewModel {
         self.providers = providers
         self.preferences = preferences
         self.cached = cached
+        self.purge = purge
         self.fetch = fetch
         self.fetchHistory = fetchHistory
         self.fetchClaudeHistory = fetchClaudeHistory
         self.fetchEstimatedHistory = fetchEstimatedHistory
+        preferences.onProvidersDisabled = { [weak self] ids in self?.purge(ids) }
         preferences.onUsageSelectionChanged = { [weak self] in
             guard let self else { return }
             self.rows.removeAll { !self.preferences.isEnabled($0.id) }
@@ -142,12 +148,23 @@ final class AIUsageViewModel {
 
     func stop() {
         isStopped = true
+        queuedProviders.removeAll()
         refreshTask?.cancel()
         refreshTask = nil
         localAPI.stop()
     }
 
     func refreshNow(providerID: String? = nil) { Task { await refresh(providerID: providerID) } }
+
+    /// Runs one queued per-provider refresh; each finished refresh chains the next.
+    private func startQueuedRefresh() {
+        guard !isStopped, let next = queuedProviders.sorted().first else {
+            queuedProviders.removeAll()
+            return
+        }
+        queuedProviders.remove(next)
+        refreshNow(providerID: next)
+    }
 
     func refresh(providerID: String? = nil, force: Bool = true) async {
         guard !isStopped else { return }
@@ -158,9 +175,18 @@ final class AIUsageViewModel {
             updateStatusItem()
             return
         }
-        guard !isRefreshing else { return }
+        guard !isRefreshing else {
+            // A per-provider request (for example "Refresh X") must not vanish
+            // while another refresh runs: queue it for when that one finishes.
+            // Whole-set requests stay coalesced into the running one.
+            if let providerID, enabled.contains(providerID) { queuedProviders.insert(providerID) }
+            return
+        }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            startQueuedRefresh()
+        }
         let selected = providerID.map { enabled.intersection([$0]) } ?? enabled
         guard !selected.isEmpty else { return }
         let results: [AIUsageService.ProviderResult]

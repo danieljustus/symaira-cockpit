@@ -29,10 +29,48 @@ final class AIUsageAPIHostTests: XCTestCase {
         XCTAssertEqual((object["providers"] as? [String: Any])?.count, 0)
         host.update(enabled: false, rows: rows)
         XCTAssertEqual(host.status, "Local API is off")
-        do {
-            _ = try await session.data(for: request)
-            XCTFail("Disabled API still accepts requests")
-        } catch { /* Connection refusal is the expected disabled state. */ }
+        // Shutdown runs off the main actor, so refusal is eventual, not immediate.
+        let refusalDeadline = Date().addingTimeInterval(5)
+        var refused = false
+        while !refused, Date() < refusalDeadline {
+            do {
+                _ = try await session.data(for: request)
+                try await Task.sleep(for: .milliseconds(20))
+            } catch is CancellationError {
+                break
+            } catch { refused = true }
+        }
+        XCTAssertTrue(refused, "Disabled API still accepts requests")
+    }
+
+    @MainActor
+    func testStartFailureNamesTheActualPort() async throws {
+        let occupier = AIUsageLocalServer(port: 0) { [] }
+        let taken = try occupier.start()
+        defer { occupier.stop() }
+        let host = AIUsageAPIHost(port: taken)
+        host.update(enabled: true, rows: [])
+        defer { host.stop() }
+        let deadline = Date().addingTimeInterval(5)
+        while host.status == "Starting local API…", Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(host.status.contains("port \(taken)."), host.status)
+        XCTAssertFalse(host.status.contains("6737") && taken != 6737, host.status)
+    }
+
+    @MainActor
+    func testDisableThenEnableRebindsWithoutRacingTheStoppedInstance() async throws {
+        let host = AIUsageAPIHost(port: 0)
+        defer { host.stop() }
+        host.update(enabled: true, rows: [])
+        host.update(enabled: false, rows: [])
+        host.update(enabled: true, rows: [])
+        let deadline = Date().addingTimeInterval(5)
+        while host.status == "Starting local API…", Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(host.status.hasPrefix("Local API: 127.0.0.1:"), host.status)
     }
 
     @MainActor

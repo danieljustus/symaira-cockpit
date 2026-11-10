@@ -189,7 +189,7 @@ struct TopProcessesTool: TuneTool {
 
 struct GetAIUsageTool: TuneTool {
     let name = "get_ai_usage"
-    let description = "Read AI subscription/token usage per provider (OpenRouter, …). Read-only; never returns credential material. Unconfigured providers report as not set up."
+    let description = "Read AI subscription/token usage per provider (OpenRouter, …). Read-only; never returns credential material. Unconfigured providers report as not set up. This tool takes no arguments and always queries every catalog provider through symbrain (credential/local-auth discovery included), regardless of which providers are enabled in the Cockpit app. To limit discovery to one provider, use the CLI: `symcockpit ai-usage <provider>`."
     let inputSchema = MCPJSONSchema()
     var isReadOnly: Bool { true }
 

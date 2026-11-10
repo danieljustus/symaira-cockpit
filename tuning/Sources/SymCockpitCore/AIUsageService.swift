@@ -117,6 +117,12 @@ public struct AIUsageService: @unchecked Sendable {
         for provider in providers { cache?.remove(providerID: provider.id) }
     }
 
+    /// Drops the cached snapshots of specific providers (for example when the
+    /// user disables them), so a disabled provider's meters cannot be served.
+    public func purgeCache(providerIDs: Set<String>) {
+        for id in providerIDs { cache?.remove(providerID: id) }
+    }
+
     /// Doctor now reports the same auth source/status used by the usage screen.
     public func credentialSources() -> [CredentialSourceReport] {
         providers.map {
@@ -136,7 +142,9 @@ public struct AIUsageService: @unchecked Sendable {
 
         for provider in providers {
             guard let row = report.providers.first(where: { $0.id == provider.id }) else {
-                results.append(ProviderResult(providerID: provider.id, snapshot: nil, error: "AI usage unavailable."))
+                // A provider added in a newer Cockpit than the installed Brain is absent from its report.
+                results.append(ProviderResult(providerID: provider.id, snapshot: nil,
+                    error: "AI usage unavailable. symbrain did not report this provider; it may need an update."))
                 continue
             }
 

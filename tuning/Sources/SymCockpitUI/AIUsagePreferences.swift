@@ -16,11 +16,16 @@ final class AIUsagePreferences: ObservableObject {
             }
             enabledRevision += 1
             defaults.set(Array(enabledProviders), forKey: Keys.enabledProviders)
+            let disabled = oldValue.subtracting(enabledProviders)
+            if !disabled.isEmpty { onProvidersDisabled?(disabled) }
             onUsageSelectionChanged?()
         }
     }
     private(set) var enabledRevision = 0
     var onUsageSelectionChanged: (() -> Void)?
+    /// Called with the providers that just left the enabled set, so their cached
+    /// meters are purged and cannot be served by other surfaces afterwards.
+    var onProvidersDisabled: ((Set<String>) -> Void)?
 
     @Published var claudeHistoryEnabled: Bool {
         didSet {
@@ -177,7 +182,7 @@ final class AIUsagePreferences: ObservableObject {
     private let defaults: UserDefaults
 
     private enum Keys {
-        static let enabledProviders = "com.symaira.symtune.aiUsage.enabledProviders"
+        static let enabledProviders = AIUsageEnabledProviders.defaultsKey
         static let refreshInterval = "com.symaira.symtune.aiUsage.refreshInterval"
         static let menuBarEnabled = "com.symaira.symtune.aiUsage.menuBarEnabled"
         static let codexHistoryEnabled = "com.symaira.symtune.aiUsage.codexHistoryEnabled"
@@ -232,7 +237,8 @@ final class AIUsagePreferences: ObservableObject {
     }
 
     /// Toggles a provider on or off. Disabling never clears the Keychain
-    /// credentials — re-enabling stays frictionless.
+    /// credentials — re-enabling stays frictionless — but it purges the
+    /// provider's cached usage snapshot (`onProvidersDisabled`).
     func setEnabled(_ providerID: String, _ enabled: Bool) {
         if enabled {
             enabledProviders.insert(providerID)

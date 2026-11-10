@@ -120,6 +120,9 @@ func runAIUsage(_ args: [String], controller: TuneController) throws {
         emit("legacy per-provider result form shared with MCP get_ai_usage.")
         emit("Reuses snapshots younger than five minutes; --force refreshes now.")
         emit("A provider argument limits credential discovery and requests to that provider.")
+        emit("Without a provider argument every catalog provider is queried by symbrain,")
+        emit("regardless of which providers are enabled in the Cockpit app.")
+        emit("Example: symcockpit ai-usage claude --json")
         return
     }
     let wantsJSON = args.contains("--json")

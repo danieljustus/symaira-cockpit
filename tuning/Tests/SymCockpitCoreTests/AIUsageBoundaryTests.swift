@@ -28,6 +28,42 @@ final class AIUsageBoundaryTests: XCTestCase {
         XCTAssertFalse(client.called)
     }
 
+    func testOlderBrainRejectingProvidersFlagMapsToUpdateMessageForAnyExitStatus() throws {
+        for (status, stderr) in [(2, ""), (1, "Error: unknown flag: --providers\n"),
+                                 (64, "unrecognized option '--providers'"), (1, "flag provided but not defined: -providers")] {
+            let runner = FailingBrainRunner(status: Int32(status), stderr: stderr)
+            let client = SymBrainUsageClient(runner: runner, environment: [:], credentialReference: { _ in nil })
+            XCTAssertThrowsError(try client.fetchReport(providerIDs: ["codex"]), "status \(status)") { error in
+                XCTAssertEqual(error as? SymBrainUsageError, .providerSelectionUnsupported)
+            }
+        }
+        // An unrelated failure stays an honest generic failure, not an "update" hint.
+        let broken = SymBrainUsageClient(runner: FailingBrainRunner(status: 1, stderr: "network down"),
+                                         environment: [:], credentialReference: { _ in nil })
+        XCTAssertThrowsError(try broken.fetchReport(providerIDs: ["codex"])) { error in
+            XCTAssertEqual(error as? SymBrainUsageError, .commandFailed(1))
+        }
+        // The unselected path never maps to the selection error.
+        XCTAssertThrowsError(try broken.fetchReport()) { error in
+            XCTAssertEqual(error as? SymBrainUsageError, .commandFailed(1))
+        }
+    }
+
+    func testUpdateMessageNamesTheRequiredContractAndStaysSecretFree() {
+        let message = SymBrainUsageError.providerSelectionUnsupported.errorDescription ?? ""
+        XCTAssertTrue(message.contains("update symbrain"), message)
+        XCTAssertTrue(message.contains("--providers"), message)
+        XCTAssertTrue(message.contains("SYMBRAIN_USAGE_*_HISTORY"), message)
+    }
+
+    func testProviderMissingFromAnOlderBrainReportNamesTheCause() async {
+        let service = AIUsageService(providers: [SymBrainUsageProvider(id: "zai", displayName: "Z.ai")],
+                                     client: EmptyReportClient())
+        let result = await service.usageAll(providerIDs: ["zai"])
+        XCTAssertTrue(result.first?.error?.hasPrefix("AI usage unavailable.") == true)
+        XCTAssertTrue(result.first?.error?.contains("symbrain did not report this provider") == true)
+    }
+
     private func decodeSnapshot(used: String, label: String = "Session") throws -> SymBrainUsageSnapshot {
         let object: [String: Any] = [
             "provider_id": "codex", "fetched_at": "2026-10-28T08:00:00Z", "source": "oauth",
@@ -46,5 +82,20 @@ private final class AllOnlyClient: SymBrainUsageClientProtocol, @unchecked Senda
     func fetchReport() throws -> SymBrainUsageReport {
         lock.withLock { didCall = true }
         throw SymBrainUsageError.binaryUnavailable
+    }
+}
+
+private struct FailingBrainRunner: SymBrainCommandRunner {
+    let status: Int32
+    let stderr: String
+    func run(arguments: [String], environment: [String: String]) throws -> SymBrainCommandResult {
+        SymBrainCommandResult(standardOutput: Data(), standardError: Data(stderr.utf8), terminationStatus: status)
+    }
+}
+
+private struct EmptyReportClient: SymBrainUsageClientProtocol {
+    func fetchReport() throws -> SymBrainUsageReport { SymBrainUsageReport(schemaVersion: 1, providers: []) }
+    func fetchReport(providerIDs: Set<String>) throws -> SymBrainUsageReport {
+        SymBrainUsageReport(schemaVersion: 1, providers: [])
     }
 }

@@ -2,7 +2,14 @@
 """Run opt-in XCTest against receipt-validated native Brains, never user history.
 
 Build the root tests first, then supply the resulting .xctest bundle. All fixture
-and HOME directories must be a new run directory beneath Dev/builds or Dev/Symaira_Dev/builds.
+and HOME directories must be a new run directory beneath an allowed build root
+(`--allowed-root`, repeatable; or SYMAIRA_HISTORY_BUILD_ROOTS, os.pathsep-separated;
+default: /Volumes/1TB_NVMe_SN850X/Dev/builds and .../Dev/Symaira_Dev/builds). The
+sandbox denies reads below the user's home (`--deny-home`, or
+SYMAIRA_HISTORY_DENY_HOME; default: the current user's home directory).
+
+Every safety gate is an explicit check that exits non-zero, so it still holds
+under `python -O`.
 """
 import argparse
 import datetime
@@ -21,6 +28,32 @@ import time
 from contextlib import closing
 
 
+DEFAULT_BUILD_ROOTS = ["/Volumes/1TB_NVMe_SN850X/Dev/builds", "/Volumes/1TB_NVMe_SN850X/Dev/Symaira_Dev/builds"]
+
+
+def require(condition, message="check failed"):
+    """Safety gate: unlike `assert`, never stripped by `python -O`."""
+    if not condition:
+        sys.exit("error: %s" % (message,))
+
+
+def add_environment_options(parser, default_roots=None):
+    """Adds the machine-specific settings as options with env/default fallbacks."""
+    env_roots = os.environ.get("SYMAIRA_HISTORY_BUILD_ROOTS")
+    roots = [Path(p) for p in env_roots.split(os.pathsep) if p] if env_roots else \
+        [Path(p) for p in (default_roots or DEFAULT_BUILD_ROOTS)]
+    parser.add_argument("--allowed-root", type=Path, action="append",
+                        help="allowed build root for --run-root (repeatable; default: %s)" % ", ".join(map(str, roots)))
+    parser.add_argument("--deny-home", type=Path,
+                        default=Path(os.environ.get("SYMAIRA_HISTORY_DENY_HOME") or Path.home()),
+                        help="home directory whose reads the sandbox denies (default: current user's home)")
+    parser.set_defaults(default_allowed_roots=roots)
+
+
+def allowed_roots(args):
+    return [Path(p).resolve() for p in (args.allowed_root or args.default_allowed_roots)]
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -34,26 +67,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ["go", "rust", "receipt", "test-bundle", "run-root", "evidence"]:
         parser.add_argument("--" + name, type=Path, required=True)
+    add_environment_options(parser)
     args = parser.parse_args()
     existing_parent = next(p for p in args.run_root.parents if p.exists())
-    assert shutil.disk_usage(existing_parent).free >= 5 * 1024**3, "5 GiB reserve"
+    require(shutil.disk_usage(existing_parent).free >= 5 * 1024**3, "5 GiB reserve")
     root = args.run_root.resolve()
-    assert any(root.is_relative_to(Path(p)) for p in [
-        "/Volumes/1TB_NVMe_SN850X/Dev/builds", "/Volumes/1TB_NVMe_SN850X/Dev/Symaira_Dev/builds"])
-    assert not root.exists(), "Refuse to overwrite a previous run"
+    require(any(root.is_relative_to(base) for base in allowed_roots(args)),
+            "run root %s is not below an allowed build root" % root)
+    require(not root.exists(), "Refuse to overwrite a previous run")
     binaries = {lane: getattr(args, lane).resolve(strict=True) for lane in ["go", "rust"]}
     receipt_bytes = args.receipt.read_bytes()
     receipt = json.loads(receipt_bytes)
     hashes = {}
     for lane, binary in binaries.items():
         expected = {c["binary_sha256"] for c in receipt["checks"] if c["lane"] == lane}
-        assert len(expected) == 1 and re.fullmatch("[0-9a-f]{64}", next(iter(expected)))
+        require(len(expected) == 1 and re.fullmatch("[0-9a-f]{64}", next(iter(expected))))
         hashes[lane] = digest(binary)
-        assert expected == {hashes[lane]}, (lane, "final receipt mismatch")
-        assert os.access(binary, os.X_OK)
-    assert args.test_bundle.is_dir() and args.test_bundle.suffix == ".xctest"
+        require(expected == {hashes[lane]}, (lane, "final receipt mismatch"))
+        require(os.access(binary, os.X_OK))
+    require(args.test_bundle.is_dir() and args.test_bundle.suffix == ".xctest")
     args.evidence.mkdir(parents=True, exist_ok=True)
-    assert not (args.evidence / "receipt.json").exists(), "Retain previous receipt"
+    require(not (args.evidence / "receipt.json").exists(), "Retain previous receipt")
     root.mkdir(parents=True)
     records = []
     repo = Path(__file__).resolve().parents[1]
@@ -75,8 +109,8 @@ def main():
             passed = re.findall(r"Test Case '-\[([^]]+)\]' passed", text)
             skipped = re.findall(r"Test Case '-\[([^]]+)\]' skipped", text)
             record.update(passed=passed, skipped=skipped)
-            assert result.returncode == 0 and passed == [expected_test] and not skipped, (name, record)
-            assert "Executed 1 test, with 0 failures" in text, (name, "missing executed summary")
+            require(result.returncode == 0 and passed == [expected_test] and not skipped, (name, record))
+            require("Executed 1 test, with 0 failures" in text, (name, "missing executed summary"))
         return result
 
     # Only these synthetic data roots are ever passed to the production Swift client.
@@ -130,7 +164,7 @@ def main():
         profile = root / (lane + ".sb")
         profile.write_text('(version 1)(allow default)(deny network*)'
                            '(deny file-read* (subpath (param "DENIED_GROK")) (subpath (param "DENIED_OPENCODE")))'
-                           '(deny file-read* (subpath "/Users/daniel") (subpath "/Library/Keychains"))'
+                           '(deny file-read* (subpath ' + json.dumps(str(args.deny_home)) + ') (subpath "/Library/Keychains"))'
                            '(deny file-write*)(allow file-write* (subpath ' + json.dumps(str(root)) + '))'
                            '(deny process-exec)(allow process-exec (literal ' + json.dumps(str(binary)) + '))')
         wrapper = root / (lane + "-brain")
@@ -158,38 +192,38 @@ def main():
             "SymCockpitE2ETests.AIUsagePairedHistoryTests testSeparateProcessPreferences")
     pids = [int(re.search(rb"pid=(\d+)", (args.evidence / ("preferences-" + p + ".stdout")).read_bytes()).group(1))
             for p in ["write", "read-revoke", "read-revoked"]]
-    assert len(set(pids)) == 3
+    require(len(set(pids)) == 3)
     preference_file = root / "preferences-home/PairedHistory.persistence.plist"
     persisted = plistlib.loads(preference_file.read_bytes())
     prefix = "com.symaira.symtune.aiUsage."
-    assert persisted[prefix + "grokHistoryEnabled"] is False
-    assert persisted[prefix + "opencodeHistoryEnabled"] is False
-    assert persisted[prefix + "localSpendPeriod"] == "yesterday"
-    assert persisted[prefix + "localSpendMode"] == "costPerMillion"
+    require(persisted[prefix + "grokHistoryEnabled"] is False)
+    require(persisted[prefix + "opencodeHistoryEnabled"] is False)
+    require(persisted[prefix + "localSpendPeriod"] == "yesterday")
+    require(persisted[prefix + "localSpendMode"] == "costPerMillion")
     (args.evidence / "isolated-preference-readback.json").write_text(json.dumps(persisted, indent=2) + "\n")
     # Actual denial controls: no connection is attempted beyond the kernel-denied loopback socket.
     profile = root / "rust.sb"
     control_profile = profile.read_text().replace('(param "DENIED_GROK")', json.dumps(str(root / "absent")))
     control_profile = control_profile.replace('(param "DENIED_OPENCODE")', json.dumps(str(root / "absent")))
     control_python = Path(sys.base_prefix) / "Resources/Python.app/Contents/MacOS/Python"
-    assert control_python.is_file(), "Need the real framework interpreter, not its posix_spawn launcher"
+    require(control_python.is_file(), "Need the real framework interpreter, not its posix_spawn launcher")
     control_profile += '(allow process-exec (literal ' + json.dumps(str(control_python)) + ') (literal "/bin/cat"))'
     denied = run("network-denial", ["/usr/bin/sandbox-exec", "-p", control_profile, str(control_python),
                  "-I", "-S", "-c", 'import socket; socket.create_connection(("127.0.0.1", 9), timeout=1)'], environment)
-    assert denied.returncode != 0 and b"PermissionError: [Errno 1] Operation not permitted" in denied.stderr
+    require(denied.returncode != 0 and b"PermissionError: [Errno 1] Operation not permitted" in denied.stderr)
     sentinel = root / "denied-synthetic-sentinel"
     sentinel.write_text("synthetic privacy control only\n")
     denied = run("read-denial", ["/usr/bin/sandbox-exec", "-p", control_profile +
                  '(deny file-read* (literal ' + json.dumps(str(sentinel)) + '))', "/bin/cat", str(sentinel)], environment)
-    assert denied.returncode != 0 and not denied.stdout and b"Operation not permitted" in denied.stderr
+    require(denied.returncode != 0 and not denied.stdout and b"Operation not permitted" in denied.stderr)
     denied = run("exec-denial", ["/usr/bin/sandbox-exec", "-p", control_profile, "/usr/bin/security", "help"], environment)
-    assert denied.returncode != 0
+    require(denied.returncode != 0)
     after = {scenario: {part: inventory(root / scenario / part) for part in ["grok", "data"]} for scenario in before}
-    assert before == after and not (root / "TRAP").exists()
-    assert all(not list((root / scenario / "tmp").iterdir()) for scenario in before)
-    assert hashes == {lane: digest(binary) for lane, binary in binaries.items()}
-    assert source_before == {p: digest(repo / p) for p in source_before}
-    assert bundle_before == inventory(args.test_bundle)
+    require(before == after and not (root / "TRAP").exists())
+    require(all(not list((root / scenario / "tmp").iterdir()) for scenario in before))
+    require(hashes == {lane: digest(binary) for lane, binary in binaries.items()})
+    require(source_before == {p: digest(repo / p) for p in source_before})
+    require(bundle_before == inventory(args.test_bundle))
     observations = inventory(args.evidence)
     helpers = {str(p): digest(p) for p in [Path('/bin/sh'), Path('/bin/cat'), Path('/usr/bin/sandbox-exec'), control_python]}
     result = dict(source_class="synthetic JSONL and v1/v2 SQLite through native production Swift/Go/Rust",
