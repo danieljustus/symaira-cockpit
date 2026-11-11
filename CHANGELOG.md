@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.2] (2026-11-11)
+
 ### Fixed
 - **Fan helper could not be turned on (#411):** `SMAppService` reports a
   never-registered daemon as `notFound`, which the app read as "this build does
