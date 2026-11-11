@@ -38,7 +38,7 @@ if arguments.count == 4, arguments[1] == "--print-requirement" {
     exit(0)
 }
 
-let engine = FanHelperEngine { profileProvider, shouldContinue, sleep in
+let engine = FanHelperEngine { selectionProvider, shouldContinue, sleep in
     let smc = SMCService()
     let sensors = SensorService(smc: smc)
     let fanControl = FanControlService(smc: smc, sensors: sensors)
@@ -47,7 +47,7 @@ let engine = FanHelperEngine { profileProvider, shouldContinue, sleep in
     let governor = FanGovernor(
         fanControl: fanControl, sensors: sensors, config: TuneConfig(), sleep: sleep
     )
-    try governor.run(profileProvider: profileProvider, shouldContinue: shouldContinue)
+    try governor.run(selectionProvider: selectionProvider, shouldContinue: shouldContinue)
 }
 engine.startWatchdogTimer()
 
@@ -56,6 +56,7 @@ let listener = NSXPCListener(machServiceName: FanHelperConstants.helperIdentifie
 listener.delegate = delegate
 
 // SIGTERM (launchd stop, unregister, shutdown): restore the fans, then exit.
+// Unchanged by the idle exit below.
 signal(SIGTERM, SIG_IGN)
 let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
 termination.setEventHandler {
@@ -67,6 +68,27 @@ termination.setEventHandler {
     exit(0)
 }
 termination.resume()
+
+// Idle exit: with no client and no governor (the fans are already restored by
+// then) the helper leaves after a short grace. launchd starts the current
+// binary on the next Mach lookup, so an app upgrade swaps the helper without
+// a reboot. Never exits while governing or while a client is connected.
+let idleMonitor = FanHelperIdleMonitor(
+    isGoverning: { engine.snapshot.isGoverning },
+    hasConnection: { delegate.hasActiveConnection }
+)
+let idleTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "symaira.fan-helper.idle"))
+idleTimer.schedule(
+    deadline: .now() + FanHelperConstants.idleCheckInterval,
+    repeating: FanHelperConstants.idleCheckInterval
+)
+idleTimer.setEventHandler {
+    if idleMonitor.tick() {
+        fputs("symaira fan helper: idle, exiting (launchd restarts it on demand)\n", stderr)
+        exit(0)
+    }
+}
+idleTimer.resume()
 
 listener.resume()
 RunLoop.main.run()

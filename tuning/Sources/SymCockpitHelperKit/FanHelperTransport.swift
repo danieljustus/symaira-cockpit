@@ -63,7 +63,10 @@ public struct SMAppServiceDaemon: FanHelperDaemonService {
 /// The XPC side, narrowed to what the client uses so the heartbeat and
 /// routing logic is testable without a daemon.
 public protocol FanHelperTransport: Sendable {
-    func startGovernor(profile: String) throws
+    /// A nil `coolTarget` must use the original wire selector (see
+    /// ``FanHelperXPCProtocol/startGovernor(profile:reply:)``); a target needs a
+    /// helper that exports the newer one and otherwise times out or fails.
+    func startGovernor(profile: String, coolTarget: Double?) throws
     /// Throws when the helper is unreachable. Returns whether the helper still
     /// has a governor running (false: it gave up or was stopped meanwhile).
     func heartbeat() throws -> Bool
@@ -136,9 +139,17 @@ final class XPCFanHelperTransport: FanHelperTransport, @unchecked Sendable {
         connection.resume()
     }
 
-    func startGovernor(profile: String) throws {
+    /// Without a target this uses the original selector, which every helper
+    /// version exports; the target selector exists only on 0.11.0+ helpers.
+    func startGovernor(profile: String, coolTarget: Double?) throws {
         let message: String? = try call { proxy, done in
-            proxy.startGovernor(profile: profile) { done($0) }
+            if let coolTarget {
+                proxy.startGovernor(
+                    profile: profile, coolTargetCelsius: NSNumber(value: coolTarget)
+                ) { done($0) }
+            } else {
+                proxy.startGovernor(profile: profile) { done($0) }
+            }
         }
         if let message { throw FanHelperTransportError.rejected(message) }
     }

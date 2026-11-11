@@ -227,6 +227,9 @@ struct DisplayControlsCard: View {
 struct FanControlCard: View {
     let controller: TuneController
     let model: TuneViewModel
+    /// Where a user is sent when fan changes lack the rights to take effect.
+    let preferencesManager: PreferencesManager
+    let openPreferences: () -> Void
 
     @State private var fanError: String?
     /// Mirrors the selected position so the control can revert on failure.
@@ -236,6 +239,8 @@ struct FanControlCard: View {
     /// person is looking for their password) — surfaced so the slider does
     /// not look like it silently ignored the drag.
     @State private var isAwaitingAuthorization = false
+    /// Why the last selection was not applied and where the user was sent.
+    @State private var rightsHint: String?
 
     /// See ``MainStatusView/hasFans`` for why an unsupported SMC read (not
     /// just a missing sensors report) must also be treated as "unknown," not
@@ -280,6 +285,10 @@ struct FanControlCard: View {
                     .foregroundStyle(SymairaTokens.ink3)
                     .fixedSize(horizontal: false, vertical: true)
 
+                if selectedProfile == .comfort {
+                    FanCoolTargetRow(controller: controller, model: model)
+                }
+
                 if isAwaitingAuthorization {
                     Text("Starting the fan governor — you may be asked for your "
                          + "administrator password…")
@@ -291,6 +300,12 @@ struct FanControlCard: View {
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTokens.critical)
                         .fixedSize(horizontal: false, vertical: true)
+                } else if let rightsHint {
+                    Text(rightsHint)
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTokens.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("fan-rights-hint")
                 } else if selectedProfile != .system && !model.fanGovernorRunning {
                     // Honest reporting: a selected position with nothing
                     // enforcing it means the fans are still on the firmware
@@ -332,7 +347,14 @@ struct FanControlCard: View {
             set: { newValue in
                 let previous = selectedProfile
                 pendingProfile = newValue
+                rightsHint = nil
                 apply {
+                    // Decided off the main actor (it probes for a running
+                    // governor) and before anything is written: a user who
+                    // lacks the rights is sent to where they are granted
+                    // instead of into an administrator-password prompt.
+                    let action = controller.fanSelectionAction(for: newValue)
+                    guard case .proceed = action else { throw FanRightsNeeded(action: action) }
                     try controller.applyFanProfile(newValue, allowPrivilegeEscalation: true)
                 } onFailure: {
                     pendingProfile = previous
@@ -357,6 +379,12 @@ struct FanControlCard: View {
                 isAwaitingAuthorization = false
                 fanError = nil
                 model.refreshNow()
+            } catch let needed as FanRightsNeeded {
+                isAwaitingAuthorization = false
+                fanError = nil
+                rightsHint = needed.action.hint
+                onFailure()
+                navigate(for: needed.action)
             } catch {
                 isAwaitingAuthorization = false
                 fanError = error.localizedDescription
@@ -364,4 +392,24 @@ struct FanControlCard: View {
             }
         }
     }
+
+    /// Takes the user to where the missing fan rights are granted. Nothing was
+    /// changed, so the control has already snapped back to the old position.
+    private func navigate(for action: FanSelectionAction) {
+        switch action {
+        case .proceed:
+            break
+        case .openHelperPreferences:
+            preferencesManager.requestFanHelperSetup(hint: action.hint)
+            openPreferences()
+        case .openSystemSettingsApproval:
+            controller.openFanHelperApprovalSettings()
+        }
+    }
+}
+
+/// Thrown inside the off-main-actor part of a selection: the change needs
+/// rights the user does not have yet, so the card navigates instead of applying.
+private struct FanRightsNeeded: Error {
+    let action: FanSelectionAction
 }

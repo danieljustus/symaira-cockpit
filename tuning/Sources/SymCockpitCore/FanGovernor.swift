@@ -72,10 +72,37 @@ public struct FanGovernor: Sendable {
         temperature: Double?,
         applied: Double?
     ) -> Double? {
-        guard let curve = profile.curve else { return nil }
-        guard let temperature else { return applied }
+        nextFraction(
+            selection: FanSelection(profile: profile),
+            temperature: temperature,
+            averageTemperature: nil,
+            applied: applied
+        )
+    }
 
-        let target = curve.fraction(at: temperature)
+    /// As ``nextFraction(profile:temperature:applied:)``, with the optional
+    /// Cool target (see ``FanCoolTarget``).
+    ///
+    /// - `averageTemperature`: the mean CPU/GPU cluster temperature, or nil
+    ///   when the sensors offered none — in which case only the default curve
+    ///   applies, so a missing average can never mean less cooling than before.
+    ///
+    /// The target feeds the same rise-immediately / fall-bounded / deadband
+    /// logic as the default curve; it only changes the fraction being chased.
+    public static func nextFraction(
+        selection: FanSelection,
+        temperature: Double?,
+        averageTemperature: Double?,
+        applied: Double?
+    ) -> Double? {
+        guard selection.profile.curve != nil else { return nil }
+        guard temperature != nil else { return applied }
+        guard let target = FanCoolTarget.targetFraction(
+            profile: selection.profile,
+            temperature: temperature,
+            coolTarget: selection.effectiveCoolTarget,
+            averageTemperature: averageTemperature
+        ) else { return applied }
         guard let applied else { return target }
 
         // Rise immediately, fall at a bounded rate.
@@ -109,6 +136,20 @@ public struct FanGovernor: Sendable {
         shouldContinue: @Sendable () -> Bool = { true },
         onTick: (@Sendable (Double?, Double?) -> Void)? = nil
     ) throws {
+        try run(
+            selectionProvider: { FanSelection(profile: profileProvider()) },
+            shouldContinue: shouldContinue,
+            onTick: onTick
+        )
+    }
+
+    /// As ``run(profileProvider:shouldContinue:onTick:)``, re-reading the
+    /// position *and* the optional Cool target every tick.
+    public func run(
+        selectionProvider: @Sendable () -> FanSelection,
+        shouldContinue: @Sendable () -> Bool = { true },
+        onTick: (@Sendable (Double?, Double?) -> Void)? = nil
+    ) throws {
         var applied: Double?
         // Captured lazily, immediately before the first write, and restored
         // only if there was one. A loop that never overrode anything — the
@@ -124,10 +165,16 @@ public struct FanGovernor: Sendable {
         var unverifiedTicks = 0
 
         while shouldContinue() {
-            let profile = profileProvider()
-            guard profile != .system else { return }
+            let selection = selectionProvider()
+            guard selection.profile != .system else { return }
 
-            let temperature = FanProfile.governingTemperature(in: sensors.read())
+            let report = sensors.read()
+            let temperature = FanProfile.governingTemperature(in: report)
+            // Only computed when a target is set on Cool, so every other
+            // position does exactly the work it did before.
+            let average = selection.effectiveCoolTarget == nil
+                ? nil
+                : FanCoolTarget.averageClusterTemperature(in: report)
             missingTemperatures = temperature == nil ? missingTemperatures + 1 : 0
             if missingTemperatures >= Self.maxConsecutiveMissingTemperatures {
                 throw TuneError.failed(
@@ -136,7 +183,10 @@ public struct FanGovernor: Sendable {
                 )
             }
 
-            var next = Self.nextFraction(profile: profile, temperature: temperature, applied: applied)
+            var next = Self.nextFraction(
+                selection: selection, temperature: temperature,
+                averageTemperature: average, applied: applied
+            )
             // Inside the deadband nothing is written, so confirm the SMC still
             // holds the applied state (the firmware can take the fans back,
             // e.g. across sleep) and re-assert it when it does not.

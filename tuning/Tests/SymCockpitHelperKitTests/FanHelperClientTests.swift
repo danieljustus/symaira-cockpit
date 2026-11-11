@@ -28,19 +28,29 @@ private final class FakeDaemon: FanHelperDaemonService, @unchecked Sendable {
 private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var started: [String] = []
+    private(set) var startedTargets: [Double?] = []
     private(set) var beats = 0
     private(set) var stops = 0
     private(set) var invalidated = false
     var failHeartbeats = false
     var failStarts = false
     var failStops = false
+    /// Simulates a helper that does not export the Cool-target selector.
+    var supportsTarget = true
+    /// What the target selector fails with when unsupported (an older helper
+    /// never answers: the real transport reports a timeout).
+    var targetFailure: FanHelperTransportError = .timedOut
+    private(set) var targetAttempts = 0
     /// What the helper answers to a heartbeat: does it still govern?
     var governing = true
 
-    func startGovernor(profile: String) throws {
+    func startGovernor(profile: String, coolTarget: Double?) throws {
         lock.lock(); defer { lock.unlock() }
+        if coolTarget != nil { targetAttempts += 1 }
         if failStarts { throw FanHelperTransportError.unreachable("gone") }
+        if coolTarget != nil, !supportsTarget { throw targetFailure }
         started.append(profile)
+        startedTargets.append(coolTarget)
     }
     func heartbeat() throws -> Bool {
         lock.lock(); defer { lock.unlock() }
@@ -61,9 +71,19 @@ private final class TransportFactory: @unchecked Sendable {
     private let lock = NSLock()
     private(set) var made: [FakeTransport] = []
     private(set) var teamIDs: [String] = []
+    /// Applied to every transport made afterwards (a helper process is shared
+    /// by all connections to it).
+    var supportsTarget = true
+    var targetFailure: FanHelperTransportError = .timedOut
+    var failStarts = false
+    var targetAttempts: Int { lock.lock(); defer { lock.unlock() }; return made.reduce(0) { $0 + $1.targetAttempts } }
     func make(team: String) -> FakeTransport {
         lock.lock(); defer { lock.unlock() }
-        let t = FakeTransport(); made.append(t); teamIDs.append(team); return t
+        let t = FakeTransport()
+        t.supportsTarget = supportsTarget
+        t.targetFailure = targetFailure
+        t.failStarts = failStarts
+        made.append(t); teamIDs.append(team); return t
     }
 }
 
@@ -220,6 +240,121 @@ final class FanHelperClientTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.08)
         XCTAssertEqual(transport.beatCount, afterStop, "heartbeats must stop with the governor")
         XCTAssertEqual(transport.stops, 1)
+    }
+
+    func testTheCoolTargetTravelsToTheHelperAndIsReportedBack() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        let transport = try XCTUnwrap(factory.made.first)
+        XCTAssertEqual(transport.started, ["comfort"])
+        XCTAssertEqual(transport.startedTargets, [70])
+        XCTAssertEqual(c.governorStatus().coolTarget, 70)
+        try c.startGovernor(profile: .comfort, coolTarget: nil)
+        XCTAssertEqual(transport.startedTargets, [70, nil])
+        XCTAssertNil(c.governorStatus().coolTarget)
+        try c.stopGovernor()
+    }
+
+    // MARK: - Upgrade compatibility (older helper process still running)
+
+    func testNoTargetNeverTouchesTheTargetSelector() throws {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        let c = client(daemon: FakeDaemon(.enabled), signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort)
+        try c.startGovernor(profile: .performance, coolTarget: nil)
+        XCTAssertEqual(factory.targetAttempts, 0)
+        XCTAssertEqual(factory.made.count, 1)
+        XCTAssertFalse(c.governorStatus().helperOutdated)
+        try c.stopGovernor()
+    }
+
+    func testAnOlderHelperFallsBackToTheOriginalSelectorWithoutATarget() throws {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        let c = client(daemon: FakeDaemon(.enabled), signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        // Does not throw: the caller must not fall back to the osascript path.
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        XCTAssertEqual(factory.made.count, 2, "a fresh connection carries the retry")
+        XCTAssertTrue(factory.made[0].invalidated)
+        XCTAssertEqual(factory.made[1].started, ["comfort"])
+        XCTAssertEqual(factory.made[1].startedTargets, [nil])
+        let status = c.governorStatus()
+        XCTAssertTrue(status.isGoverning, "the fans must stay governed on the normal Cool curve")
+        XCTAssertEqual(status.profile, .comfort)
+        XCTAssertNil(status.coolTarget)
+        XCTAssertTrue(status.helperOutdated)
+        try c.stopGovernor()
+        XCTAssertTrue(c.governorStatus().helperOutdated, "remembered while idle, for the hint")
+    }
+
+    func testTheOlderHelperIsProbedOnceNotOnEveryStartOrHeartbeat() throws {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        let c = client(daemon: FakeDaemon(.enabled), signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        XCTAssertEqual(factory.targetAttempts, 1)
+        // Retargets, a profile change and a lost governor that is healed all
+        // reuse the knowledge instead of paying the transport timeout again.
+        try c.startGovernor(profile: .comfort, coolTarget: 72)
+        try c.startGovernor(profile: .comfort, coolTarget: 75)
+        let transport = try XCTUnwrap(factory.made.last)
+        transport.governing = false
+        XCTAssertTrue(waitUntil { c.governorStatus() == FanHelperGovernorStatus(isGoverning: false, helperOutdated: true) })
+        XCTAssertEqual(factory.targetAttempts, 1)
+        XCTAssertEqual(factory.made.count, 2)
+        XCTAssertTrue(factory.made.flatMap(\.startedTargets).allSatisfy { $0 == nil })
+    }
+
+    func testARefusedTargetIsNotMistakenForAnOlderHelper() {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        factory.targetFailure = .rejected("invalid Cool target")
+        let c = client(daemon: FakeDaemon(.enabled), signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort, coolTarget: 70))
+        XCTAssertEqual(factory.made.count, 1, "no retry and no fresh connection")
+        XCTAssertFalse(c.governorStatus().helperOutdated)
+    }
+
+    func testAnUnreachableHelperIsNotMistakenForAnOlderOne() {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        factory.failStarts = true // the original selector fails as well: really gone
+        let c = client(daemon: FakeDaemon(.enabled), signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        XCTAssertThrowsError(try c.startGovernor(profile: .comfort, coolTarget: 70))
+        XCTAssertFalse(c.governorStatus().helperOutdated)
+    }
+
+    func testTurningTheHelperOffAndOnForgetsTheOlderHelper() throws {
+        let factory = TransportFactory()
+        factory.supportsTarget = false
+        let daemon = FakeDaemon(.enabled)
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        XCTAssertTrue(c.governorStatus().helperOutdated)
+        try c.unregister()
+        XCTAssertFalse(c.governorStatus().helperOutdated)
+        daemon.state = .enabled // registered again
+        // The replacement process supports the target: it is sent and applied.
+        factory.supportsTarget = true
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        XCTAssertEqual(c.governorStatus().coolTarget, 70)
+        XCTAssertFalse(c.governorStatus().helperOutdated)
+        try c.stopGovernor()
+    }
+
+    func testARestartedGovernorKeepsTheCoolTarget() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 66)
+        let transport = try XCTUnwrap(factory.made.first)
+        transport.governing = false
+        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+        XCTAssertEqual(transport.startedTargets.count, 1 + FanHelperClient.maxHealAttempts)
+        XCTAssertTrue(transport.startedTargets.allSatisfy { $0 == 66 }, "\(transport.startedTargets)")
     }
 
     func testRetargetingReusesTheConnection() throws {

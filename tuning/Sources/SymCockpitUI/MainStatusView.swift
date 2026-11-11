@@ -122,6 +122,7 @@ struct MainStatusView: View {
             // a second "This Mac" heading here only repeated them.
             LiveSummaryStrip(model: model, isExpanded: chrome == .embedded)
                 .id(TuneWorkspaceAnchor.overview)
+                .workspaceSection(.overview)
             if chrome == .embedded && shows(.systemStatus) {
                 SystemStatusSection(model: model)
             }
@@ -189,6 +190,7 @@ struct MainStatusView: View {
                 }
             }
             .id(TuneWorkspaceAnchor.display)
+            .workspaceSection(.display)
 
             VStack(spacing: SymairaSpacing.medium) {
                 if chrome == .embedded {
@@ -200,7 +202,11 @@ struct MainStatusView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                     if shows(.fanControl, hardwareAvailable: hasFans) {
-                        FanControlCard(controller: controller, model: model)
+                        FanControlCard(
+                            controller: controller, model: model,
+                            preferencesManager: preferencesManager,
+                            openPreferences: openPreferences
+                        )
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
@@ -209,6 +215,7 @@ struct MainStatusView: View {
                 }
             }
             .id(TuneWorkspaceAnchor.power)
+            .workspaceSection(.power)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -249,6 +256,7 @@ struct MainStatusView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .id(TuneWorkspaceAnchor.activity)
+        .workspaceSection(.activity)
     }
 
     private var readoutCards: some View {
@@ -277,6 +285,7 @@ struct MainStatusView: View {
             }
         }
         .id(TuneWorkspaceAnchor.readout)
+        .workspaceSection(.readout)
     }
 
     private func hiddenCardsNote(_ text: String) -> some View {

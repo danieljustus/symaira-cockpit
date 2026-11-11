@@ -31,6 +31,7 @@ struct PreferencesView: View {
             Divider()
                 .background(SymairaTokens.line)
 
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     appearanceSection
@@ -73,7 +74,12 @@ struct PreferencesView: View {
                         .background(SymairaTokens.line)
 
                     if let fanHelper {
-                        FanHelperPreferencesSection(preferences: fanHelper)
+                        FanHelperPreferencesSection(
+                            preferences: fanHelper,
+                            hint: manager.fanHelperHint,
+                            onHintResolved: { manager.fanHelperHint = nil }
+                        )
+                        .id(PreferencesFocus.fanHelper)
 
                         Divider()
                             .background(SymairaTokens.line)
@@ -83,6 +89,11 @@ struct PreferencesView: View {
                     updateSection
                 }
                 .padding(SymairaSpacing.xLarge)
+            }
+            .onChange(of: manager.focusRequest) { _, focus in
+                scroll(proxy, to: focus)
+            }
+            .onAppear { scroll(proxy, to: manager.focusRequest) }
             }
 
             Divider()
@@ -102,6 +113,17 @@ struct PreferencesView: View {
             guard applySuccess, applyMessage != nil else { return }
             do { try await Task.sleep(for: .seconds(3)) } catch { return }
             applyMessage = nil
+        }
+    }
+
+    /// Brings the requested section into view, then clears the request. No
+    /// animation: a jump is the honest, reduce-motion-safe way to arrive.
+    private func scroll(_ proxy: ScrollViewProxy, to focus: PreferencesFocus?) {
+        guard let focus else { return }
+        // After layout: on a freshly opened window the sections are not placed yet.
+        Task { @MainActor in
+            proxy.scrollTo(focus, anchor: .top)
+            manager.focusRequest = nil
         }
     }
 

@@ -27,7 +27,14 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// Profile of the last accepted start, re-sent when a heartbeat reports
     /// that the helper lost its governor.
     private var lastProfile: FanProfile?
+    private var lastCoolTarget: Double?
     private var healAttempts = 0
+    /// The running helper does not export the Cool-target selector (it is from
+    /// before 0.11.0). Learned from one failed attempt and then kept, so the
+    /// 5 s transport timeout is never paid again on a later start or heartbeat.
+    /// Reset only by ``register()`` / ``unregister()`` (the owner turning the
+    /// helper off and on is what swaps the process) and by an app restart.
+    private var helperLacksCoolTarget = false
     /// The helper may still be governing until this instant although the app
     /// lost contact with it (see ``FanHelperGovernorStatus/mayStillGovernUntil``).
     private var mayStillGovernUntil: Date?
@@ -95,7 +102,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         )
     }
 
-    public func startGovernor(profile: FanProfile) throws {
+    public func startGovernor(profile: FanProfile, coolTarget: Double?) throws {
         guard availability() == .enabled, case .releaseSigned(let teamID) = signing() else {
             throw TuneError.permission("the privileged fan helper is not enabled")
         }
@@ -106,11 +113,11 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
             // Re-checked on every start, not only at register: the bundle may
             // have been rewritten since.
             if let problem = bundleCheck() { throw TuneError.permission(problem) }
-            let transport = try connectedTransport(teamID: teamID)
-            try transport.startGovernor(profile: profile.rawValue)
+            let applied = try sendStart(profile: profile, coolTarget: coolTarget, teamID: teamID)
             lock.lock()
-            status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
+            status = FanHelperGovernorStatus(isGoverning: true, profile: profile, coolTarget: applied)
             lastProfile = profile
+            lastCoolTarget = coolTarget
             healAttempts = 0
             mayStillGovernUntil = nil
             lock.unlock()
@@ -127,6 +134,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     public func governorStatus() -> FanHelperGovernorStatus {
         lock.lock(); defer { lock.unlock() }
         var current = status
+        current.helperOutdated = helperLacksCoolTarget
         if !current.isGoverning, let until = mayStillGovernUntil {
             if now() < until { current.mayStillGovernUntil = until } else { mayStillGovernUntil = nil }
         }
@@ -149,6 +157,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         let wasGoverning = status.isGoverning
         status = .idle
         lastProfile = nil
+        lastCoolTarget = nil
         mayStillGovernUntil = nil
         lock.unlock()
         do {
@@ -178,6 +187,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         if let problem = bundleCheck() {
             throw TuneError.permission(problem)
         }
+        forgetHelperCapabilities()
         do { try daemon.register() } catch {
             // `register()` throws when approval is still pending; that state
             // is reported through the status, not as a failure.
@@ -189,6 +199,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// Hands the fans back, then unregisters and removes the daemon.
     public func unregister() throws {
         try? stopGovernor()
+        forgetHelperCapabilities()
         // Nothing registered (never registered, or the bundle moved): there
         // is nothing to remove, and SMAppService would throw.
         switch daemon.registration {
@@ -200,6 +211,59 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     public func openSystemSettings() { daemon.openSystemSettings() }
 
     // MARK: - Internals
+
+    private func forgetHelperCapabilities() {
+        lock.lock(); helperLacksCoolTarget = false; lock.unlock()
+    }
+
+    /// Sends one start/retarget and returns the Cool target the helper really
+    /// applies (nil when none was requested or the helper cannot hold one).
+    ///
+    /// - No target, or a helper already known to be older: the original
+    ///   selector, which every helper version exports.
+    /// - A target: the newer selector. If that fails *transiently* (timeout or
+    ///   remote error — what an older helper that lacks the selector produces)
+    ///   a fresh connection retries through the original selector without the
+    ///   target. When that works the helper is reachable but older: remember
+    ///   it, so the fans stay governed on the normal Cool curve and the
+    ///   timeout is paid once, not on every heartbeat. When it fails too, the
+    ///   helper is really unreachable and the error propagates as before.
+    ///   A refusal (``FanHelperTransportError/rejected(_:)``) is an answer from
+    ///   a current helper and never triggers the fallback.
+    private func sendStart(profile: FanProfile, coolTarget: Double?, teamID: String) throws -> Double? {
+        lock.lock()
+        let outdated = helperLacksCoolTarget
+        lock.unlock()
+        let transport = try connectedTransport(teamID: teamID)
+        guard let coolTarget, !outdated else {
+            try transport.startGovernor(profile: profile.rawValue, coolTarget: nil)
+            return nil
+        }
+        do {
+            try transport.startGovernor(profile: profile.rawValue, coolTarget: coolTarget)
+            return coolTarget
+        } catch let error as FanHelperTransportError {
+            if case .rejected = error { throw error }
+            Self.log("the Cool-target request failed (\(error)); retrying without it")
+            // The new connection first, then the old one is closed: the helper
+            // only stops a governor when its *current* connection goes away.
+            let fresh = try replaceTransport(teamID: teamID)
+            try fresh.startGovernor(profile: profile.rawValue, coolTarget: nil)
+            lock.lock(); helperLacksCoolTarget = true; lock.unlock()
+            Self.log("the running fan helper is older than this app; the Cool target is not applied")
+            return nil
+        }
+    }
+
+    private func replaceTransport(teamID: String) throws -> any FanHelperTransport {
+        let created = try makeTransport(teamID)
+        lock.lock()
+        let old = transport
+        transport = created
+        lock.unlock()
+        old?.invalidate()
+        return created
+    }
 
     private func connectedTransport(teamID: String) throws -> any FanHelperTransport {
         lock.lock()
@@ -258,7 +322,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
             dropTransport(helperMayStillGovern: true)
             return
         }
-        if !stillGoverning { healLostGovernor(via: current) }
+        if !stillGoverning { healLostGovernor() }
         lock.lock()
         let observer = heartbeatObserver
         lock.unlock()
@@ -268,9 +332,10 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// The helper answered but no longer governs (its governor gave up, or it
     /// restarted). Re-send the last profile a bounded number of times per user
     /// action; after that, stop pretending and let the UI report it.
-    private func healLostGovernor(via transport: any FanHelperTransport) {
+    private func healLostGovernor() {
         lock.lock()
         let profile = lastProfile
+        let coolTarget = lastCoolTarget
         let attempt = healAttempts
         lock.unlock()
         guard let profile, attempt < Self.maxHealAttempts else {
@@ -291,7 +356,15 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         }
         lock.lock(); healAttempts += 1; lock.unlock()
         Self.log("the helper's governor stopped; restarting (\(attempt + 1)/\(Self.maxHealAttempts))")
-        do { try transport.startGovernor(profile: profile.rawValue) } catch {
+        do {
+            guard case .releaseSigned(let teamID) = signing() else {
+                throw TuneError.permission("the privileged fan helper is not enabled")
+            }
+            let applied = try sendStart(profile: profile, coolTarget: coolTarget, teamID: teamID)
+            lock.lock()
+            status = FanHelperGovernorStatus(isGoverning: true, profile: profile, coolTarget: applied)
+            lock.unlock()
+        } catch {
             Self.log("restart failed: \(error)")
             dropTransport()
         }

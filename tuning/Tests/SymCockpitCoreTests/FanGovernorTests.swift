@@ -158,6 +158,111 @@ final class FanGovernorTests: XCTestCase {
         XCTAssertFalse(conn.writtenKeys.contains { $0.key == "F0Tg" })
     }
 
+    // MARK: - Cool target
+
+    private func fltResult(_ v: Double) -> FakeSMCKeyResult {
+        let raw = Float(v).bitPattern
+        return FakeSMCKeyResult(dataType: smcEncodeKey("flt "), bytes: [
+            UInt8(raw & 0xFF), UInt8((raw >> 8) & 0xFF),
+            UInt8((raw >> 16) & 0xFF), UInt8((raw >> 24) & 0xFF),
+        ])
+    }
+
+    /// A cool die (TCMz 50 °C) with hot cluster rows (Tp01–03 at 70 °C).
+    private func clusterKeys() -> [String: FakeSMCKeyResult] {
+        var keys = fanKeys(dieCelsius: 50)
+        for key in ["Tp01", "Tp02", "Tp03"] { keys[key] = fltResult(70) }
+        return keys
+    }
+
+    /// The governor reads the target from the selection every tick: the same
+    /// sensors give full speed with a 60 °C target and the default speed
+    /// without one.
+    func testLoopRaisesTheFansForAnAverageAboveTheTarget() throws {
+        let (governor, conn) = makeGovernor(keys: clusterKeys())
+        let ticks = TickCounter()
+        try governor.run(
+            selectionProvider: { FanSelection(profile: .comfort, coolTargetCelsius: 60) },
+            shouldContinue: { ticks.count < 1 },
+            onTick: { _, _ in ticks.increment() }
+        )
+        // The restore on exit writes the original last; look at what was applied.
+        let applied = conn.writtenKeys.filter { $0.key == "F0Tg" }.first
+        let rpm = applied.map { smcConvertValue(dataType: smcEncodeKey("flt "), bytes: $0.bytes) }
+        XCTAssertEqual(rpm ?? 0, 8000, accuracy: 1.0, "average 70 °C is above a 60 °C target: full speed")
+    }
+
+    func testLoopWithoutATargetIgnoresTheClusterRows() throws {
+        let (governor, conn) = makeGovernor(keys: clusterKeys())
+        let ticks = TickCounter()
+        try governor.run(
+            selectionProvider: { FanSelection(profile: .comfort) },
+            shouldContinue: { ticks.count < 1 },
+            onTick: { _, _ in ticks.increment() }
+        )
+        let applied = conn.writtenKeys.filter { $0.key == "F0Tg" }.first
+        let rpm = applied.map { smcConvertValue(dataType: smcEncodeKey("flt "), bytes: $0.bytes) } ?? 0
+        XCTAssertLessThan(rpm, 5000, "a 50 °C die on the default Cool curve is nowhere near full speed")
+    }
+
+    func testLoopPicksUpAChangedTargetOnTheNextTick() throws {
+        let (governor, conn) = makeGovernor(keys: clusterKeys())
+        let ticks = TickCounter()
+        try governor.run(
+            selectionProvider: {
+                // First tick: no target. From the second tick on: 60 °C.
+                ticks.count < 1
+                    ? FanSelection(profile: .comfort)
+                    : FanSelection(profile: .comfort, coolTargetCelsius: 60)
+            },
+            shouldContinue: { ticks.count < 2 },
+            onTick: { _, _ in ticks.increment() }
+        )
+        let applied = conn.writtenKeys.filter { $0.key == "F0Tg" }.map {
+            smcConvertValue(dataType: smcEncodeKey("flt "), bytes: $0.bytes)
+        }
+        XCTAssertGreaterThanOrEqual(applied.count, 2)
+        XCTAssertLessThan(applied[0], 5000)
+        XCTAssertEqual(applied[1], 8000, accuracy: 1.0)
+    }
+
+    /// With no cluster row at all the hotspot rows stand in for the average, so
+    /// the feature degrades instead of vanishing: a 50 degC chip against a
+    /// 55 degC target is 5 degC short of it, which the shifted curve answers
+    /// with more than the default curve's answer at 50 degC.
+    func testLoopUsesTheHotspotAsTheAverageWhenNoClusterRowExists() throws {
+        func appliedRPM(target: Double?) throws -> Double {
+            let (governor, conn) = makeGovernor(keys: fanKeys(dieCelsius: 50))
+            let ticks = TickCounter()
+            try governor.run(
+                selectionProvider: { FanSelection(profile: .comfort, coolTargetCelsius: target) },
+                shouldContinue: { ticks.count < 1 },
+                onTick: { _, _ in ticks.increment() }
+            )
+            let applied = conn.writtenKeys.filter { $0.key == "F0Tg" }.first
+            return applied.map { smcConvertValue(dataType: smcEncodeKey("flt "), bytes: $0.bytes) } ?? 0
+        }
+        let withoutTarget = try appliedRPM(target: nil)
+        let relaxed = try appliedRPM(target: 85)
+        let tight = try appliedRPM(target: 55)
+        XCTAssertEqual(relaxed, withoutTarget, accuracy: 1.0, "85 degC is the default curve itself")
+        XCTAssertGreaterThan(tight, withoutTarget)
+    }
+
+    func testLoopIgnoresTheTargetOnMax() throws {
+        let (governor, conn) = makeGovernor(keys: clusterKeys())
+        let ticks = TickCounter()
+        try governor.run(
+            selectionProvider: { FanSelection(profile: .performance, coolTargetCelsius: 50) },
+            shouldContinue: { ticks.count < 1 },
+            onTick: { _, _ in ticks.increment() }
+        )
+        let applied = conn.writtenKeys.filter { $0.key == "F0Tg" }.first
+        let rpm = applied.map { smcConvertValue(dataType: smcEncodeKey("flt "), bytes: $0.bytes) } ?? 0
+        // Max at 50 °C is 0.55 of the range, not full speed.
+        XCTAssertLessThan(rpm, 7000)
+    }
+
     // MARK: - Failure bounds
 
     /// A short sensor gap is held through, so a single empty poll never

@@ -6,6 +6,7 @@ private final class FakeFanHelper: FanHelperControlling, @unchecked Sendable {
     var state: FanHelperAvailability
     var startError: Error?
     private(set) var started: [FanProfile] = []
+    private(set) var startedTargets: [Double?] = []
     private(set) var stops = 0
     var status = FanHelperGovernorStatus.idle
     var watchdogWindow: TimeInterval = 8
@@ -30,7 +31,7 @@ private final class FakeFanHelper: FanHelperControlling, @unchecked Sendable {
     }
 
     func availability() -> FanHelperAvailability { state }
-    func startGovernor(profile: FanProfile) throws {
+    func startGovernor(profile: FanProfile, coolTarget: Double?) throws {
         lock.lock(); defer { lock.unlock() }
         if let startError {
             // Mirrors FanHelperClient: a failed start drops the connection, but
@@ -43,7 +44,8 @@ private final class FakeFanHelper: FanHelperControlling, @unchecked Sendable {
             throw startError
         }
         started.append(profile)
-        status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
+        startedTargets.append(coolTarget)
+        status = FanHelperGovernorStatus(isGoverning: true, profile: profile, coolTarget: coolTarget)
     }
     func stopGovernor() throws {
         lock.lock(); stops += 1; status = .idle; lock.unlock()

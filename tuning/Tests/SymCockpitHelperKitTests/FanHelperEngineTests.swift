@@ -9,14 +9,19 @@ final class FakeGovernorRunner: @unchecked Sendable {
     private(set) var started = 0
     private(set) var restored = 0
     private(set) var profilesSeen: [FanProfile] = []
+    private(set) var selectionsSeen: [FanSelection] = []
     var failure: Error?
 
     func runner() -> FanHelperEngine.GovernorRunner {
-        { [self] profileProvider, shouldContinue, sleep in
+        { [self] selectionProvider, shouldContinue, sleep in
             lock.lock(); started += 1; lock.unlock()
             defer { lock.lock(); restored += 1; lock.unlock() }
             while shouldContinue() {
-                let profile = profileProvider()
+                let selection = selectionProvider()
+                let profile = selection.profile
+                lock.lock()
+                if selectionsSeen.last != selection { selectionsSeen.append(selection) }
+                lock.unlock()
                 lock.lock()
                 if profilesSeen.last != profile { profilesSeen.append(profile) }
                 let failure = self.failure
@@ -140,6 +145,36 @@ final class FanHelperEngineTests: XCTestCase {
         engine.start(profile: .performance)
         XCTAssertTrue(waitUntil { fake.profilesSeen == [.comfort, .performance] })
         XCTAssertEqual(fake.started, 1)
+        engine.stop(reason: .requested)
+        XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
+    }
+
+    func testTheCoolTargetReachesTheGovernorAndIsClamped() {
+        let clock = FakeClock()
+        let fake = FakeGovernorRunner()
+        let engine = makeEngine(clock: clock, runner: fake)
+        engine.start(profile: .comfort, coolTarget: 70)
+        XCTAssertTrue(waitUntil { fake.selectionsSeen == [FanSelection(profile: .comfort, coolTargetCelsius: 70)] })
+        XCTAssertEqual(engine.snapshot.coolTarget, 70)
+        // Retargeting only the number does not spawn a second governor.
+        engine.start(profile: .comfort, coolTarget: 9000)
+        XCTAssertTrue(waitUntil { fake.selectionsSeen.last?.coolTargetCelsius == 85 })
+        XCTAssertEqual(engine.snapshot.coolTarget, 85, "clamped by the engine as well")
+        engine.start(profile: .comfort, coolTarget: .nan)
+        XCTAssertTrue(waitUntil { fake.selectionsSeen.last?.coolTargetCelsius == nil })
+        XCTAssertNil(engine.snapshot.coolTarget, "a non-finite target is dropped, never the maximum")
+        XCTAssertEqual(fake.started, 1)
+        engine.stop(reason: .requested)
+        XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
+    }
+
+    func testThePerformancePositionReportsNoTarget() {
+        let clock = FakeClock()
+        let fake = FakeGovernorRunner()
+        let engine = makeEngine(clock: clock, runner: fake)
+        engine.start(profile: .performance, coolTarget: 60)
+        XCTAssertTrue(waitUntil { fake.started == 1 })
+        XCTAssertNil(engine.snapshot.coolTarget)
         engine.stop(reason: .requested)
         XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
     }

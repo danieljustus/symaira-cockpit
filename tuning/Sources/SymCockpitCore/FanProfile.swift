@@ -127,8 +127,10 @@ extension FanProfile {
 /// the governor (root) only ever reads it, and re-reads it every tick so a
 /// change of position takes effect without a second password prompt. The
 /// governor never writes here, so a root process never creates or modifies a
-/// file in a user-writable directory. The only thing a writer can express is
-/// one of three enum cases, and every resulting SMC write still goes through
+/// file in a user-writable directory. The only things a writer can express are
+/// one of three enum cases and one Cool target clamped to
+/// ``FanCoolTarget/range`` on write *and* on read (the target can only add
+/// cooling), and every resulting SMC write still goes through
 /// `SMCWritePolicy`'s clamps.
 public struct FanProfileStore: Sendable {
     public let url: URL
@@ -178,27 +180,68 @@ public struct FanProfileStore: Sendable {
         return URL(fileURLWithPath: String(cString: dir))
     }
 
+    /// On-disk shape. `cool_target_celsius` is optional: a file written before
+    /// the Cool target existed (just `{"profile": …}`) still decodes, and an
+    /// absent key means "no target" — exactly the previous behaviour.
     private struct Payload: Codable {
         let profile: FanProfile
+        let coolTargetCelsius: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case profile
+            case coolTargetCelsius = "cool_target_celsius"
+        }
     }
 
     /// The stored profile, or `.system` when nothing is stored or the file is
     /// unreadable/corrupt — the safe default is always "don't override".
     public func read() -> FanProfile {
-        (try? readStrict()) ?? .system
+        readSelection().profile
     }
 
     /// The stored profile, throwing when it cannot be read or decoded. Callers
     /// that act on the value (reconciling a running helper) use this so a
     /// failure is not mistaken for the user choosing `.system`.
     public func readStrict() throws -> FanProfile {
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(Payload.self, from: data).profile
+        try readSelectionStrict().profile
     }
 
+    /// The stored position and Cool target, or `.system` without a target when
+    /// nothing is stored or the file is unreadable/corrupt.
+    public func readSelection() -> FanSelection {
+        (try? readSelectionStrict()) ?? .system
+    }
+
+    /// The stored position and Cool target, throwing when the file cannot be
+    /// read or decoded. A target outside ``FanCoolTarget/range`` is clamped
+    /// here, so a hand-edited file cannot exceed the bound; a non-finite or
+    /// mistyped one makes the whole file corrupt rather than being guessed at.
+    public func readSelectionStrict() throws -> FanSelection {
+        let data = try Data(contentsOf: url)
+        let payload = try JSONDecoder().decode(Payload.self, from: data)
+        return FanSelection(profile: payload.profile, coolTargetCelsius: payload.coolTargetCelsius)
+    }
+
+    /// Selects `profile`, keeping the stored Cool target.
     public func write(_ profile: FanProfile) throws {
+        let kept = (try? readSelectionStrict())?.coolTargetCelsius
+        try writeSelection(FanSelection(profile: profile, coolTargetCelsius: kept))
+    }
+
+    /// Sets (clamped) or clears (`nil`) the Cool target, keeping the selected
+    /// profile.
+    public func writeCoolTarget(_ celsius: Double?) throws {
+        let current = (try? readSelectionStrict())?.profile ?? .system
+        try writeSelection(FanSelection(profile: current, coolTargetCelsius: celsius))
+    }
+
+    public func writeSelection(_ selection: FanSelection) throws {
         try StateFilePermissions.ensureDirectory(url.deletingLastPathComponent())
-        let data = try JSONEncoder().encode(Payload(profile: profile))
+        let payload = Payload(
+            profile: selection.profile,
+            coolTargetCelsius: FanCoolTarget.sanitized(selection.coolTargetCelsius)
+        )
+        let data = try JSONEncoder().encode(payload)
         try data.write(to: url, options: .atomic)
         StateFilePermissions.applyFilePermissions(at: url)
     }
