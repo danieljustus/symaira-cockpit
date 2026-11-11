@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] (2026-11-11)
+
 ### Added
 - **Fan rights take you to the right settings:** in a release-signed build,
   picking *Cool* or *Max* without the rights to change fans no longer runs into
@@ -21,6 +23,11 @@
   <50-85|off>` sets it and `symcockpit fan status` (and `fan profile`) report
   `cool_target_celsius` and `average_cluster_celsius`. The XPC call to the
   helper carries the target, and the helper validates it again.
+
+### Changed
+- **Cockpit window sidebar follows scrolling:** the *Jump to* entry of the section
+  you are reading is selected while you scroll, not only after a click; at the
+  end of the page the last section is selected.
 
 ## [0.10.2] (2026-11-11)
 
