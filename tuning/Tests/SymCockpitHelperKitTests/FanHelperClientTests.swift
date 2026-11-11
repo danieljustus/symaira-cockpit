@@ -28,6 +28,7 @@ private final class FakeDaemon: FanHelperDaemonService, @unchecked Sendable {
 private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var started: [String] = []
+    private(set) var startedTargets: [Double?] = []
     private(set) var beats = 0
     private(set) var stops = 0
     private(set) var invalidated = false
@@ -37,10 +38,11 @@ private final class FakeTransport: FanHelperTransport, @unchecked Sendable {
     /// What the helper answers to a heartbeat: does it still govern?
     var governing = true
 
-    func startGovernor(profile: String) throws {
+    func startGovernor(profile: String, coolTarget: Double?) throws {
         lock.lock(); defer { lock.unlock() }
         if failStarts { throw FanHelperTransportError.unreachable("gone") }
         started.append(profile)
+        startedTargets.append(coolTarget)
     }
     func heartbeat() throws -> Bool {
         lock.lock(); defer { lock.unlock() }
@@ -220,6 +222,33 @@ final class FanHelperClientTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.08)
         XCTAssertEqual(transport.beatCount, afterStop, "heartbeats must stop with the governor")
         XCTAssertEqual(transport.stops, 1)
+    }
+
+    func testTheCoolTargetTravelsToTheHelperAndIsReportedBack() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 70)
+        let transport = try XCTUnwrap(factory.made.first)
+        XCTAssertEqual(transport.started, ["comfort"])
+        XCTAssertEqual(transport.startedTargets, [70])
+        XCTAssertEqual(c.governorStatus().coolTarget, 70)
+        try c.startGovernor(profile: .comfort, coolTarget: nil)
+        XCTAssertEqual(transport.startedTargets, [70, nil])
+        XCTAssertNil(c.governorStatus().coolTarget)
+        try c.stopGovernor()
+    }
+
+    func testARestartedGovernorKeepsTheCoolTarget() throws {
+        let daemon = FakeDaemon(.enabled)
+        let factory = TransportFactory()
+        let c = client(daemon: daemon, signing: .releaseSigned(teamID: team), optedIn: true, factory: factory)
+        try c.startGovernor(profile: .comfort, coolTarget: 66)
+        let transport = try XCTUnwrap(factory.made.first)
+        transport.governing = false
+        XCTAssertTrue(waitUntil { c.governorStatus() == .idle })
+        XCTAssertEqual(transport.startedTargets.count, 1 + FanHelperClient.maxHealAttempts)
+        XCTAssertTrue(transport.startedTargets.allSatisfy { $0 == 66 }, "\(transport.startedTargets)")
     }
 
     func testRetargetingReusesTheConnection() throws {

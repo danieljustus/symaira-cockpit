@@ -656,6 +656,54 @@ extension TuneController {
     /// The currently selected fan profile.
     public var activeFanProfile: FanProfile { fanProfileStore.read() }
 
+    /// The selected profile plus the stored Cool target (clamped on read).
+    public var activeFanSelection: FanSelection { fanProfileStore.readSelection() }
+
+    /// What the GUI should do when the user selects `profile`: apply it as
+    /// before, or take them to where the missing fan rights are granted.
+    /// Pure routing (see ``FanHelperRouting/selectionAction``); it changes and
+    /// writes nothing, so the GUI asks first and reverts the control itself.
+    public func fanSelectionAction(for profile: FanProfile) -> FanSelectionAction {
+        guard !privilegeIsRoot() else { return .proceed(.osascript) }
+        return FanHelperRouting.selectionAction(
+            for: profile,
+            availability: fanHelper?.availability(),
+            governorRunning: profile == .system ? false : isFanGovernorRunning()
+        )
+    }
+
+    /// Opens System Settings → Login Items for approving the helper. A no-op
+    /// without a helper.
+    public func openFanHelperApprovalSettings() {
+        fanHelper?.openSystemSettings()
+    }
+
+    /// The mean CPU/GPU cluster temperature right now, or nil when the
+    /// sensors offer none (see ``FanCoolTarget/averageClusterTemperature(in:)``).
+    public func averageClusterTemperature() -> Double? {
+        FanCoolTarget.averageClusterTemperature(in: sensors.read())
+    }
+
+    /// Sets (clamped to ``FanCoolTarget/range``) or clears (`nil`) the Cool
+    /// target. Needs no privileges and starts nothing: a running legacy
+    /// governor re-reads the file on its next tick, and a helper-driven one
+    /// is retargeted here (and by the heartbeat reconcile).
+    public func setFanCoolTarget(_ celsius: Double?) throws {
+        if let celsius, !celsius.isFinite {
+            throw TuneError.usage("the Cool target must be a number")
+        }
+        try fanProfileStore.writeCoolTarget(celsius)
+        let stored = fanProfileStore.readSelection()
+        logHistory(
+            action: "fan.cooltarget",
+            requested: celsius,
+            clamped: stored.coolTargetCelsius,
+            applied: nil,
+            result: "success"
+        )
+        reconcileFanProfileWithHelper()
+    }
+
     /// Whether a privileged `FanGovernor` is already running for this Mac.
     ///
     /// Matched by command line rather than a pid file on purpose: the
@@ -718,7 +766,9 @@ extension TuneController {
             // follows the stored profile; starting a second one would fight it.
             if isLegacyFanGovernorRunning() { return }
             do {
-                try fanHelper.startGovernor(profile: profile)
+                try fanHelper.startGovernor(
+                    profile: profile, coolTarget: activeFanSelection.effectiveCoolTarget
+                )
                 return
             } catch {
                 logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
@@ -750,10 +800,11 @@ extension TuneController {
         guard let fanHelper, !privilegeIsRoot(),
               FanHelperRouting.route(for: fanHelper.availability()) == .helper
         else { return }
-        let profile = activeFanProfile
+        let selection = activeFanSelection
+        let profile = selection.profile
         guard profile != .system, !isFanGovernorRunning() else { return }
         do {
-            try fanHelper.startGovernor(profile: profile)
+            try fanHelper.startGovernor(profile: profile, coolTarget: selection.effectiveCoolTarget)
             logHistory(action: "fan.profile.\(profile.rawValue)", result: "success")
         } catch {
             logHistory(action: "fan.profile.\(profile.rawValue)", result: "failed", error: error)
@@ -775,7 +826,8 @@ extension TuneController {
         // An unreadable profile file is not `.system`: skip rather than hand
         // the fans back (or move them) on a guess. The next heartbeat retries.
         let store = fanProfileStore
-        guard let stored = try? store.readStrict() else { return }
+        guard let storedSelection = try? store.readSelectionStrict() else { return }
+        let stored = storedSelection.profile
         let status = fanHelper.governorStatus()
         guard status.isGoverning else { return }
         if stored == .system {
@@ -791,9 +843,13 @@ extension TuneController {
                 // hands the fans back within seconds regardless.
                 logHistory(action: "fan.profile.system", result: "failed", error: error)
             }
-        } else if status.profile != stored {
-            guard (try? store.readStrict()) == stored else { return }
-            do { try fanHelper.startGovernor(profile: stored) } catch {
+        } else if status.profile != stored || status.coolTarget != storedSelection.effectiveCoolTarget {
+            // A changed position or Cool target: retarget. Compare the whole
+            // selection on the re-read, so a change made meanwhile wins.
+            guard (try? store.readSelectionStrict()) == storedSelection else { return }
+            do {
+                try fanHelper.startGovernor(profile: stored, coolTarget: storedSelection.effectiveCoolTarget)
+            } catch {
                 logHistory(action: "fan.profile.\(stored.rawValue)", result: "failed", error: error)
             }
         }
@@ -818,9 +874,15 @@ extension TuneController {
         // that is indistinguishable from a crash — which is exactly how the
         // `sudo` home-directory bug first presented.
         let selected = store.read()
+        let selectedTarget = store.readSelection().effectiveCoolTarget
         FileHandle.standardError.write(Data(
             "fan governor: profile '\(selected.rawValue)' from \(stateURL.path)\n".utf8
         ))
+        if let selectedTarget {
+            FileHandle.standardError.write(Data(
+                String(format: "fan governor: Cool target %.0f°C average cluster temperature\n", selectedTarget).utf8
+            ))
+        }
         if selected == .system {
             let message = "fan governor: nothing to do — the fan control is on its "
                 + "default position, so the firmware curve is left alone. Select "
@@ -850,7 +912,7 @@ extension TuneController {
         // with `sudo symcockpit fan governor`, and harmless when the cockpit
         // launches it detached with its streams redirected to /dev/null.
         try governor.run(
-            profileProvider: { store.read() },
+            selectionProvider: { store.readSelection() },
             shouldContinue: { !stopped.isStopped },
             onTick: { temperature, applied in
                 guard let temperature, let applied else { return }

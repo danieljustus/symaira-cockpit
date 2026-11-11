@@ -463,6 +463,8 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
         emit("Usage: symcockpit fan set <0.0-1.0>")
         emit("       symcockpit fan auto")
         emit("       symcockpit fan profile [system|comfort|performance]")
+        emit("       symcockpit fan status")
+        emit("       symcockpit fan target [<50-85>|off]   (Cool: max average CPU/GPU cluster °C)")
         emit("       symcockpit fan governor [--state <path>]   (requires root)")
     } else if rest.first == "auto" {
         try rejectTrailingArguments(rest, after: 1, command: "fan auto")
@@ -470,12 +472,17 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
         try emitJSON(ApplyResult(applied: true))
     } else if rest.first == "profile" {
         try runFanProfile(Array(rest.dropFirst()), controller: controller)
+    } else if rest.first == "status" {
+        try rejectTrailingArguments(rest, after: 1, command: "fan status")
+        try emitJSON(fanProfileResult(controller: controller))
+    } else if rest.first == "target" {
+        try runFanTarget(Array(rest.dropFirst()), controller: controller)
     } else if rest.first == "governor" {
         try runFanGovernor(Array(rest.dropFirst()), controller: controller)
     } else if let cmd = writeCommandByPrefix["fan set"] {
         try runWriteCommand(cmd, rest: rest, controller: controller)
     } else {
-        throw TuneError.usage("fan: expected 'set <value>', 'auto', 'profile' or 'governor'.")
+        throw TuneError.usage("fan: expected 'set <value>', 'auto', 'profile', 'status', 'target' or 'governor'.")
     }
 }
 
@@ -488,10 +495,7 @@ private func runFanSubcommand(_ rest: [String], controller: TuneController) thro
 private func runFanProfile(_ rest: [String], controller: TuneController) throws {
     try rejectTrailingArguments(rest, after: 1, command: "fan profile")
     guard let name = rest.first else {
-        try emitJSON(FanProfileResult(
-            profile: controller.activeFanProfile.rawValue,
-            governorRunning: controller.isFanGovernorRunning()
-        ))
+        try emitJSON(fanProfileResult(controller: controller))
         return
     }
     guard let profile = FanProfile(rawValue: name.lowercased()) else {
@@ -507,7 +511,50 @@ private func runFanProfile(_ rest: [String], controller: TuneController) throws 
         emit("Selected \(profile.rawValue). No fan governor is running — "
              + "start one with `sudo symcockpit fan governor`.")
     }
-    try emitJSON(FanProfileResult(profile: profile.rawValue, governorRunning: running))
+    try emitJSON(fanProfileResult(controller: controller, governorRunning: running))
+}
+
+private func fanProfileResult(
+    controller: TuneController,
+    governorRunning: Bool? = nil
+) -> FanProfileResult {
+    let selection = controller.activeFanSelection
+    return FanProfileResult(
+        profile: selection.profile.rawValue,
+        governorRunning: governorRunning ?? controller.isFanGovernorRunning(),
+        coolTargetCelsius: selection.coolTargetCelsius,
+        averageClusterCelsius: controller.averageClusterTemperature()
+    )
+}
+
+/// `symcockpit fan target [<50-85>|off]` — read, set or clear the Cool
+/// position's maximum average CPU/GPU cluster temperature.
+///
+/// Like `fan profile`, this only records the choice and never elevates: a
+/// running governor (legacy or helper) picks it up by itself. A number outside
+/// the allowed range is refused rather than silently clamped; the stored value
+/// is clamped again on every read.
+private func runFanTarget(_ rest: [String], controller: TuneController) throws {
+    try rejectTrailingArguments(rest, after: 1, command: "fan target")
+    if let arg = rest.first {
+        let range = FanCoolTarget.range
+        if ["off", "none", "clear"].contains(arg.lowercased()) {
+            try controller.setFanCoolTarget(nil)
+        } else {
+            guard let value = Double(arg), FanCoolTarget.isWithinRange(value) else {
+                throw TuneError.usage(
+                    "fan target: expected a number from \(Int(range.lowerBound)) to "
+                    + "\(Int(range.upperBound)) (°C), or 'off'."
+                )
+            }
+            try controller.setFanCoolTarget(value)
+        }
+        if controller.activeFanProfile != .comfort {
+            emitErr("Stored. The target applies while the fan control is on Cool "
+                    + "(`symcockpit fan profile comfort`).")
+        }
+    }
+    try emitJSON(fanProfileResult(controller: controller))
 }
 
 /// `symcockpit fan governor [--state <path>]` — run the temperature-tracking loop
@@ -533,10 +580,26 @@ private func runFanGovernor(_ rest: [String], controller: TuneController) throws
 private struct FanProfileResult: Encodable {
     let profile: String
     let governorRunning: Bool
+    /// The Cool target in °C, or null when none is set.
+    let coolTargetCelsius: Double?
+    /// The mean CPU/GPU cluster temperature right now, or null when the
+    /// sensors offer none (e.g. no SMC access).
+    let averageClusterCelsius: Double?
 
     enum CodingKeys: String, CodingKey {
         case profile
         case governorRunning = "governor_running"
+        case coolTargetCelsius = "cool_target_celsius"
+        case averageClusterCelsius = "average_cluster_celsius"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(profile, forKey: .profile)
+        try container.encode(governorRunning, forKey: .governorRunning)
+        // Explicit nulls: "no target" is an answer, not a missing field.
+        try container.encode(coolTargetCelsius, forKey: .coolTargetCelsius)
+        try container.encode(averageClusterCelsius.map { ($0 * 10).rounded() / 10 }, forKey: .averageClusterCelsius)
     }
 }
 

@@ -63,7 +63,7 @@ public struct SMAppServiceDaemon: FanHelperDaemonService {
 /// The XPC side, narrowed to what the client uses so the heartbeat and
 /// routing logic is testable without a daemon.
 public protocol FanHelperTransport: Sendable {
-    func startGovernor(profile: String) throws
+    func startGovernor(profile: String, coolTarget: Double?) throws
     /// Throws when the helper is unreachable. Returns whether the helper still
     /// has a governor running (false: it gave up or was stopped meanwhile).
     func heartbeat() throws -> Bool
@@ -136,9 +136,11 @@ final class XPCFanHelperTransport: FanHelperTransport, @unchecked Sendable {
         connection.resume()
     }
 
-    func startGovernor(profile: String) throws {
+    func startGovernor(profile: String, coolTarget: Double?) throws {
         let message: String? = try call { proxy, done in
-            proxy.startGovernor(profile: profile) { done($0) }
+            proxy.startGovernor(
+                profile: profile, coolTargetCelsius: coolTarget.map { NSNumber(value: $0) }
+            ) { done($0) }
         }
         if let message { throw FanHelperTransportError.rejected(message) }
     }

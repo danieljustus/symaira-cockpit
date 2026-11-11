@@ -38,7 +38,7 @@ if arguments.count == 4, arguments[1] == "--print-requirement" {
     exit(0)
 }
 
-let engine = FanHelperEngine { profileProvider, shouldContinue, sleep in
+let engine = FanHelperEngine { selectionProvider, shouldContinue, sleep in
     let smc = SMCService()
     let sensors = SensorService(smc: smc)
     let fanControl = FanControlService(smc: smc, sensors: sensors)
@@ -47,7 +47,7 @@ let engine = FanHelperEngine { profileProvider, shouldContinue, sleep in
     let governor = FanGovernor(
         fanControl: fanControl, sensors: sensors, config: TuneConfig(), sleep: sleep
     )
-    try governor.run(profileProvider: profileProvider, shouldContinue: shouldContinue)
+    try governor.run(selectionProvider: selectionProvider, shouldContinue: shouldContinue)
 }
 engine.startWatchdogTimer()
 

@@ -79,6 +79,60 @@ public enum FanHelperRouting {
     public static func route(for availability: FanHelperAvailability) -> FanHelperRoute {
         availability == .enabled ? .helper : .osascript
     }
+
+    /// What the GUI does when the user selects `profile` and fan changes may
+    /// lack the rights to take effect.
+    ///
+    /// Only a release-signed build with the helper bundled can offer a better
+    /// way than the administrator prompt, so only there is a missing right a
+    /// reason to take the user somewhere:
+    ///
+    /// - Standard (`.system`) never navigates: it needs no rights at all.
+    /// - A governor that already runs follows the change by itself (the
+    ///   legacy one re-reads the stored selection, the helper one is
+    ///   retargeted), so nothing is missing.
+    /// - Helper off or opted in but not registered: Preferences, at the
+    ///   "Privileged fan helper" section.
+    /// - Registered but awaiting approval: System Settings → Login Items.
+    /// - Enabled, unsigned/unbundled builds, and no helper at all (CLI/MCP,
+    ///   `availability == nil`) keep the unchanged routes.
+    public static func selectionAction(
+        for profile: FanProfile,
+        availability: FanHelperAvailability?,
+        governorRunning: Bool
+    ) -> FanSelectionAction {
+        guard let availability else { return .proceed(.osascript) }
+        let route = route(for: availability)
+        guard profile != .system, !governorRunning else { return .proceed(route) }
+        switch availability {
+        case .off, .notRegistered: return .openHelperPreferences
+        case .requiresApproval: return .openSystemSettingsApproval
+        case .enabled, .unavailable: return .proceed(route)
+        }
+    }
+}
+
+/// The outcome of ``FanHelperRouting/selectionAction(for:availability:governorRunning:)``.
+public enum FanSelectionAction: Sendable, Equatable {
+    /// Apply the change through `route`, as before.
+    case proceed(FanHelperRoute)
+    /// Do not change anything; show Preferences at the helper section.
+    case openHelperPreferences
+    /// Do not change anything; open System Settings → Login Items so the user
+    /// can approve the registered helper.
+    case openSystemSettingsApproval
+
+    /// The one-line explanation shown where the user lands.
+    public var hint: String? {
+        switch self {
+        case .proceed:
+            return nil
+        case .openHelperPreferences:
+            return "Turn on the privileged fan helper to change fan speed without an administrator password."
+        case .openSystemSettingsApproval:
+            return "Approve the Symaira Cockpit helper in System Settings → Login Items to change fan speed."
+        }
+    }
 }
 
 /// The persisted opt-in. Lives in the grandfathered `com.symaira.symtune`
@@ -97,15 +151,23 @@ public struct FanHelperGovernorStatus: Sendable, Equatable {
     public var isGoverning: Bool
     /// The profile the helper is governing, when it is.
     public var profile: FanProfile?
+    /// The Cool target the helper is governing with, when it has one.
+    public var coolTarget: Double?
     /// Set when the app lost contact with a governing helper (a failed
     /// retarget, a dropped connection). The helper keeps governing until its
     /// heartbeat watchdog fires, so until this instant it must still count as
     /// governing: nothing else may write the SMC beside it.
     public var mayStillGovernUntil: Date?
 
-    public init(isGoverning: Bool, profile: FanProfile? = nil, mayStillGovernUntil: Date? = nil) {
+    public init(
+        isGoverning: Bool,
+        profile: FanProfile? = nil,
+        coolTarget: Double? = nil,
+        mayStillGovernUntil: Date? = nil
+    ) {
         self.isGoverning = isGoverning
         self.profile = profile
+        self.coolTarget = coolTarget
         self.mayStillGovernUntil = mayStillGovernUntil
     }
 
@@ -130,14 +192,25 @@ public protocol FanHelperControlling: Sendable {
     /// governor tick succeeded: the governor reports an immediate failure
     /// (SMC unavailable, no thermal headroom) through the helper's `status`
     /// and, via the next heartbeat, through ``governorStatus()``.
-    func startGovernor(profile: FanProfile) throws
+    ///
+    /// `coolTarget` is the optional Cool-position maximum average temperature
+    /// (``FanCoolTarget``); nil means none. The helper validates it again.
+    func startGovernor(profile: FanProfile, coolTarget: Double?) throws
     /// Hand the fans back to the firmware and stop heartbeating.
     func stopGovernor() throws
     /// Whether the helper is governing the fans, from the last reply. Used so
     /// the UI/HUD do not claim "no governor is running" while it is.
     func governorStatus() -> FanHelperGovernorStatus
+    /// Opens System Settings → Login Items, where the user approves the helper.
+    func openSystemSettings()
 }
 
 extension FanHelperControlling {
+    /// Start or retarget without a Cool target.
+    public func startGovernor(profile: FanProfile) throws {
+        try startGovernor(profile: profile, coolTarget: nil)
+    }
     public func governorStatus() -> FanHelperGovernorStatus { .idle }
+    /// Hosts that cannot open System Settings do nothing.
+    public func openSystemSettings() {}
 }

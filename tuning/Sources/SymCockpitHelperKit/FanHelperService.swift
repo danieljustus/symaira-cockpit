@@ -8,12 +8,41 @@ final class FanHelperService: NSObject, FanHelperXPCProtocol, @unchecked Sendabl
 
     init(engine: FanHelperEngine) { self.engine = engine }
 
-    func startGovernor(profile: String, reply: @escaping (String?) -> Void) {
+    /// The Cool target as received over the wire.
+    enum CoolTargetDecoding: Equatable {
+        case none
+        case value(Double)
+        case malformed
+    }
+
+    /// The helper is root and does not trust the app's number: nil is "no
+    /// target", a non-finite value is malformed (refused, never guessed at),
+    /// and a finite one is clamped to ``FanCoolTarget/range``.
+    static func decodeCoolTarget(_ raw: NSNumber?) -> CoolTargetDecoding {
+        guard let raw else { return .none }
+        let value = raw.doubleValue
+        guard value.isFinite, let clamped = FanCoolTarget.sanitized(value) else { return .malformed }
+        return .value(clamped)
+    }
+
+    func startGovernor(
+        profile: String,
+        coolTargetCelsius: NSNumber?,
+        reply: @escaping (String?) -> Void
+    ) {
         guard let parsed = FanProfile(rawValue: profile) else {
             reply("unknown fan profile")
             return
         }
-        engine.start(profile: parsed)
+        let target: Double?
+        switch Self.decodeCoolTarget(coolTargetCelsius) {
+        case .none: target = nil
+        case .value(let value): target = value
+        case .malformed:
+            reply("invalid Cool target")
+            return
+        }
+        engine.start(profile: parsed, coolTarget: target)
         reply(nil)
     }
 

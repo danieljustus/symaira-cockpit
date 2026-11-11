@@ -25,6 +25,7 @@ public final class FanHelperEngine: @unchecked Sendable {
     public struct Snapshot: Sendable, Equatable {
         public var isGoverning: Bool
         public var profile: FanProfile
+        public var coolTarget: Double?
         public var lastStopReason: StopReason?
         public var failure: String?
     }
@@ -32,25 +33,25 @@ public final class FanHelperEngine: @unchecked Sendable {
     /// Runs the governor loop. `sleep` is interruptible and must be handed to
     /// the `FanGovernor` so a stop takes effect between ticks.
     public typealias GovernorRunner = @Sendable (
-        _ profileProvider: @Sendable () -> FanProfile,
+        _ selectionProvider: @Sendable () -> FanSelection,
         _ shouldContinue: @Sendable () -> Bool,
         _ sleep: @escaping @Sendable (TimeInterval) -> Void
     ) throws -> Void
 
     private final class Run: @unchecked Sendable {
         let lock = NSLock()
-        private var _profile: FanProfile
+        private var _selection: FanSelection
         private var _stopped = false
         private var _finished = false
         /// Entered at creation, left when the governor has unwound (the fans
         /// are restored). A successor run waits on it before touching the SMC.
         private let unwound = DispatchGroup()
 
-        init(profile: FanProfile) { _profile = profile; unwound.enter() }
+        init(selection: FanSelection) { _selection = selection; unwound.enter() }
 
-        var profile: FanProfile {
-            get { lock.lock(); defer { lock.unlock() }; return _profile }
-            set { lock.lock(); _profile = newValue; lock.unlock() }
+        var selection: FanSelection {
+            get { lock.lock(); defer { lock.unlock() }; return _selection }
+            set { lock.lock(); _selection = newValue; lock.unlock() }
         }
         var isStopped: Bool { lock.lock(); defer { lock.unlock() }; return _stopped }
         func stop() { lock.lock(); _stopped = true; lock.unlock() }
@@ -89,14 +90,18 @@ public final class FanHelperEngine: @unchecked Sendable {
 
     /// Starts the governor on `profile`, or retargets a running one.
     /// `.system` is a stop: the helper never "governs" the firmware curve.
-    public func start(profile: FanProfile) {
+    ///
+    /// `coolTarget` is clamped to ``FanCoolTarget/range`` here as well (a
+    /// non-finite one is dropped), and only the Cool position uses it.
+    public func start(profile: FanProfile, coolTarget: Double? = nil) {
         guard profile != .system else {
             stop(reason: .profileSystem)
             return
         }
+        let selection = FanSelection(profile: profile, coolTargetCelsius: coolTarget)
         lock.lock()
         if let run, !run.isStopped, !run.isFinished {
-            run.profile = profile
+            run.selection = selection
             lock.unlock()
             watchdog.beat()
             return
@@ -106,7 +111,7 @@ public final class FanHelperEngine: @unchecked Sendable {
         // would capture the half-restored state as the "original" to hand
         // back (leaving the fans pinned when it ends).
         let previous = run
-        let newRun = Run(profile: profile)
+        let newRun = Run(selection: selection)
         run = newRun
         failure = nil
         lastStopReason = nil
@@ -123,7 +128,7 @@ public final class FanHelperEngine: @unchecked Sendable {
                 // start, so nothing is captured or overridden.
                 if !newRun.isStopped {
                     try runner(
-                        { newRun.profile },
+                        { newRun.selection },
                         { !newRun.isStopped },
                         { Self.interruptibleSleep($0, slice: slice, run: newRun) }
                     )
@@ -204,7 +209,8 @@ public final class FanHelperEngine: @unchecked Sendable {
         let active = run.map { !$0.isFinished } ?? false
         return Snapshot(
             isGoverning: active,
-            profile: active ? (run?.profile ?? .system) : .system,
+            profile: active ? (run?.selection.profile ?? .system) : .system,
+            coolTarget: active ? run?.selection.effectiveCoolTarget : nil,
             lastStopReason: lastStopReason,
             failure: failure
         )

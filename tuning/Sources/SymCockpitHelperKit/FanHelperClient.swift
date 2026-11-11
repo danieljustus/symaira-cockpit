@@ -27,6 +27,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     /// Profile of the last accepted start, re-sent when a heartbeat reports
     /// that the helper lost its governor.
     private var lastProfile: FanProfile?
+    private var lastCoolTarget: Double?
     private var healAttempts = 0
     /// The helper may still be governing until this instant although the app
     /// lost contact with it (see ``FanHelperGovernorStatus/mayStillGovernUntil``).
@@ -95,7 +96,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         )
     }
 
-    public func startGovernor(profile: FanProfile) throws {
+    public func startGovernor(profile: FanProfile, coolTarget: Double?) throws {
         guard availability() == .enabled, case .releaseSigned(let teamID) = signing() else {
             throw TuneError.permission("the privileged fan helper is not enabled")
         }
@@ -107,10 +108,11 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
             // have been rewritten since.
             if let problem = bundleCheck() { throw TuneError.permission(problem) }
             let transport = try connectedTransport(teamID: teamID)
-            try transport.startGovernor(profile: profile.rawValue)
+            try transport.startGovernor(profile: profile.rawValue, coolTarget: coolTarget)
             lock.lock()
-            status = FanHelperGovernorStatus(isGoverning: true, profile: profile)
+            status = FanHelperGovernorStatus(isGoverning: true, profile: profile, coolTarget: coolTarget)
             lastProfile = profile
+            lastCoolTarget = coolTarget
             healAttempts = 0
             mayStillGovernUntil = nil
             lock.unlock()
@@ -149,6 +151,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         let wasGoverning = status.isGoverning
         status = .idle
         lastProfile = nil
+        lastCoolTarget = nil
         mayStillGovernUntil = nil
         lock.unlock()
         do {
@@ -271,6 +274,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
     private func healLostGovernor(via transport: any FanHelperTransport) {
         lock.lock()
         let profile = lastProfile
+        let coolTarget = lastCoolTarget
         let attempt = healAttempts
         lock.unlock()
         guard let profile, attempt < Self.maxHealAttempts else {
@@ -291,7 +295,7 @@ public final class FanHelperClient: FanHelperControlling, @unchecked Sendable {
         }
         lock.lock(); healAttempts += 1; lock.unlock()
         Self.log("the helper's governor stopped; restarting (\(attempt + 1)/\(Self.maxHealAttempts))")
-        do { try transport.startGovernor(profile: profile.rawValue) } catch {
+        do { try transport.startGovernor(profile: profile.rawValue, coolTarget: coolTarget) } catch {
             Self.log("restart failed: \(error)")
             dropTransport()
         }
