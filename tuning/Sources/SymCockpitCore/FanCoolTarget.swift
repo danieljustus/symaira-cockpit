@@ -86,27 +86,30 @@ public enum FanCoolTarget {
         "TC0C", "TC1C", "TC2C", "TC3C", "TC4C", "TC5C", "TC6C", "TC7C", "TC8C", "TC9C", "TCXC",
     ]
 
-    /// GPU rows: `Tg*` per-cluster keys where a Mac publishes them, and the
-    /// GPU die probe `TG0P`. `TRDX` (GPU die hotspot) is a hotspot aggregate
-    /// and only used as a fallback, see ``hotspotFallbackKeys``.
+    /// GPU rows: `Tg*` per-cluster keys where a Mac publishes them, the GPU
+    /// die probe `TG0P`, and `TRDX`. On Apple Silicon `TRDX` (the GPU die
+    /// reading) is the only GPU sensor there is, so it is the GPU's one vote;
+    /// leaving it out would make a GPU-bound load invisible to the average.
     private static func isGPUClusterKey(_ key: String) -> Bool {
-        key == "TG0P" || (key.utf8.count == 4 && key.hasPrefix("Tg"))
+        key == "TG0P" || key == "TRDX" || (key.utf8.count == 4 && key.hasPrefix("Tg"))
     }
 
-    /// Die hotspot aggregates (`TCMz`, `TRDX`) and the core-max row (`TCMb`).
-    /// They are *not* clusters: mixed into a per-cluster mean they would count
-    /// the hottest spot twice. They stand in only when a Mac publishes no
-    /// cluster row at all, so the feature degrades instead of vanishing.
-    private static let hotspotFallbackKeys: Set<String> = ["TCMz", "TRDX"]
+    /// The CPU die hotspot. It is an aggregate of the cores, not a cluster:
+    /// mixed into a per-cluster mean it would count the hottest spot twice. It
+    /// stands in only when a Mac publishes no CPU core/cluster row at all, so
+    /// the feature degrades instead of vanishing. (`TCMb`, the core-max row,
+    /// is never used.)
+    private static let cpuHotspotFallbackKey = "TCMz"
 
     /// The mean of every plausible CPU and GPU *cluster* temperature in
     /// `report` — the number the Cool target is compared against.
     ///
     /// Included by key family: CPU cores/clusters (`Tp**`, `Te**`, Intel
-    /// `TC#C`) and GPU clusters (`Tg**`, `TG0P`). Excluded on purpose:
+    /// `TC#C`) and GPU rows (`Tg**`, `TG0P`, `TRDX`). Excluded on purpose:
     /// proximity (`TCHP`, `TC0P`, `TM0P`), ambient (`Ta0P`, `TA0P`), the SoC
-    /// probe (`Ts0S`), battery and anything unknown, plus the hotspot/max
-    /// aggregates (`TCMz`, `TRDX`, `TCMb`) while any cluster row exists.
+    /// probe (`Ts0S`), battery and anything unknown, plus the CPU aggregates
+    /// `TCMb` (core max, never) and `TCMz` (CPU die hotspot, only while no CPU
+    /// core/cluster row exists).
     /// Every reading must also be physically plausible
     /// (`SMCService.plausibleTemperatureRange`): an M4 Pro implements
     /// `Tp01`–`Tp09` and reads them back at 0–8 °C while the die is at 85 °C,
@@ -120,13 +123,14 @@ public enum FanCoolTarget {
         let plausible = report.temperatures.filter {
             $0.celsius.isFinite && SMCService.isPlausibleTemperature($0.celsius)
         }
-        let clusters = plausible.filter {
+        let cpu = plausible.filter {
             isAppleSiliconClusterKey($0.key) || intelCoreKeys.contains($0.key)
-                || isGPUClusterKey($0.key)
         }
-        let used = clusters.isEmpty
-            ? plausible.filter { hotspotFallbackKeys.contains($0.key) }
-            : clusters
+        let gpu = plausible.filter { isGPUClusterKey($0.key) }
+        let cpuUsed = cpu.isEmpty
+            ? plausible.filter { $0.key == cpuHotspotFallbackKey }
+            : cpu
+        let used = cpuUsed + gpu
         guard !used.isEmpty else { return nil }
         return used.map(\.celsius).reduce(0, +) / Double(used.count)
     }

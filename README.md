@@ -263,9 +263,10 @@ reported as healthy measurements.
 **Cool target (optional).** With the fan slider on *Cool*, a *Max avg* field
 next to it takes a whole number from **50 to 85 °C** (empty = off), with the
 current average shown beside it. The number is the mean of the CPU and GPU
-*cluster* temperatures (CPU core and cluster rows plus GPU rows; hotspot,
-proximity, ambient and implausible readings are left out, and the die hotspots
-only stand in on a Mac that publishes no cluster row). It can only **add**
+*cluster* temperatures (CPU core and cluster rows plus the GPU die reading;
+the CPU hotspot, core-max, proximity, ambient and implausible readings are left
+out, and the CPU hotspot only stands in on a Mac that publishes no core row).
+It can only **add**
 cooling: the fans follow the larger of the normal Cool curve at the hottest die
 and the same curve shifted so it reaches full speed at your number, evaluated
 at the average. With no target, or no average this moment, nothing changes.

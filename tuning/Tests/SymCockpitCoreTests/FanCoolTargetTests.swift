@@ -100,8 +100,9 @@ final class FanCoolTargetTests: XCTestCase {
 
     func testAverageExcludesHotspotAggregatesProximityAmbientAndUnknownRows() throws {
         let average = try XCTUnwrap(FanCoolTarget.averageClusterTemperature(in: m4ProReport))
-        // Tp01–03 and Te04–05 only: (60+62+64+50+52) / 5.
-        XCTAssertEqual(average, 57.6, accuracy: 1e-9)
+        // Tp01–03, Te04–05 and the GPU's one reading TRDX (70):
+        // (60+62+64+50+52+70) / 6. TCMz, TCMb and TCHP are not averaged.
+        XCTAssertEqual(average, 358.0 / 6.0, accuracy: 1e-9)
     }
 
     func testAverageIgnoresImplausibleReadings() throws {
@@ -122,11 +123,23 @@ final class FanCoolTargetTests: XCTestCase {
         XCTAssertEqual(average, 70, accuracy: 1e-9)
     }
 
-    func testHotspotRowsStandInOnlyWhenNoClusterRowExists() throws {
+    func testTheCpuHotspotStandsInOnlyWhenNoCpuClusterRowExists() throws {
         let hotspotsOnly = report([("TCMz", 80), ("TRDX", 60), ("TCMb", 90), ("TCHP", 40)])
-        // TCMb (core max) is never used; TCMz/TRDX only as the fallback.
+        // TCMb (core max) is never used; TCMz only as the CPU fallback; TRDX is the GPU.
         XCTAssertEqual(
             try XCTUnwrap(FanCoolTarget.averageClusterTemperature(in: hotspotsOnly)), 70, accuracy: 1e-9
+        )
+        let withCluster = report([("TCMz", 99), ("Tp01", 60), ("TRDX", 70)])
+        XCTAssertEqual(
+            try XCTUnwrap(FanCoolTarget.averageClusterTemperature(in: withCluster)), 65, accuracy: 1e-9,
+            "TCMz must not be averaged in beside real cluster rows"
+        )
+    }
+
+    func testTheGpuOnlyMacStillHasAnAverage() throws {
+        XCTAssertEqual(
+            try XCTUnwrap(FanCoolTarget.averageClusterTemperature(in: report([("TRDX", 61), ("TCHP", 40)]))),
+            61, accuracy: 1e-9
         )
     }
 
@@ -136,8 +149,8 @@ final class FanCoolTargetTests: XCTestCase {
             in: report([("TCHP", 45), ("Ta0P", 25), ("TM0P", 40), ("Ts0S", 50), ("TCMb", 80)])
         ))
         XCTAssertNil(FanCoolTarget.averageClusterTemperature(
-            in: report([("Tp01", 2), ("Tp02", 5), ("TCMz", 200)])
-        ), "only implausible cluster and hotspot readings")
+            in: report([("Tp01", 2), ("Tp02", 5), ("TCMz", 200), ("TRDX", 3)])
+        ), "only implausible cluster, hotspot and GPU readings")
     }
 
     // MARK: - Control law

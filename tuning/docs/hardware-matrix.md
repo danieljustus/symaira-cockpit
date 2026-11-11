@@ -93,9 +93,9 @@ and equivalent keys on Apple Silicon.
 
 The optional Cool target (a maximum *average* CPU/GPU cluster temperature,
 50–85 °C) averages only cluster rows that read back plausibly: Apple Silicon
-`Tp01`–`Tp12` and `Te*` (CPU), `Tg*`/`TG0P` (GPU), Intel `TC#C`/`TCXC`. The
-hotspot rows `TCMz`/`TRDX` stand in only when a Mac exposes none of those;
-`TCMb` (core max), proximity (`TCHP`, `TC0P`, `TM0P`), ambient and `Ts0S` are
+`Tp01`–`Tp12` and `Te*` (CPU), `Tg*`/`TG0P`/`TRDX` (GPU — `TRDX` is the GPU's
+only reading on Apple Silicon), Intel `TC#C`/`TCXC`. The CPU die hotspot `TCMz`
+stands in only when a Mac exposes no CPU core/cluster row; `TCMb` (core max), proximity (`TCHP`, `TC0P`, `TM0P`), ambient and `Ts0S` are
 never averaged. On an M4 Pro `Tp01`–`Tp09` partly read 0–8 °C and are dropped
 by the plausibility gate, so the average there comes from the remaining rows.
 The target can only raise the fan fraction above the normal Cool curve.
