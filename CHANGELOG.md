@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Fan helper no longer crashes and leaves the fans at full speed:** the
+  0.11.0 helper's idle-exit timer ran its main-actor-isolated handler on a
+  private queue, so Swift 6's isolation check killed the helper (SIGTRAP)
+  about a second after every start, including mid-governing. The fans then
+  stayed forced at whatever the governor last wrote, and selecting *Standard*
+  could not reach the dead helper. The idle timer and the SIGTERM handler now
+  run on the main queue the helper's run loop drains.
+- **Elevated `fan auto` no longer hangs:** restoring file ownership after a
+  root write walked parent directories with `deletingLastPathComponent`,
+  which climbs `..` forever for a relative location; as root every step
+  stats as root-owned, so `sudo symcockpit fan auto` (and the GUI's
+  administrator fallback) spun at full CPU and never restored the fans. The
+  walk now steps through the components of the absolute path.
+
 ## [0.11.0] (2026-11-11)
 
 ### Added

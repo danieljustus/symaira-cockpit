@@ -68,6 +68,28 @@ final class ElevatedStateOwnershipTests: XCTestCase {
         XCTAssertEqual(owner?.1, 21)
     }
 
+    /// A relative location must still end at `/`. Walking it with
+    /// `deletingLastPathComponent` climbed `.` → `..` → `../..` forever, and as
+    /// root every one of those stats as root-owned, so `fan auto` spun at
+    /// full CPU instead of restoring the fans.
+    func testRelativeLocationTerminatesWhenEveryAncestorIsRootOwned() throws {
+        let relative = try XCTUnwrap(URL(string: "relative/symtune"))
+        var visited: [String] = []
+        let owner = StateFilePermissions.ownershipToRestore(
+            for: relative,
+            attributesOfPath: { path in
+                visited.append(path)
+                XCTAssertLessThan(visited.count, 4096, "the ancestor walk must terminate")
+                return visited.count < 4096 ? (0, 0) : (1, 1)
+            },
+            isRoot: { true },
+            sudoOwnership: .some((502, 21))
+        )
+        XCTAssertEqual(owner?.0, 502)
+        XCTAssertEqual(visited.last, "/")
+        XCTAssertTrue(visited.allSatisfy { $0.hasPrefix("/") }, "only absolute paths are inspected")
+    }
+
     /// Unprivileged runs must not chown anything.
     func testNoOwnershipIsRestoredWhenNotRunningAsRoot() {
         let owner = StateFilePermissions.ownershipToRestore(

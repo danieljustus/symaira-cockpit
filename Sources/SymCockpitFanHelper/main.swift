@@ -57,8 +57,15 @@ listener.delegate = delegate
 
 // SIGTERM (launchd stop, unregister, shutdown): restore the fans, then exit.
 // Unchanged by the idle exit below.
+// Both dispatch sources below run on the main queue: top-level code here is
+// main-actor isolated under Swift 6, so their handlers are too, and a handler
+// on any other queue trips the runtime isolation check (SIGTRAP). The idle
+// timer on a private queue crashed the helper a second after every start,
+// mid-governing, leaving the fans forced. `RunLoop.main.run()` drains the
+// main queue, and blocking it during termination costs nothing: XPC requests
+// arrive on their own queues and the process exits right after.
 signal(SIGTERM, SIG_IGN)
-let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 termination.setEventHandler {
     if !engine.terminate() {
         // The governor is blocked (e.g. in an SMC call) and did not restore
@@ -77,7 +84,7 @@ let idleMonitor = FanHelperIdleMonitor(
     isGoverning: { engine.snapshot.isGoverning },
     hasConnection: { delegate.hasActiveConnection }
 )
-let idleTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "symaira.fan-helper.idle"))
+let idleTimer = DispatchSource.makeTimerSource(queue: .main)
 idleTimer.schedule(
     deadline: .now() + FanHelperConstants.idleCheckInterval,
     repeating: FanHelperConstants.idleCheckInterval

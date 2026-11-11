@@ -42,14 +42,17 @@ public enum StateFilePermissions {
         sudoOwnership: (uid_t, gid_t)?? = nil
     ) -> (uid_t, gid_t)? {
         guard isRoot() else { return nil }
-        var current = location.standardized
-        while true {
-            if let (uid, gid) = attributesOfPath(current.path), uid != 0 {
+        // Walk the components of the absolute path, which is bounded by
+        // construction. `deletingLastPathComponent` never reaches `/` for a
+        // relative URL (`.` → `..` → `../..` …), and as root every one of
+        // those stats as root-owned, so the walk spun forever.
+        var components = URL(fileURLWithPath: location.path).standardizedFileURL.pathComponents
+        while !components.isEmpty {
+            let candidate = components.count == 1 ? "/" : "/" + components.dropFirst().joined(separator: "/")
+            if let (uid, gid) = attributesOfPath(candidate), uid != 0 {
                 return (uid, gid)
             }
-            let parent = current.deletingLastPathComponent().standardized
-            if parent.path == current.path { break }
-            current = parent
+            components.removeLast()
         }
         return sudoOwnership ?? sudoUidGid
     }
