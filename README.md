@@ -111,11 +111,20 @@ and switch it on:
 1. Symaira Cockpit registers the helper. macOS asks you to approve it once
    under **System Settings → General → Login Items & Extensions**; the section
    shows *Waiting for your approval* with an *Open System Settings…* button
-   until you do. While approval is pending, fan control keeps using the
-   administrator prompt above, unchanged.
+   until you do. While approval is pending, picking *Cool* or *Max* opens
+   System Settings at that spot instead of asking for a password.
 2. Once approved, fan changes go to the helper. It runs the same fan governor
    as the CLI, with the same safety clamps, and never turns off the Mac's own
    thermal protection.
+
+**Missing rights take you to the right place.** In a release-signed build, if
+you pick *Cool* or *Max* while the helper is off or not registered yet, nothing
+is applied and no password prompt appears: the control snaps back, Preferences
+opens at the *Privileged fan helper* section with a one-line explanation, and
+a pending approval opens System Settings → Login Items instead. *Standard*
+never navigates, and neither does a change while a fan governor is already
+running. Unsigned and locally built copies have no helper and keep the
+administrator prompt unchanged.
 
 What it will and will not do:
 
@@ -140,9 +149,10 @@ What it will and will not do:
   root-owned:
   `sudo chown -R root:wheel '/Applications/Symaira Cockpit.app'`
   (or keep the helper off).
-- A `fan profile system` (or any `fan profile …`) from the CLI or an MCP
-  client reaches a running helper too: the app compares the stored profile
-  with the helper on every ping and stops or retargets it within about 2 s.
+- A `fan profile system` (or any `fan profile …` or `fan target …`) from the
+  CLI or an MCP client reaches a running helper too: the app compares the
+  stored profile and Cool target with the helper on every ping and stops or
+  retargets it within about 2 s.
   The helper itself never reads files. It uses the built-in safety limits only
   (`SafetyPolicy` defaults); `SYMTUNE_FAN_*` and `config.toml` fan limits apply
   to the `osascript` path, not to the helper.
@@ -249,6 +259,24 @@ remain continuous; the fan slider selects **Standard**, **Cool**, or **Max**,
 not arbitrary RPM. Existing temperature curves and administrator permission
 checks still apply. Missing readings are labelled as loading rather than
 reported as healthy measurements.
+
+**Cool target (optional).** With the fan slider on *Cool*, a *Max avg* field
+next to it takes a whole number from **50 to 85 °C** (empty = off), with the
+current average shown beside it. The number is the mean of the CPU and GPU
+*cluster* temperatures (CPU core and cluster rows plus GPU rows; hotspot,
+proximity, ambient and implausible readings are left out, and the die hotspots
+only stand in on a Mac that publishes no cluster row). It can only **add**
+cooling: the fans follow the larger of the normal Cool curve at the hottest die
+and the same curve shifted so it reaches full speed at your number, evaluated
+at the average. With no target, or no average this moment, nothing changes.
+85 °C is where the normal curve already runs full speed, and below 50 °C the
+fans would run near full speed permanently, so the bounds are enforced in the
+core on write *and* on read, in the privileged helper too, not only in the
+field. The firmware's own thermal protection stays in charge. *Standard* and
+*Max* ignore the number. From a terminal: `symcockpit fan target 70`,
+`symcockpit fan target off`, and `symcockpit fan status` (JSON with
+`cool_target_celsius` and `average_cluster_celsius`). The MCP server has no
+fan-profile tool, so there is no MCP argument for it.
 
 For hardware-isolated design previews in Xcode, see the
 [workspace design and preview guide](docs/ui-workspace.md).

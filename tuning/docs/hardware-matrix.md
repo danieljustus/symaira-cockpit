@@ -91,6 +91,15 @@ and equivalent keys on Apple Silicon.
   the way minimum speeds are enforced diverged. `FanControlService` abstracts
   both behind a single interface.
 
+The optional Cool target (a maximum *average* CPU/GPU cluster temperature,
+50–85 °C) averages only cluster rows that read back plausibly: Apple Silicon
+`Tp01`–`Tp12` and `Te*` (CPU), `Tg*`/`TG0P` (GPU), Intel `TC#C`/`TCXC`. The
+hotspot rows `TCMz`/`TRDX` stand in only when a Mac exposes none of those;
+`TCMb` (core max), proximity (`TCHP`, `TC0P`, `TM0P`), ambient and `Ts0S` are
+never averaged. On an M4 Pro `Tp01`–`Tp09` partly read 0–8 °C and are dropped
+by the plausibility gate, so the average there comes from the remaining rows.
+The target can only raise the fan fraction above the normal Cool curve.
+
 On both architectures, `SafetyPolicy` guarantees that fan control can only
 *raise* the speed above the firmware's automatic curve, never silence it. The
 firmware thermal protection always takes precedence.

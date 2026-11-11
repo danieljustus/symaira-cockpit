@@ -127,8 +127,10 @@ extension FanProfile {
 /// the governor (root) only ever reads it, and re-reads it every tick so a
 /// change of position takes effect without a second password prompt. The
 /// governor never writes here, so a root process never creates or modifies a
-/// file in a user-writable directory. The only thing a writer can express is
-/// one of three enum cases, and every resulting SMC write still goes through
+/// file in a user-writable directory. The only things a writer can express are
+/// one of three enum cases and one Cool target clamped to
+/// ``FanCoolTarget/range`` on write *and* on read (the target can only add
+/// cooling), and every resulting SMC write still goes through
 /// `SMCWritePolicy`'s clamps.
 public struct FanProfileStore: Sendable {
     public let url: URL

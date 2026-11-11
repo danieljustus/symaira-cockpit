@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added
+- **Fan rights take you to the right settings:** in a release-signed build,
+  picking *Cool* or *Max* without the rights to change fans no longer runs into
+  an administrator prompt. The control snaps back and Preferences opens at the
+  *Privileged fan helper* section with a short explanation (helper off or not
+  registered), or System Settings → Login Items opens (approval pending).
+  *Standard*, a running governor, an enabled helper and unsigned/local builds
+  keep their existing paths. The decision is a pure, tested Core function
+  (`FanHelperRouting.selectionAction`).
+- **Optional Cool target:** a *Max avg °C* field next to *Cool* (50–85 °C,
+  empty = off) with the live average shown beside it. The fans follow the
+  larger of the normal Cool curve at the hottest die and the same curve shifted
+  to full speed at the target, evaluated at the mean CPU/GPU cluster
+  temperature, so it only ever adds cooling. Bounds are clamped on write and on
+  read, in the helper too; `fan-profile.json` gains an optional
+  `cool_target_celsius` (older files still load). `symcockpit fan target
+  <50-85|off>` sets it and `symcockpit fan status` (and `fan profile`) report
+  `cool_target_celsius` and `average_cluster_celsius`. The XPC call to the
+  helper carries the target, and the helper validates it again.
+
 ## [0.10.2] (2026-11-11)
 
 ### Fixed

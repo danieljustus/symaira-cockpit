@@ -138,6 +138,9 @@ symtune warmth set <0.0-1.0>          # color temperature warmth (gamma)
 symtune warmth reset                  # reset warmth to neutral
 symtune fan set <0.0-1.0>             # fan speed fraction (requires sudo)
 symtune fan auto                      # return fans to firmware automatic control
+symtune fan profile [system|comfort|performance]   # three-position control (Standard/Cool/Max)
+symtune fan target [<50-85>|off]      # Cool: max average CPU/GPU cluster °C (only adds cooling)
+symtune fan status                    # profile, cool_target_celsius, average_cluster_celsius (JSON)
 symtune battery-limit set <50-100>    # hold charge at target percent (requires sudo)
 symtune battery-limit clear           # re-enable charging (requires sudo)
 symtune restore                       # restore all overrides to defaults
