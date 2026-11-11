@@ -7,9 +7,11 @@
   Label, Mach service and executable name are the grandfathered
   com.symaira.symtune-helper identity and must not be renamed.
   There is deliberately no KeepAlive/RunAtLoad: launchd starts the helper on
-  the first XPC lookup. It stays idle (as root, doing nothing) until reboot
-  or unregistration; when the app is gone the governor hands the fans back,
-  but the process itself does not exit.
+  the first XPC lookup. Since 0.11.0 the helper exits by itself a few seconds
+  after the last client left and the fans were handed back, so the next
+  lookup starts whatever binary the current app bundle contains (an app
+  upgrade swaps the helper). Helpers before 0.11.0 never exited and keep
+  running until unregistered or reboot.
 -->
 <plist version="1.0">
 <dict>

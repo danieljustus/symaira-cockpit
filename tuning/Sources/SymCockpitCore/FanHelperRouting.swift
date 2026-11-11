@@ -158,18 +158,31 @@ public struct FanHelperGovernorStatus: Sendable, Equatable {
     /// heartbeat watchdog fires, so until this instant it must still count as
     /// governing: nothing else may write the SMC beside it.
     public var mayStillGovernUntil: Date?
+    /// The running helper is from before the Cool target existed: it governs
+    /// on the normal Cool curve and cannot apply a target. Known after one
+    /// failed attempt, then remembered until the helper is turned off and on
+    /// (or the app restarts); a stored target is then expected *not* to be in
+    /// ``coolTarget``.
+    public var helperOutdated: Bool
 
     public init(
         isGoverning: Bool,
         profile: FanProfile? = nil,
         coolTarget: Double? = nil,
-        mayStillGovernUntil: Date? = nil
+        mayStillGovernUntil: Date? = nil,
+        helperOutdated: Bool = false
     ) {
         self.isGoverning = isGoverning
         self.profile = profile
         self.coolTarget = coolTarget
         self.mayStillGovernUntil = mayStillGovernUntil
+        self.helperOutdated = helperOutdated
     }
+
+    /// Shown where the Cool target is set when ``helperOutdated`` holds.
+    public static let outdatedHelperHint =
+        "The running fan helper is from an older version, so the target is not applied yet. "
+        + "Turn the helper off and on in Preferences, or restart your Mac."
 
     /// Governing for sure, or possibly still governing at `date`.
     public func isGoverningOrMayBe(at date: Date = Date()) -> Bool {

@@ -113,6 +113,41 @@ final class FanHelperServiceCoolTargetTests: XCTestCase {
         XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
     }
 
+    func testTheOriginalSelectorStartsAGovernorWithoutATarget() {
+        let (service, engine, recorder) = makeService()
+        var answer: String??
+        service.startGovernor(profile: "comfort") { answer = .some($0) }
+        XCTAssertEqual(answer, .some(nil))
+        XCTAssertTrue(waitUntil { recorder.selections == [FanSelection(profile: .comfort)] })
+        XCTAssertNil(engine.snapshot.coolTarget)
+        engine.stop(reason: .requested)
+        XCTAssertTrue(engine.waitUntilIdle(timeout: 2))
+    }
+
+    func testTheOriginalSelectorStillRefusesAnUnknownProfile() {
+        let (service, _, recorder) = makeService()
+        var answer: String??
+        service.startGovernor(profile: "turbo") { answer = .some($0) }
+        XCTAssertEqual(answer, .some("unknown fan profile"))
+        XCTAssertTrue(recorder.selections.isEmpty)
+    }
+
+    /// The wire contract an older running helper and a newer app both rely on:
+    /// the 0.10.x selectors must stay in the protocol next to the new one.
+    func testTheProtocolKeepsTheOriginalSelectorsNextToTheNewOne() {
+        let proto = NSProtocolFromString(NSStringFromProtocol(FanHelperXPCProtocol.self))
+        XCTAssertNotNil(proto)
+        for name in [
+            "startGovernorWithProfile:reply:", "startGovernorWithProfile:coolTargetCelsius:reply:",
+            "heartbeatWithReply:", "stopGovernorWithReply:", "statusWithReply:",
+        ] {
+            let description = protocol_getMethodDescription(
+                try! XCTUnwrap(proto), NSSelectorFromString(name), true, true
+            )
+            XCTAssertNotNil(description.name, "\(name) must stay exported")
+        }
+    }
+
     func testAnUnknownProfileIsStillRefused() {
         let (service, _, recorder) = makeService()
         XCTAssertEqual(start(service, profile: "turbo", target: NSNumber(value: 70.0)), .some("unknown fan profile"))

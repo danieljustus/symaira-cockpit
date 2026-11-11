@@ -78,6 +78,12 @@ struct FanCoolTargetRow: View {
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.critical)
                     .fixedSize(horizontal: false, vertical: true)
+            } else if model.fanHelperLacksCoolTarget, model.fanCoolTarget != nil {
+                Text(FanHelperGovernorStatus.outdatedHelperHint)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTokens.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("fan-cool-target-outdated-helper")
             } else {
                 Text("Adds cooling near this average CPU/GPU temperature. \(rangeText), empty = off.")
                     .symairaText(.caption)

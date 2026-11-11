@@ -39,6 +39,14 @@ public enum FanHelperConstants {
     /// request reaches a governor that is between two ticks.
     public static let sleepSlice: TimeInterval = 0.2
 
+    /// How long an idle helper (no connection, no governor, fans restored)
+    /// lingers before it exits. launchd starts the current binary on the next
+    /// Mach lookup, so this is what lets an app upgrade swap the helper.
+    public static let idleExitGrace: TimeInterval = 5
+
+    /// How often the helper checks whether it may exit.
+    public static let idleCheckInterval: TimeInterval = 1
+
     /// Upper bound for the helper to restore the fans on SIGTERM before it
     /// exits regardless.
     public static let terminationGrace: TimeInterval = 5

@@ -162,6 +162,13 @@ What it will and will not do:
   So the fans return to the system curve a few seconds after the app quits; with
   the helper on, the stored position is applied again the next time the app
   starts.
+- **Updates:** the helper is a background process that macOS keeps running
+  after the app was replaced. From 0.11.0 on it exits by itself a few seconds
+  after the app disconnected and the fans were handed back; macOS starts the
+  new version on the next fan change, so later updates swap it automatically.
+  After updating **from 0.10.x** the old helper is still running: fan control
+  keeps working, but the Cool target is not applied yet (the Cool target row
+  says so). Turn the helper off and on in Preferences, or restart your Mac.
 - It only changes fan profiles. Battery charge limits still use the
   administrator prompt.
 - Unsigned, ad-hoc or locally built copies never register the helper and

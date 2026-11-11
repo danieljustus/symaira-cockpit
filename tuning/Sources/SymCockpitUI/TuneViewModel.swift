@@ -55,6 +55,9 @@ final class TuneViewModel {
     /// The Cool position's optional maximum average CPU/GPU cluster
     /// temperature, as stored (already clamped by the store).
     private(set) var fanCoolTarget: Double?
+    /// The running fan helper predates the Cool target (an app upgrade leaves
+    /// the old process running), so the stored target is not applied yet.
+    private(set) var fanHelperLacksCoolTarget = false
 
     /// The mean CPU/GPU cluster temperature in the last sensor report, for the
     /// read-only "now" figure next to the Cool target. Pure: no extra reads.
@@ -253,6 +256,9 @@ final class TuneViewModel {
         if fanCoolTarget != currentSelection.coolTargetCelsius {
             fanCoolTarget = currentSelection.coolTargetCelsius
         }
+
+        let helperOutdated = controller.fanHelperLacksCoolTarget()
+        if fanHelperLacksCoolTarget != helperOutdated { fanHelperLacksCoolTarget = helperOutdated }
 
         // `activeOverrides()` already read the built-in brightness; reuse it
         // instead of hitting DisplayServices a second time per refresh.

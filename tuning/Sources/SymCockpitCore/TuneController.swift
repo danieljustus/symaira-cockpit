@@ -843,7 +843,8 @@ extension TuneController {
                 // hands the fans back within seconds regardless.
                 logHistory(action: "fan.profile.system", result: "failed", error: error)
             }
-        } else if status.profile != stored || status.coolTarget != storedSelection.effectiveCoolTarget {
+        } else if status.profile != stored
+                    || status.coolTarget != Self.coolTargetHelperCanApply(storedSelection, status: status) {
             // A changed position or Cool target: retarget. Compare the whole
             // selection on the re-read, so a change made meanwhile wins.
             guard (try? store.readSelectionStrict()) == storedSelection else { return }
@@ -853,6 +854,21 @@ extension TuneController {
                 logHistory(action: "fan.profile.\(stored.rawValue)", result: "failed", error: error)
             }
         }
+    }
+
+    /// The Cool target a helper with `status` can actually hold: none when it
+    /// is known to predate the target (comparing against the stored one would
+    /// retarget on every heartbeat for nothing).
+    private static func coolTargetHelperCanApply(
+        _ selection: FanSelection, status: FanHelperGovernorStatus
+    ) -> Double? {
+        status.helperOutdated ? nil : selection.effectiveCoolTarget
+    }
+
+    /// True once the running fan helper is known to be older than the app and
+    /// therefore cannot apply the Cool target. Cached; never blocks on XPC.
+    public func fanHelperLacksCoolTarget() -> Bool {
+        fanHelper?.governorStatus().helperOutdated ?? false
     }
 
     /// Run the governor loop in *this* process until the stored profile

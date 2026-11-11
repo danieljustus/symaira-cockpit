@@ -23,6 +23,17 @@
   <50-85|off>` sets it and `symcockpit fan status` (and `fan profile`) report
   `cool_target_celsius` and `average_cluster_celsius`. The XPC call to the
   helper carries the target, and the helper validates it again.
+- **Fan helper survives upgrades:** the helper keeps its original XPC call
+  (`startGovernor(profile:reply:)`, no target) and gets the target as an
+  additional call, so a new app keeps controlling the fans through a
+  still-running older helper. Such a helper is detected from one failed
+  target request (remembered, never retried on later heartbeats), the fans stay
+  governed on the normal Cool curve without a password prompt, and the Cool
+  target row says the target is not applied yet. **After upgrading from 0.10.x
+  the Cool target applies once the helper restarts: turn the helper off and on
+  in Preferences, or restart your Mac. Future updates swap the helper
+  automatically**, because it now exits a few seconds after its last client
+  left and the fans were handed back (never while governing or connected).
 
 ### Changed
 - **Cockpit window sidebar follows scrolling:** the *Jump to* entry of the section

@@ -7,6 +7,8 @@ private final class CoolTargetFakeHelper: FanHelperControlling, @unchecked Senda
     private(set) var started: [(profile: FanProfile, target: Double?)] = []
     private(set) var settingsOpened = 0
     private var status = FanHelperGovernorStatus.idle
+    /// Simulates a running helper from before the Cool target existed.
+    var outdated = false
 
     init(_ state: FanHelperAvailability) { self.state = state }
 
@@ -14,7 +16,10 @@ private final class CoolTargetFakeHelper: FanHelperControlling, @unchecked Senda
     func startGovernor(profile: FanProfile, coolTarget: Double?) throws {
         lock.lock(); defer { lock.unlock() }
         started.append((profile, coolTarget))
-        status = FanHelperGovernorStatus(isGoverning: true, profile: profile, coolTarget: coolTarget)
+        status = FanHelperGovernorStatus(
+            isGoverning: true, profile: profile,
+            coolTarget: outdated ? nil : coolTarget, helperOutdated: outdated
+        )
     }
     func stopGovernor() throws {
         lock.lock(); status = .idle; lock.unlock()
@@ -174,6 +179,33 @@ final class TuneControllerCoolTargetTests: XCTestCase {
         try controller.setFanCoolTarget(nil)
         XCTAssertNil(helper.started.last?.target)
         XCTAssertEqual(helper.started.count, 4)
+    }
+
+    func testAnOlderHelperIsNotRetargetedOnEveryHeartbeat() throws {
+        let helper = CoolTargetFakeHelper(.enabled)
+        helper.outdated = true
+        let controller = try makeController(helper: helper)
+        try controller.setFanCoolTarget(70)
+        try controller.applyFanProfile(.comfort, allowPrivilegeEscalation: true)
+        XCTAssertEqual(helper.started.count, 1)
+        XCTAssertTrue(controller.fanHelperLacksCoolTarget())
+        // The helper cannot hold the stored target; comparing against it
+        // would send a start on every heartbeat.
+        for _ in 0..<5 { controller.reconcileFanProfileWithHelper() }
+        XCTAssertEqual(helper.started.count, 1)
+        // A different position is still followed.
+        try controller.fanProfileStore.write(.performance)
+        controller.reconcileFanProfileWithHelper()
+        XCTAssertEqual(helper.started.map(\.profile), [.comfort, .performance])
+    }
+
+    func testACurrentHelperReportsNoOutdatedHint() throws {
+        let helper = CoolTargetFakeHelper(.enabled)
+        let controller = try makeController(helper: helper)
+        try controller.applyFanProfile(.comfort, allowPrivilegeEscalation: true)
+        XCTAssertFalse(controller.fanHelperLacksCoolTarget())
+        let withoutHelper = try makeController(helper: nil)
+        XCTAssertFalse(withoutHelper.fanHelperLacksCoolTarget())
     }
 
     func testATargetChangeFromAnotherProcessIsReconciled() throws {

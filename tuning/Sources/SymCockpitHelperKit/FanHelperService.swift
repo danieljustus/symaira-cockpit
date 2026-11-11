@@ -25,6 +25,13 @@ final class FanHelperService: NSObject, FanHelperXPCProtocol, @unchecked Sendabl
         return .value(clamped)
     }
 
+    /// The original selector, unchanged: a governor without a Cool target.
+    /// Kept so an older app (and a newer app that learned this helper is
+    /// older) keeps working.
+    func startGovernor(profile: String, reply: @escaping (String?) -> Void) {
+        startGovernor(profile: profile, coolTargetCelsius: nil, reply: reply)
+    }
+
     func startGovernor(
         profile: String,
         coolTargetCelsius: NSNumber?,
@@ -93,6 +100,13 @@ public final class FanHelperListenerDelegate: NSObject, NSXPCListenerDelegate, @
         self.ownTeamID = ownTeamID
         self.embeddedTeamID = embeddedTeamID
         self.selfValidator = selfValidator
+    }
+
+    /// Whether a client connection is currently open. Read by the idle-exit
+    /// monitor: the helper never exits while an app is connected.
+    public var hasActiveConnection: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return current != nil
     }
 
     public func listener(
