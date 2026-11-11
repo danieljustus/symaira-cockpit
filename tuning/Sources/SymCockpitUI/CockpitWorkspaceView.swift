@@ -26,6 +26,47 @@ public enum TuneWorkspaceAnchor: String, CaseIterable, Identifiable, Sendable {
         case .readout: "menubar.rectangle"
         }
     }
+
+    /// Named coordinate space of the workspace scroll view; anchored sections
+    /// report their top edge in it so the sidebar can follow scrolling.
+    static let scrollSpace = "cockpit-workspace-scroll"
+
+    /// The section the reader is in: the last one, in page order, whose top
+    /// edge has passed `threshold` (points below the viewport top). At the
+    /// bottom of the page the last section wins, because short trailing
+    /// sections can never reach the top. Nil when nothing was measured yet.
+    public static func current(
+        sectionTops: [TuneWorkspaceAnchor: CGFloat],
+        threshold: CGFloat,
+        atBottom: Bool
+    ) -> TuneWorkspaceAnchor? {
+        let measured = allCases.filter { sectionTops[$0] != nil }
+        if atBottom, let last = measured.last { return last }
+        return measured.last { sectionTops[$0]! <= threshold } ?? measured.first
+    }
+}
+
+/// Collects each anchored section's top edge in ``TuneWorkspaceAnchor/scrollSpace``.
+struct WorkspaceSectionTopsKey: PreferenceKey {
+    static let defaultValue: [TuneWorkspaceAnchor: CGFloat] = [:]
+    static func reduce(value: inout [TuneWorkspaceAnchor: CGFloat], nextValue: () -> [TuneWorkspaceAnchor: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+extension View {
+    /// Reports this section's position so the workspace sidebar can select it
+    /// while scrolling. A no-op outside the workspace scroll view.
+    func workspaceSection(_ anchor: TuneWorkspaceAnchor) -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: WorkspaceSectionTopsKey.self,
+                    value: [anchor: geometry.frame(in: .named(TuneWorkspaceAnchor.scrollSpace)).minY]
+                )
+            }
+        }
+    }
 }
 
 private struct TunePanelChromeKey: EnvironmentKey {
@@ -56,6 +97,12 @@ public struct CockpitWorkspaceView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sidebarLayout = SymairaSidebarState()
     @State private var selectedAnchor = TuneWorkspaceAnchor.overview
+    @State private var sectionTops: [TuneWorkspaceAnchor: CGFloat] = [:]
+    @State private var viewport = ScrollViewport()
+    /// A sidebar click scrolls programmatically; until that scroll has
+    /// settled the clicked entry stays selected instead of flickering through
+    /// the sections it passes.
+    @State private var followScrollAfter = Date.distantPast
     @State private var topography = SymairaTopoModel()
     @FocusState private var focusedAnchor: TuneWorkspaceAnchor?
 
@@ -85,6 +132,22 @@ public struct CockpitWorkspaceView<Content: View>: View {
                             .padding(SymairaSpacing.xLarge)
                             .frame(maxWidth: 960, alignment: .topLeading)
                             .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                    .coordinateSpace(name: TuneWorkspaceAnchor.scrollSpace)
+                    .onScrollGeometryChange(for: ScrollViewport.self) { geometry in
+                        ScrollViewport(
+                            height: geometry.containerSize.height,
+                            atBottom: geometry.contentOffset.y + geometry.containerSize.height
+                                >= geometry.contentSize.height - 2
+                                && geometry.contentSize.height > geometry.containerSize.height
+                        )
+                    } action: { _, new in
+                        viewport = new
+                        followScroll()
+                    }
+                    .onPreferenceChange(WorkspaceSectionTopsKey.self) { tops in
+                        sectionTops = tops
+                        followScroll()
                     }
                 })
         }
@@ -173,8 +236,23 @@ public struct CockpitWorkspaceView<Content: View>: View {
         .padding(SymairaSpacing.medium)
     }
 
+    /// Selects the section currently in view, unless a sidebar jump is still
+    /// scrolling.
+    private func followScroll() {
+        guard Date() >= followScrollAfter,
+              let current = TuneWorkspaceAnchor.current(
+                  sectionTops: sectionTops,
+                  threshold: max(80, viewport.height * 0.3),
+                  atBottom: viewport.atBottom
+              ),
+              current != selectedAnchor
+        else { return }
+        selectedAnchor = current
+    }
+
     private func jump(to anchor: TuneWorkspaceAnchor, in scroll: ScrollViewProxy) {
         selectedAnchor = anchor
+        followScrollAfter = Date().addingTimeInterval(0.5)
         if reduceMotion {
             scroll.scrollTo(anchor, anchor: .top)
         } else {
@@ -183,4 +261,10 @@ public struct CockpitWorkspaceView<Content: View>: View {
             }
         }
     }
+}
+
+/// The scroll view's visible height and whether it rests at the bottom.
+private struct ScrollViewport: Equatable {
+    var height: CGFloat = 0
+    var atBottom = false
 }

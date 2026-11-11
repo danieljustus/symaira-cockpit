@@ -42,6 +42,7 @@ public struct CockpitDesignPreview: View {
                         .cockpitProtected()
                 }
                 .id(TuneWorkspaceAnchor.overview)
+                .workspaceSection(.overview)
 
                 SystemStatusCard(
                     battery: showsReadings ? Self.battery : nil,
@@ -54,6 +55,7 @@ public struct CockpitDesignPreview: View {
                     DisplaysCard(displays: showsReadings ? Self.displays : [])
                 }
                 .id(TuneWorkspaceAnchor.display)
+                .workspaceSection(.display)
 
                 VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
                     sectionLabel("Power & cooling")
@@ -78,12 +80,14 @@ public struct CockpitDesignPreview: View {
                     )
                 }
                 .id(TuneWorkspaceAnchor.power)
+                .workspaceSection(.power)
 
                 VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
                     sectionLabel("Activity")
                     StorageVolumesCard(volumes: showsReadings ? Self.volumes : nil)
                 }
                 .id(TuneWorkspaceAnchor.activity)
+                .workspaceSection(.activity)
                 previewOnlySection("Menu bar & HUD", anchor: .readout)
 
                 Text("Komponentenvorschau, nicht das vollständige Cockpit-Fenster. Regler und Schalter wirken nur hier.")
@@ -118,6 +122,7 @@ public struct CockpitDesignPreview: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .id(anchor)
+        .workspaceSection(anchor)
     }
 
     private func sectionLabel(_ title: String) -> some View {

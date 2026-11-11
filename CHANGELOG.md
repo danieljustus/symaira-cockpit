@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- **Cockpit window sidebar follows scrolling:** the *Jump to* entry of the section
+  you are reading is selected while you scroll, not only after a click; at the
+  end of the page the last section is selected.
+
 ## [0.10.2] (2026-11-11)
 
 ### Fixed
