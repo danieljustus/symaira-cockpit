@@ -5,12 +5,25 @@ import SymCockpitCore
 /// Preferences section for the optional privileged fan helper (issue #405).
 struct FanHelperPreferencesSection: View {
     @ObservedObject var preferences: FanHelperPreferences
+    /// Why the user landed here (they tried to change fan speed without the
+    /// rights for it); nil when they navigated here themselves.
+    var hint: String?
+    /// Called once the helper is enabled, so the hint does not outlive its cause.
+    var onHintResolved: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("PRIVILEGED FAN HELPER")
                 .symairaText(.sectionLabel)
                 .foregroundStyle(SymairaTokens.ink3)
+
+            if let hint {
+                Text(hint)
+                    .symairaText(.caption)
+                    .foregroundStyle(SymairaTokens.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("fan-helper-hint")
+            }
 
             Text("An optional background helper, registered with macOS, that applies fan changes without asking for your administrator password and does not depend on a root-owned copy of the command-line tool. It only accepts requests from this app, never lifts the Mac's thermal protection, and hands the fans back to the system curve if the app stops responding. You can remove it here at any time.")
                 .symairaText(.caption)
@@ -50,5 +63,8 @@ struct FanHelperPreferencesSection: View {
             }
         }
         .onAppear { preferences.refresh() }
+        .onChange(of: preferences.availability) { _, availability in
+            if availability == .enabled { onHintResolved() }
+        }
     }
 }

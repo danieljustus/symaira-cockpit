@@ -52,6 +52,15 @@ final class TuneViewModel {
     /// than showing a position that is not in effect.
     private(set) var fanProfile: FanProfile = .system
     private(set) var fanGovernorRunning = false
+    /// The Cool position's optional maximum average CPU/GPU cluster
+    /// temperature, as stored (already clamped by the store).
+    private(set) var fanCoolTarget: Double?
+
+    /// The mean CPU/GPU cluster temperature in the last sensor report, for the
+    /// read-only "now" figure next to the Cool target. Pure: no extra reads.
+    var fanAverageClusterCelsius: Double? {
+        sensors.flatMap { FanCoolTarget.averageClusterTemperature(in: $0) }
+    }
 
     /// Rendered menu-bar text (empty when the icon fallback should be used).
     private(set) var statusItemText: String = ""
@@ -239,8 +248,11 @@ final class TuneViewModel {
         let currentOverrides = controller.activeOverrides()
         if overrides != currentOverrides { overrides = currentOverrides }
 
-        let currentProfile = controller.activeFanProfile
-        if fanProfile != currentProfile { fanProfile = currentProfile }
+        let currentSelection = controller.activeFanSelection
+        if fanProfile != currentSelection.profile { fanProfile = currentSelection.profile }
+        if fanCoolTarget != currentSelection.coolTargetCelsius {
+            fanCoolTarget = currentSelection.coolTargetCelsius
+        }
 
         // `activeOverrides()` already read the built-in brightness; reuse it
         // instead of hitting DisplayServices a second time per refresh.

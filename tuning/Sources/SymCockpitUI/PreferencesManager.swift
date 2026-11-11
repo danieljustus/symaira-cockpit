@@ -2,6 +2,11 @@ import SwiftUI
 import Combine
 import SymCockpitCore
 
+/// A section of the Preferences window that can be brought into view.
+enum PreferencesFocus: Hashable {
+    case fanHelper
+}
+
 /// Observable preferences for the SymCockpitMenuBarApp menu-bar app.
 ///
 /// Reads initial values from ``TuneConfig`` (config.toml) and publishes changes
@@ -23,6 +28,20 @@ final class PreferencesManager: ObservableObject {
     @Published var showCalendarWeek: Bool
     /// Which cards the popover shows.
     @Published var visibleCards: Set<PopoverCard>
+
+    /// A section the Preferences window should bring into view when it opens
+    /// (or is already open). The window clears it once it has scrolled there.
+    @Published var focusRequest: PreferencesFocus?
+    /// Why the user was sent to the privileged-helper section, shown there.
+    @Published var fanHelperHint: String?
+
+    /// Sends the user to the "Privileged fan helper" section with `hint`.
+    func requestFanHelperSetup(hint: String?) {
+        fanHelperHint = hint
+        // Reset first so asking again while the window is open still fires.
+        focusRequest = nil
+        focusRequest = .fanHelper
+    }
 
     /// GUI-only selection, saved immediately without changing CLI/MCP discovery.
     @Published var hiddenStorageVolumeIDs: Set<String> {

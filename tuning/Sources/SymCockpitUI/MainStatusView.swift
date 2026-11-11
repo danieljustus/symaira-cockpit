@@ -200,7 +200,11 @@ struct MainStatusView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                     if shows(.fanControl, hardwareAvailable: hasFans) {
-                        FanControlCard(controller: controller, model: model)
+                        FanControlCard(
+                            controller: controller, model: model,
+                            preferencesManager: preferencesManager,
+                            openPreferences: openPreferences
+                        )
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
