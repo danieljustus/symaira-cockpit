@@ -12,18 +12,42 @@ public protocol FanHelperDaemonService: Sendable {
 
 /// The real daemon service. Constructing it does not register anything.
 public struct SMAppServiceDaemon: FanHelperDaemonService {
-    public init() {}
+    private let plistIsBundled: @Sendable () -> Bool
+
+    public init(
+        plistIsBundled: @escaping @Sendable () -> Bool = {
+            FileManager.default.fileExists(
+                atPath: Bundle.main.bundleURL
+                    .appendingPathComponent("Contents/Library/LaunchDaemons")
+                    .appendingPathComponent(FanHelperConstants.launchdPlistName).path
+            )
+        }
+    ) {
+        self.plistIsBundled = plistIsBundled
+    }
 
     private var service: SMAppService {
         SMAppService.daemon(plistName: FanHelperConstants.launchdPlistName)
     }
 
     public var registration: FanHelperRegistration {
-        switch service.status {
+        Self.registration(for: service.status, plistIsBundled: plistIsBundled)
+    }
+
+    /// `SMAppService` reports `.notFound` for a daemon that was never
+    /// registered, not only for a missing plist (issue #411). Treating that
+    /// as "not bundled" disabled the only control that registers it, so a
+    /// never-registered daemon whose plist ships in the bundle is
+    /// `.notRegistered`; `.notFound` remains for a bundle without the plist.
+    static func registration(
+        for status: SMAppService.Status,
+        plistIsBundled: () -> Bool
+    ) -> FanHelperRegistration {
+        switch status {
         case .notRegistered: return .notRegistered
         case .enabled: return .enabled
         case .requiresApproval: return .requiresApproval
-        case .notFound: return .notFound
+        case .notFound: return plistIsBundled() ? .notRegistered : .notFound
         @unknown default: return .notFound
         }
     }

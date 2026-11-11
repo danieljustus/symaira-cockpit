@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.10.2] (2026-11-11)
+
+### Fixed
+- **Fan helper could not be turned on (#411):** `SMAppService` reports a
+  never-registered daemon as `notFound`, which the app read as "this build does
+  not include the helper" and disabled the Preferences toggle, the only control
+  that registers it. A bundled but never-registered helper now shows as off and
+  can be enabled; "not included" remains for a bundle without the launchd plist.
+
 ## [0.10.1] (2026-11-10)
 
 ### Fixed
