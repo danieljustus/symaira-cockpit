@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.12.1] (2026-11-12)
+
+### Fixed
+- **Returning the fans to firmware control works on Apple Silicon** (#414):
+  `fan auto` and the helper's stale-override recovery wrote fan mode `3`,
+  which an M4 Pro does not treat as automatic, so after a helper crash the
+  fans stayed forced at full speed. They now write mode `0`, the value the
+  firmware reports at rest. Verified live on a Mac16,8: after
+  `kill -9` of the governing helper the fans sat at ~7,800 rpm with
+  `Ftst=1`/`F*Md=1`; the fixed `fan auto` brought them back to ~2,300 rpm
+  with `Ftst=0`/`F*Md=0`.
+
 ## [0.12.0] (2026-11-12)
 
 ### Removed

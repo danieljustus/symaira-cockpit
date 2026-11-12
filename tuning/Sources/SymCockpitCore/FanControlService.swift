@@ -190,8 +190,13 @@ public struct FanControlService: Sendable {
             }
         }
         #if arch(arm64)
+        // Mode 0 is firmware control on Apple Silicon (read back at rest on
+        // an M4 Pro, Mac16,8); 1 is forced. The former constant 3 is not an
+        // automatic mode there: the SMC kept the fans forced at full speed
+        // after a helper crash, while the governor's restore of the captured
+        // 0 always worked.
         for i in 0..<fanCount {
-            write("F\(i)Md", 3, "ui8 ")
+            write("F\(i)Md", Double(Self.appleSiliconAutoMode), "ui8 ")
         }
         write("Ftst", 0, "ui8 ")
         #else
@@ -200,6 +205,9 @@ public struct FanControlService: Sendable {
         #endif
         if let rejected { throw FanControlError.restoreWriteFailed(rejected) }
     }
+
+    /// `F{n}Md` value for firmware (automatic) control on Apple Silicon.
+    public static let appleSiliconAutoMode: UInt8 = 0
 
     /// Whether a software override still holds the fans: the diagnostic
     /// unlock (`Ftst`) or a fan in manual mode on Apple Silicon, a forced-fan
@@ -280,8 +288,8 @@ public struct FanControlService: Sendable {
 
     /// Capture every fan's mode and target before the governor's first write,
     /// so the way out restores what was actually found rather than a guessed
-    /// "auto" constant. On an M4 Pro the resting mode is already `1`, so
-    /// `restoreAuto`'s hardcoded `3` would not put the fan back where it was.
+    /// "auto" constant: the found mode and target are the most faithful
+    /// restore, `restoreAuto` is only the fallback without a capture.
     public func captureOriginalStates() -> [Int: (mode: UInt8?, targetRPM: Double?)] {
         let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
         var states: [Int: (mode: UInt8?, targetRPM: Double?)] = [:]

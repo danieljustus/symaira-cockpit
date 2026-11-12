@@ -22,7 +22,7 @@ private final class RecordedDelays: @unchecked Sendable {
 
 final class FanControlServiceTests: XCTestCase {
     #if arch(arm64)
-    private func makeAppleSiliconFanKeys(targetRPM: Double = 10, maxRPM: Double = 100, mode: UInt8 = 3) -> [String: FakeSMCKeyResult] {
+    private func makeAppleSiliconFanKeys(targetRPM: Double = 10, maxRPM: Double = 100, mode: UInt8 = 0) -> [String: FakeSMCKeyResult] {
         let flt = smcEncodeKey("flt ")
         let ui8 = smcEncodeKey("ui8 ")
         return [
@@ -92,7 +92,7 @@ final class FanControlServiceTests: XCTestCase {
         try service.applyFan(fraction: 0.5, config: TuneConfig())
         try service.restoreAuto()
 
-        let mode = conn.writtenKeys.first { $0.key == "F0Md" && $0.bytes == [3] }
+        let mode = conn.writtenKeys.first { $0.key == "F0Md" && $0.bytes == [0] }
         XCTAssertNotNil(mode)
         let ftst = conn.writtenKeys.last { $0.key == "Ftst" }
         XCTAssertEqual(ftst?.bytes, [0])
