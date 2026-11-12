@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] (2026-11-12)
+
 ### Removed
 - **The `symcockpit tune <command>` prefix** (#259): deprecated through v0.8
   and v0.9, it now exits 2 and names the direct command instead of running
