@@ -9,7 +9,7 @@ final class MainQueueToolsE2ETests: XCTestCase {
         let bundle = try XCTUnwrap(Bundle.allBundles.first { $0.bundlePath.hasSuffix(".xctest") })
         let process = Process()
         process.executableURL = bundle.bundleURL.deletingLastPathComponent().appendingPathComponent("symcockpit")
-        process.arguments = ["tune", "serve"]
+        process.arguments = ["serve"]
         process.environment = [
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
             "HOME": root.path,

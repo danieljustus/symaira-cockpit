@@ -357,9 +357,9 @@ query every catalog provider regardless of the app's selection.
 
 Direct `symcockpit` commands expose thermals, power, battery, display, fan,
 brightness, profiles, diagnostics and the MCP server. The old
-`symcockpit tune <command>` spelling prints a warning to stderr and is still
-supported in v0.10; its removal waits for the remaining migration checks
-(#259). Migrate clients to the direct spelling now.
+`symcockpit tune <command>` prefix was removed in v0.12 after its deprecation
+window (#259): it now exits 2 and names the direct command to run instead.
+An MCP client configured with `["tune", "serve"]` needs `["serve"]`.
 
 ```text
 symcockpit doctor

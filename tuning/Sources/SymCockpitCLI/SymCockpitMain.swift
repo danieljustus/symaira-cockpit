@@ -681,7 +681,7 @@ private func handleNonTuneError(_ error: Error) -> Int32 {
 }
 
 /// Tune CLI logic as a library so both the legacy `symcockpit` binary and the
-/// unified `symcockpit tune` dispatcher can invoke it.
+/// unified `symcockpit` dispatcher can invoke it.
 public enum SymCockpitMain {
     @discardableResult
     public static func run(_ args: [String]) -> Int32 {

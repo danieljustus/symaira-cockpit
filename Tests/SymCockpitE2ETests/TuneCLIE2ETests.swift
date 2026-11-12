@@ -3,7 +3,7 @@ import XCTest
 /// E2E tests for the tune family through the unified dispatcher binary.
 ///
 /// The legacy `symtune` executable was removed (PR #8, repo consolidation);
-/// the public entrypoint is now `symcockpit tune …`. These tests locate the
+/// the public entrypoint is now `symcockpit …`. These tests locate the
 /// dispatcher binary relative to this test file (`<repo>/.build/debug/`) and
 /// exercise the same CLI surface through it.
 final class SymCockpitCLIE2ETests: XCTestCase {
@@ -159,7 +159,7 @@ final class SymCockpitCLIE2ETests: XCTestCase {
         for command in Self.alwaysJSONCommands {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: symtuneBinary)
-            process.arguments = ["tune", command, "--bogus"]
+            process.arguments = [command, "--bogus"]
             let outputPipe = Pipe()
             let errorPipe = Pipe()
             process.standardOutput = outputPipe
@@ -253,7 +253,7 @@ final class SymCockpitCLIE2ETests: XCTestCase {
         }
     }
 
-    /// Run `symcockpit tune` with the given arguments. Successful machine
+    /// Run `symcockpit` with the given arguments. Successful machine
     /// output is stdout only; the legacy deprecation notice stays on stderr.
     /// - Parameters:
     ///   - args: Arguments to pass after the `tune` family prefix.
@@ -270,7 +270,7 @@ final class SymCockpitCLIE2ETests: XCTestCase {
     ) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symtuneBinary)
-        process.arguments = ["tune"] + args
+        process.arguments = args
 
         if !environment.isEmpty {
             var childEnvironment = ProcessInfo.processInfo.environment
@@ -287,7 +287,7 @@ final class SymCockpitCLIE2ETests: XCTestCase {
 
         let waitForExit = armBoundedWait(process)
         try process.run()
-        XCTAssertTrue(waitForExit(), "symcockpit tune \(args.joined(separator: " ")) did not exit in time")
+        XCTAssertTrue(waitForExit(), "symcockpit \(args.joined(separator: " ")) did not exit in time")
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()

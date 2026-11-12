@@ -4,7 +4,7 @@ import XCTest
 /// End-to-end coverage for issue #285 through the public dispatcher binary.
 ///
 /// Before the fix, `tune battery-limit set 9223372036854775807` and the same
-/// value through `tune serve` (`set_charge_limit`) died with SIGTRAP inside
+/// value through `serve` (`set_charge_limit`) died with SIGTRAP inside
 /// the shared `WriteCommand` integer conversion: the CLI exited on an
 /// uncatchable signal and the MCP session vanished without an error response.
 ///
@@ -112,13 +112,13 @@ final class ChargeLimitIntegerOverflowE2ETests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Spawns `symcockpit tune <arguments>` with a fully explicit, isolated
+    /// Spawns `symcockpit <arguments>` with a fully explicit, isolated
     /// environment (setting `Process.environment` replaces the inherited one,
     /// so XDG_* overrides are absent by construction).
     private func launchTune(_ arguments: [String]) throws -> ServeChild {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symcockpitBinary)
-        process.arguments = ["tune"] + arguments
+        process.arguments = arguments
         process.environment = [
             "HOME": isolatedHome.path,
             "CFFIXED_USER_HOME": isolatedHome.path,

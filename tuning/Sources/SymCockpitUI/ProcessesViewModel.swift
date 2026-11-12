@@ -148,7 +148,7 @@ final class ProcessesViewModel {
             let outcome = await Task.detached(priority: .userInitiated) { () -> ProcessUsageReport in
                 do {
                     let output = try PrivilegedElevation.runSymCockpit([
-                        "tune", "processes", "--sort", "gpu", "--limit", "\(requestedLimit)", "--json",
+                        "processes", "--sort", "gpu", "--limit", "\(requestedLimit)", "--json",
                     ])
                     let decoder = JSONDecoder()
                     decoder.keyDecodingStrategy = .convertFromSnakeCase

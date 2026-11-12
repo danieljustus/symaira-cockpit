@@ -42,7 +42,7 @@ public struct PowermetricsGPUProcessSource: GPUProcessReporting {
         guard isRunningAsRoot() else {
             return Self.emptyReport(notes: [
                 "GPU sampling needs root — powermetrics refuses to run otherwise. Run "
-                    + "`sudo symcockpit tune processes --sort gpu`, or use the app's "
+                    + "`sudo symcockpit processes --sort gpu`, or use the app's "
                     + "\"Load GPU usage\" action, which prompts for your administrator password.",
             ])
         }

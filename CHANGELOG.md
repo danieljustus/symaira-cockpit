@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Removed
+- **The `symcockpit tune <command>` prefix** (#259): deprecated through v0.8
+  and v0.9, it now exits 2 and names the direct command instead of running
+  it. Use `symcockpit <command>`; an MCP client configured with
+  `["tune", "serve"]` needs `["serve"]`. The app's elevated fan and process
+  calls already use the direct spelling.
+
 ### Fixed
 - **Fan helper no longer crashes and leaves the fans at full speed:** the
   0.11.0 helper's idle-exit timer ran its main-actor-isolated handler on a

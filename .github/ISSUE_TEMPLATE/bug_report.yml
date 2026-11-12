@@ -59,7 +59,7 @@ body:
       label: Steps to reproduce
       description: Exact commands or clicks. Include the full command line where relevant.
       placeholder: |
-        1. Run a relevant `symcockpit tune` command
+        1. Run a relevant `symcockpit` command
         2. ...
     validations:
       required: true

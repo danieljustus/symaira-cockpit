@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 /// Integration tests for the public tune `serve` run path, exercised through
-/// the unified dispatcher binary (`symcockpit tune serve`). The in-process
+/// the unified dispatcher binary (`symcockpit serve`). The in-process
 /// migration tests drive `TuneMCPServer.makeServer()` through pipes, but the
 /// public bridge — the convenience-init default config load and `run()`'s
 /// `MCPStdioTransport` launch, EOF termination, and start-failure propagation —
@@ -100,7 +100,7 @@ final class SymCockpitServeIntegrationE2ETests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func launchServe(arguments: [String] = ["tune", "serve"]) throws -> ServeChild {
+    private func launchServe(arguments: [String] = ["serve"]) throws -> ServeChild {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: symtuneBinary)
         process.arguments = arguments
@@ -146,7 +146,7 @@ final class SymCockpitServeIntegrationE2ETests: XCTestCase {
     }
 }
 
-/// Bounded subprocess harness for `symcockpit tune serve`. Uses the
+/// Bounded subprocess harness for `symcockpit serve`. Uses the
 /// terminationHandler + semaphore pattern with a timeout — never
 /// `waitUntilExit()`. On timeout the child is SIGTERM'd, then SIGKILL'd after
 /// a short grace period so a hung server can never block the test run.

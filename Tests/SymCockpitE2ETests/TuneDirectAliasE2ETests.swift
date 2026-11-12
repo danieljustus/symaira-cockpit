@@ -31,19 +31,20 @@ final class TuneDirectAliasE2ETests: XCTestCase {
     ]
 
 
-    func testDirectAliasMatchesTunePrefixedOutput() throws {
+    /// The `tune` prefix was removed in v0.12 (#259): the direct command
+    /// answers, the prefixed form names it and exits 2 without running it.
+    func testDirectCommandAnswersAndTunePrefixNamesIt() throws {
         for command in aliasedCommands {
             let direct = try run([command, "--help"])
             let prefixed = try run(["tune", command, "--help"])
 
-            XCTAssertEqual(direct.stdout, prefixed.stdout,
-                           "symcockpit \(command) --help should match symcockpit tune \(command) --help")
-            XCTAssertTrue(prefixed.stderr.hasPrefix("symcockpit: 'tune' is deprecated;"),
-                          "legacy route must announce the migration for \(command)")
-            XCTAssertTrue(prefixed.stderr.hasSuffix(direct.stderr),
-                          "legacy route must retain the command diagnostics for \(command)")
-            XCTAssertEqual(direct.status, prefixed.status,
-                           "symcockpit \(command) --help exit code should match the tune-prefixed form")
+            // Some commands answer --help with a usage exit; only the routing
+            // is under test here, not each command's help contract.
+            XCTAssertFalse(direct.stderr.contains("unknown family"), "symcockpit \(command) must route directly")
+            XCTAssertEqual(prefixed.status, 2, "the removed prefix is a usage error for \(command)")
+            XCTAssertTrue(prefixed.stdout.isEmpty, "the removed prefix must not run \(command)")
+            XCTAssertEqual(prefixed.stderr,
+                           "symcockpit: the 'tune' prefix was removed; run 'symcockpit \(command) --help' instead.\n")
         }
     }
 

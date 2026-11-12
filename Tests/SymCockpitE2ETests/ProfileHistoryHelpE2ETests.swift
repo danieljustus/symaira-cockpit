@@ -18,7 +18,7 @@ final class ProfileHistoryHelpE2ETests: XCTestCase {
             ["profile", "save", "--help"], ["profile", "delete", "owned", "--help"],
             ["history", "--help"], ["history", "-h"], ["history", "--limit", "5", "--help"],
         ]
-        for prefix in [[], ["tune"]] as [[String]] {
+        for prefix in [[]] as [[String]] {
             for command in cases {
                 let result = try run(prefix + command, home: home)
                 XCTAssertEqual(result.code, 0, "\(prefix + command): \(result.output)")

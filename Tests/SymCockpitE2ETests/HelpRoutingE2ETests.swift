@@ -21,7 +21,6 @@ final class HelpRoutingE2ETests: XCTestCase {
     func testRequestedHelpRoutesToStdoutAndExitsZero() throws {
         let surfaces: [[String]] = [
             ["--help"],
-            ["tune", "--help"],
         ]
 
         for arguments in surfaces {
@@ -29,12 +28,8 @@ final class HelpRoutingE2ETests: XCTestCase {
             XCTAssertEqual(result.status, 0, "\(arguments.joined(separator: " ")) should exit 0")
             XCTAssertFalse(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                            "\(arguments.joined(separator: " ")) should print help to stdout")
-            if arguments.first == "tune" {
-                XCTAssertTrue(result.stderr.hasPrefix("symcockpit: 'tune' is deprecated;"), result.stderr)
-            } else {
-                XCTAssertTrue(result.stderr.isEmpty,
-                              "\(arguments.joined(separator: " ")) should not write help to stderr: \(result.stderr)")
-            }
+            XCTAssertTrue(result.stderr.isEmpty,
+                          "\(arguments.joined(separator: " ")) should not write help to stderr: \(result.stderr)")
         }
     }
 

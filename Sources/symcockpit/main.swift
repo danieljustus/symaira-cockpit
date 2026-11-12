@@ -3,7 +3,8 @@
 //   symcockpit <command>           thermals, brightness, power
 //   symcockpit version             the Cockpit version (JSON)
 //
-// Direct commands and the deprecated tune prefix delegate to the same library.
+// Direct commands delegate to the tuning library; the removed `tune` prefix
+// prints a migration hint.
 
 import Foundation
 import SymCockpitVersion
@@ -33,8 +34,8 @@ symcockpit covers this machine's thermals, power, display and brightness.
 Operate and Scope moved to Symaira Brain as optional modules; the legacy
 dispatcher commands are removed.
 
-The legacy `symcockpit tune <command>` spelling remains available with a
-deprecation warning through Cockpit v0.9. Use direct commands instead.
+The `symcockpit tune <command>` prefix was removed in v0.12 after its
+deprecation window (v0.8 and v0.9); run `symcockpit <command>` directly.
 
 """
 
@@ -103,8 +104,12 @@ guard args.first != nil else {
 let code: Int32
 switch args[0] {
 case "tune":
-    FileHandle.standardError.write(Data("symcockpit: 'tune' is deprecated; use 'symcockpit <command>' directly (still supported; removal is planned).\n".utf8))
-    code = SymCockpitMain.run(Array(args.dropFirst()))
+    // PB-2026-09-09: the prefix was deprecated through v0.9 and removed in
+    // v0.12. Name the direct command instead of a generic usage error.
+    let direct = (["symcockpit"] + args.dropFirst()).joined(separator: " ")
+    let suggestion = args.count > 1 ? direct : "symcockpit <command>"
+    FileHandle.standardError.write(Data("symcockpit: the 'tune' prefix was removed; run '\(suggestion)' instead.\n".utf8))
+    code = 2
 case "version", "--version", "-V":
     let update = await checkForCockpitUpdateIfEnabled(args: args)
     if args.contains("--json") {

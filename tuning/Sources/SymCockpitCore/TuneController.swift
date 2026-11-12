@@ -120,16 +120,16 @@ public final class TuneController: Sendable {
             let value = PrivilegedElevation.shellFormat(fraction)
             do {
                 try PrivilegedElevation.runSymCockpit([
-                    "tune", "fan", "set", value, "--data-dir", resolvedDataDir.path
+                    "fan", "set", value, "--data-dir", resolvedDataDir.path
                 ])
             } catch let error as PrivilegedElevation.ElevationError {
                 guard case .failed(let message) = error, message.contains("--data-dir") else { throw error }
-                try PrivilegedElevation.runSymCockpit(["tune", "fan", "set", value])
+                try PrivilegedElevation.runSymCockpit(["fan", "set", value])
             }
         }
         self.privilegedFanGovernor = privilegedFanGovernor ?? { stateURL in
             try PrivilegedElevation.runSymCockpitDetached([
-                "tune", "fan", "governor", "--state", stateURL.path
+                "fan", "governor", "--state", stateURL.path
             ])
         }
         self.privilegeIsRoot = privilegeIsRoot ?? { PrivilegedElevation.isRunningAsRoot }
@@ -580,7 +580,7 @@ extension TuneController {
 
     /// - Parameter allowPrivilegeEscalation: When `true` and this process is
     ///   not already root, a direct SMC write rejected for lack of privilege
-    ///   is retried by re-invoking `symcockpit tune fan set` under a one-time
+    ///   is retried by re-invoking `symcockpit fan set` under a one-time
     ///   administrator authorization prompt (see ``PrivilegedElevation``).
     ///   Defaults to `false` and must stay opt-in: the CLI and the MCP server
     ///   call this too, and neither must ever block on a GUI password dialog

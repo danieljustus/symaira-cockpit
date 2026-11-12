@@ -11,7 +11,7 @@ Brain; `symcockpit operate` and `symcockpit scope` print a migration hint and
 exit 4. Do not reintroduce them here or move hardware control into Brain.
 
 **This machine.** One binary, `symcockpit`, owns thermals/power/display through
-the `tune` command tree and its direct aliases. It ships one Tune MCP server,
+direct root commands (the `tune` prefix was removed in v0.12). It ships one Tune MCP server,
 a menu-bar HUD and a tuning GUI. macOS-only, Swift 6, public Apache-2.0.
 
 This repo is the result of merging the archived `symaira-tune`,
@@ -145,7 +145,7 @@ products adopt it.
 - Environment prefix: `SYMTUNE_*`. Tune uses its documented XDG paths.
 - Exit codes: `0` ok · `1` error · `2` usage/config · `3` permission ·
   `4` unsupported/not-implemented.
-- **Zero stdio pollution** in `tune serve`: stdout carries JSON-RPC only;
+- **Zero stdio pollution** in `serve`: stdout carries JSON-RPC only;
   everything else goes to stderr.
 - Public Apache-2.0 — no billing, tenant or cloud code here. There is no Pro
   edition; see `tuning/docs/commercial-boundary.md`.

@@ -11,7 +11,7 @@ final class ProfileArgumentE2ETests: XCTestCase {
         func run(_ arguments: [String], expected: Int32) throws {
             let process = Process()
             process.executableURL = binary
-            process.arguments = ["tune", "profile"] + arguments
+            process.arguments = ["profile"] + arguments
             process.environment = ["HOME": root.path, "CFFIXED_USER_HOME": root.path,
                                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
             let output = Pipe()

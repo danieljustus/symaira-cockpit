@@ -1,5 +1,5 @@
 // symtune — legacy entrypoint, now a thin wrapper over SymCockpitCLI.
-// The unified entrypoint is `symcockpit tune <command>`.
+// The unified entrypoint is `symcockpit <command>`.
 import Foundation
 import SymCockpitCLI
 

@@ -24,38 +24,34 @@ final class CommandMapAcceptanceE2ETests: XCTestCase {
     ]
 
     private let formerCollisions = ["doctor", "permissions", "history"]
-    private let deprecation = "symcockpit: 'tune' is deprecated;"
+    private let removedPrefix = "symcockpit: the 'tune' prefix was removed;"
 
-    func testEveryReviewedDirectAliasMatchesLegacyTuneRoute() throws {
-        for command in directTuneCommands {
-            for help in ["--help", "-h"] {
+    func testEveryReviewedDirectCommandAnswersHelp() throws {
+        for command in directTuneCommands + formerCollisions {
+            for help in formerCollisions.contains(command) ? ["--help"] : ["--help", "-h"] {
                 let direct = try run([command, help])
-                let legacy = try run(["tune", command, help])
-                XCTAssertEqual(direct.status, legacy.status, command)
-                XCTAssertEqual(direct.stdout, legacy.stdout, command)
-                XCTAssertTrue(legacy.stderr.hasPrefix(deprecation), command)
-                XCTAssertTrue(legacy.stderr.hasSuffix(direct.stderr), command)
+                XCTAssertFalse(direct.stderr.contains("unknown family"), command)
+                XCTAssertNotEqual(direct.status, 4, command)
             }
-        }
-    }
-
-    func testFormerCollisionsHaveDirectRoutes() throws {
-        for command in formerCollisions {
-            let direct = try run([command, "--help"])
-            let legacy = try run(["tune", command, "--help"])
-            XCTAssertEqual(direct.status, legacy.status, command)
-            XCTAssertEqual(direct.stdout, legacy.stdout, command)
-            XCTAssertTrue(legacy.stderr.hasPrefix(deprecation), command)
-            XCTAssertTrue(legacy.stderr.hasSuffix(direct.stderr), command)
         }
         // Direct `serve` is exercised by the bounded MCP stdio integration test.
     }
 
-    func testTuneFamilyAndVersionAliasesRemainExecutable() throws {
-        let result = try run(["tune", "--help"])
-        XCTAssertEqual(result.status, 0)
-        XCTAssertFalse(result.stdout.isEmpty)
-        XCTAssertTrue(result.stderr.hasPrefix(deprecation), result.stderr)
+    /// #259: the prefix was deprecated through v0.9 and removed in v0.12.
+    func testRemovedTunePrefixPointsAtTheDirectCommand() throws {
+        for command in directTuneCommands + formerCollisions {
+            let legacy = try run(["tune", command, "--help"])
+            XCTAssertEqual(legacy.status, 2, command)
+            XCTAssertTrue(legacy.stdout.isEmpty, command)
+            XCTAssertTrue(legacy.stderr.hasPrefix(removedPrefix), command)
+            XCTAssertTrue(legacy.stderr.contains("'symcockpit \(command) --help'"), legacy.stderr)
+        }
+        let bare = try run(["tune"])
+        XCTAssertEqual(bare.status, 2)
+        XCTAssertTrue(bare.stderr.contains("'symcockpit <command>'"), bare.stderr)
+    }
+
+    func testVersionAliasesRemainExecutable() throws {
 
         let version = try run(["version"])
         for alias in ["--version", "-V"] {
