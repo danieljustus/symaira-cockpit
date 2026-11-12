@@ -16,6 +16,16 @@
   stats as root-owned, so `sudo symcockpit fan auto` (and the GUI's
   administrator fallback) spun at full CPU and never restored the fans. The
   walk now steps through the components of the absolute path.
+- **`fan auto` no longer claims success when nothing was restored** (#415):
+  every SMC write is checked; a rejected one is still followed by the
+  remaining writes, then reported as a permission error (exit 3) when
+  unprivileged or an error (exit 1) as root, instead of `{"applied": true}`.
+- **The fan helper recovers fans a dead predecessor left forced** (#414): at
+  launch, and when *Standard* is chosen with no run active, the helper hands
+  the fans back to the firmware if a software override (`Ftst` unlock, manual
+  mode) is still set and no standalone `fan governor` process owns it. A
+  `kill -9` mid-governing therefore no longer leaves the fans at full speed
+  until someone runs `sudo symcockpit fan auto`.
 
 ## [0.11.0] (2026-11-11)
 

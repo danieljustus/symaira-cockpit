@@ -1,6 +1,6 @@
 import Foundation
 
-func mapFanControlError(_ error: FanControlError) -> TuneError {
+func mapFanControlError(_ error: FanControlError, isRoot: Bool = geteuid() == 0) -> TuneError {
     switch error {
     case .noFansDetected:
         return .unsupported("SMC reports no fans; fan control is unavailable")
@@ -10,6 +10,10 @@ func mapFanControlError(_ error: FanControlError) -> TuneError {
         return .permission("SMC rejected target RPM for fan \(index)")
     case .unsupportedPlatform:
         return .unsupported("Fan control is not supported on this platform")
+    case .restoreWriteFailed(let key):
+        return isRoot
+            ? .failed("SMC rejected \(key) while returning the fans to firmware control; they may still be forced")
+            : .permission("returning the fans to firmware control needs root (SMC rejected \(key)); run with sudo")
     }
 }
 

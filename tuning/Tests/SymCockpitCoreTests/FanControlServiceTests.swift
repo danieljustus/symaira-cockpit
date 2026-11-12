@@ -126,6 +126,46 @@ final class FanControlServiceTests: XCTestCase {
     }
     #endif
 
+    #if arch(arm64)
+    /// Issue #415: an unprivileged `fan auto` must not look applied.
+    func testAppleSiliconRestoreAutoThrowsWhenAWriteIsRejectedButTriesEveryKey() {
+        let conn = FakeSMCConnection(isOpen: true, keys: makeAppleSiliconFanKeys())
+        conn.writeHandler = { key, _, _ in key != "F0Md" }
+        let smc = SMCService(connection: conn)
+        let service = FanControlService(smc: smc, sensors: SensorService(smc: smc))
+
+        XCTAssertThrowsError(try service.restoreAuto()) { error in
+            guard case FanControlError.restoreWriteFailed(let key)? = error as? FanControlError else {
+                return XCTFail("expected restoreWriteFailed, got \(error)")
+            }
+            XCTAssertEqual(key, "F0Md")
+        }
+        XCTAssertTrue(conn.writtenKeys.contains { $0.key == "Ftst" }, "a rejected key must not skip the rest")
+    }
+
+    func testAppleSiliconOverrideDetection() {
+        let resting = FakeSMCConnection(isOpen: true, keys: makeAppleSiliconFanKeys(mode: 0))
+        XCTAssertFalse(FanControlService(smc: SMCService(connection: resting), sensors: SensorService(smc: SMCService(connection: resting))).hasSoftwareOverride())
+
+        let manual = FakeSMCConnection(isOpen: true, keys: makeAppleSiliconFanKeys(mode: 1))
+        XCTAssertTrue(FanControlService(smc: SMCService(connection: manual), sensors: SensorService(smc: SMCService(connection: manual))).hasSoftwareOverride())
+
+        var unlockedKeys = makeAppleSiliconFanKeys(mode: 0)
+        unlockedKeys["Ftst"] = FakeSMCKeyResult(dataType: smcEncodeKey("ui8 "), bytes: [1])
+        let unlocked = FakeSMCConnection(isOpen: true, keys: unlockedKeys)
+        XCTAssertTrue(FanControlService(smc: SMCService(connection: unlocked), sensors: SensorService(smc: SMCService(connection: unlocked))).hasSoftwareOverride())
+    }
+
+    func testOverrideClearsAfterRestoreAuto() throws {
+        let conn = FakeSMCConnection(isOpen: true, keys: makeAppleSiliconFanKeys(mode: 1))
+        let smc = SMCService(connection: conn)
+        let service = FanControlService(smc: smc, sensors: SensorService(smc: smc))
+        XCTAssertTrue(service.hasSoftwareOverride())
+        try service.restoreAuto()
+        XCTAssertFalse(service.hasSoftwareOverride())
+    }
+    #endif
+
     func testRestoreAutoThrowsOnNoFans() {
         let conn = FakeSMCConnection(isOpen: true, keys: [
             "FNum": FakeSMCKeyResult(dataType: smcEncodeKey("ui8 "), bytes: [0]),

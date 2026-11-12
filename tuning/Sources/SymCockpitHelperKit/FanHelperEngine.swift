@@ -69,6 +69,7 @@ public final class FanHelperEngine: @unchecked Sendable {
 
     private let watchdog: HeartbeatWatchdog
     private let runner: GovernorRunner
+    private let staleRecovery: (@Sendable () -> Void)?
     private let sleepSlice: TimeInterval
     private let lock = NSLock()
     private var run: Run?
@@ -79,10 +80,12 @@ public final class FanHelperEngine: @unchecked Sendable {
     public init(
         watchdog: HeartbeatWatchdog = HeartbeatWatchdog(),
         sleepSlice: TimeInterval = FanHelperConstants.sleepSlice,
+        staleRecovery: (@Sendable () -> Void)? = nil,
         runner: @escaping GovernorRunner
     ) {
         self.watchdog = watchdog
         self.sleepSlice = sleepSlice
+        self.staleRecovery = staleRecovery
         self.runner = runner
     }
 
@@ -149,6 +152,11 @@ public final class FanHelperEngine: @unchecked Sendable {
         lock.lock()
         guard let run, !run.isStopped, !run.isFinished else {
             lock.unlock()
+            // Nothing of ours is running: an explicit Standard still has to
+            // recover fans a dead predecessor left forced (issue #414).
+            if reason == .requested || reason == .profileSystem {
+                recoverStaleOverride()
+            }
             return
         }
         run.stop()
@@ -158,6 +166,19 @@ public final class FanHelperEngine: @unchecked Sendable {
 
     public func heartbeat() {
         watchdog.beat()
+    }
+
+    /// Runs the stale-override recovery, but only while no run exists or the
+    /// last one has fully unwound: a stopping run restores the fans itself,
+    /// and recovery must never race a governor. Holds the engine lock so a
+    /// concurrent ``start(profile:coolTarget:)`` waits until it is done.
+    /// Call once at helper launch, before serving XPC.
+    public func recoverStaleOverride() {
+        guard let staleRecovery else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        if let run, !run.isFinished { return }
+        staleRecovery()
     }
 
     /// The XPC connection that owned the run went away: the app is gone, so

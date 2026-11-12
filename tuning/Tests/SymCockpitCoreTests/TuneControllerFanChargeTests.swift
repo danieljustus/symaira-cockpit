@@ -288,6 +288,9 @@ final class TuneControllerErrorMappingTests: XCTestCase {
         XCTAssertEqual(mapFanControlError(.fanModeWriteRejected(0)).description, "permission error: SMC rejected manual mode for fan 0; run with sudo")
         XCTAssertEqual(mapFanControlError(.targetRPMWriteFailed(1)).description, "permission error: SMC rejected target RPM for fan 1")
         XCTAssertEqual(mapFanControlError(.unsupportedPlatform).description, "unsupported: Fan control is not supported on this platform")
+        // Issue #415: unprivileged → permission (exit 3); as root → error (exit 1).
+        XCTAssertEqual(mapFanControlError(.restoreWriteFailed("F0Md"), isRoot: false).exitCode, ExitCode.permission.rawValue)
+        XCTAssertEqual(mapFanControlError(.restoreWriteFailed("F0Md"), isRoot: true).exitCode, ExitCode.error.rawValue)
     }
 
     func testMapValidationError() {

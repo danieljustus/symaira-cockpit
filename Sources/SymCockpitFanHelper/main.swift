@@ -38,7 +38,23 @@ if arguments.count == 4, arguments[1] == "--print-requirement" {
     exit(0)
 }
 
-let engine = FanHelperEngine { selectionProvider, shouldContinue, sleep in
+// A fresh helper governs nothing, so fans still forced at launch were left by
+// a predecessor that died mid-run (issue #414). The same recovery runs when
+// the app asks for Standard while no run is active.
+let staleRecovery: @Sendable () -> Void = {
+    let smc = SMCService()
+    let fanControl = FanControlService(smc: smc, sensors: SensorService(smc: smc))
+    let outcome = FanStaleOverrideRecovery.run(
+        hasOverride: { fanControl.hasSoftwareOverride() },
+        legacyGovernorRunning: { FanGovernorProcessProbe.isRunning() },
+        restore: { try fanControl.restoreAuto() }
+    )
+    if outcome != .nothingForced {
+        FileHandle.standardError.write(Data("symaira fan helper: stale fan override: \(outcome)\n".utf8))
+    }
+}
+
+let engine = FanHelperEngine(staleRecovery: staleRecovery) { selectionProvider, shouldContinue, sleep in
     let smc = SMCService()
     let sensors = SensorService(smc: smc)
     let fanControl = FanControlService(smc: smc, sensors: sensors)
@@ -50,6 +66,7 @@ let engine = FanHelperEngine { selectionProvider, shouldContinue, sleep in
     try governor.run(selectionProvider: selectionProvider, shouldContinue: shouldContinue)
 }
 engine.startWatchdogTimer()
+engine.recoverStaleOverride()
 
 let delegate = FanHelperListenerDelegate(engine: engine)
 let listener = NSXPCListener(machServiceName: FanHelperConstants.helperIdentifier)

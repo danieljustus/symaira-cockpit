@@ -429,7 +429,7 @@ public enum PrivilegedElevation: Sendable {
         switch error {
         case let error as FanControlError:
             switch error {
-            case .fanModeWriteRejected, .targetRPMWriteFailed:
+            case .fanModeWriteRejected, .targetRPMWriteFailed, .restoreWriteFailed:
                 return true
             case .noFansDetected, .unsupportedPlatform:
                 return false

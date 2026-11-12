@@ -104,6 +104,9 @@ public enum FanControlError: Error, Sendable, CustomStringConvertible {
     case fanModeWriteRejected(Int)
     case targetRPMWriteFailed(Int)
     case unsupportedPlatform
+    /// A write that hands the fans back to the firmware was rejected
+    /// (unprivileged, or the SMC refused it). Carries the SMC key.
+    case restoreWriteFailed(String)
 
     public var description: String {
         switch self {
@@ -115,6 +118,8 @@ public enum FanControlError: Error, Sendable, CustomStringConvertible {
             return "fan \(index) target RPM write failed"
         case .unsupportedPlatform:
             return "unsupported platform"
+        case .restoreWriteFailed(let key):
+            return "SMC rejected the restore write to \(key)"
         }
     }
 }
@@ -168,19 +173,51 @@ public struct FanControlService: Sendable {
     }
 
     /// Restore all fans to automatic firmware control and clear any unlock flag.
+    ///
+    /// Every write is attempted even after one fails, so a partial failure
+    /// still hands back as many fans as possible; the first rejected key is
+    /// then thrown, because a restore that did not happen must not be
+    /// reported as applied (an unprivileged `fan auto` used to say so).
     public func restoreAuto() throws {
         guard smc.isAvailable else { return }
         let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
         guard fanCount > 0 else { throw FanControlError.noFansDetected }
 
+        var rejected: String?
+        func write(_ key: String, _ value: Double, _ dataType: String) {
+            if !smc.writeKeyValue(key, value: value, dataType: dataType), rejected == nil {
+                rejected = key
+            }
+        }
         #if arch(arm64)
         for i in 0..<fanCount {
-            _ = smc.writeKeyValue("F\(i)Md", value: 3, dataType: "ui8 ")
+            write("F\(i)Md", 3, "ui8 ")
         }
-        _ = smc.writeKeyValue("Ftst", value: 0, dataType: "ui8 ")
+        write("Ftst", 0, "ui8 ")
         #else
         guard let originalFS = FanControlService.originalFSBitmask(smc: smc) else { return }
-        _ = smc.writeKeyValue("FS!", value: Double(originalFS), dataType: "ui16")
+        write("FS!", Double(originalFS), "ui16")
+        #endif
+        if let rejected { throw FanControlError.restoreWriteFailed(rejected) }
+    }
+
+    /// Whether a software override still holds the fans: the diagnostic
+    /// unlock (`Ftst`) or a fan in manual mode on Apple Silicon, a forced-fan
+    /// bit in `FS!` on Intel. Nothing readable answers `false`.
+    ///
+    /// A process that governs nothing (a freshly started helper) can treat a
+    /// `true` here as stale: whoever forced the fans is gone. A false
+    /// positive only costs a redundant hand-back to the firmware curve.
+    public func hasSoftwareOverride() -> Bool {
+        guard smc.isAvailable else { return false }
+        let fanCount = smc.readKeyUInt("FNum").map { Int($0) } ?? 0
+        guard fanCount > 0 else { return false }
+        #if arch(arm64)
+        if smc.readKeyUInt("Ftst") == 1 { return true }
+        return (0..<fanCount).contains { smc.readKeyUInt("F\($0)Md") == 1 }
+        #else
+        guard let bits = smc.readKeyUInt("FS!") else { return false }
+        return bits & UInt((1 << fanCount) - 1) != 0
         #endif
     }
 

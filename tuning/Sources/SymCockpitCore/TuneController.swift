@@ -109,14 +109,7 @@ public final class TuneController: Sendable {
             source: processSource ?? LibprocProcessSampleSource(),
             gpuSource: gpuProcessSource ?? DefaultGPUProcessSource()
         )
-        self.fanGovernorRunning = fanGovernorRunning ?? {
-            guard let result = try? BoundedProcessRunner.run(
-                executable: "/usr/bin/pgrep",
-                arguments: ["-f", "tune fan governor"],
-                timeoutSeconds: 5
-            ) else { return false }
-            return result.terminationStatus == 0
-        }
+        self.fanGovernorRunning = fanGovernorRunning ?? { FanGovernorProcessProbe.isRunning() }
         self.privilegedFanSet = privilegedFanSet ?? { fraction in
             // Pass the caller's data directory explicitly: the elevated child
             // runs under osascript, which sets no SUDO_* variables, so it
