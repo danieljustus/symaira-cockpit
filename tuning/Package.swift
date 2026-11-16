@@ -21,7 +21,7 @@ let package = Package(
         .library(name: "SymCockpitUI", targets: ["SymCockpitUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.20.0"),
+        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.22.0"),
         .package(path: "../history"),
     ],
     targets: [
