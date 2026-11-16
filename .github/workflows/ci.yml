@@ -37,6 +37,9 @@ jobs:
       - name: Check the path-to-job table
         run: ./scripts/test-ci-changed-areas.sh
 
+      - name: Check symaira-corekit pins match project.yml
+        run: bash scripts/check-corekit-pins.sh
+
       - name: Detect affected jobs
         id: detect
         env:

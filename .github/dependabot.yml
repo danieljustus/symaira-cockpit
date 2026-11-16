@@ -4,11 +4,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # One PR moves the root and tuning packages together. Dependabot never edits
+  # tuning/project.yml; scripts/check-corekit-pins.sh fails CI until its
+  # exactVersion matches tuning/Package.swift.
   - package-ecosystem: swift
-    directory: /
+    directories:
+      - /
+      - /tuning
     schedule:
       interval: weekly
-  - package-ecosystem: swift
-    directory: /tuning
-    schedule:
-      interval: weekly
+    groups:
+      symaira-corekit:
+        patterns:
+          - "*symaira-corekit*"
