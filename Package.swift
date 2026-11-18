@@ -20,7 +20,7 @@ let package = Package(
         .executable(name: "SymCockpitFanHelper", targets: ["SymCockpitFanHelper"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.23.0"),
+        .package(url: "https://github.com/danieljustus/symaira-corekit.git", exact: "0.23.1"),
         .package(path: "tuning"),
     ],
     targets: [

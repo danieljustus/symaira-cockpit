@@ -2,8 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Hovered icons stop redrawing once their animation has settled** (#418):
+  symaira-corekit 0.23.1 pauses the icon animation timeline after a hover or
+  click motion. Before, every icon that had been hovered, for example in the
+  notch HUD, kept redrawing at display rate until its view was torn down,
+  which is a plausible cause of the CPU load that built up over a long
+  session. Whether this resolves the reported 60 % load still needs
+  confirmation in normal use.
+
 ### Changed
-- symaira-corekit moves from 0.20.0 to 0.23.0 (#417). Running text uses
+- symaira-corekit moves from 0.20.0 to 0.23.1 (#417). Running text uses
   Figtree instead of Inter; headings keep Google Sans Flex.
 
 ### Internal
