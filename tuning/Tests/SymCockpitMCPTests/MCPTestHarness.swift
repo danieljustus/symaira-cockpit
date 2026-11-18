@@ -17,14 +17,17 @@ struct MCPTestHarness {
         powerSource: any PowerAssertionSource = MockMCPPowerAssertionSource()
     ) throws -> MCPTestHarness {
         // Default protocol tests must never write to the host's display, SMC
-        // or power assertions. Tests for successful SMC writes inject their own mock.
+        // or power assertions, and never query the host's AI providers through
+        // a real symbrain (slow, network-bound, and it would touch the user's
+        // persistent usage cache). Tests for successful SMC writes inject their own mock.
         let unavailableSMC = MockSMCConnection()
         unavailableSMC.isOpen = false
         let controller = controller ?? TuneController(
             displayWrite: MockMCPDisplayWriteService(),
             smcService: SMCService(connection: unavailableSMC),
             batterySource: MockBatterySource(),
-            keepAwakeSource: powerSource
+            keepAwakeSource: powerSource,
+            aiUsageClient: EmptyMCPUsageClient()
         )
         let clientToServer = Pipe()
         let serverToClient = Pipe()
@@ -43,6 +46,14 @@ struct MCPTestHarness {
             reader: LineReader(handle: serverToClient.fileHandleForReading),
             serverTask: serverTask
         )
+    }
+}
+
+/// Reports no provider data, so every catalog provider shows as not set up.
+struct EmptyMCPUsageClient: SymBrainUsageClientProtocol {
+    func fetchReport() throws -> SymBrainUsageReport { SymBrainUsageReport(schemaVersion: 1, providers: []) }
+    func fetchReport(providerIDs: Set<String>) throws -> SymBrainUsageReport {
+        SymBrainUsageReport(schemaVersion: 1, providers: [])
     }
 }
 

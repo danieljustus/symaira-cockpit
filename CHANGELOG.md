@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.2] (2026-11-18)
+
 ### Fixed
 - **Hovered icons stop redrawing once their animation has settled** (#418):
   symaira-corekit 0.23.1 pauses the icon animation timeline after a hover or
@@ -18,6 +20,9 @@
 ### Internal
 - Test preference domains are created in the temporary directory instead of
   `~/Library/Preferences`, which collected an empty plist per test run (#419).
+- The MCP protocol tests no longer query the host's AI providers through a
+  real `symbrain`; the `get_ai_usage` test took up to 16 s on a configured
+  Mac and timed out, and it touched the user's persistent usage cache.
 
 ## [0.12.1] (2026-11-12)
 
