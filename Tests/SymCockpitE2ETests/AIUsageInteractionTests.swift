@@ -7,7 +7,7 @@ import SymCockpitCore
 final class AIUsageInteractionTests: XCTestCase {
     @MainActor
     private func preferences() -> AIUsagePreferences {
-        let name = "AIUsageInteractionTests.\(UUID().uuidString)"
+        let name = NSTemporaryDirectory() + "AIUsageInteractionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         addTeardownBlock { defaults.removePersistentDomain(forName: name) }
         return AIUsagePreferences(defaults: defaults)
@@ -16,7 +16,7 @@ final class AIUsageInteractionTests: XCTestCase {
     @MainActor
     func testProductionDisplayToggleActionsPersist() async throws {
         _ = NSApplication.shared
-        let name = "AIUsageControls.\(UUID().uuidString)"
+        let name = NSTemporaryDirectory() + "AIUsageControls.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = AIUsagePreferences(defaults: defaults)

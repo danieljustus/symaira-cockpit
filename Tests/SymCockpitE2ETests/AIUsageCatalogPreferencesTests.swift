@@ -5,7 +5,7 @@ import SymCockpitCore
 final class AIUsageCatalogPreferencesTests: XCTestCase {
     @MainActor
     func testOptInAndLocalAuthSaveClearCustomPathSemantics() throws {
-        let suite = "AIUsageCatalogPreferencesTests." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "AIUsageCatalogPreferencesTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

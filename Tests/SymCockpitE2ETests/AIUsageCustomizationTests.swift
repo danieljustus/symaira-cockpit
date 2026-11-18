@@ -6,7 +6,7 @@ import SymCockpitCore
 final class AIUsageCustomizationTests: XCTestCase {
     @MainActor
     func testUndoAndProviderResetPreserveConsentCredentialsAndOtherProviders() throws {
-        let suite = "AIUsageCustomizationTests." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "AIUsageCustomizationTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

@@ -77,7 +77,7 @@ final class AIUsageRecordedHistoryUITests: XCTestCase {
 
     @MainActor
     func testDecodedHistoryReachesMountedSharedCardWithoutQuota() throws {
-        let suite = "GrokHistoryFixture." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "GrokHistoryFixture." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)
@@ -174,7 +174,7 @@ final class AIUsageRecordedHistoryUITests: XCTestCase {
 
     @MainActor
     func testConsentAndSelectionFlowClearHistoryAndRefreshWithScopedOptIn() async throws {
-        let suite = "GrokHistoryFlow." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "GrokHistoryFlow." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

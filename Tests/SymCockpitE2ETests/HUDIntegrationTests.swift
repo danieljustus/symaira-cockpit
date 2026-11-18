@@ -9,7 +9,7 @@ final class HUDIntegrationTests: XCTestCase {
     @MainActor
     func testSavedHUDChoiceAndActionsUseTheProductionHost() async throws {
         _ = NSApplication.shared
-        let suite = "com.symaira.cockpit.hud-integration.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.hud-integration.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let surface = ReadoutSurfacePreferences(defaults: defaults)

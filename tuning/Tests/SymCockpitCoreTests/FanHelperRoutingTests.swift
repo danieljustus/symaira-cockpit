@@ -56,7 +56,7 @@ final class FanHelperRoutingTests: XCTestCase {
     }
 
     func testPreferenceDefaultsToOffInTheGrandfatheredNamespace() throws {
-        let suite = "com.symaira.test.fanhelper.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.test.fanhelper.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         XCTAssertFalse(FanHelperDefaults.isEnabled(defaults))

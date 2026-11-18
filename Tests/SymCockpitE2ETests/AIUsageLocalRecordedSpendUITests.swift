@@ -24,7 +24,7 @@ final class AIUsageLocalRecordedSpendUITests: XCTestCase {
 
     @MainActor
     func testConsentPersistenceRevocationAndHiddenCardsDoNotChangeTotal() async throws {
-        let suite = "LocalSpendConsent." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "LocalSpendConsent." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)
@@ -72,7 +72,7 @@ final class AIUsageLocalRecordedSpendUITests: XCTestCase {
 
     @MainActor
     func testPassiveNativeSharedPanelRendersStatesInBothAppearancesAndWidths() throws {
-        let suite = "LocalSpendRender." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "LocalSpendRender." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)
@@ -110,7 +110,7 @@ final class AIUsageLocalRecordedSpendUITests: XCTestCase {
     @MainActor
     func testNativeAXPeriodModeActionsAndOpenCodeModelDisclosure() async throws {
         _ = NSApplication.shared
-        let suite = "LocalSpendAX." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "LocalSpendAX." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

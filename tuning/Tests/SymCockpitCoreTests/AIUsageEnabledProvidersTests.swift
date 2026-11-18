@@ -4,7 +4,7 @@ import XCTest
 
 final class AIUsageEnabledProvidersTests: XCTestCase {
     private func suite() throws -> UserDefaults {
-        let name = "AIUsageEnabledProvidersTests." + UUID().uuidString
+        let name = NSTemporaryDirectory() + "AIUsageEnabledProvidersTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         addTeardownBlock { UserDefaults(suiteName: name)?.removePersistentDomain(forName: name) }
         return defaults

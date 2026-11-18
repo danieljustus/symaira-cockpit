@@ -5,7 +5,7 @@ import SymCockpitCore
 final class AIUsageDisablePurgeTests: XCTestCase {
     @MainActor
     func testDisablingAProviderPurgesOnlyThatProvidersCache() throws {
-        let suite = "AIUsageDisablePurgeTests." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "AIUsageDisablePurgeTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

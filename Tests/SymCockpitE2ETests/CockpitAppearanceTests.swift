@@ -8,7 +8,7 @@ final class CockpitAppearanceTests: XCTestCase {
     func testAppearanceAppliesToExistingAndNewWindowsAndRestoresSystem() async throws {
         let app = NSApplication.shared
         let previous = app.appearance
-        let suite = "com.symaira.cockpit.appearance.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.appearance.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer {
             app.appearance = previous
@@ -56,7 +56,7 @@ final class CockpitAppearanceTests: XCTestCase {
         }
         let app = NSApplication.shared
         let previous = app.appearance
-        let suite = "com.symaira.cockpit.appearance-restart.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.appearance-restart.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer {
             app.appearance = previous
@@ -64,7 +64,7 @@ final class CockpitAppearanceTests: XCTestCase {
         }
         CockpitAppearancePreferences(defaults: defaults).selection = .dark
         XCTAssertTrue(defaults.synchronize())
-        let output = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).log")
+        let output = URL(fileURLWithPath: suite + ".log")
         XCTAssertTrue(FileManager.default.createFile(atPath: output.path, contents: nil))
         let handle = try FileHandle(forWritingTo: output)
         defer { try? handle.close(); try? FileManager.default.removeItem(at: output) }

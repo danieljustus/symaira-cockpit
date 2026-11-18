@@ -5,7 +5,7 @@ import SymCockpitCore
 final class AIUsageQueuedRefreshTests: XCTestCase {
     @MainActor
     func testPerProviderRefreshDuringAnotherRefreshIsQueuedNotDropped() async throws {
-        let suite = "AIUsageQueuedRefreshTests." + UUID().uuidString
+        let suite = NSTemporaryDirectory() + "AIUsageQueuedRefreshTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = AIUsagePreferences(defaults: defaults)

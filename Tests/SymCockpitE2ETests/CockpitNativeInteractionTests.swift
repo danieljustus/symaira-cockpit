@@ -54,7 +54,7 @@ final class CockpitNativeInteractionTests: XCTestCase {
         }
         XCTAssertTrue(elements(window).contains { text($0, "accessibilityIdentifier") == "cockpit-settings-menu" })
 
-        let suite = "com.symaira.cockpit.native-preferences.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.native-preferences.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = PreferencesView(

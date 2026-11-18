@@ -6,7 +6,7 @@ import SymCockpitCore
 final class StorageVolumePreferencesTests: XCTestCase {
     @MainActor
     func testPanelSelectionPersistsWithoutFilteringDiscovery() async throws {
-        let suite = "com.symaira.cockpit.storage-selection-tests.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.storage-selection-tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set("preserve", forKey: "unrelated-preference")

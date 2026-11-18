@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- symaira-corekit moves from 0.20.0 to 0.23.0 (#417). Running text uses
+  Figtree instead of Inter; headings keep Google Sans Flex.
+
+### Internal
+- Test preference domains are created in the temporary directory instead of
+  `~/Library/Preferences`, which collected an empty plist per test run (#419).
+
 ## [0.12.1] (2026-11-12)
 
 ### Fixed

@@ -22,10 +22,10 @@ final class CockpitDesignRenderTests: XCTestCase {
     @MainActor
     func testPreferencesAndHUDLayoutUseIsolatedSettings() async throws {
         _ = NSApplication.shared
-        let suite = "com.symaira.cockpit.render.\(UUID().uuidString)"
+        let suite = NSTemporaryDirectory() + "com.symaira.cockpit.render.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        let home = URL(fileURLWithPath: suite + ".home")
         let manager = PreferencesManager(defaults: defaults, configPaths: ConfigPaths(env: [:], home: home))
         let preferences = PreferencesView(
             manager: manager,

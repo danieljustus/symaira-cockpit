@@ -126,7 +126,7 @@ final class AIUsageVaultReferenceTests: XCTestCase {
     }
 
     func testPersistedPathsRoundTripThroughAnIsolatedDefaultsSuite() throws {
-        let suiteName = "com.symaira.symtune.tests.\(UUID().uuidString)"
+        let suiteName = NSTemporaryDirectory() + "com.symaira.symtune.tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
