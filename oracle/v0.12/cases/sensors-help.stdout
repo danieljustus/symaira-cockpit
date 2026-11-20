@@ -1,0 +1,4 @@
+Usage: symcockpit sensors [--json]
+
+Thermal pressure + (when available) temps/fan RPM (JSON).
+--json is accepted for consistency with other read commands; it is a no-op here.

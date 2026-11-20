@@ -1,0 +1,77 @@
+{
+  "properties": {
+    "architecture": {
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "credential_sources": {
+      "items": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "macos_version": {
+      "type": "string"
+    },
+    "permissions": {
+      "properties": {
+        "history_writable": {
+          "type": "boolean"
+        },
+        "mcp_mode": {
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "privileged_helper_installed": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "recommendations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

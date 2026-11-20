@@ -1,0 +1,44 @@
+{
+  "properties": {
+    "apple_condition": {
+      "type": "string"
+    },
+    "apple_maximum_capacity_percent": {
+      "type": "number"
+    },
+    "charge_limit_supported": {
+      "type": "boolean"
+    },
+    "charging": {
+      "type": "boolean"
+    },
+    "current_capacity_percent": {
+      "type": "number"
+    },
+    "cycle_count": {
+      "type": "number"
+    },
+    "design_capacity_mah": {
+      "type": "number"
+    },
+    "external_connected": {
+      "type": "boolean"
+    },
+    "health_percent": {
+      "type": "number"
+    },
+    "max_capacity_mah": {
+      "type": "number"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "present": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

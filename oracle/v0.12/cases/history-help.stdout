@@ -1,0 +1,3 @@
+Usage: symcockpit history [--json] [--limit N | -n N]
+Show recorded write operations. Default limit: 100 events.
+--json prints structured events instead of the text table.

@@ -1,0 +1,17 @@
+{
+  "properties": {
+    "average_cluster_celsius": {
+      "type": "number"
+    },
+    "cool_target_celsius": {
+      "type": "null"
+    },
+    "governor_running": {
+      "type": "boolean"
+    },
+    "profile": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

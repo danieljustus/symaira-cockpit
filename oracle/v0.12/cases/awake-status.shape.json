@@ -1,0 +1,17 @@
+{
+  "properties": {
+    "active": {
+      "type": "boolean"
+    },
+    "prevent_display_sleep": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

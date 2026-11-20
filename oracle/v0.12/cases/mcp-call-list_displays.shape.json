@@ -1,0 +1,40 @@
+{
+  "properties": {
+    "displays": {
+      "items": {
+        "properties": {
+          "backing_scale_factor": {
+            "type": "number"
+          },
+          "display_id": {
+            "type": "number"
+          },
+          "edr_capable": {
+            "type": "boolean"
+          },
+          "is_builtin": {
+            "type": "boolean"
+          },
+          "max_edr_headroom": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "potential_edr_headroom": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

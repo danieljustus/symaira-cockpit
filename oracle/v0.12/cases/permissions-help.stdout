@@ -1,0 +1,4 @@
+Usage: symcockpit permissions [--json]
+
+Permission & SMC write status (JSON).
+--json is accepted for consistency with other read commands; it is a no-op here.

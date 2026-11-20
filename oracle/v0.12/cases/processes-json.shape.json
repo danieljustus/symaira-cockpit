@@ -1,0 +1,43 @@
+{
+  "properties": {
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "processes": {
+      "items": {
+        "properties": {
+          "cpu_percent": {
+            "type": "number"
+          },
+          "memory_bytes": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "thread_count": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sampled_process_count": {
+      "type": "number"
+    },
+    "sorted_by": {
+      "type": "string"
+    },
+    "unreadable_process_count": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

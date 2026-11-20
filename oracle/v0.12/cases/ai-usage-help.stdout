@@ -1,0 +1,10 @@
+Usage: symcockpit ai-usage [provider] [--json] [--force]
+
+AI subscription/token usage via symbrain. Read-only;
+no credentials are ever printed. --json emits the machine-readable
+legacy per-provider result form shared with MCP get_ai_usage.
+Reuses snapshots younger than five minutes; --force refreshes now.
+A provider argument limits credential discovery and requests to that provider.
+Without a provider argument every catalog provider is queried by symbrain,
+regardless of which providers are enabled in the Cockpit app.
+Example: symcockpit ai-usage claude --json

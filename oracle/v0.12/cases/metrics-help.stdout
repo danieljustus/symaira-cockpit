@@ -1,0 +1,5 @@
+Usage: symcockpit metrics [--json]
+
+Print system metrics: CPU utilization, memory pressure, GPU utilization, disk usage,
+mounted storage volumes, and network throughput. All values are read-only snapshots.
+--json is accepted for consistency with other read commands; it is a no-op here.

@@ -1,0 +1,29 @@
+{
+  "properties": {
+    "families": {
+      "items": null,
+      "type": "array"
+    },
+    "schema_version": {
+      "type": "number"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "update": {
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "update_available": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

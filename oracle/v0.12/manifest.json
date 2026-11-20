@@ -1,0 +1,688 @@
+{
+  "schema": 1,
+  "source": {
+    "swift_commit": "1a91baf6b7bc8a0648fa33b642f3738ae1e0df7c",
+    "version": "0.12.2",
+    "captured_on": {
+      "arch": "arm64",
+      "macos": "27.2.1"
+    }
+  },
+  "env": {
+    "isolate_xdg": true,
+    "set": {
+      "LC_ALL": "C",
+      "SYMCOCKPIT_CHECK_UPDATES": "0",
+      "SYMTUNE_CHECK_UPDATES": "0",
+      "TZ": "UTC"
+    }
+  },
+  "cases": [
+    {
+      "id": "help",
+      "argv": [
+        "help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "help-flag",
+      "argv": [
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/help-flag.stdout",
+      "normalize": []
+    },
+    {
+      "id": "help-short",
+      "argv": [
+        "-h"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/help-short.stdout",
+      "normalize": []
+    },
+    {
+      "id": "version",
+      "argv": [
+        "version"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/version.stdout",
+      "normalize": [
+        {
+          "pattern": "\\d+\\.\\d+\\.\\d+",
+          "replacement": "<version>"
+        }
+      ]
+    },
+    {
+      "id": "version-flag",
+      "argv": [
+        "--version"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/version-flag.stdout",
+      "normalize": [
+        {
+          "pattern": "\\d+\\.\\d+\\.\\d+",
+          "replacement": "<version>"
+        }
+      ]
+    },
+    {
+      "id": "version-short",
+      "argv": [
+        "-V"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/version-short.stdout",
+      "normalize": [
+        {
+          "pattern": "\\d+\\.\\d+\\.\\d+",
+          "replacement": "<version>"
+        }
+      ]
+    },
+    {
+      "id": "version-json",
+      "argv": [
+        "version",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/version-json.shape.json"
+    },
+    {
+      "id": "no-args",
+      "argv": [],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "unknown-command",
+      "argv": [
+        "nope"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "tune-prefix-removed",
+      "argv": [
+        "tune",
+        "sensors"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "operate-moved",
+      "argv": [
+        "operate"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 4
+    },
+    {
+      "id": "scope-moved",
+      "argv": [
+        "scope"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 4
+    },
+    {
+      "id": "sensors-json",
+      "argv": [
+        "sensors",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/sensors-json.shape.json"
+    },
+    {
+      "id": "battery-json",
+      "argv": [
+        "battery",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/battery-json.shape.json"
+    },
+    {
+      "id": "displays-json",
+      "argv": [
+        "displays",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/displays-json.shape.json"
+    },
+    {
+      "id": "permissions-json",
+      "argv": [
+        "permissions",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/permissions-json.shape.json"
+    },
+    {
+      "id": "doctor-json",
+      "argv": [
+        "doctor",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/doctor-json.shape.json"
+    },
+    {
+      "id": "metrics-json",
+      "argv": [
+        "metrics",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/metrics-json.shape.json"
+    },
+    {
+      "id": "status-json",
+      "argv": [
+        "status",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/status-json.shape.json"
+    },
+    {
+      "id": "history-json",
+      "argv": [
+        "history",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/history-json.shape.json"
+    },
+    {
+      "id": "processes-json",
+      "argv": [
+        "processes",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/processes-json.shape.json"
+    },
+    {
+      "id": "top-json",
+      "argv": [
+        "top",
+        "--json"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/top-json.shape.json"
+    },
+    {
+      "id": "brightness-get",
+      "argv": [
+        "brightness",
+        "get"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/brightness-get.shape.json"
+    },
+    {
+      "id": "fan-status",
+      "argv": [
+        "fan",
+        "status"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/fan-status.shape.json"
+    },
+    {
+      "id": "fan-profile-read",
+      "argv": [
+        "fan",
+        "profile"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/fan-profile-read.shape.json"
+    },
+    {
+      "id": "fan-target-read",
+      "argv": [
+        "fan",
+        "target"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/fan-target-read.shape.json"
+    },
+    {
+      "id": "awake-status",
+      "argv": [
+        "awake",
+        "status"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/awake-status.shape.json"
+    },
+    {
+      "id": "profile-list",
+      "argv": [
+        "profile",
+        "list"
+      ],
+      "kind": "json_shape",
+      "expect_exit": 0,
+      "fixture": "cases/profile-list.shape.json"
+    },
+    {
+      "id": "history-text",
+      "argv": [
+        "history"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/history-text.stdout",
+      "normalize": []
+    },
+    {
+      "id": "status-text",
+      "argv": [
+        "status"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 0
+    },
+    {
+      "id": "processes-text",
+      "argv": [
+        "processes"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 0
+    },
+    {
+      "id": "sensors-help",
+      "argv": [
+        "sensors",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/sensors-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "battery-help",
+      "argv": [
+        "battery",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/battery-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "displays-help",
+      "argv": [
+        "displays",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/displays-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "permissions-help",
+      "argv": [
+        "permissions",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/permissions-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "doctor-help",
+      "argv": [
+        "doctor",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/doctor-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "metrics-help",
+      "argv": [
+        "metrics",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/metrics-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "history-help",
+      "argv": [
+        "history",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/history-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "processes-help",
+      "argv": [
+        "processes",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/processes-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "ai-usage-help",
+      "argv": [
+        "ai-usage",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/ai-usage-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "profile-help",
+      "argv": [
+        "profile",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/profile-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "dim-help",
+      "argv": [
+        "dim",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/dim-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "warmth-help",
+      "argv": [
+        "warmth",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/warmth-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "fan-help",
+      "argv": [
+        "fan",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/fan-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "battery-limit-help",
+      "argv": [
+        "battery-limit",
+        "--help"
+      ],
+      "kind": "exact",
+      "expect_exit": 0,
+      "fixture": "cases/battery-limit-help.stdout",
+      "normalize": []
+    },
+    {
+      "id": "sensors-bad-arg",
+      "argv": [
+        "sensors",
+        "--bogus"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "doctor-bad-arg",
+      "argv": [
+        "doctor",
+        "--bogus"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "metrics-bad-arg",
+      "argv": [
+        "metrics",
+        "--bogus"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "status-bad-option",
+      "argv": [
+        "status",
+        "--bogus"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "status-interval-missing",
+      "argv": [
+        "status",
+        "--interval"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "history-bad-option",
+      "argv": [
+        "history",
+        "--bogus"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "processes-sort-missing",
+      "argv": [
+        "processes",
+        "--sort"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "processes-bad-limit",
+      "argv": [
+        "processes",
+        "--limit",
+        "0"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "brightness-get-extra",
+      "argv": [
+        "brightness",
+        "get",
+        "extra"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "fan-status-extra",
+      "argv": [
+        "fan",
+        "status",
+        "extra"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "profile-missing-subcommand",
+      "argv": [
+        "profile"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "profile-list-extra",
+      "argv": [
+        "profile",
+        "list",
+        "extra"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "data-dir-missing-path",
+      "argv": [
+        "sensors",
+        "--data-dir"
+      ],
+      "kind": "exit_code",
+      "expect_exit": 2
+    },
+    {
+      "id": "mcp-tools-list",
+      "kind": "mcp_tools_list",
+      "fixture": "cases/mcp-tools-list.json"
+    },
+    {
+      "id": "mcp-call-get_capabilities",
+      "kind": "mcp_call_shape",
+      "tool": "get_capabilities",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_capabilities.shape.json"
+    },
+    {
+      "id": "mcp-call-get_sensors",
+      "kind": "mcp_call_shape",
+      "tool": "get_sensors",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_sensors.shape.json"
+    },
+    {
+      "id": "mcp-call-get_battery",
+      "kind": "mcp_call_shape",
+      "tool": "get_battery",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_battery.shape.json"
+    },
+    {
+      "id": "mcp-call-list_displays",
+      "kind": "mcp_call_shape",
+      "tool": "list_displays",
+      "arguments": {},
+      "fixture": "cases/mcp-call-list_displays.shape.json"
+    },
+    {
+      "id": "mcp-call-get_system_metrics",
+      "kind": "mcp_call_shape",
+      "tool": "get_system_metrics",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_system_metrics.shape.json"
+    },
+    {
+      "id": "mcp-call-get_top_processes",
+      "kind": "mcp_call_shape",
+      "tool": "get_top_processes",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_top_processes.shape.json"
+    },
+    {
+      "id": "mcp-call-keep_awake_status",
+      "kind": "mcp_call_shape",
+      "tool": "keep_awake_status",
+      "arguments": {},
+      "fixture": "cases/mcp-call-keep_awake_status.shape.json"
+    },
+    {
+      "id": "mcp-call-get_brightness",
+      "kind": "mcp_call_shape",
+      "tool": "get_brightness",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_brightness.shape.json"
+    },
+    {
+      "id": "mcp-call-list_profiles",
+      "kind": "mcp_call_shape",
+      "tool": "list_profiles",
+      "arguments": {},
+      "fixture": "cases/mcp-call-list_profiles.shape.json"
+    },
+    {
+      "id": "mcp-call-get_status",
+      "kind": "mcp_call_shape",
+      "tool": "get_status",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_status.shape.json"
+    },
+    {
+      "id": "mcp-call-get_history",
+      "kind": "mcp_call_shape",
+      "tool": "get_history",
+      "arguments": {},
+      "fixture": "cases/mcp-call-get_history.shape.json"
+    }
+  ]
+}

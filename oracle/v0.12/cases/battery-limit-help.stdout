@@ -1,0 +1,2 @@
+Usage: symcockpit battery-limit set <50-100>
+       symcockpit battery-limit clear

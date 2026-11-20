@@ -1,0 +1,4 @@
+Usage: symcockpit displays [--json]
+
+Displays with EDR headroom / extended-brightness capability (JSON).
+--json is accepted for consistency with other read commands; it is a no-op here.

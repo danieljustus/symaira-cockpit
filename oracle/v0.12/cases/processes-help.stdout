@@ -1,0 +1,8 @@
+Usage: symtune processes [--sort cpu|memory|gpu] [--limit N] [--interval <seconds>] [--json]
+
+Rank running processes by CPU, memory (RAM), or GPU usage. CPU is a rate,
+so the command samples twice --interval seconds apart (default 1.0) before
+reporting. Processes owned by another user are counted but not readable
+without elevation. GPU time is read from the IORegistry without root;
+only when the registry exposes no per-process GPU usage does the root-only
+powermetrics fallback apply (run this command with sudo then).

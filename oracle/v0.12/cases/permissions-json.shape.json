@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "history_writable": {
+      "type": "boolean"
+    },
+    "mcp_mode": {
+      "type": "string"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "privileged_helper_installed": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

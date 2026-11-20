@@ -1,0 +1,4 @@
+Usage: symcockpit doctor [--json]
+
+Capabilities, host info, and recommendations (JSON).
+--json is accepted for consistency with other read commands; it is a no-op here.

@@ -1,0 +1,23 @@
+symcockpit — this machine: hardware and system tuning
+
+Usage:
+  symcockpit <command> [options]
+
+Commands:
+  sensors, battery, displays, metrics, status, processes, top
+  awake, brightness, extbright, dim, warmth, restore, profile
+  fan, battery-limit, ai-usage, doctor, permissions, history, serve
+
+  version [--json] [--no-update-check]    symcockpit version plus the component versions
+  --version, -V                           aliases for `symcockpit version`
+  help                This text
+
+Examples:
+  symcockpit doctor
+
+symcockpit covers this machine's thermals, power, display and brightness.
+Operate and Scope moved to Symaira Brain as optional modules; the legacy
+dispatcher commands are removed.
+
+The `symcockpit tune <command>` prefix was removed in v0.12 after its
+deprecation window (v0.8 and v0.9); run `symcockpit <command>` directly.

@@ -1,0 +1,9 @@
+{
+  "properties": {
+    "profiles": {
+      "items": null,
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

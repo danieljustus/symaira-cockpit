@@ -1,0 +1,2 @@
+Usage: symcockpit warmth set <0.0-1.0>
+       symcockpit warmth reset

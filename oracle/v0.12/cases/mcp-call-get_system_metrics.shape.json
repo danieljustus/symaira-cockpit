@@ -1,0 +1,156 @@
+{
+  "properties": {
+    "cpu": {
+      "properties": {
+        "per_core_utilization": {
+          "items": null,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "disk": {
+      "properties": {
+        "capacity_bytes": {
+          "type": "number"
+        },
+        "free_bytes": {
+          "type": "number"
+        },
+        "used_bytes": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "gpu": {
+      "properties": {
+        "utilization_percent": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "memory": {
+      "properties": {
+        "compressed_bytes": {
+          "type": "number"
+        },
+        "free_bytes": {
+          "type": "number"
+        },
+        "pressure": {
+          "type": "string"
+        },
+        "used_bytes": {
+          "type": "number"
+        },
+        "wired_bytes": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "network": {
+      "properties": {
+        "aggregate_bytes_in": {
+          "type": "number"
+        },
+        "aggregate_bytes_out": {
+          "type": "number"
+        },
+        "interfaces": {
+          "items": {
+            "properties": {
+              "bytes_in": {
+                "type": "number"
+              },
+              "bytes_out": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "power": {
+      "properties": {
+        "adapter_source": {
+          "type": "string"
+        },
+        "adapter_watts": {
+          "type": "number"
+        },
+        "amps": {
+          "type": "number"
+        },
+        "system_source": {
+          "type": "string"
+        },
+        "system_watts": {
+          "type": "number"
+        },
+        "volts": {
+          "type": "number"
+        },
+        "watts": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "volumes": {
+      "items": {
+        "properties": {
+          "is_internal": {
+            "type": "boolean"
+          },
+          "is_local": {
+            "type": "boolean"
+          },
+          "is_read_only": {
+            "type": "boolean"
+          },
+          "mount_path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "space": {
+            "properties": {
+              "capacity_bytes": {
+                "type": "number"
+              },
+              "free_bytes": {
+                "type": "number"
+              },
+              "used_bytes": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

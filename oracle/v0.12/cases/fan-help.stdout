@@ -1,0 +1,6 @@
+Usage: symcockpit fan set <0.0-1.0>
+       symcockpit fan auto
+       symcockpit fan profile [system|comfort|performance]
+       symcockpit fan status
+       symcockpit fan target [<50-85>|off]   (Cool: max average CPU/GPU cluster °C)
+       symcockpit fan governor [--state <path>]   (requires root)

@@ -1,0 +1,4 @@
+Usage: symcockpit profile save <name>   Save current settings
+       symcockpit profile load <name>   Apply saved settings
+       symcockpit profile list          List saved profiles
+       symcockpit profile delete <name> Delete a saved profile

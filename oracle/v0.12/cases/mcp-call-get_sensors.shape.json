@@ -1,0 +1,55 @@
+{
+  "properties": {
+    "fans": {
+      "items": {
+        "properties": {
+          "index": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_rpm": {
+            "type": "number"
+          },
+          "min_rpm": {
+            "type": "number"
+          },
+          "rpm": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "notes": {
+      "items": null,
+      "type": "array"
+    },
+    "smc_supported": {
+      "type": "boolean"
+    },
+    "temperatures": {
+      "items": {
+        "properties": {
+          "celsius": {
+            "type": "number"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "thermal_pressure": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

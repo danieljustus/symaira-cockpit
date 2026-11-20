@@ -1,0 +1,12 @@
+{
+  "properties": {
+    "brightness": {
+      "type": "number"
+    },
+    "notes": {
+      "items": null,
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,164 @@
+{
+  "properties": {
+    "active_overrides": {
+      "properties": {
+        "fan_fraction": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "battery": {
+      "properties": {
+        "apple_condition": {
+          "type": "string"
+        },
+        "apple_maximum_capacity_percent": {
+          "type": "number"
+        },
+        "charge_limit_supported": {
+          "type": "boolean"
+        },
+        "charging": {
+          "type": "boolean"
+        },
+        "current_capacity_percent": {
+          "type": "number"
+        },
+        "cycle_count": {
+          "type": "number"
+        },
+        "design_capacity_mah": {
+          "type": "number"
+        },
+        "external_connected": {
+          "type": "boolean"
+        },
+        "health_percent": {
+          "type": "number"
+        },
+        "max_capacity_mah": {
+          "type": "number"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "present": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "displays": {
+      "properties": {
+        "displays": {
+          "items": {
+            "properties": {
+              "backing_scale_factor": {
+                "type": "number"
+              },
+              "display_id": {
+                "type": "number"
+              },
+              "edr_capable": {
+                "type": "boolean"
+              },
+              "is_builtin": {
+                "type": "boolean"
+              },
+              "max_edr_headroom": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "potential_edr_headroom": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "health_score": {
+      "type": "number"
+    },
+    "health_score_msg": {
+      "type": "string"
+    },
+    "recommendations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "sensors": {
+      "properties": {
+        "fans": {
+          "items": {
+            "properties": {
+              "index": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string"
+              },
+              "max_rpm": {
+                "type": "number"
+              },
+              "min_rpm": {
+                "type": "number"
+              },
+              "rpm": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "items": null,
+          "type": "array"
+        },
+        "smc_supported": {
+          "type": "boolean"
+        },
+        "temperatures": {
+          "items": {
+            "properties": {
+              "celsius": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "thermal_pressure": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

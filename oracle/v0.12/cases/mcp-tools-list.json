@@ -1,0 +1,337 @@
+{
+  "tools": [
+    {
+      "description": "Report tool version, host info, and which tuning capabilities are available.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_capabilities"
+    },
+    {
+      "description": "Read thermal pressure and (when available) temperatures and fan RPM.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_sensors"
+    },
+    {
+      "description": "Read battery health: charge %, cycle count, capacity, condition — plus Apple's own Maximum Capacity/Condition when available.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_battery"
+    },
+    {
+      "description": "List displays with EDR headroom (extended-brightness capability).",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "list_displays"
+    },
+    {
+      "description": "Read system metrics: CPU utilization, memory pressure, boot disk usage, mounted storage volumes (names, paths, capacity), network throughput, and GPU device utilization percent (gpu.utilization_percent, when the IORegistry publishes it), and power. The power block separates two quantities: system_watts is the total power the whole Mac consumes (SMC PSTR, else the battery's SystemLoad; also valid on battery), while volts/amps/watts (adapter_watts) are adapter DC-in input only and read ~0 on battery. Fields the Mac does not expose are absent.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_system_metrics"
+    },
+    {
+      "description": "List the processes currently using the most CPU, memory or GPU — the answer to \"what is making this Mac hot/slow?\". CPU is a rate measured between two samples taken about a second apart. Processes owned by another user (root) are counted in unreadable_process_count but cannot be inspected without elevation.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "How many processes to return (1–50).",
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sort_by": {
+            "description": "Ranking key: 'cpu' (default), 'memory' or 'gpu'.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_top_processes"
+    },
+    {
+      "description": "Read AI subscription/token usage per provider (OpenRouter, …). Read-only; never returns credential material. Unconfigured providers report as not set up. This tool takes no arguments and always queries every catalog provider through symbrain (credential/local-auth discovery included), regardless of which providers are enabled in the Cockpit app. To limit discovery to one provider, use the CLI: `symcockpit ai-usage <provider>`.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_ai_usage"
+    },
+    {
+      "description": "Start or stop a keep-awake session. Prevents idle/system sleep and optionally display sleep. Runs indefinitely without duration_seconds. Returns full session state.",
+      "inputSchema": {
+        "properties": {
+          "duration_seconds": {
+            "description": "Optional session duration in seconds, between 0 and 86400 (24 hours). Omit for an indefinite session.",
+            "maximum": 86400,
+            "minimum": 0,
+            "type": "number"
+          },
+          "enabled": {
+            "description": "Set to true to start a session, false to end it.",
+            "type": "boolean"
+          },
+          "prevent_display_sleep": {
+            "description": "When true, also prevent display sleep.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "name": "keep_awake"
+    },
+    {
+      "description": "Return the current keep-awake session state (active, type, remaining time, reason).",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "keep_awake_status"
+    },
+    {
+      "description": "Read the built-in display brightness (0.0–1.0).",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_brightness"
+    },
+    {
+      "description": "Save current settings as a named profile.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "save_profile"
+    },
+    {
+      "description": "Apply a saved profile by name.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "load_profile"
+    },
+    {
+      "description": "List all saved profiles.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "list_profiles"
+    },
+    {
+      "description": "Delete a saved profile by name.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "delete_profile"
+    },
+    {
+      "description": "Get the consolidated health status snapshot of the system, including score, recommendations, overrides, and raw reports.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_status"
+    },
+    {
+      "description": "Retrieve the write operations history log.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of events to return (default 100).",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_history"
+    },
+    {
+      "description": "Set built-in display brightness (0.0–1.0).",
+      "inputSchema": {
+        "properties": {
+          "value": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "set_brightness"
+    },
+    {
+      "description": "Set extended/EDR brightness multiplier (1.0–1.6) via on-screen EDR layer.",
+      "inputSchema": {
+        "properties": {
+          "value": {
+            "maximum": 1.6,
+            "minimum": 1,
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "set_extended_brightness"
+    },
+    {
+      "description": "Set software dim overlay (0.15=max dim, 1.0=no dim).",
+      "inputSchema": {
+        "properties": {
+          "value": {
+            "maximum": 1,
+            "minimum": 0.15,
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "set_dim"
+    },
+    {
+      "description": "Remove all dim overlays.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "reset_dim"
+    },
+    {
+      "description": "Set color temperature warmth (0.0=neutral, 1.0=max warm). Uses gamma LUT.",
+      "inputSchema": {
+        "properties": {
+          "value": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "set_warmth"
+    },
+    {
+      "description": "Reset color temperature warmth to neutral (identity gamma).",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "reset_warmth"
+    },
+    {
+      "description": "Restore all overrides to system defaults.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "restore"
+    },
+    {
+      "description": "Set fan speed as a fraction 0.0–1.0. Requires root/SMC write access.",
+      "inputSchema": {
+        "properties": {
+          "fraction": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "fraction"
+        ],
+        "type": "object"
+      },
+      "name": "set_fan"
+    },
+    {
+      "description": "Hold battery charge at a target percent (50–100). Requires root/SMC write access.",
+      "inputSchema": {
+        "properties": {
+          "percent": {
+            "maximum": 100,
+            "minimum": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "percent"
+        ],
+        "type": "object"
+      },
+      "name": "set_charge_limit"
+    },
+    {
+      "description": "Clear battery charge limit and re-enable charging. Requires root/SMC write access.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "clear_charge_limit"
+    }
+  ]
+}
