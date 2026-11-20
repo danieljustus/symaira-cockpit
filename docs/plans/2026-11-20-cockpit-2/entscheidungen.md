@@ -3,7 +3,7 @@
 | ID | Entscheidung | Status | Datum | Begründung und Quelle |
 |---|---|---|---|---|
 | D01 | Neuaufbau im bestehenden Repo `symaira-cockpit`; Produktname Symaira Cockpit, CLI `symcockpit` bleiben | von Daniel bestätigt | 2026-11-20 | G2, mit D12 bestätigt; PB §4 legt Name und Repo fest |
-| D02 | Cockpit besitzt künftig Mac-Hardware, Systemzustand und Systemwartung: Monitor, Tuning, Speicher, Audio und MIDI, Bluetooth, Eingabe, Finder-Integration und Zwischenablageverlauf. Umsetzung als Produktvertrag Revision 9 | von Daniel bestätigt (Umfang); Vertragstext offen | 2026-11-20 | G1/G2: alle vier angebotenen Bereiche gewählt. Die Vertragsänderung selbst ist ein eigener Schritt nach G5 |
+| D02 | Cockpit besitzt künftig Mac-Hardware, Systemzustand und Systemwartung: Monitor, Tuning, Speicher, Audio und MIDI, Bluetooth, Eingabe, Finder-Integration und Zwischenablageverlauf. Umsetzung als Produktvertrag Revision 9 | von Daniel bestätigt; Vertragstext Revision 9 am 2026-11-20 eingetragen (lokal, nicht gepusht) | 2026-11-20 | G1/G2: alle vier angebotenen Bereiche gewählt. Die Vertragsänderung selbst ist ein eigener Schritt nach G5 |
 | D03 | PDF-Kompression gehört Desktop (`symdesk pdf compress` in `symdesk-render`), eine Rust-Pipeline mit drei Stufen | von Daniel bestätigt | 2026-11-20 | G2; PB §1: Desktop besitzt PDF-Ausgabe; lopdf 0.47 dort gepinnt. Planung erfolgt im Desktop-Repo |
 | D04 | Automator wird vorerst nicht nachgebaut | von Daniel bestätigt | 2026-11-20 | G2: „ok dann lassen wir die beiden Tools erstmal.“ Kurzbefehle-Aktionen (R07) bleiben ein Vorschlag für später |
 | D05 | Cyberduck wird vorerst nicht nachgebaut | von Daniel bestätigt | 2026-11-20 | G2, wie D04 |
