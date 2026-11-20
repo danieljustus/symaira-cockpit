@@ -1,0 +1,1070 @@
+{
+  "generated": "2026-11-20",
+  "idea": "symaira-cockpit-2",
+  "candidates": [
+    {
+      "name": "Apple Aktivitätsanzeige 10.14",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Prozess- und Systemmessung; Messqualität und bestätigter Aktionsabschluss",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Apple Aktivitätsanzeige/rebuild.md"
+      ]
+    },
+    {
+      "name": "Apple Audio-MIDI-Setup 3.9",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Geräte-UID vs. HAL-ID, bestätigte Konfigurationsänderung",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Apple Audio-MIDI-Setup/rebuild.md"
+      ]
+    },
+    {
+      "name": "Blackmagic Disk Speed Test 3.4.3",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Messkern ohne UI, MiB/s vs. MB/s, Dateibesitz statt Namens-Cleanup",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Blackmagic Disk Speed Test/rebuild.md"
+      ]
+    },
+    {
+      "name": "Burrow 0.14.0",
+      "kind": "re-analysis",
+      "url": "https://github.com/caezium/burrow",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 1817,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Bereinigung mit ablaufendem Auftrag, Prognose, MCP; Swift, bündelt Mole-Engine",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Burrow/rebuild.md",
+        "gh api repos/caezium/burrow (2026-11-20)"
+      ]
+    },
+    {
+      "name": "Codenotch 1.24.0",
+      "kind": "re-analysis",
+      "url": "https://github.com/vinzdg/codenotch",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 3081,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Agent-Kontingente und Session-Meldungen; Cockpit hat Kontingente bereits über symbrain usage",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Codenotch/rebuild.md",
+        "gh api repos/vinzdg/codenotch (2026-11-20)"
+      ]
+    },
+    {
+      "name": "Command X 1.7.1",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Finder Cut/Paste per CGEvent mit Frontmost-Gate",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Command X/rebuild.md"
+      ]
+    },
+    {
+      "name": "Uninstaller 1.1.0",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Negativbeispiel Namensheuristik und Admin-Shell; Besitzplan als Verbesserung",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Uninstaller/rebuild.md"
+      ]
+    },
+    {
+      "name": "DriveDx 1.12.1",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Worst-Case-Health mit Algorithmusversion; kext und Qt4 nicht übernehmen",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/DriveDx/rebuild.md"
+      ]
+    },
+    {
+      "name": "Feel My Mac 1.0.4",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "niedrig",
+      "decision": "muster",
+      "reason": "Trackpad-Haptik nur über privates MultitouchSupport",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Feel My Mac/rebuild.md"
+      ]
+    },
+    {
+      "name": "Folder Preview 3.1.1",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Quick Look für Ordner/Archive; unbegrenzte Entpackung nicht übernehmen",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Folder Preview/rebuild.md"
+      ]
+    },
+    {
+      "name": "LightBlue 5.3.6",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "BLE-GATT mit Auftrag/ACK/Readback getrennt",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/LightBlue/rebuild.md"
+      ]
+    },
+    {
+      "name": "MouseBoost Pro 5.3.0",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Finder-Kontextmenü als Auftrag mit ID und Quittung; Clipboard-Filter",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/MouseBoost Pro/rebuild.md"
+      ]
+    },
+    {
+      "name": "PDF Squeezer 4.9",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Zwei Engines, 46 Profiloptionen; gehört fachlich zu Desktop",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/PDF Squeezer/rebuild.md"
+      ]
+    },
+    {
+      "name": "Vorssaint 3.4.4",
+      "kind": "re-analysis",
+      "url": "https://github.com/vorssaint/vorssaint-utils",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-3.0",
+      "pricing": "",
+      "last_activity": "2026-11-18",
+      "stars": 35440,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Mixer über Process Taps; GPL, nur Muster; Breite außerhalb Hardware",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Vorssaint/rebuild.md",
+        "gh api repos/vorssaint/vorssaint-utils (2026-11-20)",
+        "docs/adopt/2026-11-10T10-50-35Z--vorssaint-vorssaint-utils.md"
+      ]
+    },
+    {
+      "name": "Apple Automator 2.10",
+      "kind": "re-analysis",
+      "url": "",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "proprietary",
+      "pricing": "",
+      "last_activity": "",
+      "stars": null,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Workflow-Engine, nicht Hardware; Kurzbefehle sind Apples Plattform",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Apple Automator/rebuild.md"
+      ]
+    },
+    {
+      "name": "Cyberduck 9.3.1",
+      "kind": "re-analysis",
+      "url": "https://github.com/iterate-ch/cyberduck",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-3.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 4918,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Dateitransfer-Client mit 39 Protokollmodulen; keine Domäne von Cockpit",
+      "sources": [
+        "/Volumes/1TB_NVMe_SN850X/Dev/Reverse Engineering/Cyberduck/rebuild.md",
+        "gh api repos/iterate-ch/cyberduck (2026-11-20)"
+      ]
+    },
+    {
+      "name": "symaira-cockpit v0.12.2 (Swift)",
+      "kind": "symaira",
+      "url": "https://github.com/danieljustus/symaira-cockpit",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "fork",
+      "reason": "Paritätsorakel und Hardware-Lektionen (SMC-Endianness, Plausibilitätsgates)",
+      "sources": [
+        "git log, tuning/AGENTS.md"
+      ]
+    },
+    {
+      "name": "symaira-corekit Rust-Crates",
+      "kind": "symaira",
+      "url": "https://github.com/danieljustus/symaira-corekit",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "MCP, Config, Log, Exit, Update, SQLite, Version",
+      "sources": [
+        "symaira-corekit/Cargo.toml"
+      ]
+    },
+    {
+      "name": "symaira-desktop symdesk-render",
+      "kind": "symaira",
+      "url": "https://github.com/danieljustus/symaira-desktop",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Rust-PDF-Operationen mit lopdf 0.47; Ziel für PDF-Kompression",
+      "sources": [
+        "symaira-desktop/crates/symdesk-render/Cargo.toml"
+      ]
+    },
+    {
+      "name": "symaira-brain symbrain-usage / scope",
+      "kind": "symaira",
+      "url": "https://github.com/danieljustus/symaira-brain",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Datenquelle für AI-Kontingente; Scope besitzt Ports/Container/Daemons",
+      "sources": [
+        "symaira-brain/rust, symaira-brain/scope/README.md"
+      ]
+    },
+    {
+      "name": "exelban/stats",
+      "kind": "oss",
+      "url": "https://github.com/exelban/stats",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 43530,
+      "fit": "hoch",
+      "decision": "muster",
+      "reason": "Funktionsumfang eines Menüleisten-Monitors; Swift",
+      "sources": [
+        "gh api repos/exelban/stats (2026-11-20)"
+      ]
+    },
+    {
+      "name": "vladkens/macmon",
+      "kind": "oss",
+      "url": "https://github.com/vladkens/macmon",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-18",
+      "stars": 2137,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Rust-Bibliothek für Apple-Silicon-Leistung/Frequenz ohne sudo (IOReport); Spike S2",
+      "sources": [
+        "gh api repos/vladkens/macmon (2026-11-20)",
+        "https://crates.io/api/v1/crates/macmon (2026-11-20)"
+      ]
+    },
+    {
+      "name": "sysinfo",
+      "kind": "oss",
+      "url": "https://github.com/GuillaumeGomez/sysinfo",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 2763,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Prozesse/Disks/Netz plattformübergreifend; macOS-Spezifika eher direkt über libproc/mach2",
+      "sources": [
+        "gh api repos/GuillaumeGomez/sysinfo (2026-11-20)",
+        "https://crates.io/api/v1/crates/sysinfo (2026-11-20)"
+      ]
+    },
+    {
+      "name": "libproc",
+      "kind": "oss",
+      "url": "https://crates.io/crates/libproc",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-04",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Prozessinformationen auf macOS",
+      "sources": [
+        "https://crates.io/api/v1/crates/libproc (2026-11-20)"
+      ]
+    },
+    {
+      "name": "mach2",
+      "kind": "oss",
+      "url": "https://crates.io/crates/mach2",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "BSD-2-Clause OR MIT OR Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-08-30",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Mach-Hoststatistiken",
+      "sources": [
+        "https://crates.io/api/v1/crates/mach2 (2026-11-20)"
+      ]
+    },
+    {
+      "name": "objc2 und Framework-Crates",
+      "kind": "oss",
+      "url": "https://github.com/madsmtm/objc2",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "pricing": "",
+      "last_activity": "2026-10-05",
+      "stars": 1090,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "IOKit, CoreAudio, CoreMIDI, CoreBluetooth, ServiceManagement, PDFKit, QuickLookUI, FinderSync, Security",
+      "sources": [
+        "gh api repos/madsmtm/objc2 (2026-11-20)",
+        "https://crates.io/api/v1/crates/objc2-io-kit (2026-11-20)",
+        "https://crates.io/api/v1/crates/objc2-core-audio (2026-11-20)"
+      ]
+    },
+    {
+      "name": "tw93/Mole",
+      "kind": "oss",
+      "url": "https://github.com/tw93/Mole",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-3.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 75691,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Bereinigungskatalog als Ideenquelle; GPL, kein Code",
+      "sources": [
+        "gh api repos/tw93/Mole (2026-11-20)"
+      ]
+    },
+    {
+      "name": "alienator88/Pearcleaner",
+      "kind": "oss",
+      "url": "https://github.com/alienator88/Pearcleaner",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "NOASSERTION (fair-code)",
+      "pricing": "",
+      "last_activity": "2026-06-22",
+      "stars": 15162,
+      "fit": "mittel",
+      "decision": "verwerfen",
+      "reason": "Keine OSI-Lizenz; höchstens öffentlich beschriebene Ideen",
+      "sources": [
+        "gh api repos/alienator88/Pearcleaner (2026-11-20)"
+      ]
+    },
+    {
+      "name": "dua-cli",
+      "kind": "oss",
+      "url": "https://github.com/Byron/dua-cli",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 6458,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Schnelle Plattenanalyse in Rust; Kandidat für Platzanalyse",
+      "sources": [
+        "gh api repos/Byron/dua-cli (2026-11-20)",
+        "https://crates.io/api/v1/crates/dua-cli (2026-11-20)"
+      ]
+    },
+    {
+      "name": "dust",
+      "kind": "oss",
+      "url": "https://github.com/bootandy/dust",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 12667,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Baumdarstellung der Platznutzung",
+      "sources": [
+        "gh api repos/bootandy/dust (2026-11-20)"
+      ]
+    },
+    {
+      "name": "fclones",
+      "kind": "oss",
+      "url": "https://github.com/pkolaczk/fclones",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2025-03-03",
+      "stars": 3011,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Duplikatsuche; letzte Aktivität 2025-03, Wartungsrisiko",
+      "sources": [
+        "gh api repos/pkolaczk/fclones (2026-11-20)"
+      ]
+    },
+    {
+      "name": "czkawka_core",
+      "kind": "oss",
+      "url": "https://github.com/qarmin/czkawka",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT (Crate)",
+      "pricing": "",
+      "last_activity": "2026-11-16",
+      "stars": 35358,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Duplikate, leere Ordner, große Dateien als Rust-Kern",
+      "sources": [
+        "gh api repos/qarmin/czkawka (2026-11-20)",
+        "https://crates.io/api/v1/crates/czkawka_core (2026-11-20)"
+      ]
+    },
+    {
+      "name": "trash",
+      "kind": "oss",
+      "url": "https://crates.io/crates/trash",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-17",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Papierkorb statt endgültigem Löschen",
+      "sources": [
+        "https://crates.io/api/v1/crates/trash (2026-11-20)"
+      ]
+    },
+    {
+      "name": "btleplug",
+      "kind": "oss",
+      "url": "https://github.com/deviceplug/btleplug",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT/Apache-2.0/BSD-3-Clause",
+      "pricing": "",
+      "last_activity": "2026-10-10",
+      "stars": 1193,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "BLE-Central über CoreBluetooth; Peripherie-Rolle fehlt",
+      "sources": [
+        "gh api repos/deviceplug/btleplug (2026-11-20)",
+        "https://crates.io/api/v1/crates/btleplug (2026-11-20)"
+      ]
+    },
+    {
+      "name": "coreaudio-rs",
+      "kind": "oss",
+      "url": "https://github.com/RustAudio/coreaudio-rs",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT/Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-06-18",
+      "stars": 298,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "CoreAudio-Wrapper; für HAL-Properties und Taps eher objc2-core-audio",
+      "sources": [
+        "gh api repos/RustAudio/coreaudio-rs (2026-11-20)",
+        "https://crates.io/api/v1/crates/coreaudio-rs (2026-11-20)"
+      ]
+    },
+    {
+      "name": "coremidi",
+      "kind": "oss",
+      "url": "https://github.com/chris-zen/coremidi",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-09-13",
+      "stars": 88,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "CoreMIDI-Geräte und Endpoints",
+      "sources": [
+        "gh api repos/chris-zen/coremidi (2026-11-20)",
+        "https://crates.io/api/v1/crates/coremidi (2026-11-20)"
+      ]
+    },
+    {
+      "name": "insidegui/AudioCap",
+      "kind": "oss",
+      "url": "https://github.com/insidegui/AudioCap",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "BSD-2-Clause",
+      "pricing": "",
+      "last_activity": "2025-08-07",
+      "stars": 513,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Beispiel für Process Taps",
+      "sources": [
+        "gh api repos/insidegui/AudioCap (2026-11-20)"
+      ]
+    },
+    {
+      "name": "kyleneideck/BackgroundMusic",
+      "kind": "oss",
+      "url": "https://github.com/kyleneideck/BackgroundMusic",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-2.0",
+      "pricing": "",
+      "last_activity": "2026-06-10",
+      "stars": 19401,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Treiberansatz und GPL; Process Taps machen Treiber unnötig",
+      "sources": [
+        "gh api repos/kyleneideck/BackgroundMusic (2026-11-20)"
+      ]
+    },
+    {
+      "name": "smartmontools",
+      "kind": "oss",
+      "url": "https://github.com/smartmontools/smartmontools",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 1491,
+      "fit": "niedrig",
+      "decision": "beobachten",
+      "reason": "Nur optional als zur Laufzeit erkanntes externes Programm für USB-SATA; nicht bündeln",
+      "sources": [
+        "gh api repos/smartmontools/smartmontools (2026-11-20)"
+      ]
+    },
+    {
+      "name": "dkorunic/iSMC",
+      "kind": "oss",
+      "url": "https://github.com/dkorunic/iSMC",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "GPL-3.0",
+      "pricing": "",
+      "last_activity": "2026-11-17",
+      "stars": 214,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "SMC-CLI für M1 bis M5; GPL, nur Muster",
+      "sources": [
+        "gh api repos/dkorunic/iSMC (2026-11-20)"
+      ]
+    },
+    {
+      "name": "macsmc / smc Crates",
+      "kind": "oss",
+      "url": "https://crates.io/crates/macsmc",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT OR Apache-2.0 / WTFPL",
+      "pricing": "",
+      "last_activity": "2020-07-07",
+      "stars": null,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Veraltet; eigener SMC-Port aus dem Swift-Bestand",
+      "sources": [
+        "https://crates.io/api/v1/crates/macsmc (2026-11-20)",
+        "https://crates.io/api/v1/crates/smc (2026-11-20)"
+      ]
+    },
+    {
+      "name": "lopdf",
+      "kind": "oss",
+      "url": "https://github.com/J-F-Liu/lopdf",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 2295,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "PDF-Objektebene; bereits in Desktop gepinnt",
+      "sources": [
+        "gh api repos/J-F-Liu/lopdf (2026-11-20)",
+        "https://crates.io/api/v1/crates/lopdf (2026-11-20)"
+      ]
+    },
+    {
+      "name": "jpeg-encoder / zune-jpeg",
+      "kind": "oss",
+      "url": "https://crates.io/crates/jpeg-encoder",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "(MIT OR Apache-2.0) AND IJG / MIT OR Apache-2.0 OR Zlib",
+      "pricing": "",
+      "last_activity": "2026-10-19",
+      "stars": null,
+      "fit": "hoch",
+      "decision": "abhaengigkeit",
+      "reason": "Bilddekodierung und -neukodierung für PDF-Kompression",
+      "sources": [
+        "https://crates.io/api/v1/crates/jpeg-encoder (2026-11-20)",
+        "https://crates.io/api/v1/crates/zune-jpeg (2026-11-20)"
+      ]
+    },
+    {
+      "name": "oxipng",
+      "kind": "oss",
+      "url": "https://github.com/oxipng/oxipng",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-13",
+      "stars": 4330,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Verlustfreie Flate-Optimierung als Idee",
+      "sources": [
+        "gh api repos/oxipng/oxipng (2026-11-20)"
+      ]
+    },
+    {
+      "name": "hayro",
+      "kind": "oss",
+      "url": "https://github.com/LaurenzV/hayro",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0 OR MIT",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 877,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Rust-PDF-Rasterung für Vorher/Nachher-Vergleich",
+      "sources": [
+        "gh api repos/LaurenzV/hayro (2026-11-20)",
+        "https://crates.io/api/v1/crates/hayro (2026-11-20)"
+      ]
+    },
+    {
+      "name": "pdfium-render",
+      "kind": "oss",
+      "url": "https://github.com/ajrcarey/pdfium-render",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT OR Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-14",
+      "stars": 728,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Braucht PDFium-Binärdatei als Zusatzabhängigkeit",
+      "sources": [
+        "gh api repos/ajrcarey/pdfium-render (2026-11-20)"
+      ]
+    },
+    {
+      "name": "qpdf",
+      "kind": "oss",
+      "url": "https://github.com/qpdf/qpdf",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-09-26",
+      "stars": 5604,
+      "fit": "niedrig",
+      "decision": "beobachten",
+      "reason": "C++; nur falls lopdf an Grenzen stößt",
+      "sources": [
+        "gh api repos/qpdf/qpdf (2026-11-20)"
+      ]
+    },
+    {
+      "name": "agl/jbig2enc",
+      "kind": "oss",
+      "url": "https://github.com/agl/jbig2enc",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "NOASSERTION (Apache-2.0 laut Repo)",
+      "pricing": "",
+      "last_activity": "2026-11-10",
+      "stars": 81,
+      "fit": "niedrig",
+      "decision": "beobachten",
+      "reason": "JBIG2 für Schwarzweiß-Scans; spätere Stufe",
+      "sources": [
+        "gh api repos/agl/jbig2enc (2026-11-20)"
+      ]
+    },
+    {
+      "name": "zip / sevenz-rust2 / compress-tools",
+      "kind": "oss",
+      "url": "https://crates.io/crates/zip",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT / Apache-2.0 / MIT OR Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": null,
+      "fit": "mittel",
+      "decision": "abhaengigkeit",
+      "reason": "Archivlisten für Quick-Look-Vorschau ohne Vollentpackung",
+      "sources": [
+        "https://crates.io/api/v1/crates/zip (2026-11-20)",
+        "https://crates.io/api/v1/crates/sevenz-rust2 (2026-11-20)",
+        "https://crates.io/api/v1/crates/compress-tools (2026-11-20)"
+      ]
+    },
+    {
+      "name": "MacPaw/XADMaster",
+      "kind": "oss",
+      "url": "https://github.com/MacPaw/XADMaster",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "LGPL-2.1",
+      "pricing": "",
+      "last_activity": "2026-09-21",
+      "stars": 139,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "LGPL und Objective-C",
+      "sources": [
+        "gh api repos/MacPaw/XADMaster (2026-11-20)"
+      ]
+    },
+    {
+      "name": "p0deje/Maccy",
+      "kind": "oss",
+      "url": "https://github.com/p0deje/Maccy",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-10-26",
+      "stars": 22399,
+      "fit": "mittel",
+      "decision": "muster",
+      "reason": "Zwischenablageverlauf, falls gewünscht",
+      "sources": [
+        "gh api repos/p0deje/Maccy (2026-11-20)"
+      ]
+    },
+    {
+      "name": "sindresorhus/KeyboardShortcuts",
+      "kind": "oss",
+      "url": "https://github.com/sindresorhus/KeyboardShortcuts",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-09-11",
+      "stars": 2743,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Kurzbefehl-Rekorder für die SwiftUI-App",
+      "sources": [
+        "gh api repos/sindresorhus/KeyboardShortcuts (2026-11-20)"
+      ]
+    },
+    {
+      "name": "AlDente",
+      "kind": "oss",
+      "url": "https://github.com/AppHouseKitchen/AlDente-Battery_Care_and_Monitoring",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "NOASSERTION",
+      "pricing": "",
+      "last_activity": "2026-11-18",
+      "stars": 9250,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Ladegrenze hat Cockpit bereits; Lizenz unklar",
+      "sources": [
+        "gh api repos/AppHouseKitchen/AlDente-Charge-Limiter (2026-11-20)"
+      ]
+    },
+    {
+      "name": "context-labs/mactop",
+      "kind": "oss",
+      "url": "https://github.com/context-labs/mactop",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2025-12-21",
+      "stars": 2346,
+      "fit": "niedrig",
+      "decision": "muster",
+      "reason": "Apple-Silicon-Metriken in Go",
+      "sources": [
+        "gh api repos/context-labs/mactop (2026-11-20)"
+      ]
+    },
+    {
+      "name": "rmcp",
+      "kind": "oss",
+      "url": "https://crates.io/crates/rmcp",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-17",
+      "stars": null,
+      "fit": "niedrig",
+      "decision": "verwerfen",
+      "reason": "Ökosystem nutzt symaira-core-mcp aus CoreKit",
+      "sources": [
+        "https://crates.io/api/v1/crates/rmcp (2026-11-20)"
+      ]
+    },
+    {
+      "name": "uniffi",
+      "kind": "oss",
+      "url": "https://github.com/mozilla/uniffi-rs",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MPL-2.0",
+      "pricing": "",
+      "last_activity": "2026-11-19",
+      "stars": 5149,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Option für Rust-in-Swift-App, Entscheidung in Phase 3",
+      "sources": [
+        "gh api repos/mozilla/uniffi-rs (2026-11-20)"
+      ]
+    },
+    {
+      "name": "swift-bridge",
+      "kind": "oss",
+      "url": "https://github.com/chinedufn/swift-bridge",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "Apache-2.0/MIT",
+      "pricing": "",
+      "last_activity": "2026-09-05",
+      "stars": 1155,
+      "fit": "mittel",
+      "decision": "beobachten",
+      "reason": "Alternative zu UniFFI",
+      "sources": [
+        "gh api repos/chinedufn/swift-bridge (2026-11-20)"
+      ]
+    },
+    {
+      "name": "rclone",
+      "kind": "oss",
+      "url": "https://github.com/rclone/rclone",
+      "platforms": [
+        "macOS"
+      ],
+      "license": "MIT",
+      "pricing": "",
+      "last_activity": "2026-11-20",
+      "stars": 61133,
+      "fit": "mittel",
+      "decision": "nutzen",
+      "reason": "Statt Cyberduck-Nachbau, falls Remote-Speicher gebraucht wird",
+      "sources": [
+        "gh api repos/rclone/rclone (2026-11-20)"
+      ]
+    }
+  ]
+}
