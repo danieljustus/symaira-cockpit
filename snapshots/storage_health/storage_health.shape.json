@@ -1,0 +1,362 @@
+{
+  "properties": {
+    "devices": {
+      "items": {
+        "properties": {
+          "access": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "checks": {
+            "items": {
+              "properties": {
+                "grade": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "rule": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "history": {
+            "properties": {
+              "detail": {
+                "type": "null"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "key": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "metrics": {
+            "properties": {
+              "available_spare": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "available_spare_threshold": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "controller_busy_time": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "critical_warning": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "data_read": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "data_written": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "error_log_entries": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "host_read_commands": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "host_write_commands": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "media_errors": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "percentage_used": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "power_cycles": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "power_on_hours": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "temperature_celsius": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "temperature_kelvin": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "unsafe_shutdowns": {
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "model": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "measured_at": {
+      "type": "string"
+    },
+    "overall_grade": {
+      "type": "string"
+    },
+    "rules_version": {
+      "type": "number"
+    },
+    "schema": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

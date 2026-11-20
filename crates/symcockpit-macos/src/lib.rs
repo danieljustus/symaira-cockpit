@@ -6,9 +6,11 @@
 
 pub mod battery;
 pub mod display;
+pub mod fs_stats;
 pub mod gpu;
 pub mod host;
 pub mod network;
+pub mod nvme;
 pub mod power;
 pub mod process;
 pub mod smc;

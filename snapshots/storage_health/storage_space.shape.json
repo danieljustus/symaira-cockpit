@@ -1,0 +1,162 @@
+{
+  "properties": {
+    "depth": {
+      "type": "number"
+    },
+    "entries_visited": {
+      "type": "number"
+    },
+    "error_count": {
+      "type": "number"
+    },
+    "errors": {
+      "items": null,
+      "type": "array"
+    },
+    "hardlinks": {
+      "properties": {
+        "allocated_bytes_not_counted": {
+          "type": "number"
+        },
+        "duplicates_skipped": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "limit": {
+      "type": "number"
+    },
+    "measured_at": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "schema": {
+      "type": "number"
+    },
+    "skipped_other_devices": {
+      "type": "number"
+    },
+    "tree": {
+      "properties": {
+        "allocated_bytes": {
+          "type": "number"
+        },
+        "apparent_bytes": {
+          "type": "number"
+        },
+        "children": {
+          "items": {
+            "properties": {
+              "allocated_bytes": {
+                "type": "number"
+              },
+              "apparent_bytes": {
+                "type": "number"
+              },
+              "children": {
+                "items": {
+                  "properties": {
+                    "allocated_bytes": {
+                      "type": "number"
+                    },
+                    "apparent_bytes": {
+                      "type": "number"
+                    },
+                    "children": {
+                      "items": null,
+                      "type": "array"
+                    },
+                    "files": {
+                      "type": "number"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "other": {
+                      "properties": {
+                        "allocated_bytes": {
+                          "type": "number"
+                        },
+                        "apparent_bytes": {
+                          "type": "number"
+                        },
+                        "count": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "files": {
+                "type": "number"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "other": {
+                "properties": {
+                  "allocated_bytes": {
+                    "type": "number"
+                  },
+                  "apparent_bytes": {
+                    "type": "number"
+                  },
+                  "count": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "files": {
+          "type": "number"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "other": {
+          "properties": {
+            "allocated_bytes": {
+              "type": "number"
+            },
+            "apparent_bytes": {
+              "type": "number"
+            },
+            "count": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "unit": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

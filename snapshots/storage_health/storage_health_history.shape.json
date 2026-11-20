@@ -1,0 +1,66 @@
+{
+  "properties": {
+    "rules_version": {
+      "type": "number"
+    },
+    "samples": {
+      "items": {
+        "properties": {
+          "available_spare_percent": {
+            "type": "number"
+          },
+          "changes": {
+            "items": {
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "device_key": {
+            "type": "string"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "measured_at": {
+            "type": "string"
+          },
+          "media_errors": {
+            "type": "number"
+          },
+          "model": {
+            "type": "string"
+          },
+          "percentage_used": {
+            "type": "number"
+          },
+          "rules_version": {
+            "type": "number"
+          },
+          "temperature_celsius": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}
