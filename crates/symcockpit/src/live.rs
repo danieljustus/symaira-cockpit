@@ -433,6 +433,17 @@ mod tests {
     }
 
     #[test]
+    fn display_enumeration_refuses_off_the_main_thread_instead_of_crashing() {
+        // The test harness never runs on the main thread.
+        assert!(LiveDisplays::new().is_err());
+        let hardware = LiveHardware {
+            smc: SharedSmc::default(),
+            env: BTreeMap::new(),
+        };
+        assert!(!hardware.edr_capable());
+    }
+
+    #[test]
     fn fan_fraction_needs_every_fan_in_manual_mode() {
         let manual = LiveOverrides(fan_smc(&[(1, 2000.0, 4000.0), (1, 3000.0, 4000.0)]));
         assert_eq!(
