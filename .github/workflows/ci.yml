@@ -29,6 +29,7 @@ jobs:
       root: ${{ steps.detect.outputs.root }}
       icon: ${{ steps.detect.outputs.icon }}
       make: ${{ steps.detect.outputs.make }}
+      rust: ${{ steps.detect.outputs.rust }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -188,6 +189,27 @@ jobs:
       # separate Xcode-26 icon check, so auto-merge cannot outrun it.
       - name: Native app icon and DMG smoke
         run: ./scripts/test-app-icon.sh
+
+  # Cockpit 2 Rust workspace (Cargo.toml at the root; ADR 0003). The toolchain
+  # comes from rust-toolchain.toml. The static name keeps the required check
+  # reported when the job is skipped.
+  rust:
+    name: rust
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.rust != 'false' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Format, lint, test
+        run: |
+          set -euo pipefail
+          cargo fmt --check
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
 
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.

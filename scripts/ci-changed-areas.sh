@@ -13,8 +13,9 @@ history=false
 root=false
 icon=false
 make=false
+rust=false
 
-all() { tuning=true; history=true; root=true; icon=true; make=true; }
+all() { tuning=true; history=true; root=true; icon=true; make=true; rust=true; }
 
 while IFS= read -r path || [ -n "$path" ]; do
   [ -n "$path" ] || continue
@@ -29,6 +30,9 @@ while IFS= read -r path || [ -n "$path" ]; do
     tuning/*) tuning=true; root=true ;;
     Sources/* | Tests/*) root=true ;;
     scripts/check-make-propagation.sh) make=true ;;
+    # The Rust workspace (Cargo.toml at the repo root) and its oracle fixtures.
+    Cargo.toml | Cargo.lock | rust-toolchain.toml | crates/* | oracle/* | \
+    scripts/oracle-capture.sh) rust=true ;;
     # The root job runs the icon/DMG smoke and its tests read scripts/assets.
     scripts/* | assets/*) root=true; icon=true ;;
     # Read by the root GUIVersionConsistencyTests.
@@ -42,5 +46,5 @@ while IFS= read -r path || [ -n "$path" ]; do
   esac
 done
 
-printf 'tuning=%s\nhistory=%s\nroot=%s\nicon=%s\nmake=%s\n' \
-  "$tuning" "$history" "$root" "$icon" "$make"
+printf 'tuning=%s\nhistory=%s\nroot=%s\nicon=%s\nmake=%s\nrust=%s\n' \
+  "$tuning" "$history" "$root" "$icon" "$make" "$rust"

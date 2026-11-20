@@ -13,7 +13,11 @@ TOOLCHAIN := $(XCODE_SELECT)
 endif
 export DEVELOPER_DIR = $(TOOLCHAIN)
 
-.PHONY: build test build-%% test-%% build-app smoke-app run-app clean
+# Locally the build guard (Dev/Verwaltung/ABLAGEREGELN.md) requires the launcher.
+DEV_EXTERNAL := $(HOME)/.local/bin/dev-external
+CARGO ?= $(if $(wildcard $(DEV_EXTERNAL)),$(DEV_EXTERNAL) cargo,cargo)
+
+.PHONY: build test build-%% test-%% build-app smoke-app run-app clean rust-build rust-test oracle
 
 ## build: Build all packages
 build:
@@ -30,6 +34,19 @@ test:
 		echo "==> test $$p"; \
 		( cd $$p && swift test ) || rc=1; \
 	done; exit $$rc
+
+## rust-build: Build the Rust workspace (CARGO="dev-external cargo" is picked up when installed)
+rust-build:
+	$(CARGO) build --workspace --locked
+
+## rust-test: Test the Rust workspace
+rust-test:
+	$(CARGO) test --workspace --locked
+
+## oracle: Compare a binary with the frozen v0.12 oracle: make oracle BIN=<path to symcockpit>
+oracle:
+	@test -n "$(BIN)" || { echo "usage: make oracle BIN=<path to symcockpit>" >&2; exit 2; }
+	SYMCOCKPIT_ORACLE_BIN="$(abspath $(BIN))" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
 
 ## build-app: Assemble the GUI bundle (build/app/Symaira Cockpit.app)
 build-app:

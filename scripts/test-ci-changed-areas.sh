@@ -18,7 +18,7 @@ expect() {
   fi
 }
 
-all="tuning history root icon make"
+all="tuning history root icon make rust"
 expect "" .github/dependabot.yml
 expect "" README.md docs/product-boundaries.md .github/pull_request_template.md
 expect "tuning root" tuning/Sources/SymCockpitCore/Version.swift
@@ -27,6 +27,9 @@ expect "root" Tests/SymCockpitE2ETests/X.swift
 expect "root" .github/workflows/release.yml
 expect "root icon" assets/branding/AppIcon.sha256
 expect "make" scripts/check-make-propagation.sh
+expect "rust" Cargo.toml Cargo.lock rust-toolchain.toml
+expect "rust" crates/symcockpit/src/lib.rs oracle/v0.12/manifest.json scripts/oracle-capture.sh
+expect "tuning root rust" tuning/Sources/SymCockpitCore/Version.swift crates/symcockpit-contract/src/lib.rs
 expect "$all" .github/workflows/ci.yml
 expect "$all" Makefile
 expect "$all" Package.resolved
