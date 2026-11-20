@@ -3,6 +3,12 @@
 
 mod registry;
 
+/// Command specs per functional area; the coordinator appends each `specs()` to the register.
+pub mod areas {
+    pub mod bluetooth;
+    pub mod input;
+}
+
 pub use registry::{CommandSpec, commands};
 
 use serde::{Deserialize, Serialize};
