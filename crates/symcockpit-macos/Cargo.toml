@@ -9,5 +9,15 @@ repository.workspace = true
 publish.workspace = true
 
 # No `unsafe_code` entry on purpose: this is the one crate allowed to use it.
+[dependencies]
+symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+libc = "=0.2.191"
+core-foundation = "=0.10.1"
+core-foundation-sys = "=0.8.7"
+
+[dev-dependencies]
+symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.12.2" }
+serde_json.workspace = true
+
 [lints.clippy]
 all = { level = "warn", priority = -1 }
