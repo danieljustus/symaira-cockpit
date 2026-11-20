@@ -1,35 +1,28 @@
-//! `symcockpit` during the strangler migration (ADR 0003): `version` is answered
-//! here, every other invocation is `exec`ed into the legacy Swift binary so
+//! `symcockpit` during the strangler migration (ADR 0003). Read commands run
+//! natively as soon as their area is wired in (`app::Handlers`), `version`,
+//! `help`, `history`, `profile list`, `ai-usage` and the MCP server `serve`
+//! always do; everything else is `exec`ed into the legacy Swift binary so
 //! stdin, stdout, stderr and the exit code stay untouched.
 
+pub mod app;
+pub mod cli;
+pub mod help;
+pub mod json;
+pub mod legacy;
+pub mod mcp;
+pub mod native;
+pub mod platform;
+
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
 
 use symcockpit_contract::exit;
+
+pub use legacy::{LEGACY_ENV, forward, resolve_legacy};
 
 /// Release version; must equal `CockpitVersion.current` in Swift.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Environment variable naming the legacy binary explicitly.
-pub const LEGACY_ENV: &str = "SYMCOCKPIT_LEGACY_BIN";
-
 const UPDATE_ENV: &str = "SYMCOCKPIT_CHECK_UPDATES";
-
-/// Where the legacy Swift binary lives: the environment override, then next to
-/// this executable, then in the Homebrew-style `libexec` layout.
-pub fn resolve_legacy(override_path: Option<OsString>, exe: &Path) -> Option<PathBuf> {
-    if let Some(path) = override_path.filter(|p| !p.is_empty()) {
-        // An explicit override is never second-guessed by falling through.
-        return Some(PathBuf::from(path)).filter(|p| p.is_file());
-    }
-    let dir = exe.parent()?;
-    [
-        dir.join("symcockpit-legacy"),
-        dir.join("../libexec/symcockpit/symcockpit-legacy"),
-    ]
-    .into_iter()
-    .find(|p| p.is_file())
-}
 
 /// The text of `symcockpit version` when the Swift binary would skip its
 /// update check (the only case reproducible without network access); `None`
@@ -60,40 +53,75 @@ pub fn version_output(
     })
 }
 
-/// Replace this process with the legacy binary. Returns only on failure.
-pub fn forward(args: Vec<OsString>) -> u8 {
-    use std::os::unix::process::CommandExt;
-
-    let exe = std::env::current_exe()
-        .map(|p| p.canonicalize().unwrap_or(p))
-        .unwrap_or_default();
-    let Some(legacy) = resolve_legacy(std::env::var_os(LEGACY_ENV), &exe) else {
-        eprintln!(
-            "symcockpit: legacy binary not found; set {LEGACY_ENV} or install symcockpit-legacy next to symcockpit"
-        );
-        return exit::UNSUPPORTED;
-    };
-    let error = std::process::Command::new(&legacy).args(args).exec();
-    eprintln!("symcockpit: cannot start {}: {error}", legacy.display());
-    exit::ERROR
+/// Entry point shared by `main` and tests: handles the invocation with the
+/// production wiring of [`platform::app`].
+pub fn run(args: Vec<OsString>) -> u8 {
+    run_with(&platform::app(), args)
 }
 
-/// Entry point shared by `main` and tests.
-pub fn run(args: Vec<OsString>) -> u8 {
-    use std::io::{IsTerminal, Write};
+/// [`run`] with an explicit app, for wiring areas and for tests.
+pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
+    use std::io::IsTerminal;
 
-    let update_env = std::env::var(UPDATE_ENV).ok();
-    if let Some(text) = version_output(
-        &args,
-        update_env.as_deref(),
-        std::io::stdout().is_terminal(),
-    ) {
-        return match std::io::stdout().lock().write_all(text.as_bytes()) {
-            Ok(()) => exit::OK,
-            Err(_) => exit::ERROR,
-        };
+    let update_env = app.env.get(UPDATE_ENV).map(String::as_str);
+    if let Some(text) = version_output(&args, update_env, std::io::stdout().is_terminal()) {
+        return write_all(text.as_bytes(), b"", exit::OK);
     }
-    forward(args)
+    // Arguments that are not UTF-8 cannot be parsed here; Swift decides.
+    let Some(strings) = args
+        .iter()
+        .map(|a| a.to_str().map(str::to_owned))
+        .collect::<Option<Vec<String>>>()
+    else {
+        return forward(args);
+    };
+    match cli::plan(app, &strings) {
+        cli::Action::Done(outcome) => write_all(
+            outcome.stdout.as_bytes(),
+            outcome.stderr.as_bytes(),
+            outcome.code,
+        ),
+        cli::Action::Forward => forward(args),
+        cli::Action::Serve { data_dir_override } => serve(app, data_dir_override),
+    }
+}
+
+fn write_all(stdout: &[u8], stderr: &[u8], code: u8) -> u8 {
+    use std::io::Write;
+    if !stderr.is_empty() {
+        let _ = std::io::stderr().lock().write_all(stderr);
+    }
+    if !stdout.is_empty() && std::io::stdout().lock().write_all(stdout).is_err() {
+        return exit::ERROR;
+    }
+    code
+}
+
+fn serve(app: &app::App, data_dir_override: Option<std::path::PathBuf>) -> u8 {
+    let env_lookup = |key: &str| app.env.get(key).cloned();
+    let loaded = symcockpit_store::Config::load(&app.paths, &env_lookup);
+    for warning in &loaded.warnings {
+        eprintln!("symcockpit: {warning}");
+    }
+    let data_dir = data_dir_override
+        .clone()
+        .unwrap_or_else(|| app.paths.data_dir.clone());
+    let ctx = app::Context {
+        config: &loaded.config,
+        paths: &app.paths,
+        data_dir: &data_dir,
+        data_dir_override: data_dir_override.as_deref(),
+        env: &app.env,
+        services: &app.services,
+    };
+    let server = mcp::Server::new(app, &ctx);
+    match mcp::serve(&server, std::io::stdin().lock(), std::io::stdout().lock()) {
+        Ok(()) => exit::OK,
+        Err(error) => {
+            eprintln!("symcockpit: serve: {error}");
+            exit::ERROR
+        }
+    }
 }
 
 #[cfg(test)]
@@ -164,38 +192,5 @@ mod tests {
         for a in [&["sensors"][..], &["serve"], &[], &["help"], &["nope"]] {
             assert_eq!(version_output(&args(a), None, false), None, "{a:?}");
         }
-    }
-
-    #[test]
-    fn resolution_order_is_override_then_sibling_then_libexec() {
-        let tmp = tempfile::tempdir().unwrap();
-        let bin = tmp.path().join("bin");
-        let libexec = tmp.path().join("libexec/symcockpit");
-        std::fs::create_dir_all(&bin).unwrap();
-        std::fs::create_dir_all(&libexec).unwrap();
-        let exe = bin.join("symcockpit");
-        let sibling = bin.join("symcockpit-legacy");
-        let far = libexec.join("symcockpit-legacy");
-        let custom = tmp.path().join("custom");
-        assert_eq!(resolve_legacy(None, &exe), None);
-        std::fs::write(&far, "").unwrap();
-        assert_eq!(
-            resolve_legacy(None, &exe).unwrap().canonicalize().unwrap(),
-            far.canonicalize().unwrap()
-        );
-        std::fs::write(&sibling, "").unwrap();
-        assert_eq!(resolve_legacy(None, &exe), Some(sibling.clone()));
-        std::fs::write(&custom, "").unwrap();
-        assert_eq!(
-            resolve_legacy(Some(custom.clone().into()), &exe),
-            Some(custom)
-        );
-        // A missing override does not fall back to the sibling.
-        assert_eq!(
-            resolve_legacy(Some(tmp.path().join("gone").into()), &exe),
-            None
-        );
-        // An empty override counts as unset.
-        assert_eq!(resolve_legacy(Some(OsString::new()), &exe), Some(sibling));
     }
 }
