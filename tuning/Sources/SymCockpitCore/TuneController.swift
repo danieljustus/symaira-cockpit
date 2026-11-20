@@ -951,6 +951,7 @@ extension TuneController {
     public func applyChargeLimit(percent: Int) throws {
         let clamped = SafetyPolicy.clamp(percent, config.chargeLimitMin, config.chargeLimitMax)
         do {
+            try requireChargeLimitKey()
             try SMCWritePolicy.requireACPower(battery: battery)
             smcRestoreTracker.saveChargeOriginal()
             try chargeLimit.applyChargeLimit(percent: percent, config: config)
@@ -967,6 +968,7 @@ extension TuneController {
 
     public func clearChargeLimit() throws {
         do {
+            try requireChargeLimitKey()
             try chargeLimit.clearChargeLimit()
             chargeLimitState.clear()
             logHistory(action: "battery-limit.clear", result: "success")
@@ -974,6 +976,21 @@ extension TuneController {
             logHistory(action: "battery-limit.clear", result: "failed", error: error)
             throw error
         }
+    }
+
+    /// Why charge limiting cannot work on firmware without any charge-limit
+    /// key. Shared by the write paths and `doctor` so both tell the same story.
+    static let missingChargeLimitKeyDetail =
+        "this Mac's firmware has no charge-limit SMC key (CHTE, CH0B or CHLC), "
+        + "so `sudo` cannot help. Firmware shipped with macOS 27 removed these keys; "
+        + "use System Settings > Battery > Charge Limit instead."
+
+    /// Firmware without a charge-limit key is a hardware limit, not a missing
+    /// privilege (#420). The key probe reads unprivileged, so this fails before
+    /// any restore record or SMC write. An unreachable SMC keeps its own error.
+    private func requireChargeLimitKey() throws {
+        guard smc.isAvailable, chargeLimit.detectKeyFamily() == nil else { return }
+        throw TuneError.unsupported(Self.missingChargeLimitKeyDetail)
     }
 
     private func powerDrawCapability() -> Capability {
@@ -1123,6 +1140,7 @@ extension TuneController {
         let edrCapable = displays.anyEDRCapable()
         let smcAvailable = sensors.smcAvailable
         let smcWritable = smc.isAvailable && PrivilegedElevation.isRunningAsRoot
+        let chargeLimitKeyMissing = smcAvailable && chargeLimit.detectKeyFamily() == nil
 
         let privilegedStatus = privilegedExecutableStatus()
         let caps: [Capability] = [
@@ -1164,12 +1182,14 @@ extension TuneController {
                                 : "SMC unreachable — not a privilege problem, and `sudo` will not "
                                     + "help. Either this is a VM, or the host's SMC generation is not "
                                     + "supported by this build."),
-            Capability(id: "battery.chargeLimit", available: smcWritable, tier: "core",
-                       detail: smcWritable
-                            ? "Battery charge limiting via SMC."
-                            : smcAvailable
-                                ? "Battery charge limiting via SMC. Requires root (run the CLI with `sudo`)."
-                                : "SMC unavailable — charge limiting not possible."),
+            Capability(id: "battery.chargeLimit", available: smcWritable && !chargeLimitKeyMissing, tier: "core",
+                       detail: chargeLimitKeyMissing
+                            ? "Battery charge limiting unsupported: \(Self.missingChargeLimitKeyDetail)"
+                            : smcWritable
+                                ? "Battery charge limiting via SMC."
+                                : smcAvailable
+                                    ? "Battery charge limiting via SMC. Requires root (run the CLI with `sudo`)."
+                                    : "SMC unavailable — charge limiting not possible."),
             privilegedExecutableCapability(privilegedStatus),
             powerDrawCapability(),
         ]

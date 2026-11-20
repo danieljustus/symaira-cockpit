@@ -120,6 +120,46 @@ final class TuneControllerFanChargeTests: XCTestCase {
         XCTAssertNoThrow(try controller.clearChargeLimit())
     }
 
+    // #420: macOS 27 firmware has no charge-limit key at all. That is
+    // unsupported (exit 4) before any SMC write, not a request for sudo.
+    func testChargeLimitWithoutFirmwareKeyIsUnsupported() {
+        let connection = FakeSMCConnection(isOpen: true, keys: ["FNum": ui8(2)])
+        let controller = TuneController(
+            config: TuneConfig(),
+            displayWrite: MockDisplayWriteService(),
+            smcService: SMCService(connection: connection),
+            batterySource: FakeBatterySource(result: .success(BatteryProperties(externalConnected: true)))
+        )
+
+        for (action, write) in [
+            ("battery-limit.set", { try controller.applyChargeLimit(percent: 80) }),
+            ("battery-limit.clear", { try controller.clearChargeLimit() }),
+        ] as [(String, () throws -> Void)] {
+            XCTAssertThrowsError(try write(), action) { error in
+                guard case TuneError.unsupported(let message) = error else {
+                    return XCTFail("\(action): expected TuneError.unsupported, got \(error)")
+                }
+                XCTAssertEqual((error as? TuneError)?.exitCode, ExitCode.unsupported.rawValue)
+                XCTAssertTrue(message.contains("no charge-limit SMC key"), message)
+            }
+            XCTAssertEqual(controller.getHistory().last?.action, action)
+            XCTAssertEqual(controller.getHistory().last?.result, "failed")
+        }
+        XCTAssertTrue(connection.writtenKeys.isEmpty, "no SMC write may happen without a key")
+
+        let capability = controller.capabilities().capabilities.first { $0.id == "battery.chargeLimit" }
+        XCTAssertEqual(capability?.available, false)
+        XCTAssertTrue(capability?.detail.contains("no charge-limit SMC key") ?? false)
+        XCTAssertFalse(capability?.detail.contains("Requires root") ?? true)
+    }
+
+    func testChargeLimitCapabilityWithKeyKeepsItsPrivilegeDetail() {
+        let capability = makeController(keys: ["CHTE": ui32(0)])
+            .capabilities().capabilities.first { $0.id == "battery.chargeLimit" }
+        XCTAssertNotNil(capability)
+        XCTAssertFalse(capability?.detail.contains("no charge-limit SMC key") ?? true)
+    }
+
     func testActiveFanFraction() {
         let controller = makeController(keys: [
             "FNum": ui8(1),
