@@ -1,0 +1,54 @@
+{
+  "properties": {
+    "ack": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "readback_hex": {
+      "type": "string"
+    },
+    "request": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "characteristic": {
+          "type": "string"
+        },
+        "device_id": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "value_hex": {
+          "type": "string"
+        },
+        "with_response": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "stages": {
+      "items": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

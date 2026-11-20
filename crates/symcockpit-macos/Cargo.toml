@@ -11,3 +11,17 @@ publish.workspace = true
 # No `unsafe_code` entry on purpose: this is the one crate allowed to use it.
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# CoreBluetooth through objc2 rather than btleplug: no async runtime (architecture §10),
+# and the same bindings serve virtual peripherals later (R54). All Zlib OR Apache-2.0 OR MIT.
+[dependencies]
+symcockpit-contract.workspace = true
+symcockpit-core = { path = "../symcockpit-core" }
+serde_json.workspace = true
+objc2 = "=0.6.5"
+objc2-foundation = "=0.3.2"
+objc2-core-bluetooth = "=0.3.2"
+dispatch2 = "=0.3.1"
+
+[dev-dependencies]
+tempfile.workspace = true

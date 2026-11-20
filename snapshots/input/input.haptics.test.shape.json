@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "degraded": {
+      "type": "boolean"
+    },
+    "haptic": {
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "material": {
+      "type": "string"
+    },
+    "sound": {
+      "properties": {
+        "detail": {
+          "type": "null"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

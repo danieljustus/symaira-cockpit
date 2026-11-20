@@ -1,0 +1,74 @@
+{
+  "properties": {
+    "count": {
+      "type": "number"
+    },
+    "devices": {
+      "items": {
+        "properties": {
+          "battery": {
+            "properties": {
+              "case": {
+                "properties": {
+                  "percent": {
+                    "type": "null"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "left": {
+                "properties": {
+                  "percent": {
+                    "type": "number"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "main": {
+                "properties": {
+                  "percent": {
+                    "type": "number"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "right": {
+                "properties": {
+                  "percent": {
+                    "type": "number"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,49 @@
+{
+  "properties": {
+    "finder_cut": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "event_tap_access": {
+          "type": "string"
+        },
+        "secure_input_active": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "haptics": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "state": {
+          "properties": {
+            "detail": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "sound": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "material": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

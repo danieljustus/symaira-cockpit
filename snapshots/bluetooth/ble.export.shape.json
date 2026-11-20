@@ -1,0 +1,49 @@
+{
+  "properties": {
+    "count": {
+      "type": "number"
+    },
+    "entries": {
+      "items": {
+        "properties": {
+          "bytes": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "characteristic": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "t_ms": {
+            "type": "number"
+          },
+          "value_hex": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "format": {
+      "type": "string"
+    },
+    "schema": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

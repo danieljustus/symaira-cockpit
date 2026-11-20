@@ -1,0 +1,25 @@
+{
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "material": {
+      "type": "string"
+    },
+    "sound_enabled": {
+      "type": "boolean"
+    },
+    "state": {
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

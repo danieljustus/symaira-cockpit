@@ -1,0 +1,37 @@
+{
+  "properties": {
+    "characteristic": {
+      "type": "string"
+    },
+    "count": {
+      "type": "number"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "notifications": {
+      "items": {
+        "properties": {
+          "elapsed_ms": {
+            "type": "number"
+          },
+          "length": {
+            "type": "number"
+          },
+          "value_hex": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "service": {
+      "type": "string"
+    },
+    "window_ms": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

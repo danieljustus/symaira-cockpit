@@ -1,0 +1,40 @@
+{
+  "properties": {
+    "devices": {
+      "items": {
+        "properties": {
+          "connectable": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rssi": {
+            "type": "number"
+          },
+          "service_uuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "shown": {
+      "type": "number"
+    },
+    "timeout_ms": {
+      "type": "number"
+    },
+    "total_seen": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

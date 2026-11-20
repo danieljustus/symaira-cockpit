@@ -1,0 +1,13 @@
+{
+  "properties": {
+    "finder_cut": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

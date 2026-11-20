@@ -1,0 +1,14 @@
+{
+  "properties": {
+    "content": {
+      "type": "string"
+    },
+    "count": {
+      "type": "number"
+    },
+    "format": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
