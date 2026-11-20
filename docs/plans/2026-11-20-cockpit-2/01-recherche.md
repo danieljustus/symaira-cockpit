@@ -35,7 +35,7 @@ Quelle je Zeile: `RE/<Anwendung>/rebuild.md` und `report.md` §2 bis §5. Befund
 
 | Bestand | Was es schon kann | Lücke zur Idee |
 |---|---|---|
-| Cockpit v0.12.2 (Swift 6) | Sensoren, Lüfter, Ladegrenze, Wachhalten, Helligkeit, EDR, Wärme, Dimmen, Profile, Verlauf, Top-Prozesse, HUD/Notch, AI-Kontingente; 13 MCP-Tools (`get_status`, `get_sensors`, `get_battery`, `get_system_metrics`, `get_top_processes`, `get_history` u. a.) | Swift statt Rust; kein Speicher-, Audio-, Bluetooth- oder Finderbereich; #418 Dauer-CPU-Last der App |
+| Cockpit v0.12.2 (Swift 6) | Sensoren, Lüfter, Ladegrenze, Wachhalten, Helligkeit, EDR, Wärme, Dimmen, Profile, Verlauf, Top-Prozesse, HUD/Notch, AI-Kontingente; 26 MCP-Tools, davon 12 lesend (`get_status`, `get_sensors`, `get_battery`, `get_system_metrics`, `get_top_processes`, `get_history` u. a.) | Swift statt Rust; kein Speicher-, Audio-, Bluetooth- oder Finderbereich; #418 Dauer-CPU-Last der App |
 | CoreKit (Rust 1.98, Edition 2024) | `symaira-core-mcp`, `-config`, `-log`, `-exit`, `-version`, `-update`, `-sqlite`, `-fs`, `-env`, `-secretref`, `-mcpcfg`, `-llm` | Keine Plattform- oder Hardware-Crates (bewusst domänenfrei) |
 | Desktop `symdesk-render` | Rust-PDF mit lopdf 0.47: Split, Merge, Rotate, Bildimport (PNG, TIFF, Fax) | Keine Kompression |
 | Brain `symbrain-usage`, Scope | Nutzungsdaten der Harnesses; Scope: Ports, Container, launchd, MCP-Inventar | Keine Session-Statusmeldungen für die Notch |

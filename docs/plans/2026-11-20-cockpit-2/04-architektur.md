@@ -186,7 +186,7 @@ sequenceDiagram
 | Schnittstelle | Art | Version | Fehlerverhalten | Konsument |
 |---|---|---|---|---|
 | `symcockpit <befehl>` | CLI, `--json` | bestehende Befehle unverändert; neue unter Bereichen (`storage`, `apps`, `audio`, `midi`, `bt`, `ble`, `input`, `clipboard`); Kollisionsprüfung nach PB §4 | Exit 0 bis 4, Fehler-JSON auf stdout bei `--json`, Logs auf stderr | Mensch, Skripte, Agenten |
-| `symcockpit serve` | MCP stdio über `symaira-core-mcp` | 13 bestehende Toolnamen bleiben; neue `get_*`, `list_*`, `plan_*`, `confirm_plan`; Annotationen `readOnlyHint`, `destructiveHint` | stdout nur JSON-RPC | Agenten |
+| `symcockpit serve` | MCP stdio über `symaira-core-mcp` | 26 bestehende Toolnamen bleiben (12 davon lesend; Korrektur nach Orakel-Aufnahme); neue `get_*`, `list_*`, `plan_*`, `confirm_plan`; Annotationen `readOnlyHint`, `destructiveHint` | stdout nur JSON-RPC | Agenten |
 | `symcockpit agent --stdio` | JSON-RPC 2.0 als NDJSON, `hello`, `call`, `subscribe`, Ereignisse | Protokollversion im Handshake | startet nur mit signierter Cockpit-App als Elternprozess; sonst Exit 3 | SwiftUI-App |
 | Helfer | XPC-Machdienst `com.symaira.symtune-helper` | Nachrichtenversion | Peer-Signaturprüfung beidseitig; unbekannte Aktion abgewiesen | Agent, App |
 | `libsymcockpit_ffi` | C-ABI, JSON-Ergebnis, eigene Freigabefunktion | ABI-Version | Fehler als JSON, nie Panik über die Grenze | Erweiterungen |

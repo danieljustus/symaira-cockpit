@@ -6,10 +6,11 @@
 
 | Welle | Paket | Status | Beleg |
 |---|---|---|---|
-| 0 | F1 Rust-Workspace, Befehlsregister, Weiterleitung an Swift, Orakel-Harness, CI | ⏳ läuft (Worktree `c2-foundation`) | |
-| 0 | F2 Orakel-Fixtures aus Swift v0.12 | ⏳ läuft (Worktree `c2-oracle`) | |
+| 0 | F1 Rust-Workspace, Befehlsregister (38 Befehle, 26 MCP-Tools wertgleich), Weiterleitung an Swift, Orakel-Harness, CI | ✅ 2026-11-20 integriert; fmt, clippy, 35 Tests grün | `main` f4dba0d bis 27387c6 |
+| 0 | F2 Orakel-Fixtures aus Swift v0.12 (70 Fälle) | ✅ 2026-11-20; Abnahme Stufe 0: 70/70 grün gegen Swift und gegen das weiterleitende Rust-Binary | `oracle/v0.12/`, Rohdaten `Dev/evidence/symaira-cockpit/cockpit2-oracle/` |
+| 0 | F4 Desktop-Issue PDF-Kompression | ✅ [symaira-desktop#1408](https://github.com/danieljustus/symaira-desktop/issues/1408) | |
 | 0 | F3 Produktvertrag Revision 9 | ✅ 2026-11-20, kanonisch plus 8 Repos lokal committet | `Repos/docs/product-boundaries.md`, Backup `Repos/docs/docs-sync/2026-11-20-cockpit2-rev9/` |
-| 1 | Lesepfad: SMC, Sensoren, Lüfter, Leistung, IOReport, GPU, Prozesse, Akku, Displays; CLI und 13 MCP-Lesetools aus Rust; Prozess beenden über Plan | offen | |
+| 1 | Lesepfad: SMC, Sensoren, Lüfter, Leistung, IOReport, GPU, Prozesse, Akku, Displays; CLI und die 12 MCP-Lesetools aus Rust (von 26 Tools insgesamt); Prozess beenden über Plan | ⏳ 5 Worker parallel (1A SMC und Sensoren, 1B Akku und Energie, 1C Displays, 1D Metriken und Prozesse, 1E Dispatcher, serve, Systembefehle) | |
 | 2 | Schreibpfad, Rust-Helfer, Agent-Protokoll, App auf Rust, Swift-Kern entfernen | offen | |
 | 3 | Speicher | offen | |
 | 4 | Audio und MIDI | offen | |

@@ -60,7 +60,7 @@ Alle Spikes laufen in Wegwerf-Code außerhalb des Produkts (Ablage nach `Dev/Ver
 
 ### Stufe 1: Lesepfad und Monitor aus Rust
 
-- Liefert: Rust-Dispatcher `symcockpit` mit allen Lesebefehlen und den 13 MCP-Lesetools aus v0.12; nicht portierte Befehle werden an das gebündelte Swift-Binary weitergereicht. Neu: GPU aus der IORegistry ohne root, Systemleistung getrennt vom Netzteil (#403), Prozessliste mit Netz und Disk, Prozess beenden über Plan.
+- Liefert: Rust-Dispatcher `symcockpit` mit allen Lesebefehlen und den 12 MCP-Lesetools aus v0.12 (26 Tools insgesamt, Korrektur 2026-11-20 nach Orakel-Aufnahme); nicht portierte Befehle werden an das gebündelte Swift-Binary weitergereicht. Neu: GPU aus der IORegistry ohne root, Systemleistung getrennt vom Netzteil (#403), Prozessliste mit Netz und Disk, Prozess beenden über Plan.
 - Anforderungen: R01 bis R05, R10 bis R15.
 - Abnahme: Orakel grün für alle Lesebefehle; neue Tools mit Schema-Snapshot; Lücken- und PID-Tests.
 - Ersetzt: Aktivitätsanzeige für Agenten und im Terminal.
