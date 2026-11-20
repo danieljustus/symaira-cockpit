@@ -10,3 +10,7 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+tempfile.workspace = true

@@ -49,36 +49,35 @@ fn forwards_argv_stdio_and_exit_code_unchanged() {
     let legacy = fake_legacy(tmp.path());
     let out = run(
         Some(&legacy),
-        &["serve", "--json", "", "a b", "--data-dir=x y", "é"],
+        &["fan", "--json", "", "a b", "--data-dir=x y", "é"],
         "in-bytes",
         "3",
     );
     assert_eq!(out.status.code(), Some(3));
     assert_eq!(
         String::from_utf8(out.stdout).unwrap(),
-        "argc=6\n[serve]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
+        "argc=6\n[fan]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
     );
     assert_eq!(String::from_utf8(out.stderr).unwrap(), "to-stderr\n");
 }
 
 #[test]
-fn unknown_and_empty_invocations_reach_legacy() {
+fn unknown_and_empty_invocations_are_answered_natively_with_exit_2() {
     let tmp = tempfile::tempdir().unwrap();
     let legacy = fake_legacy(tmp.path());
-    let out = run(Some(&legacy), &["nope"], "", "2");
-    assert_eq!(out.status.code(), Some(2));
-    assert!(
-        String::from_utf8(out.stdout)
-            .unwrap()
-            .starts_with("argc=1\n[nope]")
-    );
-    let out = run(Some(&legacy), &[], "", "0");
-    assert_eq!(out.status.code(), Some(0));
-    assert!(
-        String::from_utf8(out.stdout)
-            .unwrap()
-            .starts_with("argc=0\n")
-    );
+    for args in [&["nope"][..], &[]] {
+        let out = run(Some(&legacy), args, "", "0");
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        assert!(
+            out.stdout.is_empty(),
+            "usage goes to stderr, nothing reaches the legacy binary"
+        );
+        assert!(
+            String::from_utf8(out.stderr)
+                .unwrap()
+                .contains("Usage:\n  symcockpit <command> [options]")
+        );
+    }
 }
 
 #[test]

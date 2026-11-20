@@ -17,7 +17,7 @@ export DEVELOPER_DIR = $(TOOLCHAIN)
 DEV_EXTERNAL := $(HOME)/.local/bin/dev-external
 CARGO ?= $(if $(wildcard $(DEV_EXTERNAL)),$(DEV_EXTERNAL) cargo,cargo)
 
-.PHONY: build test build-%% test-%% build-app smoke-app run-app clean rust-build rust-test oracle
+.PHONY: build test build-%% test-%% build-app smoke-app run-app clean rust-build rust-test oracle oracle-native
 
 ## build: Build all packages
 build:
@@ -47,6 +47,11 @@ rust-test:
 oracle:
 	@test -n "$(BIN)" || { echo "usage: make oracle BIN=<path to symcockpit>" >&2; exit 2; }
 	SYMCOCKPIT_ORACLE_BIN="$(abspath $(BIN))" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
+
+## oracle-native: Like `oracle`, but without any Swift binary: only read commands are checked and forwarded cases are reported as skipped
+oracle-native:
+	@test -n "$(BIN)" || { echo "usage: make oracle-native BIN=<path to symcockpit>" >&2; exit 2; }
+	SYMCOCKPIT_ORACLE_NATIVE=1 SYMCOCKPIT_ORACLE_BIN="$(abspath $(BIN))" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
 
 ## build-app: Assemble the GUI bundle (build/app/Symaira Cockpit.app)
 build-app:

@@ -22,6 +22,10 @@ pub struct EnvSpec {
     pub isolate_xdg: bool,
     #[serde(default)]
     pub set: BTreeMap<String, String>,
+    /// Replaces the inherited `SYMCOCKPIT_LEGACY_BIN` (native mode points it
+    /// at a tripwire so a forwarded command can never reach Swift).
+    #[serde(skip)]
+    pub legacy_override: Option<std::ffi::OsString>,
 }
 
 pub struct Output {
@@ -40,7 +44,10 @@ fn command(bin: &Path, args: &[&str], env: &EnvSpec) -> Result<(Command, Option<
     let dir = if env.isolate_xdg {
         // Same environment as oracle/tools/capture.py: nothing inherited, and a
         // fresh HOME too, because the fan profile lives in ~/.symtune.
-        let legacy = std::env::var_os(LEGACY_BIN_VAR);
+        let legacy = env
+            .legacy_override
+            .clone()
+            .or_else(|| std::env::var_os(LEGACY_BIN_VAR));
         cmd.env_clear().env("PATH", "/usr/bin:/bin");
         if let Some(legacy) = legacy {
             cmd.env(LEGACY_BIN_VAR, legacy);
@@ -203,6 +210,7 @@ mod tests {
         let env = EnvSpec {
             isolate_xdg: true,
             set: BTreeMap::from([("ORACLE_PROBE".to_owned(), "yes".to_owned())]),
+            legacy_override: None,
         };
         let run = || {
             let out = run_cli(

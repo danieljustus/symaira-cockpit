@@ -56,12 +56,15 @@ pub struct Case {
     pub arguments: Option<Value>,
 }
 
-/// Verdict for one case. A case passes when `errors` is empty; `hints` are tolerated drift.
+/// Verdict for one case. A case passes when `errors` is empty and it was not
+/// `skipped`; `hints` are tolerated drift. Only native mode skips: a skipped
+/// case verified nothing and must never be counted as passed.
 #[derive(Debug)]
 pub struct CaseResult {
     pub id: String,
     pub errors: Vec<String>,
     pub hints: Vec<String>,
+    pub skipped: Option<String>,
 }
 
 /// Run every case of the manifest against `bin`.
@@ -70,10 +73,112 @@ pub fn run_manifest(
     bin: &Path,
     timeout: Duration,
 ) -> Result<Vec<CaseResult>, String> {
+    run_manifest_in(manifest_path, bin, timeout, None)
+}
+
+/// Native mode (`SYMCOCKPIT_ORACLE_NATIVE=1`): the candidate gets a tripwire
+/// instead of a Swift binary. Only cases whose command is `Read` in the
+/// register run; a case that makes the candidate forward to Swift is reported
+/// as skipped ("forwarded"), never as passed.
+pub fn run_manifest_native(
+    manifest_path: &Path,
+    bin: &Path,
+    timeout: Duration,
+) -> Result<Vec<CaseResult>, String> {
+    let dir = tempfile::tempdir().map_err(|e| format!("tempdir: {e}"))?;
+    let tripwire = Tripwire::create(dir.path())?;
+    run_manifest_in(manifest_path, bin, timeout, Some(&tripwire))
+}
+
+/// A stand-in for the legacy binary that records being called and fails.
+struct Tripwire {
+    script: std::path::PathBuf,
+    marker: std::path::PathBuf,
+}
+
+impl Tripwire {
+    fn create(dir: &Path) -> Result<Self, String> {
+        use std::os::unix::fs::PermissionsExt;
+        let (script, marker) = (dir.join("tripwire"), dir.join("forwarded"));
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nprintf 'forwarded\\n' > '{}'\nexit 97\n",
+                marker.display()
+            ),
+        )
+        .and_then(|()| std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)))
+        .map_err(|e| format!("tripwire: {e}"))?;
+        Ok(Self { script, marker })
+    }
+
+    fn reset(&self) {
+        let _ = std::fs::remove_file(&self.marker);
+    }
+
+    fn fired(&self) -> bool {
+        self.marker.exists()
+    }
+}
+
+/// Why a case must not run in native mode, `None` when it may.
+fn not_a_read_case(case: &Case) -> Option<String> {
+    use symcockpit_contract::{Risk, commands};
+    let skip = || Some("not a read command".to_owned());
+    match case.kind {
+        Kind::McpToolsList => None,
+        Kind::McpCallShape => {
+            let tool = case.tool.as_deref()?;
+            match commands().iter().find(|c| c.mcp_name == Some(tool)) {
+                Some(spec) if spec.risk == Risk::Read => None,
+                Some(_) => skip(),
+                None => None,
+            }
+        }
+        _ => {
+            let words: Vec<&str> = case.argv.iter().map(String::as_str).collect();
+            let matched = commands()
+                .iter()
+                .filter(|c| {
+                    let path: Vec<&str> = c.cli_path.split(' ').collect();
+                    words.starts_with(&path)
+                })
+                .max_by_key(|c| c.cli_path.len());
+            if let Some(spec) = matched {
+                return if spec.risk == Risk::Read {
+                    None
+                } else {
+                    skip()
+                };
+            }
+            let family = words.first().copied();
+            let in_register = commands()
+                .iter()
+                .any(|c| c.cli_path.split(' ').next() == family);
+            // `fan --help` and friends are usage text; anything else in a
+            // register family without a Read match is a write.
+            if in_register && !words.iter().any(|w| matches!(*w, "--help" | "-h")) {
+                skip()
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn run_manifest_in(
+    manifest_path: &Path,
+    bin: &Path,
+    timeout: Duration,
+    tripwire: Option<&Tripwire>,
+) -> Result<Vec<CaseResult>, String> {
     let text = std::fs::read_to_string(manifest_path)
         .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
-    let manifest: Manifest =
+    let mut manifest: Manifest =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+    if let Some(tripwire) = tripwire {
+        manifest.env.legacy_override = Some(tripwire.script.clone().into_os_string());
+    }
     if manifest.schema != 1 {
         return Err(format!("unsupported manifest schema {}", manifest.schema));
     }
@@ -87,10 +192,26 @@ pub fn run_manifest(
                 id: case.id.clone(),
                 errors: Vec::new(),
                 hints: Vec::new(),
+                skipped: None,
             };
+            if tripwire.is_some() {
+                result.skipped = not_a_read_case(case);
+                if result.skipped.is_some() {
+                    return result;
+                }
+            }
+            if let Some(t) = tripwire {
+                t.reset();
+            }
             if let Err(error) = run_case(case, dir, bin, &manifest.env, &init, timeout, &mut result)
             {
                 result.errors.push(error);
+            }
+            if tripwire.is_some_and(Tripwire::fired) {
+                result.errors.clear();
+                result.hints.clear();
+                result.skipped =
+                    Some("forwarded to the Swift core (no native implementation yet)".to_owned());
             }
             result
         })
