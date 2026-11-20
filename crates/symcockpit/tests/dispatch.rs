@@ -97,6 +97,31 @@ fn area_commands_are_forwarded_until_a_handler_is_registered() {
 }
 
 #[test]
+fn bare_fan_profile_and_target_read_and_write_family_help_is_native() {
+    let tmp = home();
+    let mut a = app(tmp.path());
+    a.handlers.register("fan.status", |_, _| {
+        Ok(Output::Json(json!({"profile": "system"})))
+    });
+    for l in [&["fan", "profile"], &["fan", "target"], &["fan", "status"]] {
+        assert_eq!(
+            done(&a, l).stdout,
+            "{\n  \"profile\" : \"system\"\n}\n",
+            "{l:?}"
+        );
+    }
+    for command in ["dim", "warmth", "fan", "battery-limit"] {
+        let out = done(&a, &[command, "--help"]);
+        assert_eq!(out.code, 0);
+        assert!(
+            out.stdout
+                .starts_with(&format!("Usage: symcockpit {command} "))
+        );
+        assert_eq!(done(&a, &[command, "set", "-h"]).stdout, out.stdout);
+    }
+}
+
+#[test]
 fn writes_and_other_commands_are_always_forwarded() {
     let tmp = home();
     let mut a = app(tmp.path());
@@ -105,18 +130,15 @@ fn writes_and_other_commands_are_always_forwarded() {
     for l in [
         &["fan", "set", "0.5"][..],
         &["fan", "auto"],
-        &["fan", "profile"],
-        &["fan", "target"],
+        &["fan", "profile", "comfort"],
+        &["fan", "target", "70"],
         &["fan", "governor"],
-        &["fan", "status", "--help"],
         &["brightness", "set", "0.5"],
         &["extbright", "set", "1.2"],
         &["dim", "reset"],
-        &["dim", "--help"],
         &["warmth", "set", "0.1"],
         &["restore"],
         &["battery-limit", "set", "80"],
-        &["battery-limit", "--help"],
         &["awake"],
         &["awake", "off"],
         &["awake", "--seconds", "5"],
@@ -229,7 +251,7 @@ fn usage_errors_have_the_swift_messages_and_exit_2() {
 }
 
 #[test]
-fn help_of_read_commands_is_native_and_of_writes_is_forwarded() {
+fn help_of_read_commands_is_native_and_restore_is_forwarded() {
     let tmp = home();
     let a = app(tmp.path());
     for c in ["sensors", "battery", "displays", "permissions", "doctor"] {
@@ -267,9 +289,8 @@ fn help_of_read_commands_is_native_and_of_writes_is_forwarded() {
             .stdout
             .starts_with("Usage: symcockpit profile save")
     );
-    for w in ["fan", "dim", "warmth", "battery-limit"] {
-        assert!(forwarded(&a, &[w, "--help"]), "{w}");
-    }
+    // The write families' usage text is native too (see the next test); `restore` has none.
+    assert!(forwarded(&a, &["restore", "--help"]));
 }
 
 #[test]

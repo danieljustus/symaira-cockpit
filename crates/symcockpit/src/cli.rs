@@ -338,14 +338,27 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 Ok(Step::Forward)
             }
         }
+        "dim" | "warmth" | "battery-limit" => match is_help(rest) {
+            true => Ok(Step::Text(
+                help::write_family(command).unwrap_or_default().to_owned(),
+            )),
+            false => Ok(Step::Forward),
+        },
         "fan" => {
-            if is_help(rest) || rest.first().map(String::as_str) != Some("status") {
-                return Ok(Step::Forward);
+            if is_help(rest) {
+                return Ok(Step::Text(
+                    help::write_family("fan").unwrap_or_default().to_owned(),
+                ));
             }
-            if let Some(extra) = rest.get(1) {
-                return Err(unexpected("fan status", extra));
+            match rest {
+                // Bare `fan profile` / `fan target` only read the selection; an argument sets it.
+                [sub] if sub == "profile" || sub == "target" => {
+                    run("fan.status", true, Params::None)
+                }
+                [sub, extra, ..] if sub == "status" => Err(unexpected("fan status", extra)),
+                [sub] if sub == "status" => run("fan.status", true, Params::None),
+                _ => Ok(Step::Forward),
             }
-            run("fan.status", true, Params::None)
         }
         "profile" => {
             if is_help(rest) {

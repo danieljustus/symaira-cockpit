@@ -145,7 +145,9 @@ fn not_a_read_case(case: &Case) -> Option<String> {
                 })
                 .max_by_key(|c| c.cli_path.len());
             if let Some(spec) = matched {
-                return if spec.risk == Risk::Read {
+                // Bare `fan profile` / `fan target` read the selection; an argument sets it.
+                let read_form = matches!(words.as_slice(), ["fan", "profile" | "target"]);
+                return if spec.risk == Risk::Read || read_form {
                     None
                 } else {
                     skip()
@@ -155,9 +157,12 @@ fn not_a_read_case(case: &Case) -> Option<String> {
             let in_register = commands()
                 .iter()
                 .any(|c| c.cli_path.split(' ').next() == family);
-            // `fan --help` and friends are usage text; anything else in a
-            // register family without a Read match is a write.
-            if in_register && !words.iter().any(|w| matches!(*w, "--help" | "-h")) {
+            // `fan --help` and friends are usage text, and a bare family that
+            // the oracle recorded as a usage error (exit 2) never reached a
+            // write; anything else in a register family without a Read match
+            // is a write.
+            let usage_error = words.len() == 1 && case.expect_exit == Some(2);
+            if in_register && !usage_error && !words.iter().any(|w| matches!(*w, "--help" | "-h")) {
                 skip()
             } else {
                 None
