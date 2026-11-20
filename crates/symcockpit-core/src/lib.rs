@@ -8,3 +8,4 @@ pub mod system;
 pub mod sensors;
 pub mod battery;
 pub mod power;
+pub mod display;
