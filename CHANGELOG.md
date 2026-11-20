@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Internal
+- Cockpit 2, wave 1: the Rust `symcockpit` answers every read command and read
+  MCP tool natively (`sensors`, `fan status|profile|target`, `battery`,
+  `awake status`, `displays`, `brightness get`, `metrics`, `processes`, `top`,
+  `status`, `doctor`, `permissions`, plus `--help` of the write families). Only
+  state-changing commands are still handed to the Swift core. The oracle passes
+  70/70 with and without a Swift binary (`make oracle`, `make oracle-native`).
+
 ## [0.12.2] (2026-11-18)
 
 ### Fixed
