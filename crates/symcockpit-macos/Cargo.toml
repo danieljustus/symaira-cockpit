@@ -11,3 +11,14 @@ publish.workspace = true
 # No `unsafe_code` entry on purpose: this is the one crate allowed to use it.
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+
+[dependencies]
+symcockpit-contract.workspace = true
+symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+# Moves files to the Trash through NSFileManager (MIT).
+trash = "=5.4.0"
+# Info.plist of app bundles (MIT).
+plist = "=1.10.4"
+
+[dev-dependencies]
+tempfile.workspace = true

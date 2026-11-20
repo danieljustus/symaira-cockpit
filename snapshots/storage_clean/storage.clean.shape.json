@@ -1,0 +1,126 @@
+{
+  "properties": {
+    "catalog_version": {
+      "type": "number"
+    },
+    "categories": {
+      "items": {
+        "properties": {
+          "bytes": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "number"
+          },
+          "permanent": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "digest": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "expires_in_s": {
+      "type": "number"
+    },
+    "id": {
+      "type": "string"
+    },
+    "item_count": {
+      "type": "number"
+    },
+    "items": {
+      "items": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "files": {
+            "type": "number"
+          },
+          "identity": {
+            "properties": {
+              "dev": {
+                "type": "number"
+              },
+              "ino": {
+                "type": "number"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "mtime_ns": {
+                "type": "number"
+              },
+              "mtime_s": {
+                "type": "number"
+              },
+              "size": {
+                "type": "number"
+              },
+              "tree": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "parent_real": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requires_helper": {
+            "type": "boolean"
+          },
+          "root": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "skipped": {
+      "items": null,
+      "type": "array"
+    },
+    "state": {
+      "type": "string"
+    },
+    "total_bytes": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}
