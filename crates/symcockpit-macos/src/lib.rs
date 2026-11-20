@@ -8,3 +8,8 @@ pub mod smc;
 pub mod battery;
 pub mod power;
 pub mod display;
+pub mod gpu;
+pub mod host;
+pub mod network;
+pub mod process;
+pub mod volumes;

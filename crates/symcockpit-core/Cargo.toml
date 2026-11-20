@@ -17,6 +17,8 @@ symcockpit-store = { path = "../symcockpit-store", version = "=0.12.2" }
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true
+# powermetrics' plist output (root-only GPU fallback)
+plist = "=1.10.4"
 
 [dev-dependencies]
 tempfile.workspace = true
