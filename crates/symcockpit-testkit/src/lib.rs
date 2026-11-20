@@ -4,3 +4,5 @@ pub mod hardware;
 pub mod legacy;
 pub mod symbrain;
 pub mod smc;
+pub mod battery;
+pub mod power;

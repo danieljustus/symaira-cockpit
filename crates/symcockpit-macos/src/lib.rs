@@ -5,3 +5,5 @@
 //! documented. This crate therefore opts out of the workspace `unsafe_code` lint.
 
 pub mod smc;
+pub mod battery;
+pub mod power;

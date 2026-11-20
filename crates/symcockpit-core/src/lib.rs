@@ -6,3 +6,5 @@ pub mod profiles;
 pub mod status;
 pub mod system;
 pub mod sensors;
+pub mod battery;
+pub mod power;
