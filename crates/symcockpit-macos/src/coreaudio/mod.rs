@@ -51,8 +51,16 @@ mod live {
                 f["output"]["formats"].as_array().map_or(0, Vec::len)
             );
         }
-        let with_volume = snapshot.devices.iter().filter(|d| d.output.volume.is_some() || d.input.volume.is_some()).count();
-        let settable = snapshot.devices.iter().filter(|d| d.output.volume_settable || d.input.volume_settable).count();
+        let with_volume = snapshot
+            .devices
+            .iter()
+            .filter(|d| d.output.volume.is_some() || d.input.volume.is_some())
+            .count();
+        let settable = snapshot
+            .devices
+            .iter()
+            .filter(|d| d.output.volume_settable || d.input.volume_settable)
+            .count();
         eprintln!("devices with a readable volume: {with_volume}, settable: {settable}");
         // listener registration (process-local; also detaches the HAL from the main run loop)
         let watched = RealAudioHal::watch().expect("listeners");
