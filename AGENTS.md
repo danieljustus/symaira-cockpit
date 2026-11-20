@@ -28,6 +28,7 @@ history. No release is implied by this source cutover.
 | `Sources/SymCockpitApp/` | tune-only menu-bar and window GUI | Swift 6 (SwiftUI/AppKit) |
 | `tuning/` | thermals, power, display and brightness | Swift 6 (AppKit/IOKit) |
 | `history/` | canonical history store, replay codec, secret redaction and bounded subprocess runner | Swift 6 |
+| `crates/` | Cockpit 2 Rust workspace (ADR 0001/0003), growing next to the Swift code: `symcockpit-contract` (command register, risk classes, exit codes), `-core`, `-macos` (the only crate allowed `unsafe`), `-testkit`, `-store`, `symcockpit` (bin: `version` natively, everything else `exec`ed into the Swift binary via `SYMCOCKPIT_LEGACY_BIN`) and `symcockpit-oracle` (compares a binary with the frozen v0.12 fixtures in `oracle/`) | Rust 1.98 |
 
 `SymCockpitCLI` is a library target consumed by both Tune's own executable target
 and the root dispatcher, so Tune stays independently buildable while
@@ -46,13 +47,16 @@ make build                 # swift build in Tune and history
 make test                  # swift test in Tune and history
 make build-tuning            # a single package (also test-tune / test-history)
 swift build && swift test  # root dispatcher and GUI integration tests
+make rust-build rust-test  # Rust workspace (cargo fmt/clippy/test as in CI)
+make oracle BIN=<symcockpit>  # frozen v0.12 oracle against any binary (needs oracle/v0.12)
 ```
 
 - The full Xcode toolchain is required for app targets and tests;
   CommandLineTools alone fails on `actool`. The Makefile resolves a full local
   Xcode automatically, or set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 - CI (`.github/workflows/ci.yml`) runs Tune, history and root `swift build` +
-  `swift test` on `macos-latest`.
+  `swift test`, plus the `rust` job (`cargo fmt --check`, `clippy -D warnings`,
+  `test --locked`), on `macos-latest`.
   A `changes` job (`scripts/ci-changed-areas.sh`) starts only the macOS jobs a
   change can affect; unknown paths run everything, and skipped jobs still
   report their required checks. Add new source areas to that table.
