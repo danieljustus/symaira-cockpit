@@ -12,4 +12,5 @@ pub mod network;
 pub mod power;
 pub mod process;
 pub mod smc;
+pub mod system;
 pub mod volumes;

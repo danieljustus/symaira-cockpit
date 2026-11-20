@@ -696,7 +696,7 @@ pub fn table_lines(report: &ProcessUsageReport) -> Vec<String> {
 }
 
 /// Two sweeps `interval` apart (the first only sets the CPU baseline), then the ranked report.
-fn sample_twice(
+pub fn sample_twice(
     service: &ProcessUsageService,
     sorted_by: ProcessSortKey,
     limit: i64,
@@ -732,11 +732,16 @@ pub fn processes_command(
         Duration::from_secs_f64(options.interval),
         sleep,
     );
-    if options.wants_json {
-        return to_value(&report).map(Output::Json);
+    processes_output(&report, options.wants_json)
+}
+
+/// The JSON document, or the table on stdout with the notes on stderr.
+pub fn processes_output(report: &ProcessUsageReport, json: bool) -> Result<Output, Error> {
+    if json {
+        return to_value(report).map(Output::Json);
     }
     Ok(Output::Text {
-        stdout: table_lines(&report),
+        stdout: table_lines(report),
         stderr: report.notes.iter().map(|n| format!("note: {n}")).collect(),
     })
 }

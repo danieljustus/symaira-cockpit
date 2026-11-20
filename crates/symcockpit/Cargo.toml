@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 symcockpit-contract.workspace = true
 symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+symcockpit-macos = { path = "../symcockpit-macos", version = "=0.12.2" }
 symcockpit-store = { path = "../symcockpit-store", version = "=0.12.2" }
 serde_json.workspace = true
 jiff = { version = "=0.2.42", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }

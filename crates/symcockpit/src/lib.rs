@@ -9,6 +9,7 @@ pub mod cli;
 pub mod help;
 pub mod json;
 pub mod legacy;
+pub mod live;
 pub mod mcp;
 pub mod native;
 pub mod platform;

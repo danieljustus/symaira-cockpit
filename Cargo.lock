@@ -408,6 +408,7 @@ dependencies = [
  "serde_json",
  "symcockpit-contract",
  "symcockpit-core",
+ "symcockpit-macos",
  "symcockpit-store",
  "symcockpit-testkit",
  "tempfile",

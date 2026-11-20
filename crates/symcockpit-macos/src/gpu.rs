@@ -14,7 +14,6 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_foundation_sys::base::{CFAllocatorRef, CFTypeRef, kCFAllocatorDefault};
-use core_foundation_sys::dictionary::CFDictionaryRef;
 use core_foundation_sys::string::CFStringRef;
 use symcockpit_core::metrics::GpuUtilizationReading;
 use symcockpit_core::processes::{GpuClientReading, GpuRegistryClient};

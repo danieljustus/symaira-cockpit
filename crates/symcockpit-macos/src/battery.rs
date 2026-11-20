@@ -6,7 +6,7 @@
 //! (strings and data are dropped on the way in), and the profiler output is
 //! parsed for two lines and never stored or logged.
 
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, c_char, c_void};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::ptr::NonNull;
