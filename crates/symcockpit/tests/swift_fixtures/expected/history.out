@@ -1,0 +1,6 @@
+Timestamp Action Requested Clamped Applied Result Reason/Error
+------------------------------------------------------------------------------------------
+2026-11-19 09:00:00 fan.set 85.00 85.00 84.50 ok 
+2026-11-19 09:00:05 dim.set 0.10 0.15 n/a failed path /tmp/x "quoted"
+line é \ end
+2026-11-20 10:30:00 battery-limit.set 0.00 123456789012.00 0.30 ok 

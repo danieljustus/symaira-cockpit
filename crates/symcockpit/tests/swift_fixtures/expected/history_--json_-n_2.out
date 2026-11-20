@@ -1,0 +1,18 @@
+[
+  {
+    "action" : "dim.set",
+    "clamped_value" : 0.15,
+    "error_reason" : "path /tmp/x \"quoted\"\nline é \\ end",
+    "requested_value" : 0.1,
+    "result" : "failed",
+    "timestamp" : 816771605
+  },
+  {
+    "action" : "battery-limit.set",
+    "applied_value" : 0.30000000000000004,
+    "clamped_value" : 123456789012,
+    "requested_value" : 1e-05,
+    "result" : "ok",
+    "timestamp" : 816863400
+  }
+]

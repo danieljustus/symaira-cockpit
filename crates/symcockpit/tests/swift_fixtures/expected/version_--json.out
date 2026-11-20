@@ -1,0 +1,12 @@
+{
+  "families" : [
+
+  ],
+  "schema_version" : 1,
+  "tool" : "symcockpit",
+  "update" : {
+    "status" : "skipped",
+    "update_available" : false
+  },
+  "version" : "0.12.2"
+}
