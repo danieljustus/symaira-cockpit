@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "device_id": {
+      "type": "string"
+    },
+    "services": {
+      "items": {
+        "properties": {
+          "characteristics": {
+            "items": {
+              "properties": {
+                "properties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "uuid": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

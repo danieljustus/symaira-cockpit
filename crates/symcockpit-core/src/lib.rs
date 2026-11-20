@@ -3,8 +3,10 @@
 pub mod ai_usage;
 pub mod audio;
 pub mod battery;
+pub mod bluetooth;
 pub mod display;
 pub mod history;
+pub mod input;
 pub mod metrics;
 pub mod midi;
 pub mod plan;

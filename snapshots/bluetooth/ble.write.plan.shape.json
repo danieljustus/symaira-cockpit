@@ -1,0 +1,40 @@
+{
+  "properties": {
+    "item": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "characteristic": {
+          "type": "string"
+        },
+        "device_id": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "value_hex": {
+          "type": "string"
+        },
+        "with_response": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "risk": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

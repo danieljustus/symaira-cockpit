@@ -26,7 +26,11 @@ objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSScreen", "NSGraphics", "objc2-core-foundation"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
 objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGDisplayConfiguration", "libc"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "alloc", "NSProcessInfo", "NSString", "NSDictionary", "NSValue", "NSEnumerator", "NSArray", "NSUUID", "NSObject"] }
+objc2-foundation = "=0.3.2"
+# CoreBluetooth through objc2 rather than btleplug: no async runtime (architecture section 10),
+# and the same bindings serve virtual peripherals later (R54). All Zlib OR Apache-2.0 OR MIT.
+objc2-core-bluetooth = "=0.3.2"
+dispatch2 = "=0.3.1"
 objc2-core-audio = "=0.3.2"
 objc2-core-audio-types = "=0.3.2"
 # Client and notifications only: the crate has no device or entity traversal.

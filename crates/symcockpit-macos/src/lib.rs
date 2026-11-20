@@ -6,12 +6,14 @@
 
 pub mod apps;
 pub mod battery;
+pub mod bluetooth;
 pub mod coreaudio;
 pub mod coremidi;
 pub mod display;
 pub mod fs_stats;
 pub mod gpu;
 pub mod host;
+pub mod input;
 pub mod network;
 pub mod nvme;
 pub mod power;

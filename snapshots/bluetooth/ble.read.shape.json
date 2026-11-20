@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "characteristic": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "length": {
+      "type": "number"
+    },
+    "service": {
+      "type": "string"
+    },
+    "value_hex": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
