@@ -3,6 +3,11 @@
 
 mod registry;
 
+/// Commands per functional area, appended to the register by the coordinator.
+pub mod areas {
+    pub mod storage_clean;
+}
+
 pub use registry::{CommandSpec, commands};
 
 use serde::{Deserialize, Serialize};
