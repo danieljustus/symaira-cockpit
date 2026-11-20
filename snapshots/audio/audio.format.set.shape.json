@@ -1,0 +1,47 @@
+{
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "after": {
+      "properties": {
+        "bits": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "before": {
+      "properties": {
+        "bits": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "requested": {
+      "properties": {
+        "bits": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

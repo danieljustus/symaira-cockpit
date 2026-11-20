@@ -1,0 +1,113 @@
+{
+  "properties": {
+    "default_input": {
+      "type": "boolean"
+    },
+    "default_output": {
+      "type": "boolean"
+    },
+    "epoch": {
+      "type": "number"
+    },
+    "input": {
+      "properties": {
+        "channels": {
+          "type": "number"
+        },
+        "format": {
+          "type": "null"
+        },
+        "mute_settable": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "null"
+        },
+        "volume": {
+          "type": "null"
+        },
+        "volume_settable": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "manufacturer": {
+      "type": "string"
+    },
+    "members": {
+      "items": null,
+      "type": "array"
+    },
+    "name": {
+      "type": "string"
+    },
+    "object_id": {
+      "type": "number"
+    },
+    "online": {
+      "type": "boolean"
+    },
+    "output": {
+      "properties": {
+        "channels": {
+          "type": "number"
+        },
+        "format": {
+          "properties": {
+            "bits": {
+              "type": "number"
+            },
+            "channels": {
+              "type": "number"
+            },
+            "rate": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "mute_settable": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "volume_settable": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "sample_rate": {
+      "type": "number"
+    },
+    "sample_rates": {
+      "items": {
+        "properties": {
+          "max": {
+            "type": "number"
+          },
+          "min": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "transport": {
+      "type": "string"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+{
+  "properties": {
+    "input": {
+      "type": "null"
+    },
+    "output": {
+      "type": "number"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

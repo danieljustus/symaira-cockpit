@@ -6,6 +6,8 @@
 
 pub mod apps;
 pub mod battery;
+pub mod coreaudio;
+pub mod coremidi;
 pub mod display;
 pub mod fs_stats;
 pub mod gpu;

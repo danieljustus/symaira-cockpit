@@ -26,7 +26,12 @@ objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSScreen", "NSGraphics", "objc2-core-foundation"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
 objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGDisplayConfiguration", "libc"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "alloc", "NSProcessInfo", "NSString", "NSDictionary", "NSValue", "NSEnumerator", "NSArray"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "alloc", "NSProcessInfo", "NSString", "NSDictionary", "NSValue", "NSEnumerator", "NSArray", "NSUUID", "NSObject"] }
+objc2-core-audio = "=0.3.2"
+objc2-core-audio-types = "=0.3.2"
+# Client and notifications only: the crate has no device or entity traversal.
+coremidi = "=0.9.2"
+coremidi-sys = "=3.2.1"
 serde_json.workspace = true
 
 [dev-dependencies]

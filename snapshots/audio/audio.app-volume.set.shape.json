@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "app": {
+      "type": "string"
+    },
+    "apps": {
+      "items": {
+        "properties": {
+          "muted": {
+            "type": "boolean"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}
