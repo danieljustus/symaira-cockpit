@@ -1,0 +1,130 @@
+{
+  "properties": {
+    "app": {
+      "properties": {
+        "bundle_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "team_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "digest": {
+      "type": "string"
+    },
+    "excluded": {
+      "items": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "expires_in_s": {
+      "type": "number"
+    },
+    "id": {
+      "type": "string"
+    },
+    "item_count": {
+      "type": "number"
+    },
+    "items": {
+      "items": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "files": {
+            "type": "number"
+          },
+          "guard_running": {
+            "type": "string"
+          },
+          "identity": {
+            "properties": {
+              "dev": {
+                "type": "number"
+              },
+              "ino": {
+                "type": "number"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "mtime_ns": {
+                "type": "number"
+              },
+              "mtime_s": {
+                "type": "number"
+              },
+              "size": {
+                "type": "number"
+              },
+              "tree": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "parent_real": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requires_helper": {
+            "type": "boolean"
+          },
+          "root": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "total_bytes": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

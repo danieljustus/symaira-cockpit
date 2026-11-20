@@ -14,6 +14,11 @@ workspace = true
 [dependencies]
 symcockpit-contract.workspace = true
 symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+serde_json.workspace = true
+# CoreKit owns the SQLite policy (WAL, busy timeout, 0700 parent) and the
+# per-name migration table, so several modules can share cockpit.sqlite.
+symaira-core-sqlite = { git = "https://github.com/danieljustus/symaira-corekit", rev = "65d3300cdcf29a8ce28797bbe95ffcbe842696a1", version = "=0.0.0" }
+# Same pin as CoreKit's (one crate in the lock); only for the `params!`/`Row` types.
 rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
 
 [dev-dependencies]

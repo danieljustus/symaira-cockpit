@@ -1,29 +1,18 @@
-//! SMART measurements in `~/.local/share/symtune/cockpit.sqlite` (R30, R31).
-//!
-//! `rusqlite` with the bundled SQLite directly, same pin and features as
-//! CoreKit's `symaira-core-sqlite`, which is not used because (a) its
-//! migrations are SQL files in a `schema_migrations` table, while the
-//! architecture (section 7) wants `user_version` migrations compiled in, and
-//! (b) it pulls `symaira-core-fs` (nix, rustix, fs2, a git fetch of the
-//! CoreKit workspace) to do what is 15 lines here: a 0700 parent directory,
-//! WAL and a busy timeout. Revisit when CoreKit offers an embedded source.
+//! SMART measurements in `cockpit.sqlite` (R30, R31).
 //!
 //! The raw 512-byte log page is stored next to the grade and `rules_version`,
 //! so a later rule table can re-judge old measurements.
 
-use std::os::unix::fs::DirBuilderExt;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::Path;
 
-use rusqlite::{Connection, Transaction, TransactionBehavior, params};
+use rusqlite::params;
+use symaira_core_sqlite::Connection;
 use symcockpit_contract::Error;
 use symcockpit_core::storage::health::{Grade, HistoryStore, Location, SmartSample};
 
-/// Schema steps; step *n* takes `user_version` from *n* to *n + 1*. Each step
-/// must be idempotent (`IF NOT EXISTS`): two processes may race, and other
-/// areas of the same file keep their own steps in the same list.
-pub const MIGRATIONS: &[&str] = &["
-    CREATE TABLE IF NOT EXISTS smart_samples (
+pub(crate) const MIGRATIONS: &[(&str, &str)] = &[(
+    "smart_0001.sql",
+    "CREATE TABLE smart_samples (
         id            INTEGER PRIMARY KEY,
         measured_at   INTEGER NOT NULL,
         device_key    TEXT    NOT NULL,
@@ -34,43 +23,11 @@ pub const MIGRATIONS: &[&str] = &["
         grade         TEXT    NOT NULL CHECK (grade IN ('good', 'warning', 'critical')),
         page          BLOB    NOT NULL CHECK (length(page) = 512)
     );
-    CREATE INDEX IF NOT EXISTS smart_samples_device_time ON smart_samples (device_key, measured_at DESC, id DESC);
-"];
+    CREATE INDEX smart_samples_device_time ON smart_samples (device_key, measured_at DESC, id DESC);",
+)];
 
 fn db_err(e: rusqlite::Error) -> Error {
     Error::Failed(format!("smart history: {e}"))
-}
-
-/// Bring `conn` to the latest of `steps`. A database written by a newer
-/// version (`user_version` above `steps.len()`) is refused, not touched.
-pub fn migrate(conn: &Connection, steps: &[&str]) -> Result<(), Error> {
-    let version: i64 = conn
-        .pragma_query_value(None, "user_version", |r| r.get(0))
-        .map_err(db_err)?;
-    if version > steps.len() as i64 {
-        return Err(Error::Config(format!(
-            "cockpit.sqlite is schema version {version}, this build knows {}",
-            steps.len()
-        )));
-    }
-    for (i, sql) in steps.iter().enumerate().skip(version as usize) {
-        let tx =
-            Transaction::new_unchecked(conn, TransactionBehavior::Immediate).map_err(db_err)?;
-        tx.execute_batch(sql).map_err(db_err)?;
-        tx.pragma_update(None, "user_version", i as i64 + 1)
-            .map_err(db_err)?;
-        tx.commit().map_err(db_err)?;
-    }
-    Ok(())
-}
-
-/// `$XDG_DATA_HOME/symtune/cockpit.sqlite`, else `$HOME/.local/share/symtune/cockpit.sqlite`.
-pub fn default_path(xdg_data_home: Option<&str>, home: Option<&str>) -> Option<PathBuf> {
-    let base = match xdg_data_home.filter(|p| Path::new(p).is_absolute()) {
-        Some(x) => PathBuf::from(x),
-        None => Path::new(home.filter(|h| !h.is_empty())?).join(".local/share"),
-    };
-    Some(base.join("symtune/cockpit.sqlite"))
 }
 
 pub struct SmartHistoryStore {
@@ -80,32 +37,17 @@ pub struct SmartHistoryStore {
 impl SmartHistoryStore {
     /// Open (creating the 0700 parent directory and the file), enable WAL, migrate.
     pub fn open(path: &Path) -> Result<Self, Error> {
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(parent)
-                .map_err(|e| Error::Failed(format!("smart history: {}: {e}", parent.display())))?;
-        }
-        Self::init(Connection::open(path).map_err(db_err)?)
+        Ok(SmartHistoryStore {
+            conn: crate::open(path)?,
+        })
     }
 
     /// The default location from the process environment.
     pub fn open_default() -> Result<Self, Error> {
-        let path = default_path(
+        Self::open(&crate::default_path(
             std::env::var("XDG_DATA_HOME").ok().as_deref(),
             std::env::var("HOME").ok().as_deref(),
-        )
-        .ok_or_else(|| Error::Config("HOME is not set".into()))?;
-        Self::open(&path)
-    }
-
-    fn init(conn: Connection) -> Result<Self, Error> {
-        conn.busy_timeout(Duration::from_secs(5)).map_err(db_err)?;
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(db_err)?;
-        migrate(&conn, MIGRATIONS)?;
-        Ok(SmartHistoryStore { conn })
+        )?)
     }
 
     fn sample(r: &rusqlite::Row<'_>) -> rusqlite::Result<(SmartSample, String)> {
@@ -210,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn open_creates_private_wal_database_at_user_version_1() {
+    fn open_creates_private_wal_database_with_named_migrations() {
         let (dir, s) = store();
         let mode = std::fs::metadata(dir.path().join("sub"))
             .unwrap()
@@ -218,16 +160,20 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o700);
-        let v: i64 = s
-            .conn
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .unwrap();
-        assert_eq!(v, MIGRATIONS.len() as i64);
         let j: String = s
             .conn
             .pragma_query_value(None, "journal_mode", |r| r.get(0))
             .unwrap();
         assert_eq!(j, "wal");
+        let applied: i64 = s
+            .conn
+            .query_row(
+                "SELECT count(*) FROM schema_migrations WHERE version = 'smart_0001'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(applied, 1);
     }
 
     #[test]
@@ -273,71 +219,37 @@ mod tests {
     }
 
     #[test]
-    fn reopening_keeps_data_and_a_newer_database_is_refused() {
+    fn reopening_keeps_data_and_does_not_reapply_migrations() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("c.sqlite");
         SmartHistoryStore::open(&path)
             .unwrap()
             .record(&sample(1, "internal:A", Grade::Good, 9))
             .unwrap();
-        assert_eq!(
-            SmartHistoryStore::open(&path)
-                .unwrap()
-                .latest("internal:A")
-                .unwrap()
-                .unwrap()
-                .page[0],
-            9
-        );
-        Connection::open(&path)
-            .unwrap()
-            .pragma_update(None, "user_version", 99)
+        let again = SmartHistoryStore::open(&path).unwrap();
+        assert_eq!(again.latest("internal:A").unwrap().unwrap().page[0], 9);
+        let n: i64 = again
+            .conn
+            .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
-        assert!(matches!(
-            SmartHistoryStore::open(&path),
-            Err(Error::Config(_))
-        ));
-    }
-
-    #[test]
-    fn migrate_applies_only_missing_steps_and_rolls_back_a_failing_one() {
-        let conn = Connection::open_in_memory().unwrap();
-        migrate(&conn, &["CREATE TABLE t (a)"]).unwrap();
-        migrate(&conn, &["CREATE TABLE t (a)", "CREATE TABLE u (b)"]).unwrap();
-        let bad = [
-            "CREATE TABLE t (a)",
-            "CREATE TABLE u (b)",
-            "CREATE TABLE v (c); THIS IS NOT SQL",
-        ];
-        assert!(migrate(&conn, &bad).is_err());
-        let v: i64 = conn
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .unwrap();
-        assert_eq!(v, 2);
-        let v_exists: i64 = conn
-            .query_row(
-                "SELECT count(*) FROM sqlite_master WHERE name = 'v'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(v_exists, 0);
+        assert_eq!(n, crate::all_migrations().len() as i64);
     }
 
     #[test]
     fn default_path_follows_xdg_then_home() {
+        use crate::default_path;
         assert_eq!(
-            default_path(Some("/x"), Some("/h")),
-            Some("/x/symtune/cockpit.sqlite".into())
+            default_path(Some("/x"), Some("/h")).unwrap(),
+            Path::new("/x/symtune/cockpit.sqlite")
         );
         assert_eq!(
-            default_path(Some("rel"), Some("/h")),
-            Some("/h/.local/share/symtune/cockpit.sqlite".into())
+            default_path(Some("rel"), Some("/h")).unwrap(),
+            Path::new("/h/.local/share/symtune/cockpit.sqlite")
         );
         assert_eq!(
-            default_path(None, Some("/h")),
-            Some("/h/.local/share/symtune/cockpit.sqlite".into())
+            default_path(None, Some("/h")).unwrap(),
+            Path::new("/h/.local/share/symtune/cockpit.sqlite")
         );
-        assert_eq!(default_path(None, None), None);
+        assert!(matches!(default_path(None, None), Err(Error::Config(_))));
     }
 }

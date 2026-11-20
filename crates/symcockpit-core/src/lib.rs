@@ -5,6 +5,7 @@ pub mod battery;
 pub mod display;
 pub mod history;
 pub mod metrics;
+pub mod plan;
 pub mod power;
 pub mod processes;
 pub mod profiles;

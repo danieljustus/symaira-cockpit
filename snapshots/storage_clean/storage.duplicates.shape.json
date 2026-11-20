@@ -1,0 +1,49 @@
+{
+  "properties": {
+    "files_seen": {
+      "type": "number"
+    },
+    "group_count": {
+      "type": "number"
+    },
+    "groups": {
+      "items": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "reclaimable_bytes": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "hardlinks_skipped": {
+      "type": "number"
+    },
+    "min_size": {
+      "type": "number"
+    },
+    "reclaimable_bytes": {
+      "type": "number"
+    },
+    "root": {
+      "type": "string"
+    },
+    "unreadable": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

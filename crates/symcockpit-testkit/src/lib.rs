@@ -8,5 +8,6 @@ pub mod metrics;
 pub mod power;
 pub mod processes;
 pub mod smc;
+pub mod storage_clean;
 pub mod storage_health;
 pub mod symbrain;

@@ -1,0 +1,39 @@
+{
+  "properties": {
+    "counts": {
+      "properties": {
+        "confirmed": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "index": {
+            "type": "number"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
