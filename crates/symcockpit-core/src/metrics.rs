@@ -79,64 +79,8 @@ pub struct NetworkReport {
     pub aggregate_bytes_out_per_second: Option<f64>,
 }
 
-/// Which SMC key supplied the adapter (DC-in) wattage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub enum AdapterPowerSource {
-    #[serde(rename = "smc_pdtr")]
-    SmcPdtr,
-    #[serde(rename = "smc_pd0r")]
-    SmcPd0r,
-}
-
-/// Where the total system power came from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub enum SystemPowerSource {
-    #[serde(rename = "smc_pstr")]
-    SmcPstr,
-    #[serde(rename = "battery_system_load")]
-    BatterySystemLoad,
-}
-
-/// Live power readings (adapter DC-in rail and total system power). Every
-/// field is optional; `adapter_watts` repeats `watts`, as in Swift.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
-pub struct PowerReport {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub volts: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub amps: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub watts: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub adapter_watts: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub adapter_source: Option<AdapterPowerSource>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_watts: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_source: Option<SystemPowerSource>,
-}
-
-impl PowerReport {
-    pub fn new(
-        volts: Option<f64>,
-        amps: Option<f64>,
-        watts: Option<f64>,
-        adapter_source: Option<AdapterPowerSource>,
-        system_watts: Option<f64>,
-        system_source: Option<SystemPowerSource>,
-    ) -> Self {
-        Self {
-            volts,
-            amps,
-            watts,
-            adapter_watts: watts,
-            adapter_source,
-            system_watts,
-            system_source,
-        }
-    }
-}
+// One system-power type for every consumer: see `sensors::read_system_power`.
+pub use crate::sensors::{AdapterPowerSource, PowerReport, SystemPowerSource};
 
 /// GPU device utilization in percent (0-100), the maximum across accelerators.
 #[derive(Clone, Debug, PartialEq, Serialize)]

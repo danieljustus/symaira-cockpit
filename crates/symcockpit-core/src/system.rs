@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use symcockpit_store::Config;
 
 use crate::ai_usage;
+use crate::sensors::{AdapterPowerSource, PowerReport, SystemPowerSource};
 
 /// Why charge limiting cannot work on firmware without any charge-limit key
 /// (#420). Shared with the write path, like in Swift.
@@ -21,23 +22,6 @@ pub struct PrivilegedExecutable {
     /// Raw state: `matching`, `stale`, `unchecked`, `unverifiable`, `untrusted`, `not_installed`.
     pub state: String,
     pub detail: String,
-}
-
-/// Where total system power came from (`PowerReport.systemSource`).
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SystemPowerSource {
-    SmcPstr,
-    BatterySystemLoad,
-}
-
-/// What the power readers found, reduced to what the capability text needs.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PowerDrawReport {
-    pub system_source: Option<SystemPowerSource>,
-    /// Any of volts, amps or watts was read.
-    pub adapter_input: bool,
-    /// The adapter watts came from `PD0R` rather than `PDTR`.
-    pub adapter_pd0r: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,11 +43,11 @@ pub trait HardwareFacts {
     /// A charge-limit key (CHTE, CH0B or CHLC) exists.
     fn charge_limit_key_present(&self) -> bool;
     fn privileged_executable(&self) -> PrivilegedExecutable;
-    fn power_draw(&self) -> Option<PowerDrawReport>;
+    fn power_draw(&self) -> Option<PowerReport>;
     fn host(&self) -> HostInfo;
 }
 
-pub fn power_draw_detail(report: Option<&PowerDrawReport>) -> String {
+pub fn power_draw_detail(report: Option<&PowerReport>) -> String {
     let Some(report) = report else {
         return "No power readings exposed on this Mac — neither total system power (SMC PSTR / battery SystemLoad) nor adapter input (SMC VD0R/ID0R/PDTR/PD0R) is readable.".into();
     };
@@ -74,8 +58,13 @@ pub fn power_draw_detail(report: Option<&PowerDrawReport>) -> String {
         }
         None => "total system power (system_watts) unavailable",
     };
-    let adapter = if report.adapter_input {
-        let key = if report.adapter_pd0r { "PD0R" } else { "PDTR" };
+    let adapter_input = report.volts.is_some() || report.amps.is_some() || report.watts.is_some();
+    let adapter = if adapter_input {
+        let key = if report.adapter_source == Some(AdapterPowerSource::SmcPd0r) {
+            "PD0R"
+        } else {
+            "PDTR"
+        };
         format!(
             "adapter DC-in input only (volts/amps/watts, SMC VD0R/ID0R/{key}) — near 0 on battery, not the Mac's consumption"
         )
@@ -273,7 +262,7 @@ mod tests {
         root: bool,
         charge_key: bool,
         privileged: PrivilegedExecutable,
-        power: Option<PowerDrawReport>,
+        power: Option<PowerReport>,
     }
 
     impl Default for Fake {
@@ -290,10 +279,11 @@ mod tests {
                     state: "matching".into(),
                     detail: "ok".into(),
                 },
-                power: Some(PowerDrawReport {
+                power: Some(PowerReport {
                     system_source: Some(SystemPowerSource::SmcPstr),
-                    adapter_input: true,
-                    adapter_pd0r: false,
+                    watts: Some(10.0),
+                    adapter_source: Some(AdapterPowerSource::SmcPdtr),
+                    ..Default::default()
                 }),
             }
         }
@@ -321,8 +311,8 @@ mod tests {
         fn privileged_executable(&self) -> PrivilegedExecutable {
             self.privileged.clone()
         }
-        fn power_draw(&self) -> Option<PowerDrawReport> {
-            self.power
+        fn power_draw(&self) -> Option<PowerReport> {
+            self.power.clone()
         }
         fn host(&self) -> HostInfo {
             HostInfo {
@@ -480,28 +470,29 @@ mod tests {
 
     #[test]
     fn power_draw_text_covers_sources_and_absence() {
-        let both = PowerDrawReport {
+        let both = PowerReport {
             system_source: Some(SystemPowerSource::SmcPstr),
-            adapter_input: true,
-            adapter_pd0r: false,
+            watts: Some(10.0),
+            adapter_source: Some(AdapterPowerSource::SmcPdtr),
+            ..Default::default()
         };
         assert_eq!(
             power_draw_detail(Some(&both)),
             "Live power: total system power (system_watts) via SMC PSTR; adapter DC-in input only (volts/amps/watts, SMC VD0R/ID0R/PDTR) — near 0 on battery, not the Mac's consumption."
         );
-        let load = PowerDrawReport {
+        let load = PowerReport {
             system_source: Some(SystemPowerSource::BatterySystemLoad),
-            adapter_input: false,
-            adapter_pd0r: false,
+            ..Default::default()
         };
         assert_eq!(
             power_draw_detail(Some(&load)),
             "Live power: total system power (system_watts) via battery PowerTelemetryData.SystemLoad; adapter DC-in input (volts/amps/watts) unavailable."
         );
-        let pd0r = PowerDrawReport {
+        let pd0r = PowerReport {
             system_source: None,
-            adapter_input: true,
-            adapter_pd0r: true,
+            watts: Some(10.0),
+            adapter_source: Some(AdapterPowerSource::SmcPd0r),
+            ..Default::default()
         };
         assert!(power_draw_detail(Some(&pd0r)).contains("system_watts) unavailable; adapter DC-in input only (volts/amps/watts, SMC VD0R/ID0R/PD0R)"));
         assert!(power_draw_detail(None).starts_with("No power readings exposed on this Mac"));

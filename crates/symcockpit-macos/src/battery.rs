@@ -24,8 +24,8 @@ use symcockpit_core::battery::{
 
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
-    fn IOServiceMatching(name: *const c_char) -> *mut CFMutableDictionary;
-    fn IOServiceGetMatchingService(main_port: u32, matching: *mut CFMutableDictionary) -> u32;
+    fn IOServiceMatching(name: *const c_char) -> *mut c_void;
+    fn IOServiceGetMatchingService(main_port: u32, matching: *mut c_void) -> u32;
     fn IORegistryEntryCreateCFProperties(
         entry: u32,
         properties: *mut *mut CFMutableDictionary,

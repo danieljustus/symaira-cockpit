@@ -1,8 +1,7 @@
 //! A fake Mac for `doctor` and `permissions`: every fact is a plain field.
 
-use symcockpit_core::system::{
-    HardwareFacts, HostInfo, PowerDrawReport, PrivilegedExecutable, SystemPowerSource,
-};
+use symcockpit_core::sensors::{AdapterPowerSource, PowerReport, SystemPowerSource};
+use symcockpit_core::system::{HardwareFacts, HostInfo, PrivilegedExecutable};
 
 #[derive(Clone, Debug)]
 pub struct FakeHardware {
@@ -13,7 +12,7 @@ pub struct FakeHardware {
     pub root: bool,
     pub charge_key: bool,
     pub privileged: PrivilegedExecutable,
-    pub power: Option<PowerDrawReport>,
+    pub power: Option<PowerReport>,
 }
 
 impl Default for FakeHardware {
@@ -31,10 +30,11 @@ impl Default for FakeHardware {
                 state: "matching".into(),
                 detail: "root-owned copy matches".into(),
             },
-            power: Some(PowerDrawReport {
+            power: Some(PowerReport {
                 system_source: Some(SystemPowerSource::SmcPstr),
-                adapter_input: true,
-                adapter_pd0r: false,
+                watts: Some(10.0),
+                adapter_source: Some(AdapterPowerSource::SmcPdtr),
+                ..Default::default()
             }),
         }
     }
@@ -62,8 +62,8 @@ impl HardwareFacts for FakeHardware {
     fn privileged_executable(&self) -> PrivilegedExecutable {
         self.privileged.clone()
     }
-    fn power_draw(&self) -> Option<PowerDrawReport> {
-        self.power
+    fn power_draw(&self) -> Option<PowerReport> {
+        self.power.clone()
     }
     fn host(&self) -> HostInfo {
         HostInfo {

@@ -26,10 +26,10 @@ const K_IO_REGISTRY_ITERATE_RECURSIVELY: u32 = 1;
 
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
-    fn IOServiceMatching(name: *const c_char) -> CFDictionaryRef;
+    fn IOServiceMatching(name: *const c_char) -> *mut c_void;
     fn IOServiceGetMatchingServices(
         main_port: u32,
-        matching: CFDictionaryRef,
+        matching: *mut c_void,
         existing: *mut io_object_t,
     ) -> i32;
     fn IOIteratorNext(iterator: io_object_t) -> io_object_t;

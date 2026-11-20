@@ -1,35 +1,7 @@
 //! Fakes for the power, thermal and keep-awake ports and the oracle form tests
 //! of `awake status` and MCP `keep_awake_status`.
 
-use std::collections::HashMap;
-
-use symcockpit_core::power::{
-    KeepAwakeSession, KeepAwakeStatus, PowerKeyReader, ThermalSource, ThermalState,
-};
-
-/// SMC power keys from a map; `open` mimics the connection state.
-pub struct FakePowerKeys {
-    pub open: bool,
-    pub keys: HashMap<String, f64>,
-}
-
-impl FakePowerKeys {
-    pub fn new(keys: &[(&str, f64)]) -> Self {
-        FakePowerKeys {
-            open: true,
-            keys: keys.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
-        }
-    }
-}
-
-impl PowerKeyReader for FakePowerKeys {
-    fn is_open(&self) -> bool {
-        self.open
-    }
-    fn read_key(&self, key: &str) -> Option<f64> {
-        self.keys.get(key).copied()
-    }
-}
+use symcockpit_core::power::{KeepAwakeSession, KeepAwakeStatus, ThermalSource, ThermalState};
 
 pub struct FakeThermal(pub ThermalState);
 
@@ -51,8 +23,10 @@ impl KeepAwakeStatus for FakeKeepAwake {
 mod tests {
     use super::*;
     use crate::battery::assert_shape;
+    use crate::smc::FakeSmc;
     use std::time::SystemTime;
-    use symcockpit_core::power::{awake_status_json, read_system_power};
+    use symcockpit_core::power::awake_status_json;
+    use symcockpit_core::sensors::read_system_power;
 
     fn status() -> serde_json::Value {
         awake_status_json(&FakeKeepAwake(
@@ -77,8 +51,8 @@ mod tests {
 
     #[test]
     fn fake_keys_drive_the_system_power_function() {
-        let report =
-            read_system_power(&FakePowerKeys::new(&[("PDTR", 0.0)]), || Some(8_000)).unwrap();
+        let smc = FakeSmc::new(true).with_flt("PDTR", 0.0);
+        let report = read_system_power(&smc, || Some(8_000)).unwrap();
         assert_eq!(report.system_watts, Some(8.0));
         assert_eq!(
             FakeThermal(ThermalState::Fair).thermal_state().label(),

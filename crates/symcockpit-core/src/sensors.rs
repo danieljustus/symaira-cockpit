@@ -145,7 +145,7 @@ pub enum SystemPowerSource {
 /// Live power readings. Every field is optional and omitted when absent; the
 /// block itself is omitted when nothing is readable (no zeros, no guesses).
 /// `adapter_watts` always repeats `watts`, as in Swift.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct PowerReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volts: Option<f64>,
@@ -161,6 +161,27 @@ pub struct PowerReport {
     pub system_watts: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_source: Option<SystemPowerSource>,
+}
+
+impl PowerReport {
+    pub fn new(
+        volts: Option<f64>,
+        amps: Option<f64>,
+        watts: Option<f64>,
+        adapter_source: Option<AdapterPowerSource>,
+        system_watts: Option<f64>,
+        system_source: Option<SystemPowerSource>,
+    ) -> Self {
+        Self {
+            volts,
+            amps,
+            watts,
+            adapter_watts: watts,
+            adapter_source,
+            system_watts,
+            system_source,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
