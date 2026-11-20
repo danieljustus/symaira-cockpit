@@ -22,6 +22,43 @@ pub mod exit {
     pub const UNSUPPORTED: u8 = 4;
 }
 
+/// Domain error shared by every area; mirrors `TuneError` in
+/// `tuning/Sources/SymCockpitCore/Errors.swift` (cases, messages, exit codes).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Error {
+    Usage(String),
+    Config(String),
+    Permission(String),
+    Unsupported(String),
+    NotImplemented(String),
+    Failed(String),
+}
+
+impl Error {
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            Error::Usage(_) | Error::Config(_) => exit::USAGE,
+            Error::Permission(_) => exit::PERMISSION,
+            Error::Unsupported(_) | Error::NotImplemented(_) => exit::UNSUPPORTED,
+            Error::Failed(_) => exit::ERROR,
+        }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Usage(m) | Error::Failed(m) => f.write_str(m),
+            Error::Config(m) => write!(f, "config error: {m}"),
+            Error::Permission(m) => write!(f, "permission error: {m}"),
+            Error::Unsupported(m) => write!(f, "unsupported: {m}"),
+            Error::NotImplemented(m) => write!(f, "not implemented: {m}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 /// How an agent may trigger a command (architecture §5.3).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -94,6 +131,40 @@ mod tests {
                 src.contains(&format!("case {name} = {code}")),
                 "{name} = {code}"
             );
+        }
+    }
+
+    #[test]
+    fn errors_match_swift_messages_and_exit_codes() {
+        let src = include_str!("../../../tuning/Sources/SymCockpitCore/Errors.swift");
+        for (err, prefix, code) in [
+            (Error::Usage("m".into()), "", exit::USAGE),
+            (Error::Config("m".into()), "config error: ", exit::USAGE),
+            (
+                Error::Permission("m".into()),
+                "permission error: ",
+                exit::PERMISSION,
+            ),
+            (
+                Error::Unsupported("m".into()),
+                "unsupported: ",
+                exit::UNSUPPORTED,
+            ),
+            (
+                Error::NotImplemented("m".into()),
+                "not implemented: ",
+                exit::UNSUPPORTED,
+            ),
+            (Error::Failed("m".into()), "", exit::ERROR),
+        ] {
+            assert_eq!(err.to_string(), format!("{prefix}m"));
+            assert_eq!(err.exit_code(), code);
+            if !prefix.is_empty() {
+                assert!(
+                    src.contains(&format!("\"{prefix}\\(message)\"")),
+                    "{prefix}"
+                );
+            }
         }
     }
 
