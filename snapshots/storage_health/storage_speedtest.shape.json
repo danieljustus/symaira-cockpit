@@ -1,0 +1,82 @@
+{
+  "properties": {
+    "block_bytes": {
+      "type": "number"
+    },
+    "cache_mode": {
+      "type": "string"
+    },
+    "cache_mode_applied": {
+      "type": "boolean"
+    },
+    "cleanup": {
+      "properties": {
+        "error": {
+          "type": "null"
+        },
+        "removed": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "read": {
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "duration_seconds": {
+          "type": "number"
+        },
+        "mb_per_s": {
+          "type": "number"
+        },
+        "mib_per_s": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "schema": {
+      "type": "number"
+    },
+    "size_mib": {
+      "type": "number"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string"
+    },
+    "units": {
+      "properties": {
+        "mb_per_s": {
+          "type": "string"
+        },
+        "mib_per_s": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "write": {
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "duration_seconds": {
+          "type": "number"
+        },
+        "mb_per_s": {
+          "type": "number"
+        },
+        "mib_per_s": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}

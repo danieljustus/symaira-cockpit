@@ -10,3 +10,12 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+symcockpit-contract.workspace = true
+symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+# Same pin and feature set as CoreKit `symaira-core-sqlite`; see smart_history.rs for why that crate is not used.
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
+
+[dev-dependencies]
+tempfile.workspace = true
