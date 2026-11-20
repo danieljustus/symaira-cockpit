@@ -1,6 +1,10 @@
 //! Command register and wire vocabulary shared by CLI, MCP and the app
 //! protocol (ADR 0001). Pure data: no I/O, no platform access.
 
+pub mod areas {
+    //! Per-area command specs the coordinator appends to the register.
+    pub mod audio;
+}
 mod registry;
 
 pub use registry::{CommandSpec, commands};

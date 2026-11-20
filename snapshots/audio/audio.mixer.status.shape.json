@@ -1,0 +1,32 @@
+{
+  "properties": {
+    "audio_processes": {
+      "items": {
+        "properties": {
+          "bundle_id": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "running_output": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "managed": {
+      "items": null,
+      "type": "array"
+    },
+    "mixer_running": {
+      "type": "boolean"
+    },
+    "supported": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

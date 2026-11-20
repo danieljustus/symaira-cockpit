@@ -1,0 +1,48 @@
+{
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "after": {
+      "properties": {
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "before": {
+      "type": "null"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "requested": {
+      "properties": {
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "multi_output": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

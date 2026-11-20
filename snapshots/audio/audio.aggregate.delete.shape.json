@@ -1,0 +1,44 @@
+{
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "after": {
+      "properties": {
+        "present": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "before": {
+      "properties": {
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "present": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "requested": {
+      "properties": {
+        "present": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "after": {
+      "type": "string"
+    },
+    "before": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "requested": {
+      "type": "string"
+    },
+    "uid": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

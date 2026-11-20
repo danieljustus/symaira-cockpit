@@ -1,0 +1,19 @@
+{
+  "properties": {
+    "events": {
+      "items": null,
+      "type": "array"
+    },
+    "output_changes": {
+      "type": "number"
+    },
+    "stopped": {
+      "type": "boolean"
+    },
+    "teardown_errors": {
+      "items": null,
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

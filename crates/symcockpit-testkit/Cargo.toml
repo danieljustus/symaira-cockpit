@@ -10,3 +10,11 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+symcockpit-core = { path = "../symcockpit-core" }
+
+[dev-dependencies]
+symcockpit-contract.workspace = true
+symcockpit-oracle = { path = "../symcockpit-oracle" }
+serde_json.workspace = true

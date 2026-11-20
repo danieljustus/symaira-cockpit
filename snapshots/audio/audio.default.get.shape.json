@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "input": {
+      "type": "string"
+    },
+    "output": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
