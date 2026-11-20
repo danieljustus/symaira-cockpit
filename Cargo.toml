@@ -1,0 +1,45 @@
+# Cockpit 2 Rust workspace (ADR 0001/0003): grows next to the Swift packages
+# (Package.swift, tuning/, history/) until the Swift core is retired.
+[workspace]
+members = [
+    "crates/symcockpit-contract",
+    "crates/symcockpit-core",
+    "crates/symcockpit-macos",
+    "crates/symcockpit-testkit",
+    "crates/symcockpit-store",
+    "crates/symcockpit",
+    "crates/symcockpit-oracle",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.12.2"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+repository = "https://github.com/danieljustus/symaira-cockpit"
+publish = false
+
+[workspace.dependencies]
+symcockpit-contract = { path = "crates/symcockpit-contract", version = "=0.12.2" }
+# Shared Symaira foundations are pinned by revision like every Rust consumer:
+#   { git = "https://github.com/danieljustus/symaira-corekit",
+#     rev = "65d3300cdcf29a8ce28797bbe95ffcbe842696a1", version = "=0.0.0" }
+# No CoreKit crate is used yet: symaira-core-exit numbers codes differently
+# (4 = forbidden, Cockpit: 4 = unsupported) and symaira-core-version has no
+# `families`/`update` fields. Add the pin with the first crate that fits.
+regex = "=1.13.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+tempfile = "=3.23.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true

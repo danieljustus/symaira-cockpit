@@ -1,0 +1,18 @@
+[package]
+name = "symcockpit"
+description = "Symaira Cockpit command line: `version` natively, everything else forwarded to the Swift core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+symcockpit-contract.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

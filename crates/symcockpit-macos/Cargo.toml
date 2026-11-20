@@ -1,0 +1,13 @@
+[package]
+name = "symcockpit-macos"
+description = "macOS platform adapters. `unsafe` is allowed in this crate only (ADR 0004)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# No `unsafe_code` entry on purpose: this is the one crate allowed to use it.
+[lints.clippy]
+all = { level = "warn", priority = -1 }

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "source": {"swift_commit": "0000000000000000000000000000000000000000", "version": "0.0.0", "captured_on": {"arch": "synthetic", "macos": "synthetic"}},
+  "env": {"isolate_xdg": true, "set": {"ORACLE_SYNTHETIC": "1"}},
+  "cases": [
+    {"id": "sensors-json", "argv": ["sensors", "--json"], "kind": "json_shape", "expect_exit": 0, "fixture": "cases/sensors-json.shape.json"},
+    {"id": "help", "argv": ["help"], "kind": "exact", "expect_exit": 0, "fixture": "cases/help.stdout", "normalize": [{"pattern": "v\\d+", "replacement": "vX"}]},
+    {"id": "unknown-command", "argv": ["nope"], "kind": "exit_code", "expect_exit": 2},
+    {"id": "mcp-tools-list", "kind": "mcp_tools_list", "fixture": "cases/mcp-tools-list.json"},
+    {"id": "mcp-call-get_sensors", "kind": "mcp_call_shape", "tool": "get_sensors", "arguments": {}, "fixture": "cases/mcp-call-get_sensors.shape.json"}
+  ]
+}

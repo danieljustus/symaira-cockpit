@@ -1,0 +1,1 @@
+{"type":"object","properties":{"thermal":{"type":"string"},"fans":{"type":"array","items":{"type":"object","properties":{"rpm":{"type":"number"}}}},"temp":{"type":"null"}}}

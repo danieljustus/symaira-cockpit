@@ -40,3 +40,6 @@ PLANUNG.md
 ARCHITEKTUR.md
 .claude/
 .worktrees/
+
+# Rust
+/target
