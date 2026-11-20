@@ -11,3 +11,9 @@ publish.workspace = true
 # No `unsafe_code` entry on purpose: this is the one crate allowed to use it.
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+
+[dependencies]
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSProcessInfo"] }
+serde_json.workspace = true
+symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
