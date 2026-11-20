@@ -3,3 +3,4 @@
 pub mod hardware;
 pub mod legacy;
 pub mod symbrain;
+pub mod smc;

@@ -12,5 +12,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+symcockpit-contract.workspace = true
 symcockpit-core = { path = "../symcockpit-core", version = "=0.12.2" }
+symcockpit-oracle = { path = "../symcockpit-oracle" }
+serde_json.workspace = true
 tempfile.workspace = true
