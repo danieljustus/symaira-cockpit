@@ -62,8 +62,11 @@ can be absent on one machine state and present on another; see Limits.
 
 ### Environment
 
-`env.set` is applied on top of a cleared environment; `isolate_xdg` means fresh
-temporary `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`:
+`env.set` is applied on top of a cleared environment (`PATH=/usr/bin:/bin`);
+`isolate_xdg` means a fresh temporary `HOME` (also `CFFIXED_USER_HOME`),
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` per case. The capture
+and the `symcockpit-oracle` harness apply the same rules; the harness passes
+through only `SYMCOCKPIT_LEGACY_BIN`, so it can drive the Rust binary:
 
 | Variable | Why |
 | --- | --- |
@@ -71,10 +74,9 @@ temporary `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`:
 | `SYMCOCKPIT_CHECK_UPDATES=0` | `CockpitUpdatePolicy` (Sources/symcockpit/CockpitUpdateChecker.swift); no request is ever made |
 | `LC_ALL=C`, `TZ=UTC` | locale- and zone-independent text |
 
-**Also isolate `HOME`.** The fan profile lives in `~/.symtune/fan-profile.json`
-(`FanProfileStore.defaultURL`), which XDG variables do not move. The capture
-sets `HOME` and `CFFIXED_USER_HOME` to a fresh directory; a harness that runs
-the Swift binary should do the same.
+`HOME` is isolated because the fan profile lives in
+`~/.symtune/fan-profile.json` (`FanProfileStore.defaultURL`), which XDG
+variables do not move.
 
 ## Recording
 

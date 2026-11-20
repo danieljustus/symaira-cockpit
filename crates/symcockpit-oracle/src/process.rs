@@ -11,6 +11,10 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+/// The only variable an isolated case inherits: it lets the oracle drive the
+/// Rust binary, which forwards unported commands to the Swift one.
+pub const LEGACY_BIN_VAR: &str = "SYMCOCKPIT_LEGACY_BIN";
+
 /// Environment rules from the manifest.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct EnvSpec {
@@ -34,15 +38,25 @@ fn command(bin: &Path, args: &[&str], env: &EnvSpec) -> Result<(Command, Option<
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let dir = if env.isolate_xdg {
+        // Same environment as oracle/tools/capture.py: nothing inherited, and a
+        // fresh HOME too, because the fan profile lives in ~/.symtune.
+        let legacy = std::env::var_os(LEGACY_BIN_VAR);
+        cmd.env_clear().env("PATH", "/usr/bin:/bin");
+        if let Some(legacy) = legacy {
+            cmd.env(LEGACY_BIN_VAR, legacy);
+        }
         let dir = tempfile::tempdir().map_err(|e| format!("tempdir: {e}"))?;
-        for (var, sub) in [
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_DATA_HOME", "data"),
-            ("XDG_CACHE_HOME", "cache"),
+        for (vars, sub) in [
+            (&["HOME", "CFFIXED_USER_HOME"][..], "home"),
+            (&["XDG_CONFIG_HOME"][..], "config"),
+            (&["XDG_DATA_HOME"][..], "data"),
+            (&["XDG_CACHE_HOME"][..], "cache"),
         ] {
             let path = dir.path().join(sub);
             std::fs::create_dir(&path).map_err(|e| format!("mkdir {}: {e}", path.display()))?;
-            cmd.env(var, path);
+            for var in vars {
+                cmd.env(var, &path);
+            }
         }
         Some(dir)
     } else {
@@ -212,7 +226,15 @@ mod tests {
             a.contains("ORACLE_PROBE=yes")
                 && a.contains("XDG_DATA_HOME=")
                 && a.contains("XDG_CACHE_HOME=")
+                && a.contains("CFFIXED_USER_HOME=")
+                && a.contains("PATH=/usr/bin:/bin")
         );
+        let home = std::env::var("HOME").unwrap_or_default();
+        assert!(
+            !a.contains(&format!("HOME={home}\n")),
+            "real HOME leaked: {a}"
+        );
+        assert!(!a.contains("USER="), "inherited environment leaked: {a}");
     }
 
     #[test]
