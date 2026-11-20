@@ -10,3 +10,8 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+symcockpit-contract.workspace = true
+serde.workspace = true
+serde_json.workspace = true
