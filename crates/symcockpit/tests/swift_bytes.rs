@@ -20,6 +20,7 @@ fn expected(name: &str) -> Vec<u8> {
 fn command(home: &std::path::Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_symcockpit"));
     cmd.env_clear()
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .env("HOME", home)
         .env("PATH", "/usr/bin:/bin")
         .env("TZ", "UTC")

@@ -1,7 +1,9 @@
 //! `symcockpit` during the strangler migration (ADR 0003). Read commands run
 //! natively as soon as their area is wired in (`app::Handlers`), `version`,
 //! `help`, `history`, `profile list`, `ai-usage` and the MCP server `serve`
-//! always do; everything else is `exec`ed into the legacy Swift binary so
+//! always do, and so do the unprivileged writes (`writes`: brightness, extended
+//! brightness, dim, warmth, awake, profiles, and the display half of `restore`);
+//! everything else is `exec`ed into the legacy Swift binary so
 //! stdin, stdout, stderr and the exit code stay untouched.
 
 pub mod agent;
@@ -16,12 +18,28 @@ pub mod mcp;
 pub mod native;
 pub mod platform;
 pub mod write;
+pub mod writes;
 
 use std::ffi::OsString;
 
 use symcockpit_contract::exit;
 
 pub use legacy::{LEGACY_ENV, forward, resolve_legacy};
+
+/// Debug builds only: tests that spawn this binary set it, and then no command
+/// reaches a display, gamma, overlay, keep-awake, SMC or charge-limit write;
+/// the write fails as unsupported instead (tuning/AGENTS.md hardware
+/// isolation). Release builds never read it.
+pub const NO_HARDWARE_ENV: &str = "SYMCOCKPIT_TEST_NO_HARDWARE";
+
+pub(crate) fn hardware_writes_blocked() -> Result<(), symcockpit_contract::Error> {
+    if cfg!(debug_assertions) && std::env::var_os(NO_HARDWARE_ENV).is_some() {
+        return Err(symcockpit_contract::Error::Unsupported(format!(
+            "hardware writes are disabled ({NO_HARDWARE_ENV})"
+        )));
+    }
+    Ok(())
+}
 
 /// Release version; must equal `CockpitVersion.current` in Swift.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -81,17 +99,45 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
     };
     // Internal command of the app bundle: not in the help text or the oracle.
     if strings.first().map(String::as_str) == Some("agent") {
-        return agent::main(app, &strings[1..]);
+        // The agent ends on EOF or SIGTERM (its own signal pipe); the
+        // overrides it held for the app are put back afterwards.
+        let code = agent::main(app, &strings[1..]);
+        writes::shutdown();
+        return code;
     }
-    match cli::plan(app, &strings) {
+    // Restore-on-interrupt for the commands that can hold an override. Armed
+    // here, in production only: it installs signal handlers and starts a thread.
+    if matches!(
+        strings.first().map(String::as_str),
+        Some(
+            "serve"
+                | "awake"
+                | "brightness"
+                | "extbright"
+                | "dim"
+                | "warmth"
+                | "profile"
+                | "restore"
+        )
+    ) {
+        writes::arm_interrupt_restore();
+    }
+    let code = match cli::plan(app, &strings) {
         cli::Action::Done(outcome) => write_all(
             outcome.stdout.as_bytes(),
             outcome.stderr.as_bytes(),
             outcome.code,
         ),
-        cli::Action::Forward => forward(args),
+        cli::Action::Forward => {
+            // Whatever this process overrode is put back before the exec.
+            writes::shutdown();
+            return forward(args);
+        }
         cli::Action::Serve { data_dir_override } => serve(app, data_dir_override),
-    }
+    };
+    // Restore-on-exit for the display and keep-awake overrides.
+    writes::shutdown();
+    code
 }
 
 fn write_all(stdout: &[u8], stderr: &[u8], code: u8) -> u8 {
@@ -123,7 +169,11 @@ fn serve(app: &app::App, data_dir_override: Option<std::path::PathBuf>) -> u8 {
         services: &app.services,
     };
     let server = mcp::Server::new(app, &ctx);
-    match mcp::serve(&server, std::io::stdin().lock(), std::io::stdout().lock()) {
+    match mcp::serve(
+        &server,
+        writes::PumpedStdin::spawn(),
+        std::io::stdout().lock(),
+    ) {
         Ok(()) => exit::OK,
         Err(error) => {
             eprintln!("symcockpit: serve: {error}");

@@ -43,6 +43,7 @@ fn applied() -> Output {
 }
 
 fn run(ctx: &Context, command: &Command) -> Result<Output, Error> {
+    crate::hardware_writes_blocked()?;
     let is_root = running_as_root();
     let smc = LiveSmc::open();
     let (host, battery, clock) = (LiveHost, LiveBatterySource, SystemMonotonic);

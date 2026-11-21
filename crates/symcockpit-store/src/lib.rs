@@ -1,19 +1,28 @@
-//! Persisted data formats shared with v0.12. Read-only, with one exception:
-//! `smc_restore` writes `smc-restore.json` (the privileged write path's
-//! restore record, same format and modes as Swift). Nothing here locks or
-//! modifies any other file the Swift core owns.
+//! Persisted data formats shared with v0.12. Reading never creates, modifies or
+//! locks a file the Swift core owns; the few writers (history append, profiles,
+//! the display restore record and `smc_restore`, the privileged write path's
+//! restore record) keep the Swift file formats and modes.
 
 mod config;
+mod display_record;
 mod history;
 pub mod history_log;
 mod paths;
 mod profiles;
 pub mod smc_restore;
+mod state;
 pub mod state_perms;
 mod toml;
 
 pub use config::{Config, Loaded, safety};
-pub use history::{HistoryRecord, history_writable, parse_iso8601, read_history_records};
+pub use display_record::{DisplayRestoreRecord, clear_record, read_record, write_record};
+pub use history::{
+    HistoryEvent, HistoryRecord, append_history_event, history_writable, parse_iso8601,
+    read_history_records,
+};
 pub use paths::{Env, Paths};
-pub use profiles::{Profile, read_profiles};
+pub use profiles::{
+    Profile, delete_profile, is_valid_profile_name, read_profile, read_profiles, write_profile,
+};
+pub use state::{ensure_private_dir, secure_file, write_private_atomic};
 pub use toml::{Table, Value as TomlValue, parse as parse_toml};

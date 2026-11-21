@@ -2,14 +2,18 @@
 
 pub mod ai_usage;
 pub mod audio;
+pub mod awake;
 pub mod battery;
 pub mod bluetooth;
 pub mod charge_limit;
 pub mod clipboard;
 pub mod clock;
 pub mod display;
+pub mod display_write;
+pub mod edr;
 pub mod fan;
 pub mod finder;
+pub mod gamma;
 pub mod governor;
 pub mod helper_engine;
 pub mod history;
@@ -27,4 +31,5 @@ pub mod smc_write;
 pub mod status;
 pub mod storage;
 pub mod system;
+pub mod tune_write;
 pub mod write_commands;

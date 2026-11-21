@@ -15,6 +15,7 @@ fn serve(home: &Path, legacy: Option<&Path>, extra_env: &[(&str, &str)], input: 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_symcockpit"));
     cmd.arg("serve")
         .env_clear()
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join("c"))
@@ -67,7 +68,7 @@ const SESSION: &str = concat!(
     "\n",
     r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_history","arguments":{}}}"#,
     "\n",
-    r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"set_dim","arguments":{"value":0.5}}}"#,
+    r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"delete_profile","arguments":{"name":"nope"}}}"#,
     "\n",
     "garbage\n",
     r#"{"jsonrpc":"2.0","id":5,"method":"ping"}"#,
@@ -116,13 +117,19 @@ fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
         "tools/list must hold the recorded v0.12 result"
     );
     assert_eq!(frames[2]["result"]["content"][0]["text"], "[]");
-    assert_eq!(
-        frames[3]["result"]["content"][0]["text"],
-        "{\"applied\":true}"
+    // Every v0.12 write is native now and runs in this process; the test
+    // process forbids hardware writes, so it is a tool error, not a Swift call.
+    assert!(
+        frames[3]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("hardware writes are disabled"),
+        "{}",
+        frames[3]
     );
     assert_eq!(frames[4]["error"]["code"], -32700);
     assert_eq!(frames[5]["result"], json!({}));
-    assert_eq!(fake.calls(), [["dim", "set", "0.5"]]);
+    assert!(fake.calls().is_empty(), "nothing was handed to Swift");
     // Nothing was created in the (isolated) data or config directories.
     assert!(!tmp.path().join("d").exists() && !tmp.path().join("c").exists());
 }
@@ -207,6 +214,7 @@ fn non_utf8_arguments_are_forwarded_to_swift() {
     let tmp = tempfile::tempdir().unwrap();
     let fake = FakeLegacy::new(tmp.path(), "forwarded", "", 0);
     let out = Command::new(env!("CARGO_BIN_EXE_symcockpit"))
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .arg(std::ffi::OsStr::from_bytes(b"\xff\xfe"))
         .env("SYMCOCKPIT_LEGACY_BIN", &fake.path)
         .output()
@@ -222,6 +230,7 @@ fn native_commands_run_as_a_process_with_exact_exit_codes() {
         Command::new(env!("CARGO_BIN_EXE_symcockpit"))
             .args(args)
             .env_clear()
+            .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
             .env("PATH", "/usr/bin:/bin")
             .env("HOME", tmp.path())
             .env("XDG_DATA_HOME", tmp.path().join("d"))

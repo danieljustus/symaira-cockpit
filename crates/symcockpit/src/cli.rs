@@ -12,6 +12,7 @@ use symcockpit_contract::{CommandSpec, Error, area_commands};
 use symcockpit_core::{ai_usage, history, profiles, status, write_commands};
 
 use crate::app::{App, AreaInput, Context, Output, Params, ProcessSort, ProcessesParams, Request};
+use crate::writes::{self, WriteOp};
 use crate::{help, json, native};
 
 /// What to do with the invocation.
@@ -195,13 +196,15 @@ fn tune(app: &App, args: &[String]) -> Action {
     }
     // Parsing errors and `--help` also carry the configuration warnings.
     with_context(app, data_dir_override, |ctx| {
-        let request = match parse(command, &args[1..]) {
-            Ok(Step::Run(request)) => request,
+        let result = match parse(command, &args[1..]) {
+            Ok(Step::Run(request)) => native::run_read(app, ctx, &request),
+            Ok(Step::Write(WriteOp::Restore)) => writes::restore(ctx, || smc_restore(app, ctx)),
+            Ok(Step::Write(op)) => writes::run_cli(ctx, &op),
             Ok(Step::Text(text)) => return Action::Done(Outcome::out(text)),
             Ok(Step::Forward) => return Action::Forward,
             Err(error) => return Action::Done(Outcome::failure(&error)),
         };
-        match native::run_read(app, ctx, &request) {
+        match result {
             Ok(Some(output)) => Action::Done(render(output)),
             Ok(None) => Action::Forward,
             Err(error) => Action::Done(Outcome::failure(&error)),
@@ -415,6 +418,8 @@ enum Step {
     Text(String),
     /// Not a read the Swift core cannot do better: hand it over.
     Forward,
+    /// An unprivileged write, run in this process.
+    Write(WriteOp),
 }
 
 fn run(command: &'static str, json: bool, params: Params) -> Result<Step, Error> {
@@ -427,6 +432,21 @@ fn run(command: &'static str, json: bool, params: Params) -> Result<Step, Error>
 
 fn unexpected(command: &str, arg: &str) -> Error {
     Error::Usage(format!("{command}: unexpected argument '{arg}'"))
+}
+
+/// The SMC half of `restore`: the fan/charge area's handler (root directly,
+/// otherwise the helper). `Ok(None)` where it is not wired (test apps): the
+/// Swift core finishes the restore.
+pub(crate) fn smc_restore(app: &App, ctx: &Context) -> Result<Option<Output>, Error> {
+    let Some(handler) = app.handlers.get("restore") else {
+        return Ok(None);
+    };
+    let request = Request {
+        command: "restore",
+        json: true,
+        params: Params::Write(write_commands::Command::Restore),
+    };
+    handler(ctx, &request).map(Some)
 }
 
 /// A privileged write: answered by the handler wired in [`crate::write`], else forwarded.
@@ -558,7 +578,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
         }
         "awake" => match rest.first().map(String::as_str) {
             Some("status") => run("awake.status", true, Params::None),
-            _ => Ok(Step::Forward),
+            _ => writes::parse_awake(rest).map(Step::Write),
         },
         "brightness" => {
             if rest.is_empty() || rest[0] == "get" {
@@ -567,16 +587,19 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 }
                 run("brightness.get", true, Params::None)
             } else {
-                Ok(Step::Forward)
+                writes::parse_brightness_set(rest).map(Step::Write)
             }
         }
         "battery-limit" if !is_help(rest) => write(write_commands::parse_battery_limit(rest)?),
-        "restore" => write(write_commands::parse_restore(rest)?),
-        "dim" | "warmth" | "battery-limit" => match is_help(rest) {
-            true => Ok(Step::Text(
+        "extbright" => writes::parse_extbright(rest).map(Step::Write),
+        "restore" => writes::parse_restore(rest).map(Step::Write),
+        "dim" | "warmth" | "battery-limit" => match (is_help(rest), command) {
+            (true, _) => Ok(Step::Text(
                 help::write_family(command).unwrap_or_default().to_owned(),
             )),
-            false => Ok(Step::Forward),
+            (false, "dim") => writes::parse_dim(rest).map(Step::Write),
+            (false, "warmth") => writes::parse_warmth(rest).map(Step::Write),
+            (false, _) => Ok(Step::Forward),
         },
         "fan" => {
             if is_help(rest) {
@@ -614,7 +637,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
             if subcommand == "list" {
                 run("profile.list", true, Params::None)
             } else {
-                Ok(Step::Forward)
+                writes::parse_profile(subcommand, tail).map(Step::Write)
             }
         }
         _ => Ok(Step::Forward),

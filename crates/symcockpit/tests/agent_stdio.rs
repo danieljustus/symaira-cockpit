@@ -26,6 +26,7 @@ fn command(home: &Path, args: &[&str]) -> Command {
     let mut cmd = Command::new(BIN);
     cmd.args(args)
         .env_clear()
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join("c"))
@@ -181,31 +182,37 @@ fn hello_call_plan_and_confirm_run_through_the_mcp_dispatch_path() {
         "a native read does not spawn Swift"
     );
 
-    // reversible: direct, via the Swift core exactly as `tools/call` does.
+    // reversible: direct, no plan. The test process forbids hardware writes
+    // (SYMCOCKPIT_TEST_NO_HARDWARE), so the native dim write is refused as
+    // unsupported instead of dimming the real display.
     let (r, _) = agent.request(
         "call",
         json!({"command": "dim.set", "params": {"value": 0.5}}),
     );
-    assert_eq!(r["result"]["output"], json!({"applied": true}));
-    assert_eq!(fake.calls().len(), 1);
-    assert_eq!(fake.calls()[0][..3], ["dim", "set", "0.5"]);
+    assert!(
+        r["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("hardware writes are disabled"),
+        "{r}"
+    );
+    assert!(fake.calls().is_empty());
 
     // risky: a plan first, nothing executed.
-    let (r, _) = agent.request(
-        "call",
-        json!({"command": "fan.set", "params": {"fraction": 0.7}}),
-    );
+    // (`fan.target` only writes the user's file and is still the Swift
+    // core's, here the fake.)
+    let (r, _) = agent.request("call", json!({"command": "fan.target"}));
     assert_eq!(r["result"]["status"], "confirmation_required");
-    assert_eq!(fake.calls().len(), 1, "planning does not run the command");
+    assert!(fake.calls().is_empty(), "planning does not run the command");
     let id = r["result"]["plan"]["id"].as_str().unwrap().to_owned();
     let (r, _) = agent.request("confirm", json!({"plan_id": id}));
     assert_eq!(r["result"]["status"], "confirmed");
     assert_eq!(r["result"]["output"], json!({"applied": true}));
-    assert_eq!(fake.calls().len(), 2);
-    assert_eq!(fake.calls()[1][..3], ["fan", "set", "0.7"]);
+    assert_eq!(fake.calls().len(), 1);
+    assert_eq!(fake.calls()[0][..2], ["fan", "target"]);
     let (r, _) = agent.request("confirm", json!({"plan_id": id}));
     assert_eq!(r["error"]["code"], -32000, "a plan is confirmed once");
-    assert_eq!(fake.calls().len(), 2);
+    assert_eq!(fake.calls().len(), 1);
 
     // A command failure keeps its CLI exit class.
     let (r, _) = agent.request("call", json!({"command": "no.such.command"}));

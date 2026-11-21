@@ -122,7 +122,7 @@ fn bare_fan_profile_and_target_read_and_write_family_help_is_native() {
 }
 
 #[test]
-fn writes_and_other_commands_are_always_forwarded() {
+fn fan_charge_and_the_endless_loops_are_always_forwarded() {
     let tmp = home();
     let mut a = app(tmp.path());
     a.handlers
@@ -133,22 +133,11 @@ fn writes_and_other_commands_are_always_forwarded() {
         &["fan", "profile", "comfort"],
         &["fan", "target", "70"],
         &["fan", "governor"],
-        &["brightness", "set", "0.5"],
-        &["extbright", "set", "1.2"],
-        &["dim", "reset"],
-        &["warmth", "set", "0.1"],
-        &["restore"],
         &["battery-limit", "set", "80"],
-        &["awake"],
-        &["awake", "off"],
-        &["awake", "--seconds", "5"],
-        &["profile", "save", "x"],
-        &["profile", "load", "x"],
-        &["profile", "delete", "x"],
+        &["battery-limit", "clear"],
         &["ai-usage", "serve"],
         &["status", "--watch"],
         &["status", "--watch", "--interval", "2s"],
-        &["extbright"],
     ] {
         assert!(forwarded(&a, l), "{l:?}");
     }
@@ -289,8 +278,8 @@ fn help_of_read_commands_is_native_and_restore_is_forwarded() {
             .stdout
             .starts_with("Usage: symcockpit profile save")
     );
-    // The write families' usage text is native too (see the next test); `restore` has none,
-    // so `--help` is an unexpected argument, as in v0.12.
+    // The write families' usage text is native too (see the next test); `restore`
+    // has none: Swift treats `--help` as an unexpected argument (exit 2).
     let restore = done(&a, &["restore", "--help"]);
     assert_eq!(
         (restore.stderr.as_str(), restore.code),
@@ -603,7 +592,6 @@ fn write_commands_parse_natively_and_run_through_their_wired_handler() {
         &["fan", "governor"],
         &["battery-limit", "set", "80"],
         &["battery-limit", "clear"],
-        &["restore"],
         &["fan", "profile", "comfort"],
     ] {
         assert!(forwarded(&a, line), "{line:?}");
@@ -633,11 +621,7 @@ fn write_commands_parse_natively_and_run_through_their_wired_handler() {
     assert_eq!(done(&a, &["fan", "auto"]).code, 0);
     assert_eq!(done(&a, &["battery-limit", "set", "80"]).code, 0);
     assert_eq!(done(&a, &["battery-limit", "clear"]).code, 0);
-    let denied = done(&a, &["restore"]);
-    assert_eq!(
-        (denied.stderr.as_str(), denied.code),
-        ("symcockpit: permission error: no\n", 3)
-    );
+    // `restore` runs its display half first (tests/writes.rs), then this handler.
     assert_eq!(
         *seen.borrow(),
         vec![
@@ -646,7 +630,6 @@ fn write_commands_parse_natively_and_run_through_their_wired_handler() {
             ("fan.auto", Command::FanAuto),
             ("battery-limit.set", Command::ChargeSet(80)),
             ("battery-limit.clear", Command::ChargeClear),
-            ("restore", Command::Restore),
         ]
     );
 }

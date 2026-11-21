@@ -23,6 +23,7 @@ fn fake_legacy(dir: &Path) -> PathBuf {
 
 fn run(legacy: Option<&Path>, args: &[&str], stdin: &str, exit: &str) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_symcockpit"));
+    cmd.env("SYMCOCKPIT_TEST_NO_HARDWARE", "1");
     cmd.args(args)
         .env_remove("SYMCOCKPIT_LEGACY_BIN")
         .env_remove("SYMCOCKPIT_CHECK_UPDATES")
@@ -49,14 +50,16 @@ fn forwards_argv_stdio_and_exit_code_unchanged() {
     let legacy = fake_legacy(tmp.path());
     let out = run(
         Some(&legacy),
-        &["dim", "--json", "", "a b", "--data-dir=x y", "é"],
+        // Setting a fan profile only writes the user's own file and is still
+        // the Swift core's; every other v0.12 command is native by now.
+        &["fan", "profile", "--json", "", "a b", "--data-dir=x y", "é"],
         "in-bytes",
         "3",
     );
     assert_eq!(out.status.code(), Some(3));
     assert_eq!(
         String::from_utf8(out.stdout).unwrap(),
-        "argc=6\n[dim]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
+        "argc=7\n[fan]\n[profile]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
     );
     assert_eq!(String::from_utf8(out.stderr).unwrap(), "to-stderr\n");
 }
@@ -98,6 +101,7 @@ fn explicit_update_opt_in_is_forwarded() {
     let tmp = tempfile::tempdir().unwrap();
     let legacy = fake_legacy(tmp.path());
     let out = Command::new(env!("CARGO_BIN_EXE_symcockpit"))
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .arg("version")
         .env("SYMCOCKPIT_LEGACY_BIN", &legacy)
         .env("SYMCOCKPIT_CHECK_UPDATES", "1")
@@ -117,7 +121,8 @@ fn missing_legacy_binary_exits_4_with_a_message() {
     let exe = tmp.path().join("symcockpit");
     std::fs::copy(env!("CARGO_BIN_EXE_symcockpit"), &exe).unwrap();
     let out = Command::new(&exe)
-        .arg("dim")
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
+        .args(["fan", "target", "70"])
         .env_remove("SYMCOCKPIT_LEGACY_BIN")
         .output()
         .unwrap();
@@ -130,7 +135,8 @@ fn missing_legacy_binary_exits_4_with_a_message() {
     );
     // An override pointing nowhere fails the same way.
     let out = Command::new(&exe)
-        .arg("dim")
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
+        .args(["fan", "target", "70"])
         .env("SYMCOCKPIT_LEGACY_BIN", tmp.path().join("gone"))
         .output()
         .unwrap();
@@ -145,7 +151,8 @@ fn sibling_legacy_binary_is_found_next_to_the_executable() {
     let sibling = fake_legacy(tmp.path());
     std::fs::rename(&sibling, tmp.path().join("symcockpit-legacy")).unwrap();
     let out = Command::new(&exe)
-        .arg("dim")
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
+        .args(["fan", "target", "70"])
         .env_remove("SYMCOCKPIT_LEGACY_BIN")
         .env("FAKE_EXIT", "0")
         .output()
@@ -153,6 +160,6 @@ fn sibling_legacy_binary_is_found_next_to_the_executable() {
     assert!(
         String::from_utf8(out.stdout)
             .unwrap()
-            .starts_with("argc=1\n[dim]")
+            .starts_with("argc=3\n[fan]\n[target]\n[70]")
     );
 }

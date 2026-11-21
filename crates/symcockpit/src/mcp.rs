@@ -475,7 +475,8 @@ impl<'a> Server<'a> {
             name: spec.mcp_name.unwrap_or(spec.name),
             description: "",
             spec,
-            legacy: TOOLS.iter().any(|(name, _)| spec.mcp_name == Some(*name)),
+            // A v0.12 command, with or without an MCP name of its own.
+            legacy: !area_commands().iter().any(|c| c.name == spec.name),
         };
         self.tool_value(&tool, arguments)
     }
@@ -538,7 +539,52 @@ impl<'a> Server<'a> {
     }
 
     fn write_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {
-        self.through_legacy(&write_args(tool, arguments)?)
+        // The reversible display, keep-awake and profile writes run in this
+        // process (their overrides live as long as it does); fans, the charge
+        // limit and the SMC half of `restore` go to the fan/charge area's
+        // handlers. What has no native handler (test apps) goes to Swift.
+        let native = if tool.spec.name == "restore" {
+            crate::writes::restore(self.ctx, || crate::cli::smc_restore(self.app, self.ctx))?
+                .map(output_value)
+        } else if let Some(value) = crate::writes::run_tool(self.ctx, tool.spec.name, arguments)? {
+            Some(value)
+        } else {
+            self.privileged(tool, arguments)?
+        };
+        match native {
+            Some(value) => Ok(value),
+            None => self.through_legacy(&write_args(tool, arguments)?),
+        }
+    }
+
+    /// `set_fan`, `set_charge_limit`, `clear_charge_limit`: the CLI's parsing
+    /// of the same arguments, then the handler wired in [`crate::write`].
+    fn privileged(
+        &self,
+        tool: &Tool,
+        arguments: &Map<String, Value>,
+    ) -> Result<Option<Value>, Error> {
+        use symcockpit_core::write_commands::{parse_battery_limit, parse_fan};
+        let Some(handler) = self
+            .app
+            .handlers
+            .get(tool.spec.name)
+            .filter(|_| crate::app::WRITE_COMMANDS.contains(&tool.spec.name))
+        else {
+            return Ok(None);
+        };
+        let argv = write_args(tool, arguments)?;
+        let command = match argv.first().map(String::as_str) {
+            Some("fan") => parse_fan(&argv[1..])?,
+            Some("battery-limit") => parse_battery_limit(&argv[1..])?,
+            _ => return Ok(None),
+        };
+        let request = Request {
+            command: tool.spec.name,
+            json: true,
+            params: Params::Write(command),
+        };
+        handler(self.ctx, &request).map(|o| Some(output_value(o)))
     }
 
     /// Runs the Swift CLI and parses its JSON stdout. A failure's message is
@@ -597,7 +643,7 @@ fn legacy_read_args(request: &Request) -> Result<Vec<String>, Error> {
 }
 
 /// `requireDouble`: a number, or a string that parses as one.
-fn require_double(arguments: &Map<String, Value>, name: &str) -> Result<f64, Error> {
+pub(crate) fn require_double(arguments: &Map<String, Value>, name: &str) -> Result<f64, Error> {
     let number = match arguments.get(name) {
         Some(Value::Number(n)) => n.as_f64(),
         Some(Value::String(s)) => s.parse::<f64>().ok(),
@@ -664,7 +710,7 @@ fn write_args(tool: &Tool, arguments: &Map<String, Value>) -> Result<Vec<String>
 }
 
 /// `KeepAwakeTool.validatedDuration`.
-fn validate_duration(value: Option<&Value>) -> Result<(), Error> {
+pub(crate) fn validate_duration(value: Option<&Value>) -> Result<(), Error> {
     let Some(value) = value.filter(|v| !v.is_null()) else {
         return Ok(());
     };
@@ -737,5 +783,13 @@ pub fn serve(server: &Server, mut input: impl BufRead, mut output: impl Write) -
             // The client went away.
             return Ok(());
         }
+    }
+}
+
+/// A write handler's output as the JSON an MCP client gets.
+fn output_value(output: Output) -> Value {
+    match output {
+        Output::Json(value) | Output::Report { value, .. } => value,
+        Output::Text { .. } => json!({"applied": true}),
     }
 }

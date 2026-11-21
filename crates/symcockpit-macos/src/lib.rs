@@ -12,6 +12,7 @@ pub mod codesign;
 pub mod coreaudio;
 pub mod coremidi;
 pub mod display;
+pub mod display_write;
 pub mod finder;
 pub mod fs_stats;
 pub mod gpu;

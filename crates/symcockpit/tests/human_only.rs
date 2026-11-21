@@ -18,6 +18,7 @@ fn serve(home: &Path, input: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_symcockpit"))
         .arg("serve")
         .env_clear()
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join("c"))
