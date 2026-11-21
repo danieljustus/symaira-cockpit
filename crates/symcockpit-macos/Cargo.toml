@@ -23,9 +23,12 @@ plist = "=1.10.4"
 core-foundation = "=0.10.1"
 core-foundation-sys = "=0.8.7"
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSScreen", "NSGraphics", "objc2-core-foundation"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSScreen", "NSGraphics", "NSApplication", "NSWindow", "NSView", "NSResponder", "NSColor", "NSRunningApplication", "objc2-core-foundation", "objc2-quartz-core"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
-objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGDisplayConfiguration", "libc"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGDisplayConfiguration", "CGColorSpace", "libc"] }
+# Extended-brightness trigger: a 1x1 CAMetalLayer that is really presented (MIT OR Apache-2.0 OR Zlib).
+objc2-metal = { version = "=0.3.2", default-features = false, features = ["std", "MTLDevice", "MTLCommandQueue", "MTLCommandBuffer", "MTLRenderPass", "MTLRenderCommandEncoder", "MTLTexture", "MTLPixelFormat", "MTLDrawable", "MTLCommandEncoder", "MTLResource"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CAMetalLayer", "CALayer", "objc2-metal", "objc2-core-foundation", "objc2-core-graphics"] }
 objc2-foundation = "=0.3.2"
 # CoreBluetooth through objc2 rather than btleplug: no async runtime (architecture section 10),
 # and the same bindings serve virtual peripherals later (R54). All Zlib OR Apache-2.0 OR MIT.

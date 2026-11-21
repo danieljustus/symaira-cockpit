@@ -10,6 +10,7 @@ pub mod bluetooth;
 pub mod coreaudio;
 pub mod coremidi;
 pub mod display;
+pub mod display_write;
 pub mod fs_stats;
 pub mod gpu;
 pub mod host;
