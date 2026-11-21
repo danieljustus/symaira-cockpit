@@ -11,8 +11,10 @@ final class CockpitControlWiringTests: XCTestCase {
     func testDisplayAndPowerActionsDoNotDiscardErrors() throws {
         for file in ["ControlCards.swift", "MainStatusView.swift"] {
             let source = try String(contentsOf: ui.appendingPathComponent(file), encoding: .utf8)
-            XCTAssertFalse(source.contains("try? controller."), file)
-            XCTAssertTrue(source.contains("SecretRedactor.redact(error.localizedDescription)"), file)
+            XCTAssertFalse(source.contains("try? model."), file)
+            XCTAssertFalse(source.contains("TuneController"), file, "the panel acts through the agent, not a controller")
+            // An action the agent refused comes back as `outcome.failureMessage` and is shown redacted.
+            XCTAssertTrue(source.contains("outcome.failureMessage.map(SecretRedactor.redact)"), file)
         }
     }
 

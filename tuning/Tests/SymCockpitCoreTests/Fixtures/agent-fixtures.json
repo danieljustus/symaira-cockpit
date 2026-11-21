@@ -1,0 +1,284 @@
+{
+ "_note": "Shape of a real symcockpit 0.12.2 capture (status, metrics, processes, fan/awake/brightness reads); names, volumes and interfaces scrubbed, CPU rates added. Used by the fake agent only.",
+ "ai-usage": [
+  {
+   "error": "not configured",
+   "provider_id": "p"
+  },
+  {
+   "provider_id": "q",
+   "snapshot": {
+    "fetched_at": 816945369.0,
+    "meters": [],
+    "provider_id": "q",
+    "source": "api"
+   }
+  }
+ ],
+ "awake.status": {
+  "active": false,
+  "prevent_display_sleep": false,
+  "reason": "",
+  "started_at": 816945369.0
+ },
+ "brightness.get": {
+  "brightness": 0.5,
+  "notes": []
+ },
+ "fan.status": {
+  "average_cluster_celsius": 61.2,
+  "cool_target_celsius": null,
+  "governor_running": false,
+  "profile": "system"
+ },
+ "metrics": {
+  "cpu": {
+   "per_core_utilization": [
+    10.0,
+    15.0
+   ],
+   "total_utilization": 12.5
+  },
+  "disk": {
+   "capacity_bytes": 494384795648,
+   "free_bytes": 71547739443,
+   "used_bytes": 422837056205
+  },
+  "gpu": {
+   "utilization_percent": 28
+  },
+  "memory": {
+   "compressed_bytes": 6439976960,
+   "free_bytes": 6349012992,
+   "pressure": "nominal",
+   "used_bytes": 19420790784,
+   "wired_bytes": 4399579136
+  },
+  "network": {
+   "aggregate_bytes_in": 6977281024,
+   "aggregate_bytes_in_per_second": 1200.0,
+   "aggregate_bytes_out": 7326026752,
+   "aggregate_bytes_out_per_second": 800.0,
+   "interfaces": [
+    {
+     "bytes_in": 3891956736,
+     "bytes_in_per_second": 1200.0,
+     "bytes_out": 2561931264,
+     "bytes_out_per_second": 800.0,
+     "name": "en0"
+    }
+   ]
+  },
+  "notes": [],
+  "power": {
+   "adapter_source": "smc_pdtr",
+   "adapter_watts": 64.89088439941406,
+   "amps": 3.2615902423858643,
+   "system_source": "smc_pstr",
+   "system_watts": 64.88013458251953,
+   "volts": 19.896089553833008,
+   "watts": 64.89088439941406
+  },
+  "volumes": [
+   {
+    "is_internal": true,
+    "is_local": true,
+    "is_read_only": false,
+    "mount_path": "/",
+    "name": "Macintosh HD",
+    "space": {
+     "capacity_bytes": 494384795648,
+     "free_bytes": 71547739443,
+     "used_bytes": 422837056205
+    },
+    "uuid": "00000000-0000-0000-0000-000000000001"
+   },
+   {
+    "is_local": false,
+    "is_read_only": true,
+    "mount_path": "/Volumes/Example",
+    "name": "Example",
+    "space": {
+     "capacity_bytes": 1099511627776,
+     "free_bytes": 0,
+     "used_bytes": 1099511627776
+    }
+   }
+  ]
+ },
+ "processes": {
+  "notes": [],
+  "processes": [
+   {
+    "cpu_percent": 2.050418412823133,
+    "memory_bytes": 501448704,
+    "name": "Example App 1",
+    "pid": 69544,
+    "thread_count": 22
+   },
+   {
+    "cpu_percent": 1.5463627295695737,
+    "memory_bytes": 727662592,
+    "name": "Example App 2",
+    "pid": 83079,
+    "thread_count": 22
+   },
+   {
+    "cpu_percent": 1.0250827089817003,
+    "memory_bytes": 1292025856,
+    "name": "Example App 3",
+    "pid": 62799,
+    "thread_count": 20
+   }
+  ],
+  "sampled_process_count": 967,
+  "sorted_by": "cpu",
+  "unreadable_process_count": 262
+ },
+ "status": {
+  "active_overrides": {},
+  "battery": {
+   "apple_condition": "Normal",
+   "apple_maximum_capacity_percent": 88,
+   "charge_limit_supported": false,
+   "charging": false,
+   "current_capacity_percent": 100,
+   "cycle_count": 171,
+   "design_capacity_mah": 6249,
+   "external_connected": true,
+   "health_percent": 86,
+   "max_capacity_mah": 5356,
+   "notes": [],
+   "present": true
+  },
+  "displays": {
+   "displays": [
+    {
+     "backing_scale_factor": 2,
+     "display_id": 1,
+     "edr_capable": true,
+     "is_builtin": true,
+     "max_edr_headroom": 1.2000000476837158,
+     "name": "Built-in Retina Display",
+     "potential_edr_headroom": 16
+    }
+   ],
+   "notes": [
+    "potential_edr_headroom > 1.0 means extended (>100%) brightness is possible on that display."
+   ]
+  },
+  "health_score": 100,
+  "health_score_msg": "System health is optimal.",
+  "recommendations": [
+   "System is running optimally with no warnings."
+  ],
+  "sensors": {
+   "fans": [
+    {
+     "index": 0,
+     "label": "Main Fan",
+     "max_rpm": 7826,
+     "min_rpm": 2317,
+     "rpm": 4951
+    },
+    {
+     "index": 1,
+     "label": "Fan 2",
+     "max_rpm": 7826,
+     "min_rpm": 2317,
+     "rpm": 5382
+    }
+   ],
+   "notes": [],
+   "smc_supported": true,
+   "temperatures": [
+    {
+     "celsius": 105.46875,
+     "key": "TCMz",
+     "label": "CPU Die Hotspot"
+    },
+    {
+     "celsius": 67.87326049804688,
+     "key": "TRDX",
+     "label": "GPU Die Hotspot"
+    },
+    {
+     "celsius": 86.93559265136719,
+     "key": "Tp01",
+     "label": "CPU Core 1"
+    },
+    {
+     "celsius": 90.546875,
+     "key": "Tp02",
+     "label": "CPU Core 2"
+    },
+    {
+     "celsius": 85.91777801513672,
+     "key": "Tp04",
+     "label": "CPU Core 4"
+    },
+    {
+     "celsius": 91.41777801513672,
+     "key": "Tp05",
+     "label": "CPU Core 5"
+    },
+    {
+     "celsius": 98,
+     "key": "Tp06",
+     "label": "CPU Core 6"
+    },
+    {
+     "celsius": 70.88968658447266,
+     "key": "Tp08",
+     "label": "CPU Core 8"
+    },
+    {
+     "celsius": 77.08968353271484,
+     "key": "Tp09",
+     "label": "CPU Core 9"
+    },
+    {
+     "celsius": 97.2540512084961,
+     "key": "TCMb",
+     "label": "CPU Die (Core Max)"
+    },
+    {
+     "celsius": 44.46739196777344,
+     "key": "TCHP",
+     "label": "CPU/Charger Proximity"
+    },
+    {
+     "celsius": 70.64734649658203,
+     "key": "Te04",
+     "label": "CPU E-Core Cluster"
+    },
+    {
+     "celsius": 76.44734954833984,
+     "key": "Te05",
+     "label": "CPU E-Core Cluster"
+    },
+    {
+     "celsius": 80.0625,
+     "key": "Te06",
+     "label": "CPU E-Core Cluster"
+    },
+    {
+     "celsius": 68.49031066894531,
+     "key": "Te0R",
+     "label": "CPU E-Core Cluster"
+    },
+    {
+     "celsius": 74.0903091430664,
+     "key": "Te0S",
+     "label": "CPU E-Core Cluster"
+    },
+    {
+     "celsius": 76.984375,
+     "key": "Te0T",
+     "label": "CPU E-Core Cluster"
+    }
+   ],
+   "thermal_pressure": "nominal"
+  }
+ }
+}

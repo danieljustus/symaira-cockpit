@@ -17,6 +17,9 @@ import SymCockpitUI
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
+    /// The one agent session of the app: `symcockpit agent --stdio` from this
+    /// bundle, started at launch and ended (stdin closed) at quit.
+    private let session = AgentSession.bundled()
     private var windowController: CockpitWindowController?
     #if DEBUG
     private var designPreviewWindow: NSWindow?
@@ -37,8 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Fan control elevates a root-owned `symcockpit`; refuse one that is
-        // not this release (#409). The tuning package cannot know the version.
+        // The GPU process list elevates a root-owned `symcockpit`; refuse one that
+        // is not this release (#409). The tuning package cannot know the version.
         PrivilegedElevation.setExpectedVersion(CockpitAppVersion.current)
 
         let app = NSApplication.shared
@@ -65,13 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         installMainMenu()
 
-        let statusBar = StatusBarController(updateVersionProvider: { CockpitAppVersion.current })
+        let statusBar = StatusBarController(session: session, updateVersionProvider: { CockpitAppVersion.current })
         statusBar.openCockpitTitle = "Open Cockpit…"
         statusBar.panelTitle = "SYMAIRA COCKPIT"
         statusBar.statusItemAccessibilityLabel = "Symaira Cockpit"
         statusBar.fallbackIconTitle = "SC"
         statusBar.preferencesWindowTitle = "Symaira Cockpit Preferences"
-        statusBar.keepAwakeAssertionReason = "Symaira Cockpit"
         // The notch HUD is a cockpit surface: offered here, and picked in the
         // window's menu-bar card, where the menu bar stays the default
         // (issues #224, #251). The standalone Tune app leaves this alone and is
@@ -91,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.windowController = window
 
         statusBar.onOpenCockpit = { [weak window] in window?.show() }
+        Task { await session.start() }
 
         // A menu-bar-only app that shows nothing on first launch reads as a
         // failed launch. Open the cockpit once, then stay out of the way.
@@ -137,6 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         windowController = nil
         statusBarController = nil
+        // Closes the agent's stdin: it ends cleanly (and with it the keep-awake
+        // session and the display overrides it holds).
+        session.stop()
     }
 
     /// Reopening from the Dock (while the window made the app a regular app)

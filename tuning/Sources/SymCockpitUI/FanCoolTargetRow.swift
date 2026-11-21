@@ -10,9 +10,8 @@ import SymCockpitCore
 /// a lie. Empty means off. The bounds (``FanCoolTarget/range``) are enforced in
 /// Core on write and on read; this row refuses an out-of-range entry with a
 /// message rather than quietly clamping what the person typed. Owns no logic:
-/// every decision is `SymCockpitCore`'s.
+/// the change goes to the agent, which plans it for the user's confirmation.
 struct FanCoolTargetRow: View {
-    let controller: TuneController
     let model: TuneViewModel
 
     @State private var draft = ""
@@ -78,12 +77,6 @@ struct FanCoolTargetRow: View {
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.critical)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if model.fanHelperLacksCoolTarget, model.fanCoolTarget != nil {
-                Text(FanHelperGovernorStatus.outdatedHelperHint)
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTokens.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("fan-cool-target-outdated-helper")
             } else {
                 Text("Adds cooling near this average CPU/GPU temperature. \(rangeText), empty = off.")
                     .symairaText(.caption)
@@ -113,17 +106,6 @@ struct FanCoolTargetRow: View {
             return
         }
         message = nil
-        let controller = controller
-        Task {
-            do {
-                try await Task.detached(priority: .userInitiated) {
-                    try controller.setFanCoolTarget(target)
-                }.value
-                model.refreshNow()
-            } catch {
-                message = error.localizedDescription
-                draft = storedText
-            }
-        }
+        Task { await model.requestFanCoolTarget(target) }
     }
 }

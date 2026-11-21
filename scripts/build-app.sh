@@ -18,6 +18,18 @@ set -euo pipefail
 #                  pair with (issue #405). Release builds derive it from the
 #                  Developer ID certificate. Without it the helper is inert.
 #   REQUIRE_EMBEDDED_TEAM_ID  true to fail when EXPECTED_TEAM_ID is unset
+#   CARGO          cargo command (default: dev-external cargo when installed, else cargo)
+#   RUST_TARGET    cargo --target for the Rust binaries (default: the host; the
+#                  bundle's agent and helper must come out arm64 either way)
+#
+# Besides the Swift app, the bundle carries two Rust binaries (Cockpit 2):
+#   Contents/MacOS/symcockpit   the app agent (`symcockpit agent --stdio`) and the
+#                               CLI the cask links later; built with
+#                               SYMCOCKPIT_TEAM_ID = EXPECTED_TEAM_ID, the team the
+#                               agent accepts as the signer of its parent
+#   Contents/Library/LaunchServices/com.symaira.symtune-helper
+#                               the privileged helper (`symcockpit-helper`),
+#                               built with SYMCOCKPIT_EMBEDDED_TEAM_ID = EXPECTED_TEAM_ID
 
 CONFIGURATION="${CONFIGURATION:-release}"
 UNIVERSAL="${UNIVERSAL:-1}"
@@ -29,9 +41,11 @@ APP_NAME="Symaira Cockpit"
 BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
 # Optional privileged fan helper (issue #405): registered by the app through
-# SMAppService.daemon. The identifier is the grandfathered helper identity.
-HELPER_PRODUCT="SymCockpitFanHelper"
+# SMAppService.daemon. The identifier is the grandfathered helper identity; the
+# launchd plist still lives next to the retired Swift helper until it is removed.
 HELPER_ID="com.symaira.symtune-helper"
+HELPER_PLIST_SOURCE="Sources/SymCockpitFanHelper/$HELPER_ID.plist"
+AGENT_ID="com.symaira.cockpit.symcockpit"
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -106,28 +120,53 @@ BIN_PATH="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/$PRODUCT"
   exit 1
 }
 
-# Same flags, other product (BUILD_ARGS[1] is the product name).
-HELPER_BUILD_ARGS=("${BUILD_ARGS[@]}")
-HELPER_BUILD_ARGS[1]="$HELPER_PRODUCT"
-swift build "${HELPER_BUILD_ARGS[@]}"
-HELPER_BIN_PATH="$(swift build "${HELPER_BUILD_ARGS[@]}" --show-bin-path)/$HELPER_PRODUCT"
-[[ -x "$HELPER_BIN_PATH" ]] || {
-  printf 'Expected helper was not produced: %s\n' "$HELPER_BIN_PATH" >&2
-  exit 1
-}
+# The Rust binaries. A team id is baked in only when one is given; without it
+# the agent refuses to serve (exit 3) and the helper stays inert, as before.
+if [[ -z "${CARGO:-}" ]]; then
+  if [[ -x "$HOME/.local/bin/dev-external" ]]; then CARGO="$HOME/.local/bin/dev-external cargo"; else CARGO=cargo; fi
+fi
+RUST_ARGS=(build --release --locked -p symcockpit -p symcockpit-helper)
+RUST_RELEASE_DIR=release
+if [[ -n "${RUST_TARGET:-}" ]]; then
+  RUST_ARGS+=(--target "$RUST_TARGET")
+  RUST_RELEASE_DIR="$RUST_TARGET/release"
+fi
+RUST_ENV=()
+if [[ -n "$EXPECTED_TEAM_ID" ]]; then
+  RUST_ENV=(SYMCOCKPIT_TEAM_ID="$EXPECTED_TEAM_ID" SYMCOCKPIT_EMBEDDED_TEAM_ID="$EXPECTED_TEAM_ID")
+fi
+# shellcheck disable=SC2086 # $CARGO is a command line ("dev-external cargo")
+env ${RUST_ENV[@]+"${RUST_ENV[@]}"} $CARGO "${RUST_ARGS[@]}"
+# shellcheck disable=SC2086
+RUST_TARGET_DIR="$($CARGO metadata --format-version 1 --no-deps | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+AGENT_BIN_PATH="$RUST_TARGET_DIR/$RUST_RELEASE_DIR/symcockpit"
+HELPER_BIN_PATH="$RUST_TARGET_DIR/$RUST_RELEASE_DIR/symcockpit-helper"
+for rust_binary in "$AGENT_BIN_PATH" "$HELPER_BIN_PATH"; do
+  [[ -x "$rust_binary" ]] || {
+    printf 'Expected Rust binary was not produced: %s\n' "$rust_binary" >&2
+    exit 1
+  }
+  [[ "$(lipo -archs "$rust_binary")" == "arm64" ]] || {
+    printf 'Rust binary must be arm64: %s (%s)\n' "$rust_binary" "$(lipo -archs "$rust_binary")" >&2
+    exit 1
+  }
+done
 
 APP_PATH="$OUTPUT_DIR/$APP_NAME.app"
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+# The agent the app starts as its child (path from the app's own executable
+# directory), and the CLI binary the cask links.
+cp "$AGENT_BIN_PATH" "$APP_PATH/Contents/MacOS/symcockpit"
 
 # The helper and its launchd plist, in the places SMAppService.daemon expects:
 # the plist under Contents/Library/LaunchDaemons, the executable (named like
 # the Mach service) under Contents/Library/LaunchServices.
 mkdir -p "$APP_PATH/Contents/Library/LaunchServices" "$APP_PATH/Contents/Library/LaunchDaemons"
 cp "$HELPER_BIN_PATH" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
-cp "$REPO_ROOT/Sources/$HELPER_PRODUCT/$HELPER_ID.plist" "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+cp "$REPO_ROOT/$HELPER_PLIST_SOURCE" "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
 plutil -lint "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist" >/dev/null
 # Bundle.module searches Contents/Resources in an assembled app. Copy every
 # package resource bundle, not just the executable: fonts, shaders and provider
@@ -205,15 +244,18 @@ if [[ "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
     "$REPO_ROOT/scripts/build-extensions.sh" "$APP_PATH"
 fi
 
-# Nested code first: the helper is signed under its own identifier (the one
-# the app's XPC requirement pins) before the bundle seals it. The app only
-# ever registers the helper when it is itself Developer-ID signed, so an
-# ad-hoc or self-signed helper here is inert.
-HELPER_SIGN_ARGS=(--force --sign "$IDENTITY" --identifier "$HELPER_ID" --timestamp=none)
+# Nested code first, all with the app's identity: the helper is signed under
+# its own identifier (the one the app's XPC requirement pins), the agent under
+# its own, before the bundle seals them. The app only ever registers the helper
+# when it is itself Developer-ID signed, so an ad-hoc or self-signed helper
+# here is inert; likewise the agent serves only a Developer-ID signed parent.
+# Hardened Runtime on both for a real identity, as the notarization needs.
+NESTED_SIGN_ARGS=(--force --sign "$IDENTITY" --timestamp=none)
 if [[ "$IDENTITY" != "-" ]]; then
-  HELPER_SIGN_ARGS+=(--options runtime)
+  NESTED_SIGN_ARGS+=(--options runtime)
 fi
-codesign "${HELPER_SIGN_ARGS[@]}" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+codesign "${NESTED_SIGN_ARGS[@]}" --identifier "$HELPER_ID" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
+codesign "${NESTED_SIGN_ARGS[@]}" --identifier "$AGENT_ID" "$APP_PATH/Contents/MacOS/symcockpit"
 # The app joins the extensions' app group (Finder jobs) only when a team id is known.
 APP_SIGN_ARGS=()
 if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then

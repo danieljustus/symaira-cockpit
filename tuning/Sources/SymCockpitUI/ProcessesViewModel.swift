@@ -2,27 +2,29 @@ import Foundation
 import Observation
 import SymCockpitCore
 
-/// Samples the process table for the popover's "Top Processes" card.
+/// Shows the agent's `processes` samples for the popover's "Top Processes" card.
 ///
 /// Kept separate from ``TuneViewModel`` because its lifetime is different: the
-/// list only samples while the card is actually expanded *and* the popover is
-/// open. A collapsed card costs nothing, which is the point — a process sweep
-/// every couple of seconds is not something a menu-bar app should do in the
-/// background forever.
+/// subscription exists only while the card is actually expanded *and* the
+/// popover is open. A collapsed card costs nothing, which is the point — a
+/// process sweep every couple of seconds is not something a menu-bar app
+/// should do in the background forever.
 @MainActor
 @Observable
 final class ProcessesViewModel {
     // MARK: - Published state
 
     private(set) var report: ProcessUsageReport = .empty
-    /// `true` between the first sweep and the second, when no CPU rate exists.
+    /// `true` until the first sample with CPU rates arrives.
     private(set) var isWarmingUp = true
     /// `true` while an explicit, elevated GPU fetch is in flight (waiting on
     /// the administrator-password prompt, then on `powermetrics` itself).
     private(set) var isLoadingGPUUsage = false
+    /// The agent's reason when it could not sample (not a value).
+    private(set) var problem: String?
 
-    /// Which resource the list is ranked by. Changing it re-ranks immediately
-    /// from the sample already in hand — no extra sweep.
+    /// Which resource the list is ranked by. Changing it asks the agent for the
+    /// new ranking at once.
     var sortedBy: ProcessSortKey = .cpu {
         didSet {
             guard oldValue != sortedBy else { return }
@@ -35,16 +37,18 @@ final class ProcessesViewModel {
 
     // MARK: - Dependencies
 
-    private let controller: TuneController
-    /// Sampling cadence while visible. Fast enough to feel live, slow enough
-    /// that the sweep itself (a few milliseconds) stays invisible.
-    private static let interval: TimeInterval = 2.0
+    private let session: AgentSession
+    /// Sampling cadence while visible. One sample is two sweeps one second
+    /// apart inside the agent, so this keeps the agent from being busy all the time.
+    private static let interval = 3000
+    private static let owner = "processes"
 
-    private var pollTask: Task<Void, Never>?
+    private var token: UUID?
     private var isVisible = false
+    private var lastSequence = 0
 
-    init(controller: TuneController) {
-        self.controller = controller
+    init(session: AgentSession) {
+        self.session = session
     }
 
     // MARK: - Lifecycle
@@ -54,88 +58,70 @@ final class ProcessesViewModel {
         guard isVisible != visible else { return }
         isVisible = visible
         if visible {
-            start()
+            subscribe()
         } else {
-            stop()
+            unsubscribe()
+            // Drop the last sample: it goes stale the moment sampling stops, and a
+            // stale reading shown without a timestamp is worse than none.
+            report = .empty
+            isWarmingUp = true
         }
+        session.setVisible(visible, owner: Self.owner)
     }
 
-    private func start() {
-        pollTask?.cancel()
-        isWarmingUp = true
-        // A stale baseline would make the first reading average CPU across the
-        // whole time the card was closed.
-        controller.resetProcessBaseline()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.sample()
-                do {
-                    try await Task.sleep(for: .seconds(Self.interval))
-                } catch {
-                    return
-                }
-            }
-        }
-    }
-
-    private func stop() {
-        pollTask?.cancel()
-        pollTask = nil
-        controller.resetProcessBaseline()
-        // Drop the last sample: it goes stale the moment sampling stops, and a
-        // stale reading shown without a timestamp is worse than none.
-        report = .empty
-        isWarmingUp = true
-    }
-
-    /// Re-rank right now (after a sort change), without waiting for the tick.
+    /// Ask for the current ranking right now (after a sort change).
     func refreshNow() {
         guard isVisible else { return }
-        Task { await sample() }
+        unsubscribe()
+        subscribe()
     }
 
-    // MARK: - Sampling
-
-    private func sample() async {
-        let sort = sortedBy
-        if sort == .gpu {
-            // The IORegistry source reads GPU time unprivileged, so poll it
-            // like CPU/memory and show any rows it returns. Its absence
-            // (powermetrics fallback, which needs root) comes back as an
-            // empty report: then only the explicit
-            // ``loadGPUUsageWithElevation()`` action populates real data, and
-            // an already-showing GPU report is left alone rather than
-            // clobbered every couple seconds by that empty one. A stale
-            // non-GPU report is still cleared when the tab is first selected.
-            let limit = self.limit
-            let controller = self.controller
-            let fresh = await Task.detached(priority: .utility) {
-                controller.topProcesses(sortedBy: .gpu, limit: limit)
-            }.value
-            if !fresh.processes.isEmpty {
-                if report != fresh { report = fresh }
-            } else if report.sortedBy != .gpu {
-                report = fresh
-            }
-            return
+    private func subscribe() {
+        isWarmingUp = true
+        problem = nil
+        lastSequence = 0
+        token = session.subscribe(
+            "processes",
+            params: ["sort_by": .string(sortedBy.rawValue), "limit": .number(Double(limit))],
+            visibleMs: Self.interval
+        ) { [weak self] event in
+            Task { @MainActor in self?.receive(event) }
         }
+    }
 
-        let limit = self.limit
-        let controller = self.controller
-        // libproc sweeps the whole process table; keep it off the main thread.
-        let fresh = await Task.detached(priority: .utility) {
-            controller.topProcesses(sortedBy: sort, limit: limit)
-        }.value
+    private func unsubscribe() {
+        if let token { session.unsubscribe(token) }
+        token = nil
+    }
 
-        if report != fresh { report = fresh }
-        if isWarmingUp, fresh.processes.contains(where: { $0.cpuPercent != nil }) {
-            isWarmingUp = false
+    // MARK: - Receiving
+
+    private func receive(_ event: AgentEvent) {
+        guard event.sequence > lastSequence || event.sequence == 0 else { return }
+        lastSequence = max(lastSequence, event.sequence)
+        switch event.payload {
+        case .result(let json):
+            guard let fresh = try? AgentDecoding.decode(ProcessUsageReport.self, from: json) else {
+                problem = "The agent's process list could not be read."
+                return
+            }
+            problem = nil
+            // The IORegistry GPU source can be empty without root: an already
+            // showing GPU report is left alone rather than clobbered by it.
+            if fresh.sortedBy == .gpu, fresh.processes.isEmpty, report.sortedBy == .gpu, !report.processes.isEmpty {
+                return
+            }
+            if report != fresh { report = fresh }
+            if isWarmingUp, fresh.processes.contains(where: { $0.cpuPercent != nil }) {
+                isWarmingUp = false
+            }
+        case .error(let error):
+            problem = error.message
         }
     }
 
     /// One-shot, explicitly user-triggered GPU sample, run as root via
-    /// ``PrivilegedElevation``. Deliberately not part of the polling loop:
+    /// ``PrivilegedElevation``. Deliberately not part of the sampling:
     /// GPU sampling needs an administrator-password prompt, and popping that
     /// every couple of seconds would be unacceptable — this runs only when
     /// the person taps the button, once per tap.

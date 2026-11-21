@@ -2,32 +2,23 @@ import Foundation
 import Observation
 import SymCockpitCore
 
-/// Hardware readings gathered off the main thread.
-private struct HardwareSnapshot: Sendable {
-    let metrics: SystemMetricsReport
-    let sensors: SensorReport?
-    let battery: BatteryReport?
-    /// Whether the privileged fan governor is running, probed via `pgrep`.
-    /// `nil` when the detail surface is closed and the probe was skipped.
-    let fanGovernorRunning: Bool?
-}
-
-/// Single source of truth for the menu-bar app.
+/// Single source of truth for the menu-bar app, fed only by the Cockpit agent.
 ///
-/// ## Why this exists
-/// The status item and the popover used to poll the hardware independently on
-/// two timers, and the popover re-read every sensor on a 3-second timer that
-/// blocked the main thread. Both now share one tiered poll:
+/// ## What it does
+/// The view model owns no hardware and no logic: it subscribes to the agent's
+/// topics, decodes what arrives and keeps it for the views. Presentation state
+/// that the views need and the agent does not send lives here: the sparkline
+/// ring buffers (filled from received `metrics` samples) and the status-item text.
 ///
-/// - **Every tick**: system metrics (cheap: `sysctl`/`mach` calls only).
-/// - **Every tick while the popover is open**: SMC sensors and battery — the
-///   expensive IOKit reads — and the fan-governor probe (`pgrep`, a
-///   fork/exec), all executed **off the main thread**.
-/// - **Every eighth tick**: the display list, which changes only when the user
-///   plugs a monitor in.
+/// ## Subscriptions (Q04: nothing is measured without a view that needs it)
+/// - `metrics`: always, because the menu-bar readout (or the HUD) needs it. It
+///   runs at the agent's hidden interval (10 s) until a detail surface is open.
+/// - `status`, `brightness.get`, `awake.status`, `fan.status`: only while the
+///   popover or the cockpit window is on screen. They are unsubscribed when it
+///   closes, so a closed panel costs the agent nothing.
 ///
-/// AppKit-backed reads (displays, brightness, dim, warmth) stay on the main
-/// actor because `NSScreen` is not thread-safe; they are also the cheap ones.
+/// When the agent is not running, every reading is dropped (no stale or made-up
+/// value) and ``diagnosis`` says why.
 ///
 /// Properties are only reassigned when the value actually changed, so a quiet
 /// system produces no SwiftUI invalidation at all.
@@ -53,17 +44,11 @@ final class TuneViewModel {
     private(set) var fanProfile: FanProfile = .system
     private(set) var fanGovernorRunning = false
     /// The Cool position's optional maximum average CPU/GPU cluster
-    /// temperature, as stored (already clamped by the store).
+    /// temperature, as stored.
     private(set) var fanCoolTarget: Double?
-    /// The running fan helper predates the Cool target (an app upgrade leaves
-    /// the old process running), so the stored target is not applied yet.
-    private(set) var fanHelperLacksCoolTarget = false
-
-    /// The mean CPU/GPU cluster temperature in the last sensor report, for the
-    /// read-only "now" figure next to the Cool target. Pure: no extra reads.
-    var fanAverageClusterCelsius: Double? {
-        sensors.flatMap { FanCoolTarget.averageClusterTemperature(in: $0) }
-    }
+    /// The mean CPU/GPU cluster temperature, for the read-only "now" figure
+    /// next to the Cool target.
+    private(set) var fanAverageClusterCelsius: Double?
 
     /// Rendered menu-bar text (empty when the icon fallback should be used).
     private(set) var statusItemText: String = ""
@@ -76,15 +61,32 @@ final class TuneViewModel {
     private(set) var dimAmount: Double = 0.0
     private(set) var warmth: Double = 0.0
 
-    /// Requested vs. actually-applied extended brightness, so the UI can be
-    /// honest about a boost that the display has not granted headroom for.
-    private(set) var extendedBrightness = ExtendedBrightnessStatus(
-        requested: nil,
-        effective: nil,
-        mode: nil,
-        availableHeadroom: nil,
-        isSupported: true
-    )
+    /// The agent's state, and the reason the app shows while it is not usable.
+    private(set) var agentState: AgentState
+    /// An answer that could not be read (the agent broke its own contract).
+    private(set) var unreadableAnswer: String?
+
+    var isAgentReady: Bool {
+        if case .ready = agentState { return true }
+        return false
+    }
+
+    var diagnosis: AgentDiagnosis? {
+        AgentDiagnosis.of(agentState)
+            ?? unreadableAnswer.map { AgentDiagnosis(title: "Cockpit agent sent something unexpected", detail: $0) }
+    }
+
+    /// A fan change waiting for the user's approval (the agent only planned it),
+    /// why the last one failed, and whether one is in flight. Driven by the
+    /// actions in `TuneViewModel+Actions.swift`.
+    struct FanFailure: Equatable {
+        let message: String
+        /// The agent lacked the rights: the fan helper has to be switched on or approved.
+        let needsHelper: Bool
+    }
+    var pendingFanChange: PendingChange?
+    var fanFailure: FanFailure?
+    var fanBusy = false
 
     /// Called whenever ``statusItemText`` changes, so the status item is only
     /// re-laid-out when its content actually differs.
@@ -92,198 +94,237 @@ final class TuneViewModel {
 
     // MARK: - Dependencies
 
-    private let controller: TuneController
+    let session: AgentSession
     private let preferences: PreferencesManager
+    /// Presentation only: rolling samples of what the agent reported.
+    private let history = MetricsHistoryService(capacity: 120)
 
-    /// Interval used while the popover is closed. The status item only needs
-    /// metrics at a glanceable cadence, so idle cost stays near zero.
-    private static let idleInterval: TimeInterval = 10.0
+    private static let detailTopics = ["status", "brightness.get", "awake.status", "fan.status"]
+    private static let primingOwner = "tune.priming"
+    private static let detailOwner = "tune.detail"
 
-    /// How many ticks between display-list refreshes.
-    private static let displayRefreshEveryNTicks = 8
+    private var metricsToken: UUID?
+    private var metricsIntervalMs: Int?
+    private var detailTokens: [UUID] = []
+    private var stateToken: UUID?
+    private var lastSequence: [String: Int] = [:]
+    /// Bounded number of samples after launch during which the views count as
+    /// visible, so CPU utilisation (a delta that needs a second sample) shows
+    /// up after seconds, not after one hidden interval.
+    private var primingSamplesRemaining = 3
 
-    private var pollTask: Task<Void, Never>?
-    private var tick = 0
-    private var isRefreshing = false
-    private var refreshPending = false
-    /// Bounded number of fast "priming" polls after launch, so a Mac that never
-    /// reports CPU utilisation cannot pin the loop at the fast cadence forever.
-    private var primingTicksRemaining = 3
-
-    /// Whether the popover (or another detail surface) is on screen. Drives
-    /// both the poll interval and whether the expensive tiers run at all.
+    /// Whether the popover (or another detail surface) is on screen.
     private(set) var isDetailVisible = false
 
     // MARK: - Lifecycle
 
-    init(controller: TuneController, preferences: PreferencesManager) {
-        self.controller = controller
+    init(session: AgentSession, preferences: PreferencesManager) {
+        self.session = session
         self.preferences = preferences
+        self.agentState = session.state
+        history.ensureBuffers(for: preferences.enabledMetrics)
     }
 
     func start() {
-        restartPolling()
+        guard stateToken == nil else { return }
+        stateToken = session.addStateObserver { [weak self] state in
+            Task { @MainActor in self?.agentStateChanged(state) }
+        }
+        agentState = session.state
+        session.setVisible(true, owner: Self.primingOwner)
+        subscribeMetrics()
     }
 
     func stop() {
-        pollTask?.cancel()
-        pollTask = nil
+        if let stateToken { session.removeStateObserver(stateToken) }
+        stateToken = nil
+        if let metricsToken { session.unsubscribe(metricsToken) }
+        metricsToken = nil
+        unsubscribeDetail()
+        session.setVisible(false, owner: Self.primingOwner)
+        session.setVisible(false, owner: Self.detailOwner)
     }
 
-    /// Show/hide the detail surface. Restarts the poll loop so the new cadence
-    /// and the expensive tiers take effect immediately rather than after the
-    /// current sleep.
+    /// Manual restart of the agent after a failure; the subscriptions come back with it.
+    func restartAgent() {
+        Task { await session.restart() }
+    }
+
+    /// Show/hide the detail surface: its topics are subscribed only while it is on screen.
     func setDetailVisible(_ visible: Bool) {
         guard isDetailVisible != visible else { return }
         isDetailVisible = visible
-        restartPolling()
+        if visible {
+            subscribeMetrics() // picks up a changed refresh interval
+            subscribeDetail()
+        } else {
+            unsubscribeDetail()
+        }
+        session.setVisible(visible, owner: Self.detailOwner)
     }
 
-    /// Force an out-of-band refresh (e.g. right after the user applied a change).
-    /// Does not feed the history buffers — only the scheduled tick does, so the
-    /// sparklines keep an even sample spacing.
+    /// Force an out-of-band read (e.g. right after the user applied a change).
+    /// Does not feed the history buffers — only samples do, so the sparklines
+    /// keep an even spacing.
     func refreshNow() {
-        Task { await refresh(scheduled: false) }
+        Task { await refresh() }
     }
 
     /// Insert a sleep/wake gap marker into the sparkline history.
     func recordWakeGap() {
-        controller.recordWakeGap()
+        history.recordWakeGap()
         rebuildMetricRows()
     }
 
-    // MARK: - Poll loop
+    // MARK: - Subscriptions
 
-    private func currentInterval() -> TimeInterval {
-        // CPU utilisation and network rates are deltas: they need a second
-        // sample before they read as anything but "unavailable". Poll quickly
-        // until that pair exists so the menu bar fills in right after launch
-        // instead of showing a partial readout for a whole idle interval.
-        if primingTicksRemaining > 0, metrics?.cpu.totalUtilization == nil {
-            primingTicksRemaining -= 1
-            return TuneConfig.minimumRefreshInterval
-        }
-        guard isDetailVisible else { return Self.idleInterval }
-        return max(preferences.metricsRefreshInterval, TuneConfig.minimumRefreshInterval)
+    private func subscribeMetrics() {
+        let interval = max(Int(preferences.metricsRefreshInterval * 1000), Int(TuneConfig.minimumRefreshInterval * 1000))
+        if metricsToken != nil, metricsIntervalMs == interval { return }
+        if let metricsToken { session.unsubscribe(metricsToken) }
+        metricsIntervalMs = interval
+        metricsToken = subscription("metrics", visibleMs: interval)
     }
 
-    private func restartPolling() {
-        pollTask?.cancel()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.refresh(scheduled: true)
-                let interval = self.currentInterval()
-                do {
-                    try await Task.sleep(for: .seconds(interval))
-                } catch {
-                    return // cancelled
-                }
-            }
+    private func subscribeDetail() {
+        let interval = max(Int(preferences.metricsRefreshInterval * 1000), Int(TuneConfig.minimumRefreshInterval * 1000))
+        detailTokens = Self.detailTopics.map { subscription($0, visibleMs: interval) }
+    }
+
+    private func unsubscribeDetail() {
+        detailTokens.forEach(session.unsubscribe)
+        detailTokens = []
+    }
+
+    private func subscription(_ command: String, visibleMs: Int) -> UUID {
+        lastSequence[command] = 0
+        return session.subscribe(command, visibleMs: visibleMs) { [weak self] event in
+            Task { @MainActor in self?.receive(event) }
         }
     }
 
-    // MARK: - Refresh
+    // MARK: - Receiving
 
-    private func refresh(scheduled: Bool) async {
-        // A user-triggered refresh can land while the scheduled one is still
-        // reading the hardware; letting both through would double-sample the
-        // history and read the SMC twice for nothing.
-        guard !isRefreshing else {
-            if !scheduled { refreshPending = true }
+    private func agentStateChanged(_ state: AgentState) {
+        agentState = state
+        lastSequence = lastSequence.mapValues { _ in 0 }
+        guard case .ready = state else {
+            clearReadings()
             return
         }
-        isRefreshing = true
-        defer {
-            isRefreshing = false
-            if refreshPending {
-                refreshPending = false
-                refreshNow()
-            }
-        }
-
-        let wantsDetail = isDetailVisible
-        let controller = self.controller
-
-        // Expensive, AppKit-free IOKit reads — and the `pgrep`-based governor
-        // probe, a synchronous fork/exec (issue #194) — run off the main
-        // thread so the UI never stalls on the SMC or on process spawning.
-        let snapshot = await Task.detached(priority: .utility) {
-            HardwareSnapshot(
-                metrics: controller.metricsReport(),
-                sensors: wantsDetail ? controller.sensorsReport() : nil,
-                battery: wantsDetail ? controller.batteryReport() : nil,
-                fanGovernorRunning: wantsDetail ? controller.isFanGovernorRunning() : nil
-            )
-        }.value
-
-        // History is fed from exactly one place now. Previously the status item
-        // and the popover each called `metricsReport()` on their own timer,
-        // which split the deltas between two readers and skewed the CPU and
-        // network rates.
-        if scheduled {
-            controller.recordMetricsHistory(snapshot.metrics)
-        }
-
-        if metrics != snapshot.metrics { metrics = snapshot.metrics }
-        if storageVolumes != snapshot.metrics.volumes { storageVolumes = snapshot.metrics.volumes }
-        if let value = snapshot.sensors, sensors != value { sensors = value }
-        if let value = snapshot.battery, battery != value { battery = value }
-        if let value = snapshot.fanGovernorRunning, fanGovernorRunning != value { fanGovernorRunning = value }
-
-        updateStatusItemText()
-        rebuildMetricRows()
-
-        if wantsDetail {
-            refreshMainThreadState()
-        }
-
-        if scheduled { tick &+= 1 }
+        unreadableAnswer = nil
     }
 
-    /// Reads that must stay on the main actor (AppKit / overlay state).
-    ///
-    /// The fan-governor probe used to run here too (a synchronous `pgrep`
-    /// fork/exec) but has moved into the `Task.detached` block in
-    /// ``refresh(scheduled:)`` alongside the sensors/battery reads — it needs
-    /// no AppKit and has no business blocking the main actor (issue #194).
-    private func refreshMainThreadState() {
-        let currentOverrides = controller.activeOverrides()
-        if overrides != currentOverrides { overrides = currentOverrides }
-
-        let currentSelection = controller.activeFanSelection
-        if fanProfile != currentSelection.profile { fanProfile = currentSelection.profile }
-        if fanCoolTarget != currentSelection.coolTargetCelsius {
-            fanCoolTarget = currentSelection.coolTargetCelsius
+    private func receive(_ event: AgentEvent) {
+        // A later sample may already be here when an older one is handled.
+        if event.sequence > 0 {
+            guard event.sequence > (lastSequence[event.command] ?? 0) else { return }
+            lastSequence[event.command] = event.sequence
         }
+        switch event.payload {
+        case .result(let json):
+            apply(event.command, json, scheduled: true)
+        case .error(let error):
+            // A capability this Mac lacks ends the subscription and shows as
+            // "not available"; anything else is a failed sample, not a value.
+            if error.exitClass != "unsupported" { reading(event.command, failed: error.message) }
+        }
+    }
 
-        let helperOutdated = controller.fanHelperLacksCoolTarget()
-        if fanHelperLacksCoolTarget != helperOutdated { fanHelperLacksCoolTarget = helperOutdated }
+    private func refresh() async {
+        guard isAgentReady else { return }
+        let commands = ["metrics"] + (isDetailVisible ? Self.detailTopics : [])
+        for command in commands {
+            if case .done(let json) = await session.perform(command) {
+                apply(command, json, scheduled: false)
+            }
+        }
+    }
 
-        // `activeOverrides()` already read the built-in brightness; reuse it
-        // instead of hitting DisplayServices a second time per refresh.
-        let brightness = currentOverrides.brightness ?? (try? controller.getBuiltinBrightness())
-        if let brightness, builtinBrightness != brightness { builtinBrightness = brightness }
+    private func apply(_ command: String, _ json: AgentJSON, scheduled: Bool) {
+        do {
+            switch command {
+            case "metrics":
+                let report = try AgentDecoding.decode(SystemMetricsReport.self, from: json)
+                if scheduled { history.record(report) }
+                if metrics != report { metrics = report }
+                if storageVolumes != report.volumes { storageVolumes = report.volumes }
+                updateStatusItemText()
+                rebuildMetricRows()
+                if scheduled { endPrimingIfDone(report) }
+            case "status":
+                let report = try AgentDecoding.decode(StatusReport.self, from: json)
+                set(\.sensors, report.sensors)
+                set(\.battery, report.battery)
+                set(\.displays, report.displays.displays)
+                set(\.overrides, report.activeOverrides)
+                set(\.dimAmount, 1.0 - (report.activeOverrides.dim ?? 1.0))
+                set(\.warmth, report.activeOverrides.warmth ?? 0.0)
+            case "brightness.get":
+                set(\.builtinBrightness, try AgentDecoding.decode(BrightnessReadback.self, from: json).brightness)
+            case "awake.status":
+                set(\.keepAwake, try AgentDecoding.decode(KeepAwakeSession.self, from: json))
+            case "fan.status":
+                let status = try AgentDecoding.decode(FanStatus.self, from: json)
+                set(\.fanProfile, status.profile)
+                set(\.fanGovernorRunning, status.governorRunning)
+                set(\.fanCoolTarget, status.coolTargetCelsius)
+                set(\.fanAverageClusterCelsius, status.averageClusterCelsius)
+            default:
+                return
+            }
+            if unreadableAnswer != nil { unreadableAnswer = nil }
+        } catch {
+            reading(command, failed: "the answer to \(command) could not be read: \(error.localizedDescription)")
+        }
+    }
 
-        let dim = 1.0 - controller.getDimLevel()
-        if dimAmount != dim { dimAmount = dim }
+    private func set<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<TuneViewModel, Value>, _ value: Value) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+    }
 
-        let currentWarmth = controller.getWarmthLevel()
-        if warmth != currentWarmth { warmth = currentWarmth }
+    private func reading(_ command: String, failed message: String) {
+        unreadableAnswer = "\(command): \(message)"
+    }
 
-        let extended = controller.extendedBrightnessStatus()
-        if extendedBrightness != extended { extendedBrightness = extended }
+    /// The agent is gone: show nothing rather than the last values.
+    private func clearReadings() {
+        metrics = nil
+        storageVolumes = nil
+        sensors = nil
+        battery = nil
+        displays = []
+        overrides = ActiveOverrides()
+        keepAwake = .inactive
+        fanProfile = .system
+        fanGovernorRunning = false
+        fanCoolTarget = nil
+        fanAverageClusterCelsius = nil
+        metricRows = []
+        updateStatusItemText()
+    }
 
-        let session = controller.keepAwakeSessionStatus()
-        if keepAwake != session { keepAwake = session }
-
-        if displays.isEmpty || tick % Self.displayRefreshEveryNTicks == 0 {
-            let list = controller.displaysReport().displays
-            if displays != list { displays = list }
+    private func endPrimingIfDone(_ report: SystemMetricsReport) {
+        guard primingSamplesRemaining > 0 else { return }
+        primingSamplesRemaining -= 1
+        if report.cpu.totalUtilization != nil || primingSamplesRemaining == 0 {
+            primingSamplesRemaining = 0
+            session.setVisible(false, owner: Self.primingOwner)
         }
     }
 
     // MARK: - Derived state
+
+    /// What "Brighter" is really doing when the display grants less than asked.
+    var extendedBrightnessNote: String? {
+        guard let requested = overrides.edrBrightness else { return nil }
+        let builtin = displays.first { $0.isBuiltin == true } ?? displays.first
+        guard let headroom = builtin?.maxEDRHeadroom, requested > headroom + 0.01 else { return nil }
+        let available = max(0, Int(((headroom - 1.0) * 100).rounded()))
+        return available == 0
+            ? "No HDR headroom right now — turn on High Dynamic Range for this display in System Settings › Displays for the full range."
+            : "Limited to +\(available)% — that is all the headroom this display grants."
+    }
 
     private func rebuildMetricRows() {
         let ordered = orderedMetrics(preferences.enabledMetrics)
@@ -313,7 +354,7 @@ final class TuneViewModel {
                 }
             }()
 
-            guard let stats = controller.metricsHistoryStats(for: id) else {
+            guard let stats = history.stats(for: id) else {
                 guard let fallback = MetricFormatting.fallbackValue(id, report: report, style: style) else { continue }
                 rows.append(MetricRowData(
                     id: id,
@@ -332,7 +373,7 @@ final class TuneViewModel {
                 current: formatted.current,
                 minimum: formatted.minimum,
                 maximum: formatted.maximum,
-                samples: controller.metricsHistorySamples(for: id)
+                samples: history.samples(for: id)
             ))
         }
 
@@ -340,13 +381,14 @@ final class TuneViewModel {
     }
 
     private func updateStatusItemText() {
-        guard let report = metrics else { return }
         let visible = orderedMetrics(preferences.visibleMetrics, fallback: [.cpu, .memory])
-        let segments = MetricStyleFormatting.statusItemSegments(
-            report: report,
-            identifiers: visible,
-            styles: preferences.metricStyles
-        )
+        let segments = metrics.map {
+            MetricStyleFormatting.statusItemSegments(
+                report: $0,
+                identifiers: visible,
+                styles: preferences.metricStyles
+            )
+        } ?? []
         // Comparing segments, not just the flattened text: two styles can
         // render the same characters with a different icon, and the status
         // item would otherwise keep the stale glyph.
@@ -373,7 +415,7 @@ final class TuneViewModel {
 
     /// Sync the history buffers after the user changed which metrics are enabled.
     func syncEnabledMetrics() {
-        controller.syncEnabledMetrics(preferences.enabledMetrics)
+        history.ensureBuffers(for: preferences.enabledMetrics)
         rebuildMetricRows()
     }
 }

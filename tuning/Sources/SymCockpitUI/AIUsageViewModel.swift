@@ -48,16 +48,41 @@ final class AIUsageViewModel {
     private(set) var isRefreshing = false
     private var queuedProviders: Set<String> = []
     private var isStopped = false
+    /// With the agent every usage read waits behind the others (a slow provider
+    /// can take 30 s), so the app fetches only while a surface needs it: the
+    /// panel is open or the usage is part of the menu-bar text. Off by default
+    /// so a model built without an agent behaves as before.
+    var requiresVisibility = false
+    var isVisible = false {
+        didSet { if isVisible, !oldValue, requiresVisibility { refreshNow() } }
+    }
 
-    convenience init(controller: TuneController, preferences: AIUsagePreferences) {
-        let service = controller.aiUsageService
-        self.init(providers: service.providers, preferences: preferences,
-            cached: { service.cachedResults(providerIDs: $0) },
-            purge: { service.purgeCache(providerIDs: $0) },
-            fetchEstimatedHistory: { await service.usageAll(providerIDs: $0, force: $1, grokHistoryEnabled: $2,
-                opencodeHistoryEnabled: $3, claudeHistoryEnabled: $4, claudeHistoryOnly: $5,
-                codexHistoryEnabled: $6, codexHistoryOnly: $7) },
-            fetch: { await service.usageAll(providerIDs: $0, force: $1) })
+    /// The usage comes from the agent's `ai-usage`. `providers` is only the
+    /// catalog's metadata (names, configuration hints): no credential is read here.
+    /// Not available through the agent yet: the recorded-history readers
+    /// (consent-based Grok/opencode/Claude/Codex history) and the on-disk snapshot cache.
+    convenience init(
+        session: AgentSession, preferences: AIUsagePreferences,
+        providers: [any AIUsageProvider] = SymBrainUsageProvider.catalog()
+    ) {
+        self.init(providers: providers, preferences: preferences,
+            fetch: { selected, _ in await Self.usage(from: session, selected: selected) })
+    }
+
+    /// The agent answers for every catalog provider (`ai-usage` takes no
+    /// provider argument); the rows the app did not ask for are dropped here.
+    nonisolated static func usage(from session: AgentSession, selected: Set<String>) async -> [AIUsageService.ProviderResult] {
+        switch await session.perform("ai-usage") {
+        case .done(let json):
+            guard let all = try? AgentDecoding.decode([AIUsageService.ProviderResult].self, from: json) else {
+                return selected.sorted().map { .init(providerID: $0, snapshot: nil, error: "AI usage could not be read from the Cockpit agent.") }
+            }
+            return all.filter { selected.contains($0.providerID) }
+        case .failed(let message, _):
+            return selected.sorted().map { .init(providerID: $0, snapshot: nil, error: SecretRedactor.redact(message)) }
+        case .needsConfirmation:
+            return selected.sorted().map { .init(providerID: $0, snapshot: nil, error: "AI usage needs a confirmation.") }
+        }
     }
 
     init(providers: [any AIUsageProvider], preferences: AIUsagePreferences,
@@ -139,7 +164,9 @@ final class AIUsageViewModel {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                await self.refresh()
+                if !self.requiresVisibility || self.isVisible || self.preferences.menuBarEnabled {
+                    await self.refresh()
+                }
                 let interval = max(1, self.preferences.refreshInterval)
                 try? await Task.sleep(for: .seconds(interval))
             }

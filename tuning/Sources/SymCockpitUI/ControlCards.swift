@@ -9,8 +9,9 @@ import SymCockpitCore
 /// Each row owns its drag state (see ``TuneSliderRow``), so moving one slider
 /// re-renders that row only — not this card, and not the panel around it.
 struct DisplayControlsCard: View {
-    let controller: TuneController
     let model: TuneViewModel
+    /// The user's configured bounds for the Beyond Normal slider (config.toml).
+    let config: TuneConfig
     @Environment(\.tunePanelChrome) private var chrome
 
     /// Who answers the brightness keys, or `nil` in a host that does not offer
@@ -32,7 +33,7 @@ struct DisplayControlsCard: View {
                 value: model.builtinBrightness,
                 range: 0.0...1.0
             ) { value in
-                apply { try controller.applyBuiltinBrightness(value) }
+                apply { await model.setBrightness(value) }
             }
 
             if let preferences = brightnessKeys {
@@ -57,7 +58,7 @@ struct DisplayControlsCard: View {
             // Extended brightness depends on the display granting EDR headroom,
             // which it does not always do. Say what is actually happening
             // instead of leaving the slider looking effective.
-            if let note = extendedBrightnessNote {
+            if let note = model.extendedBrightnessNote {
                 Text(note)
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.warning)
@@ -70,7 +71,7 @@ struct DisplayControlsCard: View {
                 value: model.warmth,
                 range: 0.0...1.0
             ) { value in
-                apply { try controller.applyWarmth(value) }
+                apply { await model.setWarmth(value) }
             }
 
             if let displayError {
@@ -80,6 +81,7 @@ struct DisplayControlsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .disabled(!model.isAgentReady)
         .cardStyle()
     }
 
@@ -170,77 +172,44 @@ struct DisplayControlsCard: View {
         BeyondNormalBrightness.position(
             dimFactor: 1.0 - model.dimAmount,
             extendedBrightness: model.overrides.edrBrightness,
-            config: controller.config
+            config: config
         )
-    }
-
-    /// What "Brighter" is really doing, whenever that differs from the request.
-    private var extendedBrightnessNote: String? {
-        let status = model.extendedBrightness
-        guard let requested = status.requested, let effective = status.effective else { return nil }
-        let applied = Int(((effective - 1.0) * 100).rounded())
-
-        switch status.mode {
-        case .softwareLift:
-            // No EDR headroom: the lift is real but clips the highlights, and
-            // it is capped for that reason. Say both.
-            return "No HDR headroom right now — lifting +\(applied)% in software, "
-                + "so bright areas may flatten. Enable High Dynamic Range for this display "
-                + "in System Settings › Displays for the full range."
-        case .extendedRange:
-            guard effective < requested - 0.01 else { return nil }
-            return "Limited to +\(applied)% — that is all the headroom this display grants."
-        case nil:
-            return nil
-        }
     }
 
     private func applyBeyondNormal(_ position: Double) {
         let resolved = BeyondNormalBrightness.resolve(
             position: position,
-            config: controller.config,
+            config: config,
             allowsExtendedBrightness: isEDRCapable
         )
-        // Both sides are written every time: leaving the other one at its last
-        // value would keep it acting after the knob has crossed centre.
         apply {
-            try controller.applyDim(resolved.dimFactor)
-            if isEDRCapable {
-                try controller.applyExtendedBrightness(resolved.extendedBrightness)
-            }
+            await model.setBeyondNormal(
+                dimFactor: resolved.dimFactor,
+                extendedBrightness: isEDRCapable ? resolved.extendedBrightness : nil
+            )
         }
     }
 
-    private func apply(_ action: () throws -> Void) {
-        do {
-            try action()
-            displayError = nil
-        } catch {
-            displayError = SecretRedactor.redact(error.localizedDescription)
+    /// Runs a command of the agent; what the agent refused is shown, never swallowed.
+    private func apply(_ action: @escaping () async -> ActionOutcome) {
+        Task {
+            let outcome = await action()
+            displayError = outcome.failureMessage.map(SecretRedactor.redact)
         }
-        model.refreshNow()
     }
 }
 
 // MARK: - Fan control
 
 struct FanControlCard: View {
-    let controller: TuneController
     let model: TuneViewModel
     /// Where a user is sent when fan changes lack the rights to take effect.
     let preferencesManager: PreferencesManager
     let openPreferences: () -> Void
 
-    @State private var fanError: String?
-    /// Mirrors the selected position so the control can revert on failure.
-    @State private var pendingProfile: FanProfile?
-    /// True while a privileged write is waiting on the system's own
-    /// administrator-password dialog (a few seconds, or longer while the
-    /// person is looking for their password) — surfaced so the slider does
-    /// not look like it silently ignored the drag.
-    @State private var isAwaitingAuthorization = false
-    /// Why the last selection was not applied and where the user was sent.
-    @State private var rightsHint: String?
+    /// The position the user asked for, drawn while the change is planned or
+    /// being applied, so the control follows the click instead of snapping back.
+    @State private var requestedProfile: FanProfile?
 
     /// See ``MainStatusView/hasFans`` for why an unsupported SMC read (not
     /// just a missing sensors report) must also be treated as "unknown," not
@@ -254,11 +223,8 @@ struct FanControlCard: View {
         return !sensors.fans.isEmpty
     }
 
-    /// The position to draw: the pending one while a change is in flight, so
-    /// the control follows the click instead of snapping back until the next
-    /// model refresh lands.
     private var selectedProfile: FanProfile {
-        pendingProfile ?? model.fanProfile
+        model.pendingFanChange != nil || model.fanBusy ? requestedProfile ?? model.fanProfile : model.fanProfile
     }
 
     var body: some View {
@@ -276,8 +242,12 @@ struct FanControlCard: View {
                     }
                 }
 
-                FanProfileSliderRow(profile: selectedProfile, isEnabled: !isAwaitingAuthorization) { profile in
-                    profileBinding.wrappedValue = profile
+                FanProfileSliderRow(
+                    profile: selectedProfile,
+                    isEnabled: model.isAgentReady && !model.fanBusy && model.pendingFanChange == nil
+                ) { profile in
+                    requestedProfile = profile
+                    Task { await model.requestFanProfile(profile) }
                 }
 
                 Text(selectedProfile.summary)
@@ -286,27 +256,19 @@ struct FanControlCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if selectedProfile == .comfort {
-                    FanCoolTargetRow(controller: controller, model: model)
+                    FanCoolTargetRow(model: model)
                 }
 
-                if isAwaitingAuthorization {
-                    Text("Starting the fan governor — you may be asked for your "
-                         + "administrator password…")
+                if let pending = model.pendingFanChange {
+                    confirmation(pending)
+                } else if model.fanBusy {
+                    Text("Applying — you may be asked for your administrator password…")
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTokens.ink3)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if let fanError {
-                    Text(fanError)
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTokens.critical)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if let rightsHint {
-                    Text(rightsHint)
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTokens.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("fan-rights-hint")
-                } else if selectedProfile != .system && !model.fanGovernorRunning {
+                } else if let failure = model.fanFailure {
+                    failureNote(failure)
+                } else if model.fanProfile != .system && !model.fanGovernorRunning {
                     // Honest reporting: a selected position with nothing
                     // enforcing it means the fans are still on the firmware
                     // curve, and saying "Cool" would be a lie.
@@ -317,10 +279,6 @@ struct FanControlCard: View {
                 }
             }
             .cardStyle()
-            .onChange(of: model.fanProfile) { _, _ in
-                // The model is authoritative again once it reflects the change.
-                pendingProfile = nil
-            }
         } else {
             VStack(spacing: 6) {
                 HStack {
@@ -341,75 +299,42 @@ struct FanControlCard: View {
         model.sensors?.fans.map(\.rpm).max()
     }
 
-    private var profileBinding: Binding<FanProfile> {
-        Binding(
-            get: { selectedProfile },
-            set: { newValue in
-                let previous = selectedProfile
-                pendingProfile = newValue
-                rightsHint = nil
-                apply {
-                    // Decided off the main actor (it probes for a running
-                    // governor) and before anything is written: a user who
-                    // lacks the rights is sent to where they are granted
-                    // instead of into an administrator-password prompt.
-                    let action = controller.fanSelectionAction(for: newValue)
-                    guard case .proceed = action else { throw FanRightsNeeded(action: action) }
-                    try controller.applyFanProfile(newValue, allowPrivilegeEscalation: true)
-                } onFailure: {
-                    pendingProfile = previous
-                }
-            }
-        )
-    }
-
-    /// Runs `work` off the main actor and reports back on it: a privileged
-    /// write can block for as long as the system's own password dialog is on
-    /// screen, and that must never freeze the slider or the popover.
-    private func apply(
-        _ work: @escaping @Sendable () throws -> Void,
-        onFailure: @escaping () -> Void = {}
-    ) {
-        isAwaitingAuthorization = true
-        Task {
-            do {
-                try await Task.detached(priority: .userInitiated) {
-                    try work()
-                }.value
-                isAwaitingAuthorization = false
-                fanError = nil
-                model.refreshNow()
-            } catch let needed as FanRightsNeeded {
-                isAwaitingAuthorization = false
-                fanError = nil
-                rightsHint = needed.action.hint
-                onFailure()
-                navigate(for: needed.action)
-            } catch {
-                isAwaitingAuthorization = false
-                fanError = error.localizedDescription
-                onFailure()
+    /// The agent only planned the change (fans are a risky command). Nothing
+    /// happens until the user says so here.
+    private func confirmation(_ pending: TuneViewModel.PendingChange) -> some View {
+        VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+            Text(pending.summary)
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTokens.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Nothing has changed yet. Confirm to apply it\(pending.plan.expiresInSeconds.map { " within \($0) seconds" } ?? "").")
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTokens.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: SymairaSpacing.small) {
+                Button("Cancel") { model.cancelPendingFanChange() }
+                    .symairaButtonStyle(.secondary)
+                Button("Confirm") { Task { await model.confirmPendingFanChange() } }
+                    .symairaButtonStyle(.primary)
             }
         }
+        .accessibilityIdentifier("fan-plan-confirmation")
     }
 
-    /// Takes the user to where the missing fan rights are granted. Nothing was
-    /// changed, so the control has already snapped back to the old position.
-    private func navigate(for action: FanSelectionAction) {
-        switch action {
-        case .proceed:
-            break
-        case .openHelperPreferences:
-            preferencesManager.requestFanHelperSetup(hint: action.hint)
-            openPreferences()
-        case .openSystemSettingsApproval:
-            controller.openFanHelperApprovalSettings()
+    @ViewBuilder
+    private func failureNote(_ failure: TuneViewModel.FanFailure) -> some View {
+        Text(failure.needsHelper ? FanSelectionAction.openHelperPreferences.hint ?? failure.message : failure.message)
+            .symairaText(.caption)
+            .foregroundStyle(failure.needsHelper ? SymairaTokens.ink : SymairaTokens.critical)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier(failure.needsHelper ? "fan-rights-hint" : "fan-error")
+        if failure.needsHelper {
+            Button("Open helper settings") {
+                preferencesManager.requestFanHelperSetup(hint: FanSelectionAction.openHelperPreferences.hint)
+                openPreferences()
+            }
+            .buttonStyle(.link)
+            .symairaText(.caption)
         }
     }
-}
-
-/// Thrown inside the off-main-actor part of a selection: the change needs
-/// rights the user does not have yet, so the card navigates instead of applying.
-private struct FanRightsNeeded: Error {
-    let action: FanSelectionAction
 }

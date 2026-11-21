@@ -39,9 +39,9 @@ private func brightnessTapCallback(
 /// Everything that is not a brightness key — volume, media, keyboard
 /// illumination — is passed through untouched.
 ///
-/// The brightness write goes through ``TuneController``, the same path the
-/// slider uses, so the config's brightness bounds and the history log apply to
-/// a key press exactly as they do to a drag.
+/// The brightness read and write go to the Cockpit agent, the same commands
+/// the slider uses, so its bounds and the history log apply to a key press
+/// exactly as they do to a drag.
 @MainActor
 final class BrightnessKeyController: NSObject {
     /// Why the keys are not currently being answered by this app. Drives what
@@ -55,7 +55,7 @@ final class BrightnessKeyController: NSObject {
         case noBuiltInDisplay
     }
 
-    private let controller: TuneController
+    private let session: AgentSession
     private let hud = BrightnessHUDPanel()
 
     private var machPort: CFMachPort?
@@ -78,8 +78,8 @@ final class BrightnessKeyController: NSObject {
         }
     }
 
-    init(controller: TuneController) {
-        self.controller = controller
+    init(session: AgentSession) {
+        self.session = session
         super.init()
     }
 
@@ -283,14 +283,53 @@ final class BrightnessKeyController: NSObject {
     /// - Returns: `false` when the press was not answered and belongs to
     ///   macOS: the read was unusable (issue #359) or the write failed.
     private func apply(direction: BrightnessKeyStep.Direction, fine: Bool) -> Bool {
-        let current = (try? controller.getBuiltinBrightness()).map(Float.init)
+        let current = brightness().map(Float.init)
         guard let target = BrightnessKeyStep.target(fromRead: current, direction: direction, fine: fine) else {
             return false
         }
-        guard (try? controller.applyBuiltinBrightness(Double(target))) != nil else { return false }
+        guard case .done = ask("brightness.set", ["value": .number(Double(target))]) else { return false }
         // Config bounds can clamp the write, so show what the display holds.
-        let shown = (try? controller.getBuiltinBrightness()).map(Float.init) ?? target
+        let shown = brightness().map(Float.init) ?? target
         hud.show(level: shown)
         return true
+    }
+
+    private func brightness() -> Double? {
+        guard case .done(let json) = ask("brightness.get"),
+              let reading = try? AgentDecoding.decode(BrightnessReadback.self, from: json)
+        else { return nil }
+        return reading.brightness
+    }
+
+    /// The event tap has to say at once whether it consumed a key, so it asks
+    /// the agent and waits a moment. An agent that is busy, slow or gone does
+    /// not answer in time and the key goes back to macOS.
+    private func ask(_ command: String, _ params: [String: AgentJSON] = [:]) -> ActionOutcome {
+        let answer = Answer()
+        let session = session
+        Task.detached {
+            answer.finish(await session.perform(command, params: params))
+        }
+        return answer.wait(seconds: 0.3) ?? .failed(message: "The Cockpit agent did not answer in time.", exitClass: nil)
+    }
+
+    private final class Answer: @unchecked Sendable {
+        private let semaphore = DispatchSemaphore(value: 0)
+        private let lock = NSLock()
+        private var outcome: ActionOutcome?
+
+        func finish(_ value: ActionOutcome) {
+            lock.lock()
+            outcome = value
+            lock.unlock()
+            semaphore.signal()
+        }
+
+        func wait(seconds: TimeInterval) -> ActionOutcome? {
+            guard semaphore.wait(timeout: .now() + seconds) == .success else { return nil }
+            lock.lock()
+            defer { lock.unlock() }
+            return outcome
+        }
     }
 }
