@@ -210,7 +210,8 @@ mod tests {
             *rec.0.lock().unwrap(),
             ["copy:/a/with space\n/b/$(touch x)"]
         );
-        assert_eq!(jobs.status()["succeeded"], 1);
+        // The counter is bumped just after the result file appears: wait for it, don't race it.
+        wait_for("the succeeded counter", || jobs.status()["succeeded"] == 1);
         jobs.stop();
     }
 

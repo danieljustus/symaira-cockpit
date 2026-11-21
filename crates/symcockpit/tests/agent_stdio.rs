@@ -2,9 +2,9 @@
 //! `call` through the MCP dispatch path, plan and confirm, subscriptions,
 //! the exit on EOF and SIGTERM, and the parent check.
 //!
-//! These run the debug binary with the debug-only test switch. The Swift core
-//! is a fake script and every data directory is a temporary one; the only real
-//! read is `metrics` (CPU, memory, network counters), nothing is written to
+//! These run the debug binary with the debug-only test switch. Every data
+//! directory and HOME is a temporary one; the only real reads are `metrics`
+//! (CPU, memory, network counters) and the fan status, nothing is written to
 //! hardware.
 
 #![cfg(debug_assertions)]
@@ -16,7 +16,6 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use symcockpit_testkit::legacy::FakeLegacy;
 
 const BIN: &str = env!("CARGO_BIN_EXE_symcockpit");
 const SWITCH: &str = "SYMCOCKPIT_AGENT_SKIP_PARENT_CHECK";
@@ -47,19 +46,16 @@ struct Agent {
 }
 
 impl Agent {
-    fn start(home: &Path, legacy: Option<&Path>) -> Self {
-        Self::start_with(home, legacy, &[])
+    fn start(home: &Path) -> Self {
+        Self::start_with(home, &[])
     }
 
-    fn start_with(home: &Path, legacy: Option<&Path>, extra: &[&str]) -> Self {
+    fn start_with(home: &Path, extra: &[&str]) -> Self {
         let data = home.join("data");
         let mut args = vec!["agent", "--stdio", "--data-dir", data.to_str().unwrap()];
         args.extend_from_slice(extra);
         let mut cmd = command(home, &args);
         cmd.env(SWITCH, "1");
-        if let Some(legacy) = legacy {
-            cmd.env("SYMCOCKPIT_LEGACY_BIN", legacy);
-        }
         let mut child = cmd.spawn().unwrap();
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().unwrap();
@@ -149,8 +145,7 @@ impl Agent {
 #[test]
 fn hello_call_plan_and_confirm_run_through_the_mcp_dispatch_path() {
     let tmp = tempfile::tempdir().unwrap();
-    let fake = FakeLegacy::new(tmp.path(), "{\"applied\":true}", "", 0);
-    let mut agent = Agent::start(tmp.path(), Some(&fake.path));
+    let mut agent = Agent::start(tmp.path());
 
     // Before hello nothing but ping works.
     let (r, _) = agent.request("call", json!({"command": "profile.list"}));
@@ -180,10 +175,6 @@ fn hello_call_plan_and_confirm_run_through_the_mcp_dispatch_path() {
     let (r, _) = agent.request("call", json!({"command": "profile.list"}));
     assert_eq!(r["result"]["status"], "ok");
     assert_eq!(r["result"]["output"], json!({"profiles": []}));
-    assert!(
-        fake.calls().is_empty(),
-        "a native read does not spawn Swift"
-    );
 
     // reversible: direct, no plan. The test process forbids hardware writes
     // (SYMCOCKPIT_TEST_NO_HARDWARE), so the native dim write is refused as
@@ -199,23 +190,78 @@ fn hello_call_plan_and_confirm_run_through_the_mcp_dispatch_path() {
             .contains("hardware writes are disabled"),
         "{r}"
     );
-    assert!(fake.calls().is_empty());
 
-    // risky: a plan first, nothing executed.
-    // (`fan.target` only writes the user's file and is still the Swift
-    // core's, here the fake.)
-    let (r, _) = agent.request("call", json!({"command": "fan.target"}));
+    // The app reads the one argument of `fan.profile` / `fan.target` from the schema.
+    let argument = |name: &str| {
+        let command = commands.iter().find(|c| c["name"] == name).unwrap();
+        command["input_schema"]["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(argument("fan.profile"), ["profile"]);
+    assert_eq!(argument("fan.target"), ["celsius"]);
+
+    // risky: a plan first, nothing executed. `fan.target` only writes the user's own file
+    // (here under the temporary HOME), so confirming it is safe in a test.
+    let file = tmp.path().join(".symtune/fan-profile.json");
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "fan.target", "params": {"celsius": 72.5}}),
+    );
     assert_eq!(r["result"]["status"], "confirmation_required");
-    assert!(fake.calls().is_empty(), "planning does not run the command");
+    assert!(!file.exists(), "planning does not run the command");
+    let id = r["result"]["plan"]["id"].as_str().unwrap().to_owned();
+    let (r, _) = agent.request("confirm", json!({"plan_id": id}));
+    assert_eq!(r["result"]["status"], "confirmed", "{r}");
+    assert_eq!(r["result"]["output"]["cool_target_celsius"], 72.5);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        r#"{"profile":"system","cool_target_celsius":72.5}"#
+    );
+    // The app clears the target with null.
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "fan.target", "params": {"celsius": null}}),
+    );
+    let id = r["result"]["plan"]["id"].as_str().unwrap().to_owned();
+    let (r, _) = agent.request("confirm", json!({"plan_id": id}));
+    assert_eq!(r["result"]["status"], "confirmed", "{r}");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        r#"{"profile":"system"}"#
+    );
+    // A bad value is a failed confirmation with the usage text, not a write.
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "fan.profile", "params": {"profile": "turbo"}}),
+    );
+    let id = r["result"]["plan"]["id"].as_str().unwrap().to_owned();
+    let (r, _) = agent.request("confirm", json!({"plan_id": id}));
+    assert_eq!(r["result"]["status"], "failed");
+    assert!(
+        r["result"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("expected one of system, comfort, performance"),
+        "{r}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        r#"{"profile":"system"}"#
+    );
+    // Planning once more for the replay check below.
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "fan.target", "params": {"celsius": 70}}),
+    );
     let id = r["result"]["plan"]["id"].as_str().unwrap().to_owned();
     let (r, _) = agent.request("confirm", json!({"plan_id": id}));
     assert_eq!(r["result"]["status"], "confirmed");
-    assert_eq!(r["result"]["output"], json!({"applied": true}));
-    assert_eq!(fake.calls().len(), 1);
-    assert_eq!(fake.calls()[0][..2], ["fan", "target"]);
     let (r, _) = agent.request("confirm", json!({"plan_id": id}));
     assert_eq!(r["error"]["code"], -32000, "a plan is confirmed once");
-    assert_eq!(fake.calls().len(), 1);
 
     // A command failure keeps its CLI exit class.
     let (r, _) = agent.request("call", json!({"command": "no.such.command"}));
@@ -229,7 +275,7 @@ fn hello_call_plan_and_confirm_run_through_the_mcp_dispatch_path() {
 #[test]
 fn nothing_is_measured_without_a_subscriber_and_samples_stop_on_unsubscribe() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut agent = Agent::start(tmp.path(), None);
+    let mut agent = Agent::start(tmp.path());
     agent.hello();
     assert!(
         agent.frame(Duration::from_millis(500)).is_none(),
@@ -268,7 +314,7 @@ fn nothing_is_measured_without_a_subscriber_and_samples_stop_on_unsubscribe() {
 #[test]
 fn end_of_input_stops_the_samplers_and_ends_the_agent() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut agent = Agent::start(tmp.path(), None);
+    let mut agent = Agent::start(tmp.path());
     agent.hello();
     agent.request(
         "subscribe",
@@ -282,7 +328,7 @@ fn end_of_input_stops_the_samplers_and_ends_the_agent() {
 #[test]
 fn sigterm_ends_the_agent_cleanly_even_while_subscribed() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut agent = Agent::start(tmp.path(), None);
+    let mut agent = Agent::start(tmp.path());
     agent.hello();
     agent.request(
         "subscribe",
@@ -339,11 +385,7 @@ const OFF_BY: &str = "SYMCOCKPIT_TEST_NO_HARDWARE";
 fn the_services_start_only_on_the_users_settings_and_never_reach_the_real_machine_in_a_test() {
     let tmp = tempfile::tempdir().unwrap();
     let jobs = tmp.path().join("jobs");
-    let mut agent = Agent::start_with(
-        tmp.path(),
-        None,
-        &["--finder-jobs-dir", jobs.to_str().unwrap()],
-    );
+    let mut agent = Agent::start_with(tmp.path(), &["--finder-jobs-dir", jobs.to_str().unwrap()]);
     let hello = agent.hello();
     let methods = hello["result"]["capabilities"]["methods"]
         .as_array()
@@ -447,11 +489,7 @@ fn the_services_start_only_on_the_users_settings_and_never_reach_the_real_machin
 fn sigterm_ends_an_agent_with_running_services_cleanly() {
     let tmp = tempfile::tempdir().unwrap();
     let jobs = tmp.path().join("jobs");
-    let mut agent = Agent::start_with(
-        tmp.path(),
-        None,
-        &["--finder-jobs-dir", jobs.to_str().unwrap()],
-    );
+    let mut agent = Agent::start_with(tmp.path(), &["--finder-jobs-dir", jobs.to_str().unwrap()]);
     agent.hello();
     agent.request("clipboard.configure", json!({"enabled": true}));
     agent.request(

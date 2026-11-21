@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{app, done, forwarded};
+use common::{app, done, unavailable};
 use serde_json::{Value, json};
 use symcockpit::app::{App, Context, OverridePort};
 use symcockpit::live::LiveOverrides;
@@ -231,18 +231,18 @@ fn a_display_command_without_a_builtin_display_is_exit_4() {
 }
 
 #[test]
-fn restore_without_an_smc_part_restores_displays_then_forwards() {
+fn restore_without_an_smc_part_restores_displays_then_is_unsupported() {
     let e = env();
     done(&e.app, &["dim", "set", "0.5"]);
-    assert!(forwarded(&e.app, &["restore"]));
+    assert!(unavailable(&e.app, &["restore"]));
     assert_eq!(
         e.rig.hw.dim_shown.get(),
         None,
-        "the display half ran before the hand-over"
+        "the display half ran before the refusal"
     );
     assert!(
         e.rig.history.borrow().iter().all(|h| h.action != "restore"),
-        "Swift logs the restore"
+        "without an SMC half there is no restore line"
     );
 }
 
@@ -410,10 +410,6 @@ fn mcp_write_tools_answer_like_v012_and_run_directly() {
     assert_eq!(
         text(&mcp(&e, "load_profile", json!({"name": "mcp"}))),
         r#"{"applied":true}"#
-    );
-    assert!(
-        e.app.legacy.is_none(),
-        "nothing went through the Swift core"
     );
     assert!(e.rig.hw.calls().contains(&"brightness 1 0.5".to_owned()));
 }

@@ -58,6 +58,25 @@ pub fn terminate_pipe() -> io::Result<File> {
     Ok(unsafe { File::from_raw_fd(read) })
 }
 
+/// Waits until `pipe` (from [`terminate_pipe`]) has a byte or `timeout` has passed;
+/// `true` when a signal arrived (an interrupted wait counts as none; the caller asks again).
+/// Lets a loop sleep and still end at once on SIGINT.
+pub fn signalled(pipe: &File, timeout: std::time::Duration) -> io::Result<bool> {
+    use std::os::fd::AsRawFd;
+    let mut fd = libc::pollfd {
+        fd: pipe.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let ms = libc::c_int::try_from(timeout.as_millis()).unwrap_or(libc::c_int::MAX);
+    // SAFETY: one valid pollfd on a descriptor `pipe` keeps open.
+    match unsafe { libc::poll(&raw mut fd, 1, ms) } {
+        -1 if io::Error::last_os_error().kind() == io::ErrorKind::Interrupted => Ok(false),
+        -1 => Err(io::Error::last_os_error()),
+        n => Ok(n > 0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Read;
@@ -71,7 +90,10 @@ mod tests {
         // SAFETY: raising a signal whose handler was just installed.
         assert_eq!(unsafe { libc::raise(libc::SIGTERM) }, 0);
         let mut byte = [0u8; 1];
+        assert!(signalled(&pipe, std::time::Duration::from_secs(5)).unwrap());
         pipe.read_exact(&mut byte).unwrap();
         assert_eq!(byte, [1]);
+        // Nothing pending: the wait runs out.
+        assert!(!signalled(&pipe, std::time::Duration::from_millis(20)).unwrap());
     }
 }

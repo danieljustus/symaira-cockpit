@@ -1,6 +1,5 @@
-//! The built binary against this Mac, read-only: no Swift core is reachable
-//! (`SYMCOCKPIT_LEGACY_BIN` points nowhere), so every command below must be
-//! answered natively. Only shapes and exit codes are asserted; the values are
+//! The built binary against this Mac, read-only: every command below must be
+//! answered by this binary itself. Only shapes and exit codes are asserted; the values are
 //! whatever the host reports (a CI VM has no battery or SMC and that is fine).
 
 use std::io::Write;
@@ -15,8 +14,7 @@ fn command() -> Command {
         .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
         .env("HOME", home)
         .env("PATH", "/usr/bin:/bin")
-        .env("SYMCOCKPIT_CHECK_UPDATES", "0")
-        .env("SYMCOCKPIT_LEGACY_BIN", "/nonexistent/no-swift-core");
+        .env("SYMCOCKPIT_CHECK_UPDATES", "0");
     cmd
 }
 

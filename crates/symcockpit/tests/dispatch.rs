@@ -1,9 +1,9 @@
 //! The command line against fake services: what is answered natively, what is
-//! forwarded, and the exact usage errors of v0.12.
+//! unsupported without a handler, and the exact usage errors of v0.12.
 
 mod common;
 
-use common::{Overrides, app, args, done, forwarded};
+use common::{Overrides, app, args, done, unavailable};
 use serde_json::json;
 use symcockpit::app::{AREA_COMMANDS, Output, Params, ProcessSort, Request};
 use symcockpit::cli::{Action, plan};
@@ -52,12 +52,20 @@ fn root_commands_match_the_v012_dispatcher() {
             )
         );
     }
-    // The version report still goes through the update-check logic.
-    assert!(forwarded(&a, &["version"]) && forwarded(&a, &["-V"]) && forwarded(&a, &["--version"]));
+    // Not on a terminal and not asked: the update check is skipped.
+    for first in ["version", "-V", "--version"] {
+        assert_eq!(
+            done(&a, &[first]).stdout,
+            format!(
+                "symcockpit {} \u{2014} update check skipped\n",
+                symcockpit::VERSION
+            )
+        );
+    }
 }
 
 #[test]
-fn area_commands_are_forwarded_until_a_handler_is_registered() {
+fn commands_without_a_handler_are_unsupported_until_one_is_registered() {
     let tmp = home();
     let mut a = app(tmp.path());
     let lines: [&[&str]; 9] = [
@@ -72,7 +80,7 @@ fn area_commands_are_forwarded_until_a_handler_is_registered() {
         &["top"],
     ];
     for l in lines {
-        assert!(forwarded(&a, l), "{l:?}");
+        assert!(unavailable(&a, l), "{l:?}");
     }
     for name in AREA_COMMANDS {
         a.handlers.register(name, move |_, req| {
@@ -122,7 +130,7 @@ fn bare_fan_profile_and_target_read_and_write_family_help_is_native() {
 }
 
 #[test]
-fn fan_charge_and_the_endless_loops_are_always_forwarded() {
+fn fan_and_charge_writes_without_a_handler_are_unsupported_and_the_loops_are_their_own_actions() {
     let tmp = home();
     let mut a = app(tmp.path());
     a.handlers
@@ -135,12 +143,21 @@ fn fan_charge_and_the_endless_loops_are_always_forwarded() {
         &["fan", "governor"],
         &["battery-limit", "set", "80"],
         &["battery-limit", "clear"],
-        &["ai-usage", "serve"],
-        &["status", "--watch"],
-        &["status", "--watch", "--interval", "2s"],
     ] {
-        assert!(forwarded(&a, l), "{l:?}");
+        assert!(unavailable(&a, l), "{l:?}");
     }
+    let watch = |l: &[&str]| match plan(&a, &args(l)) {
+        Action::StatusWatch { interval, .. } => interval,
+        _ => panic!("{l:?} is not the watch loop"),
+    };
+    assert_eq!(watch(&["status", "--watch"]), 1.0);
+    assert_eq!(watch(&["status", "--watch", "--interval", "2s"]), 2.0);
+    let serve = |l: &[&str]| match plan(&a, &args(l)) {
+        Action::AiUsageServe { port, .. } => port,
+        _ => panic!("{l:?} is not the usage server"),
+    };
+    assert_eq!(serve(&["ai-usage", "serve"]), 6737);
+    assert_eq!(serve(&["ai-usage", "serve", "--port", "0"]), 0);
 }
 
 #[test]
@@ -240,7 +257,7 @@ fn usage_errors_have_the_swift_messages_and_exit_2() {
 }
 
 #[test]
-fn help_of_read_commands_is_native_and_restore_is_forwarded() {
+fn help_of_read_commands_is_native() {
     let tmp = home();
     let a = app(tmp.path());
     for c in ["sensors", "battery", "displays", "permissions", "doctor"] {
@@ -426,7 +443,7 @@ fn doctor_permissions_and_status_wait_for_their_ports() {
     let tmp = home();
     let mut a = app(tmp.path());
     for c in ["doctor", "permissions", "status"] {
-        assert!(forwarded(&a, &[c]), "{c} before wiring");
+        assert!(unavailable(&a, &[c]), "{c} before wiring");
     }
     a.services.hardware = Some(Box::new(FakeHardware::default()));
     let doctor = done(&a, &["doctor", "--json"]);
@@ -445,7 +462,7 @@ fn doctor_permissions_and_status_wait_for_their_ports() {
             && permissions.stdout.contains("\"mcp_mode\" : \"full\"")
     );
     // Status needs the three reports and the live overrides.
-    assert!(forwarded(&a, &["status"]));
+    assert!(unavailable(&a, &["status"]));
     a.handlers.register("sensors", |_, _| {
         Ok(Output::Json(
             json!({"thermal_pressure": "nominal", "smc_supported": true}),
@@ -457,7 +474,7 @@ fn doctor_permissions_and_status_wait_for_their_ports() {
     a.handlers.register("displays", |_, _| {
         Ok(Output::Json(json!({"displays": [], "notes": []})))
     });
-    assert!(forwarded(&a, &["status"]), "overrides port still missing");
+    assert!(unavailable(&a, &["status"]), "overrides port still missing");
     a.services.overrides = Some(Box::new(Overrides(json!({"fan_fraction": 0.5}), true)));
     let json = done(&a, &["status", "--json"]);
     assert!(
@@ -475,7 +492,6 @@ fn doctor_permissions_and_status_wait_for_their_ports() {
         text.stdout
     );
     assert!(text.stdout.contains("- Fan: 50%"));
-    assert!(forwarded(&a, &["status", "--watch"]));
 }
 
 #[test]
@@ -585,7 +601,7 @@ fn write_commands_parse_natively_and_run_through_their_wired_handler() {
         );
     }
 
-    // Without a wired handler (a test app, a build without the live ports) the Swift core decides.
+    // Without a wired handler (a test app, a build without the live ports) the command is unsupported.
     for line in [
         &["fan", "set", "0.5"][..],
         &["fan", "auto"],
@@ -594,7 +610,7 @@ fn write_commands_parse_natively_and_run_through_their_wired_handler() {
         &["battery-limit", "clear"],
         &["fan", "profile", "comfort"],
     ] {
-        assert!(forwarded(&a, line), "{line:?}");
+        assert!(unavailable(&a, line), "{line:?}");
     }
 
     // Wired: the parsed command reaches the handler, `{"applied": true}` comes back, errors keep their exit codes.

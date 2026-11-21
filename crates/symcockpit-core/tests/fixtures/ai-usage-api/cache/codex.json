@@ -1,0 +1,1 @@
+{"version": 1, "snapshot": {"providerId": "codex", "meters": [{"label": "Weekly", "used": 1, "limit": 3, "unit": {"percent": {}}}], "fetchedAt": 816948843.2415638, "source": "cli"}, "refreshFailed": true}

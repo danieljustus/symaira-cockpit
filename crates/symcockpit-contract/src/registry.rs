@@ -342,8 +342,28 @@ fn v012() -> Vec<CommandSpec> {
             ranged("fraction", "number", json!(0), json!(1)),
         ),
         spec("fan.auto", "fan auto", None, "tune", Risky, no_args()),
-        spec("fan.profile", "fan profile", None, "tune", Risky, no_args()),
-        spec("fan.target", "fan target", None, "tune", Risky, no_args()),
+        spec(
+            "fan.profile",
+            "fan profile",
+            None,
+            "tune",
+            Risky,
+            object(
+                json!({"profile": {"type": "string", "description": "system, comfort or performance."}}),
+                &["profile"],
+            ),
+        ),
+        spec(
+            "fan.target",
+            "fan target",
+            None,
+            "tune",
+            Risky,
+            object(
+                json!({"celsius": {"type": ["number", "string", "null"], "description": "Cool target, 50 to 85 (°C); null or 'off' clears it."}}),
+                &["celsius"],
+            ),
+        ),
         spec(
             "fan.governor",
             "fan governor",

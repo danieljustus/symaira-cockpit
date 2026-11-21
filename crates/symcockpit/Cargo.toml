@@ -1,6 +1,6 @@
 [package]
 name = "symcockpit"
-description = "Symaira Cockpit command line: `version` natively, everything else forwarded to the Swift core."
+description = "Symaira Cockpit command line and MCP server; every command runs in this binary."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

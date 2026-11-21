@@ -1,6 +1,6 @@
 //! `symcockpit serve` as a process: framing, stdout purity and the exit code.
-//! The Swift core is replaced by a fake script; no real hardware, credential
-//! or configuration is touched (isolated HOME, cleared environment).
+//! No real hardware, credential or configuration is touched (isolated HOME,
+//! cleared environment).
 
 mod common;
 
@@ -9,9 +9,8 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 use serde_json::{Value, json};
-use symcockpit_testkit::legacy::FakeLegacy;
 
-fn serve(home: &Path, legacy: Option<&Path>, extra_env: &[(&str, &str)], input: &str) -> Output {
+fn serve(home: &Path, extra_env: &[(&str, &str)], input: &str) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_symcockpit"));
     cmd.arg("serve")
         .env_clear()
@@ -26,9 +25,6 @@ fn serve(home: &Path, legacy: Option<&Path>, extra_env: &[(&str, &str)], input: 
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if let Some(legacy) = legacy {
-        cmd.env("SYMCOCKPIT_LEGACY_BIN", legacy);
-    }
     for (k, v) in extra_env {
         cmd.env(k, v);
     }
@@ -77,9 +73,8 @@ const SESSION: &str = concat!(
 #[test]
 fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
     let tmp = tempfile::tempdir().unwrap();
-    let fake = FakeLegacy::new(tmp.path(), "{\"applied\":true}", "", 0);
     // The last request has no trailing newline: end of input flushes it.
-    let out = serve(tmp.path(), Some(&fake.path), &[], SESSION);
+    let out = serve(tmp.path(), &[], SESSION);
     assert_eq!(out.status.code(), Some(0));
     assert!(
         out.stderr.is_empty(),
@@ -129,7 +124,6 @@ fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
     );
     assert_eq!(frames[4]["error"]["code"], -32700);
     assert_eq!(frames[5]["result"], json!({}));
-    assert!(fake.calls().is_empty(), "nothing was handed to Swift");
     // Nothing was created in the (isolated) data or config directories.
     assert!(!tmp.path().join("d").exists() && !tmp.path().join("c").exists());
 }
@@ -137,14 +131,12 @@ fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
 #[test]
 fn config_read_only_mode_and_the_environment_override_both_apply() {
     let tmp = tempfile::tempdir().unwrap();
-    let fake = FakeLegacy::new(tmp.path(), "{}", "", 0);
     let list = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#;
     let count = |out: &Output| frames(out)[0]["result"]["tools"].as_array().unwrap().len();
     // Environment: SYMTUNE_MCP_MODE.
     assert_eq!(
         count(&serve(
             tmp.path(),
-            Some(&fake.path),
             &[("SYMTUNE_MCP_MODE", "read-only")],
             list
         )),
@@ -154,24 +146,18 @@ fn config_read_only_mode_and_the_environment_override_both_apply() {
     let config = tmp.path().join("c/symtune");
     std::fs::create_dir_all(&config).unwrap();
     std::fs::write(config.join("config.toml"), "[mcp]\nmode = \"read-only\"\n").unwrap();
-    assert_eq!(count(&serve(tmp.path(), Some(&fake.path), &[], list)), 23);
+    assert_eq!(count(&serve(tmp.path(), &[], list)), 23);
     // The environment wins over the file.
     assert_eq!(
-        count(&serve(
-            tmp.path(),
-            Some(&fake.path),
-            &[("SYMTUNE_MCP_MODE", "full")],
-            list
-        )),
+        count(&serve(tmp.path(), &[("SYMTUNE_MCP_MODE", "full")], list)),
         50
     );
     let call = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"restore"}}"#;
-    let hidden = serve(tmp.path(), Some(&fake.path), &[], call);
+    let hidden = serve(tmp.path(), &[], call);
     assert_eq!(
         frames(&hidden)[0]["error"]["message"],
         "Unknown tool 'restore'."
     );
-    assert!(fake.calls().is_empty());
 }
 
 #[test]
@@ -179,7 +165,6 @@ fn config_warnings_stay_on_stderr() {
     let tmp = tempfile::tempdir().unwrap();
     let out = serve(
         tmp.path(),
-        None,
         &[("SYMTUNE_DIM_MIN", "0.9"), ("SYMTUNE_DIM_MAX", "0.5")],
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n",
     );
@@ -193,7 +178,7 @@ fn config_warnings_stay_on_stderr() {
 #[test]
 fn empty_input_ends_cleanly_and_an_oversized_line_ends_the_session() {
     let tmp = tempfile::tempdir().unwrap();
-    let out = serve(tmp.path(), None, &[], "");
+    let out = serve(tmp.path(), &[], "");
     assert_eq!(
         (out.status.code(), out.stdout.len(), out.stderr.len()),
         (Some(0), 0, 0)
@@ -201,7 +186,6 @@ fn empty_input_ends_cleanly_and_an_oversized_line_ends_the_session() {
     // Blank and whitespace-only lines are skipped, CRLF is tolerated.
     let out = serve(
         tmp.path(),
-        None,
         &[],
         "  \n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\r\n",
     );
@@ -209,18 +193,22 @@ fn empty_input_ends_cleanly_and_an_oversized_line_ends_the_session() {
 }
 
 #[test]
-fn non_utf8_arguments_are_forwarded_to_swift() {
+fn non_utf8_arguments_are_read_like_swift_does_with_replacement_characters() {
     use std::os::unix::ffi::OsStrExt;
     let tmp = tempfile::tempdir().unwrap();
-    let fake = FakeLegacy::new(tmp.path(), "forwarded", "", 0);
     let out = Command::new(env!("CARGO_BIN_EXE_symcockpit"))
+        .env_clear()
         .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
+        .env("HOME", tmp.path())
         .arg(std::ffi::OsStr::from_bytes(b"\xff\xfe"))
-        .env("SYMCOCKPIT_LEGACY_BIN", &fake.path)
         .output()
         .unwrap();
-    assert_eq!(out.stdout, b"forwarded");
-    assert_eq!(fake.calls().len(), 1);
+    // Checked against the v0.12 binary: one U+FFFD per bad byte, the usual unknown-family exit.
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    assert!(String::from_utf8(out.stderr).unwrap().starts_with(
+        "symcockpit: unknown family '\u{fffd}\u{fffd}'\n\nsymcockpit \u{2014} this machine"
+    ));
 }
 
 #[test]

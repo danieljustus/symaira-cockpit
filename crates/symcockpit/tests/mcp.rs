@@ -1,6 +1,6 @@
 //! The MCP server in-process: wire behaviour of v0.12 (observed on the Swift
-//! binary), tool visibility, native read tools, and the Swift-core subprocess
-//! path for write tools — only ever against a fake legacy script.
+//! binary), tool visibility, native read and write tools, and what a tool without a
+//! handler answers (unsupported) — all against fakes.
 
 mod common;
 
@@ -11,7 +11,6 @@ use serde_json::{Value, json};
 use symcockpit::app::{App, Context, Output};
 use symcockpit::mcp::{Server, tools, tools_list};
 use symcockpit_store::Config;
-use symcockpit_testkit::legacy::FakeLegacy;
 
 struct Fixture {
     tmp: tempfile::TempDir,
@@ -31,14 +30,6 @@ fn fixture() -> Fixture {
 }
 
 impl Fixture {
-    fn with_legacy(&mut self, stdout: &str, stderr: &str, exit: i32) -> FakeLegacy {
-        let dir = self.tmp.path().join("bin");
-        std::fs::create_dir_all(&dir).unwrap();
-        let fake = FakeLegacy::new(&dir, stdout, stderr, exit);
-        self.app.legacy = Some(fake.path.clone());
-        fake
-    }
-
     /// Sends one request line with the given config mode and data dir override.
     fn ask_with(&self, mode: &str, data_dir: Option<&Path>, line: &str) -> Option<Value> {
         let config = Config {
@@ -337,12 +328,10 @@ fn read_only_mode_lists_only_tools_that_only_look_and_hides_the_rest() {
             .unwrap();
         assert_eq!(l["result"]["tools"].as_array().unwrap().len(), 23, "{mode}");
     }
-    // A hidden write tool is as unknown as a typo, and never reaches the Swift core.
-    let mut f = fixture();
-    let fake = f.with_legacy("{}", "", 0);
+    // A hidden write tool is as unknown as a typo.
+    let f = fixture();
     let hidden = f.ask_with("read-only", None, r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"set_fan","arguments":{"fraction":1}}}"#).unwrap();
     assert_eq!(error_of(&hidden), (-32603, "Unknown tool 'set_fan'."));
-    assert!(fake.calls().is_empty());
 }
 
 #[test]
@@ -454,37 +443,21 @@ fn ai_usage_tool_uses_only_the_runner_port() {
 #[test]
 fn doctor_and_status_tools_follow_the_ports() {
     let mut f = fixture();
-    // Without ports and without a Swift core the tools cannot run at all.
-    let missing = f.call("get_capabilities", json!({}));
-    assert_eq!(error_of(&missing).0, -32603);
-    assert!(
-        error_of(&missing)
-            .1
-            .starts_with("unsupported: the Swift core was not found; set SYMCOCKPIT_LEGACY_BIN")
-    );
-    // Without a native implementation the Swift CLI answers and is re-encoded compactly.
-    let fake = f.with_legacy("{\n  \"tool\" : \"symcockpit\",\n  \"n\" : 2\n}\n", "", 0);
-    assert_eq!(
-        text_of(&f.call("get_capabilities", json!({}))),
-        r#"{"n":2,"tool":"symcockpit"}"#
-    );
-    assert_eq!(
-        text_of(&f.call("get_status", json!({}))),
-        r#"{"n":2,"tool":"symcockpit"}"#
-    );
-    assert_eq!(
-        text_of(&f.call("get_top_processes", json!({"sort_by": "gpu", "limit": 3}))),
-        r#"{"n":2,"tool":"symcockpit"}"#
-    );
-    assert_eq!(
-        fake.calls(),
-        [
-            vec!["doctor"],
-            vec!["status", "--json"],
-            vec!["processes", "--json", "--sort", "gpu", "--limit", "3"]
-        ]
-    );
-    // With the hardware port the native doctor answers and the Swift core is not asked again.
+    // Without ports the tools cannot run: unsupported, nothing else is started.
+    for (tool, arguments) in [
+        ("get_capabilities", json!({})),
+        ("get_status", json!({})),
+        ("get_top_processes", json!({"sort_by": "gpu", "limit": 3})),
+    ] {
+        assert_eq!(
+            error_of(&f.call(tool, arguments)),
+            (
+                -32603,
+                format!("unsupported: {tool} is not available in this build").as_str()
+            )
+        );
+    }
+    // With the hardware port the native doctor answers.
     f.app.services.hardware = Some(Box::new(
         symcockpit_testkit::hardware::FakeHardware::default(),
     ));
@@ -492,13 +465,11 @@ fn doctor_and_status_tools_follow_the_ports() {
         serde_json::from_str(text_of(&f.call("get_capabilities", json!({})))).unwrap();
     assert_eq!(doctor["tool"], "symcockpit");
     assert_eq!(doctor["capabilities"].as_array().unwrap().len(), 14);
-    assert_eq!(fake.calls().len(), 3);
 }
 
 #[test]
-fn read_tools_without_handler_run_the_matching_cli_command() {
-    let mut f = fixture();
-    let fake = f.with_legacy("{\"ok\":true}", "", 0);
+fn read_tools_without_handler_are_unsupported() {
+    let f = fixture();
     for tool in [
         "get_sensors",
         "get_battery",
@@ -508,28 +479,19 @@ fn read_tools_without_handler_run_the_matching_cli_command() {
         "get_brightness",
     ] {
         assert_eq!(
-            text_of(&f.call(tool, json!({}))),
-            r#"{"ok":true}"#,
+            error_of(&f.call(tool, json!({}))),
+            (
+                -32603,
+                format!("unsupported: {tool} is not available in this build").as_str()
+            ),
             "{tool}"
         );
     }
-    assert_eq!(
-        fake.calls(),
-        [
-            vec!["sensors"],
-            vec!["battery"],
-            vec!["displays"],
-            vec!["metrics"],
-            vec!["awake", "status"],
-            vec!["brightness", "get"]
-        ]
-    );
 }
 
 #[test]
-fn fan_and_charge_tools_run_the_cli_prefix_with_the_validated_value() {
-    let mut f = fixture();
-    let fake = f.with_legacy("{\n  \"applied\" : true\n}\n", "", 0);
+fn fan_and_charge_tools_without_a_handler_are_unsupported_after_the_argument_check() {
+    let f = fixture();
     for (tool, arguments) in [
         ("restore", json!({})),
         ("set_fan", json!({"fraction": 0.25})),
@@ -538,28 +500,19 @@ fn fan_and_charge_tools_run_the_cli_prefix_with_the_validated_value() {
         ("clear_charge_limit", json!({})),
     ] {
         assert_eq!(
-            text_of(&f.call(tool, arguments.clone())),
-            r#"{"applied":true}"#,
+            error_of(&f.call(tool, arguments.clone())),
+            (
+                -32603,
+                format!("unsupported: {tool} is not available in this build").as_str()
+            ),
             "{tool} {arguments}"
         );
     }
-    // `restore` restores the displays here and leaves the SMC half to Swift.
-    assert_eq!(
-        fake.calls(),
-        [
-            vec!["restore"],
-            vec!["fan", "set", "0.25"],
-            vec!["battery-limit", "set", "80"],
-            vec!["battery-limit", "set", "75"],
-            vec!["battery-limit", "clear"],
-        ]
-    );
 }
 
 #[test]
-fn write_tool_argument_errors_never_reach_the_swift_core() {
-    let mut f = fixture();
-    let fake = f.with_legacy("{}", "", 0);
+fn write_tool_argument_errors_are_usage_errors() {
+    let f = fixture();
     for (tool, arguments, message) in [
         (
             "set_brightness",
@@ -619,54 +572,4 @@ fn write_tool_argument_errors_never_reach_the_swift_core() {
             "{tool} {arguments}"
         );
     }
-    assert!(fake.calls().is_empty());
-}
-
-#[test]
-fn swift_core_failures_become_internal_errors_with_the_cli_message() {
-    let mut f = fixture();
-    f.with_legacy(
-        "",
-        "note: something\nsymcockpit: permission error: SMC writes need root\n",
-        3,
-    );
-    assert_eq!(
-        error_of(&f.call("set_fan", json!({"fraction": 1}))),
-        (-32603, "permission error: SMC writes need root")
-    );
-    f.with_legacy("", "", 7);
-    assert_eq!(
-        error_of(&f.call("restore", json!({}))),
-        (-32603, "symcockpit exited with status 7")
-    );
-    f.with_legacy("not json", "", 0);
-    assert_eq!(
-        error_of(&f.call("restore", json!({}))),
-        (-32603, "symcockpit restore printed no JSON")
-    );
-    f.app.legacy = Some(f.tmp.path().join("gone"));
-    assert!(
-        error_of(&f.call("restore", json!({})))
-            .1
-            .starts_with("cannot start ")
-    );
-}
-
-#[test]
-fn the_data_dir_override_is_handed_to_the_swift_core() {
-    let mut f = fixture();
-    let fake = f.with_legacy("{\"applied\":true}", "", 0);
-    let data = f.tmp.path().join("state");
-    let response = f
-        .ask_with("full", Some(&data), r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"restore","arguments":{}}}"#)
-        .unwrap();
-    assert_eq!(text_of(&response), r#"{"applied":true}"#);
-    assert_eq!(
-        fake.calls(),
-        [vec![
-            "restore".to_owned(),
-            "--data-dir".to_owned(),
-            data.to_string_lossy().into_owned()
-        ]]
-    );
 }

@@ -10,9 +10,9 @@
 //! failures as `isError: true` results instead of `-32603`, and pulls in
 //! schemars; matching v0.12 would need more code than the ~250 lines here.
 //!
-//! The 26 v0.12 tools keep their names, schemas and answers. Their read tools
-//! call the native handlers; their write tools run the Swift core as a
-//! subprocess (see `legacy`). The tools of the newer areas (`areas.rs`) are
+//! The 26 v0.12 tools keep their names, schemas and answers and all run natively; a tool
+//! whose area is not wired (test apps) answers `unsupported`, it never starts another
+//! program. The tools of the newer areas (`areas.rs`) are
 //! native, carry annotations and follow architecture 5.3: read and reversible
 //! tools act directly, risky ones only exist as `plan_*` plus `confirm_plan`.
 
@@ -25,7 +25,7 @@ use crate::app::{
     App, AreaInput, Context, DEFAULT_PROCESS_LIMIT, Output, Params, ProcessSort, ProcessesParams,
     Request,
 };
-use crate::{VERSION, json as swift_json, legacy};
+use crate::{VERSION, json as swift_json};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 /// The single-line limit of `MCPStdioTransport`; a longer line ends the session.
@@ -513,7 +513,7 @@ impl<'a> Server<'a> {
                 "{}: handler returned text for a JSON request",
                 tool.name
             ))),
-            None => self.through_legacy(&legacy_read_args(&request)?),
+            None => Err(crate::loops::unsupported(tool.name)),
         }
     }
 
@@ -548,12 +548,20 @@ impl<'a> Server<'a> {
                 .map(output_value)
         } else if let Some(value) = crate::writes::run_tool(self.ctx, tool.spec.name, arguments)? {
             Some(value)
+        } else if let Some(change) =
+            crate::fan_select::change_from_arguments(tool.spec.name, arguments)?
+        {
+            crate::fan_select::run_json(self.app, self.ctx, &change)?.map(|(_, document)| document)
         } else {
             self.privileged(tool, arguments)?
         };
         match native {
             Some(value) => Ok(value),
-            None => self.through_legacy(&write_args(tool, arguments)?),
+            None => {
+                // The arguments are checked the same way whether or not the area is wired.
+                write_args(tool, arguments)?;
+                Err(crate::loops::unsupported(tool.name))
+            }
         }
     }
 
@@ -586,60 +594,12 @@ impl<'a> Server<'a> {
         };
         handler(self.ctx, &request).map(|o| Some(output_value(o)))
     }
-
-    /// Runs the Swift CLI and parses its JSON stdout. A failure's message is
-    /// the `symcockpit: <message>` line the CLI printed, which is the same text
-    /// the Swift MCP server puts into its error response.
-    fn through_legacy(&self, args: &[String]) -> Result<Value, Error> {
-        let Some(binary) = &self.app.legacy else {
-            return Err(Error::Unsupported(format!(
-                "the Swift core was not found; set {} or install symcockpit-legacy next to symcockpit",
-                legacy::LEGACY_ENV
-            )));
-        };
-        let mut args = args.to_vec();
-        if let Some(dir) = self.ctx.data_dir_override {
-            args.extend(["--data-dir".into(), dir.to_string_lossy().into_owned()]);
-        }
-        let captured = legacy::capture(binary, &args)?;
-        if captured.code != 0 {
-            return Err(Error::Failed(legacy::failure_message(&captured)));
-        }
-        serde_json::from_slice(&captured.stdout).map_err(|_| {
-            Error::Failed(format!(
-                "symcockpit {} printed no JSON",
-                args.first().map_or("", String::as_str)
-            ))
-        })
-    }
 }
 
 /// `MCPJSONValue.intValue`: an integral number within ±2^53.
 fn int_argument(arguments: &Map<String, Value>, key: &str) -> Option<i64> {
     let n = arguments.get(key)?.as_f64()?;
     (n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_992.0).then_some(n as i64)
-}
-
-/// CLI arguments of a read tool without a native handler.
-fn legacy_read_args(request: &Request) -> Result<Vec<String>, Error> {
-    let words = |w: &[&str]| w.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
-    Ok(match (request.command, &request.params) {
-        ("doctor" | "sensors" | "battery" | "displays" | "metrics", _) => words(&[request.command]),
-        ("awake.status", _) => words(&["awake", "status"]),
-        ("brightness.get", _) => words(&["brightness", "get"]),
-        ("status", _) => words(&["status", "--json"]),
-        ("processes", Params::Processes(p)) => {
-            vec![
-                "processes".into(),
-                "--json".into(),
-                "--sort".into(),
-                p.sort.as_str().into(),
-                "--limit".into(),
-                p.limit.to_string(),
-            ]
-        }
-        (other, _) => return Err(Error::Failed(format!("{other}: no way to run this tool"))),
-    })
 }
 
 /// `requireDouble`: a number, or a string that parses as one.
@@ -669,44 +629,18 @@ fn require_int(arguments: &Map<String, Value>, name: &str) -> Result<i64, Error>
 /// value), after the same argument validation the Swift tool performs.
 fn write_args(tool: &Tool, arguments: &Map<String, Value>) -> Result<Vec<String>, Error> {
     let spec = tool.spec;
-    match spec.name {
-        // keep_awake holds its assertion inside the server process in v0.12;
-        // a CLI subprocess cannot, so starting a session is not available yet.
-        "awake" => {
-            if !arguments
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
-                return Ok(vec!["awake".into(), "off".into()]);
-            }
-            validate_duration(arguments.get("duration_seconds"))?;
-            Err(Error::Unsupported("keep_awake sessions need the long-lived Swift server; use `symcockpit awake` in a terminal for now".into()))
-        }
-        "profile.save" | "profile.load" | "profile.delete" => {
-            let name = arguments
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| Error::Usage(format!("{} requires a name.", tool.name)))?;
-            let mut args: Vec<String> = spec.cli_path.split(' ').map(str::to_owned).collect();
-            args.push(name.to_owned());
-            Ok(args)
-        }
-        _ => {
-            let mut args: Vec<String> = spec.cli_path.split(' ').map(str::to_owned).collect();
-            if let Some((argument, schema)) = spec.input_schema["properties"]
-                .as_object()
-                .and_then(|p| p.iter().next())
-            {
-                args.push(if schema["type"] == "integer" {
-                    require_int(arguments, argument)?.to_string()
-                } else {
-                    require_double(arguments, argument)?.to_string()
-                });
-            }
-            Ok(args)
-        }
+    let mut args: Vec<String> = spec.cli_path.split(' ').map(str::to_owned).collect();
+    if let Some((argument, schema)) = spec.input_schema["properties"]
+        .as_object()
+        .and_then(|p| p.iter().next())
+    {
+        args.push(if schema["type"] == "integer" {
+            require_int(arguments, argument)?.to_string()
+        } else {
+            require_double(arguments, argument)?.to_string()
+        });
     }
+    Ok(args)
 }
 
 /// `KeepAwakeTool.validatedDuration`.

@@ -14,7 +14,7 @@ use symcockpit_core::ai_usage::{CommandOutput, UsageError, UsageRunner};
 use symcockpit_store::Paths;
 
 use crate::app::{App, Handlers, Services};
-use crate::{legacy, live};
+use crate::live;
 
 /// The `symbrain usage` budget of v0.12.
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -150,6 +150,87 @@ impl UsageRunner for SymbrainRunner {
     }
 }
 
+/// The GUI's persisted selection: the first of its preference domains that holds the key
+/// (`AIUsageEnabledProviders.loadPersisted`); nothing enabled when none does.
+pub fn enabled_ai_providers() -> std::collections::BTreeSet<String> {
+    const KEY: &str = "com.symaira.symtune.aiUsage.enabledProviders";
+    ["com.symaira.cockpit", "com.symaira.tune"]
+        .iter()
+        .find_map(|domain| symcockpit_macos::prefs::string_array(domain, KEY))
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
+}
+
+/// `releases/latest` over HTTPS through `/usr/bin/curl`: no TLS or async stack in this
+/// binary, and `--max-time` bounds the whole request like Swift's 3 s timeout.
+pub struct CurlReleases {
+    pub curl: PathBuf,
+    pub url: String,
+}
+
+impl CurlReleases {
+    pub fn github() -> Self {
+        Self {
+            curl: "/usr/bin/curl".into(),
+            url: format!(
+                "https://api.github.com/repos/{}/{}/releases/latest",
+                symcockpit_core::update_check::OWNER,
+                symcockpit_core::update_check::REPO
+            ),
+        }
+    }
+}
+
+impl crate::app::ReleaseSource for CurlReleases {
+    fn latest(&self) -> symcockpit_core::update_check::Fetched {
+        let mut args: Vec<String> = [
+            "-q",
+            "-sS",
+            "-L",
+            "--max-redirs",
+            "3",
+            "--max-time",
+            "3",
+            "--connect-timeout",
+            "3",
+            "--max-filesize",
+            "1048576",
+        ]
+        .map(String::from)
+        .into();
+        if self.url.starts_with("https://") {
+            args.extend([
+                "--proto".into(),
+                "=https".into(),
+                "--proto-redir".into(),
+                "=https".into(),
+            ]);
+        }
+        args.extend([
+            "-H".into(),
+            "Accept: application/vnd.github+json".into(),
+            "-A".into(),
+            format!("symcockpit/{}", crate::VERSION),
+            "-w".into(),
+            "\n%{http_code}".into(),
+            self.url.clone(),
+        ]);
+        let output = run_bounded(&self.curl, &args, &BTreeMap::new(), Duration::from_secs(5))
+            .map_err(|_| 7)?;
+        if output.status != 0 {
+            return Err(output.status);
+        }
+        // The body, a newline and the status code.
+        let at = output.stdout.iter().rposition(|b| *b == b'\n').ok_or(56)?;
+        let status = std::str::from_utf8(&output.stdout[at + 1..])
+            .ok()
+            .and_then(|s| s.trim().parse::<u16>().ok())
+            .ok_or(56)?;
+        Ok((status, output.stdout[..at].to_vec()))
+    }
+}
+
 /// Unix seconds as `yyyy-MM-dd HH:mm:ss` in the system time zone (`TZ` wins).
 pub fn local_time(unix: f64) -> String {
     jiff::Timestamp::from_second(unix.floor() as i64)
@@ -167,15 +248,11 @@ pub fn process_env() -> BTreeMap<String, String> {
 }
 
 /// The production app: the live read areas of [`live::wire`] on top of the
-/// real environment. Write commands are still forwarded to the Swift core.
+/// real environment.
 pub fn app() -> App {
     let env = process_env();
     let lookup = |key: &str| env.get(key).cloned();
     let paths = Paths::from_process(&lookup, symcockpit_macos::system::running_as_root());
-    let exe = std::env::current_exe()
-        .map(|p| p.canonicalize().unwrap_or(p))
-        .unwrap_or_default();
-    let legacy = legacy::resolve_legacy(std::env::var_os(legacy::LEGACY_ENV), &exe);
     let mut app = App {
         env,
         paths,
@@ -188,8 +265,10 @@ pub fn app() -> App {
             }),
             vault_entry_paths: BTreeMap::new(),
             local_time: Box::new(local_time),
+            enabled_ai_providers: Box::new(enabled_ai_providers),
+            release_source: Box::new(CurlReleases::github()),
+            stdout_is_terminal: std::io::IsTerminal::is_terminal(&std::io::stdout()),
         },
-        legacy,
     };
     live::wire(&mut app);
     crate::write::wire(&mut app);

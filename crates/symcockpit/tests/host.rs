@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use common::app;
 use serde_json::{Value, json};
-use symcockpit::agent::{RealMono, Session};
+use symcockpit::agent::Session;
 use symcockpit::app::{App, Context};
 use symcockpit::areas::{AudioKit, InputKit, Ports, register};
 use symcockpit::host::clipboard::ClipboardParts;
@@ -26,6 +26,7 @@ use symcockpit_core::audio::AudioService;
 use symcockpit_core::audio::mixer::TapHal;
 use symcockpit_core::bluetooth::{Advertisement, BleCentral, Characteristic, Service};
 use symcockpit_core::clipboard::random_key;
+use symcockpit_core::clock::SystemMonotonic;
 use symcockpit_core::finder::{Action, FinderPlatform, Inbox, Job, new_job_id};
 use symcockpit_core::input::{Access, HapticLevel, Synthetic};
 use symcockpit_core::midi::MidiService;
@@ -268,7 +269,7 @@ impl World {
         drop(self.installed.borrow_mut().take());
         *self.installed.borrow_mut() = with_host.then(|| self.host.install());
         let server = Server::new(&self.app, &ctx);
-        let (mono, clock) = (RealMono::start(), SystemClock);
+        let (mono, clock) = (SystemMonotonic, SystemClock);
         let mut session = Session::new(&server, &mono, &clock);
         if with_host {
             session = session.with_host(&self.host);
@@ -409,7 +410,7 @@ fn a_host_method_is_not_a_command_and_a_command_is_not_a_method() {
         services: &w.app.services,
     };
     let server = Server::new(&w.app, &ctx);
-    let (mono, clock) = (RealMono::start(), SystemClock);
+    let (mono, clock) = (SystemMonotonic, SystemClock);
     let mut session = Session::new(&server, &mono, &clock).with_host(&w.host);
     let r = session.handle_line(r#"{"jsonrpc":"2.0","id":1,"method":"clipboard.list"}"#);
     assert_eq!(r[0]["error"]["code"], -32002);

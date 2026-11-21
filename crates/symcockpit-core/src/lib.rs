@@ -1,6 +1,7 @@
 //! Domain modules and rules (monitor, tune, ...); no platform access.
 
 pub mod ai_usage;
+pub mod ai_usage_api;
 pub mod audio;
 pub mod awake;
 pub mod battery;
@@ -12,6 +13,7 @@ pub mod display;
 pub mod display_write;
 pub mod edr;
 pub mod fan;
+pub mod fan_select;
 pub mod finder;
 pub mod gamma;
 pub mod governor;
@@ -32,4 +34,5 @@ pub mod status;
 pub mod storage;
 pub mod system;
 pub mod tune_write;
+pub mod update_check;
 pub mod write_commands;

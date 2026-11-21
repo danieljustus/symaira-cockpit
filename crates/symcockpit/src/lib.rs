@@ -1,31 +1,27 @@
-//! `symcockpit` during the strangler migration (ADR 0003). Read commands run
-//! natively as soon as their area is wired in (`app::Handlers`), `version`,
-//! `help`, `history`, `profile list`, `ai-usage` and the MCP server `serve`
-//! always do, and so do the unprivileged writes (`writes`: brightness, extended
-//! brightness, dim, warmth, awake, profiles, and the display half of `restore`);
-//! everything else is `exec`ed into the legacy Swift binary so
-//! stdin, stdout, stderr and the exit code stay untouched.
+//! `symcockpit`: every command of the register runs in this binary (ADR 0003, wave 2D). The
+//! Swift core is not started for any CLI command or MCP tool; it only remains as the frozen
+//! reference of the oracle (`make oracle`).
 
 pub mod agent;
 pub mod app;
 pub mod areas;
 pub mod cli;
+pub mod fan_select;
 pub mod help;
 pub mod host;
 pub mod json;
-pub mod legacy;
 pub mod live;
+pub mod loops;
 pub mod mcp;
 pub mod native;
 pub mod platform;
+pub mod version;
 pub mod write;
 pub mod writes;
 
 use std::ffi::OsString;
 
 use symcockpit_contract::exit;
-
-pub use legacy::{LEGACY_ENV, forward, resolve_legacy};
 
 /// Debug builds only: tests that spawn this binary set it, and then no command
 /// reaches a display, gamma, overlay, keep-awake, SMC or charge-limit write;
@@ -57,37 +53,6 @@ pub(crate) fn service_blocked(service: &str) -> Result<(), symcockpit_contract::
 /// Release version; must equal `CockpitVersion.current` in Swift.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const UPDATE_ENV: &str = "SYMCOCKPIT_CHECK_UPDATES";
-
-/// The text of `symcockpit version` when the Swift binary would skip its
-/// update check (the only case reproducible without network access); `None`
-/// means "forward, the real check may run".
-pub fn version_output(
-    args: &[OsString],
-    update_env: Option<&str>,
-    stdout_is_terminal: bool,
-) -> Option<String> {
-    if !matches!(args.first()?.to_str()?, "version" | "--version" | "-V") {
-        return None;
-    }
-    let has = |flag: &str| args.iter().any(|a| a == flag);
-    let env = update_env.map(str::to_lowercase);
-    let opted_out =
-        has("--no-update-check") || matches!(env.as_deref(), Some("0" | "false" | "no" | "off"));
-    let opted_in = matches!(env.as_deref(), Some("1" | "true" | "yes" | "on"));
-    if !(opted_out || (!stdout_is_terminal && !opted_in)) {
-        return None;
-    }
-    Some(if has("--json") {
-        // Byte-for-byte what Swift's pretty-printed, key-sorted JSONEncoder emits.
-        format!(
-            "{{\n  \"families\" : [\n\n  ],\n  \"schema_version\" : 1,\n  \"tool\" : \"symcockpit\",\n  \"update\" : {{\n    \"status\" : \"skipped\",\n    \"update_available\" : false\n  }},\n  \"version\" : \"{VERSION}\"\n}}\n"
-        )
-    } else {
-        format!("symcockpit {VERSION} — update check skipped\n")
-    })
-}
-
 /// Entry point shared by `main` and tests: handles the invocation with the
 /// production wiring of [`platform::app`].
 pub fn run(args: Vec<OsString>) -> u8 {
@@ -96,20 +61,11 @@ pub fn run(args: Vec<OsString>) -> u8 {
 
 /// [`run`] with an explicit app, for wiring areas and for tests.
 pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
-    use std::io::IsTerminal;
-
-    let update_env = app.env.get(UPDATE_ENV).map(String::as_str);
-    if let Some(text) = version_output(&args, update_env, std::io::stdout().is_terminal()) {
-        return write_all(text.as_bytes(), b"", exit::OK);
-    }
-    // Arguments that are not UTF-8 cannot be parsed here; Swift decides.
-    let Some(strings) = args
+    // Like Swift's `CommandLine.arguments`: bytes that are not UTF-8 become U+FFFD.
+    let strings: Vec<String> = args
         .iter()
-        .map(|a| a.to_str().map(str::to_owned))
-        .collect::<Option<Vec<String>>>()
-    else {
-        return forward(args);
-    };
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
     // Internal command of the app bundle: not in the help text or the oracle.
     if strings.first().map(String::as_str) == Some("agent") {
         // The agent ends on EOF or SIGTERM (its own signal pipe); the
@@ -141,16 +97,76 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
             outcome.stderr.as_bytes(),
             outcome.code,
         ),
-        cli::Action::Forward => {
-            // Whatever this process overrode is put back before the exec.
-            writes::shutdown();
-            return forward(args);
-        }
         cli::Action::Serve { data_dir_override } => serve(app, data_dir_override),
+        cli::Action::StatusWatch {
+            data_dir_override,
+            interval,
+        } => long_running(app, data_dir_override, |ctx| {
+            let mut signals = loops::Signals::install()?;
+            Ok(loops::status_watch(
+                app,
+                ctx,
+                interval,
+                &mut std::io::stdout().lock(),
+                &mut signals,
+            ))
+        }),
+        cli::Action::AiUsageServe {
+            data_dir_override,
+            port,
+        } => long_running(app, data_dir_override, |ctx| {
+            let mut signals = loops::Signals::install()?;
+            let dir = ctx.paths.cache_dir.join("ai-usage");
+            let refresh = || {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0.0, |d| d.as_secs_f64());
+                symcockpit_core::ai_usage_api::cached_rows(
+                    &dir,
+                    &(app.services.enabled_ai_providers)(),
+                    now,
+                )
+            };
+            Ok(loops::ai_usage_serve(
+                port,
+                &refresh,
+                &mut std::io::stdout().lock(),
+                &mut signals,
+            ))
+        }),
     };
     // Restore-on-exit for the display and keep-awake overrides.
     writes::shutdown();
     code
+}
+
+/// The configuration like Swift loads it before every command (warnings to stderr), then
+/// `run` with the context of this invocation.
+fn long_running(
+    app: &app::App,
+    data_dir_override: Option<std::path::PathBuf>,
+    run: impl FnOnce(&app::Context) -> Result<u8, symcockpit_contract::Error>,
+) -> u8 {
+    let env_lookup = |key: &str| app.env.get(key).cloned();
+    let loaded = symcockpit_store::Config::load(&app.paths, &env_lookup);
+    for warning in &loaded.warnings {
+        eprintln!("symcockpit: {warning}");
+    }
+    let data_dir = data_dir_override
+        .clone()
+        .unwrap_or_else(|| app.paths.data_dir.clone());
+    let ctx = app::Context {
+        config: &loaded.config,
+        paths: &app.paths,
+        data_dir: &data_dir,
+        data_dir_override: data_dir_override.as_deref(),
+        env: &app.env,
+        services: &app.services,
+    };
+    run(&ctx).unwrap_or_else(|error| {
+        eprintln!("symcockpit: {error}");
+        error.exit_code()
+    })
 }
 
 fn write_all(stdout: &[u8], stderr: &[u8], code: u8) -> u8 {
@@ -199,10 +215,6 @@ fn serve(app: &app::App, data_dir_override: Option<std::path::PathBuf>) -> u8 {
 mod tests {
     use super::*;
 
-    fn args(list: &[&str]) -> Vec<OsString> {
-        list.iter().map(OsString::from).collect()
-    }
-
     #[test]
     fn version_constant_matches_swift_cockpit_version() {
         let swift = include_str!("../../../Sources/SymCockpitVersion/CockpitVersion.swift");
@@ -210,58 +222,5 @@ mod tests {
             swift.contains(&format!("current = \"{VERSION}\"")),
             "bump Cargo.toml with CockpitVersion"
         );
-    }
-
-    #[test]
-    fn version_text_and_json_match_swift_output() {
-        let text = version_output(&args(&["version"]), None, false).unwrap();
-        assert_eq!(
-            text,
-            format!("symcockpit {VERSION} — update check skipped\n")
-        );
-        assert_eq!(
-            version_output(&args(&["-V"]), None, false),
-            Some(text.clone())
-        );
-        assert_eq!(
-            version_output(&args(&["--version", "extra"]), None, false),
-            Some(text)
-        );
-        let json = version_output(&args(&["version", "--json"]), None, false).unwrap();
-        let swift = [
-            "{",
-            "  \"families\" : [",
-            "",
-            "  ],",
-            "  \"schema_version\" : 1,",
-            "  \"tool\" : \"symcockpit\",",
-            "  \"update\" : {",
-            "    \"status\" : \"skipped\",",
-            "    \"update_available\" : false",
-            "  },",
-            &format!("  \"version\" : \"{VERSION}\""),
-            "}",
-            "",
-        ];
-        assert_eq!(json, swift.join("\n"));
-    }
-
-    #[test]
-    fn real_update_check_is_forwarded() {
-        // Interactive terminal, or an explicit opt-in: only Swift can check.
-        assert_eq!(version_output(&args(&["version"]), None, true), None);
-        assert_eq!(version_output(&args(&["version"]), Some("1"), false), None);
-        // Opt-outs always skip, even on a terminal.
-        assert!(
-            version_output(&args(&["version", "--no-update-check"]), Some("1"), true).is_some()
-        );
-        assert!(version_output(&args(&["version"]), Some("OFF"), true).is_some());
-    }
-
-    #[test]
-    fn other_commands_are_never_answered_locally() {
-        for a in [&["sensors"][..], &["serve"], &[], &["help"], &["nope"]] {
-            assert_eq!(version_output(&args(a), None, false), None, "{a:?}");
-        }
     }
 }

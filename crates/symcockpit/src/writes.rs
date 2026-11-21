@@ -12,7 +12,7 @@
 //! `restore` is split with the fan/charge area ([`restore`]): this module puts
 //! back displays and keep-awake, then the caller runs that area's `restore`
 //! handler (`crate::write`) for the SMC half; where none is wired (test apps)
-//! the Swift core finishes the job.
+//! the command answers `unsupported`.
 
 use std::cell::RefCell;
 use std::io::{self, BufRead, Read};
@@ -360,7 +360,7 @@ fn run_awake(
 }
 
 /// Runs one write for the CLI. `Ok(None)`: the display half is done and the
-/// rest belongs to the Swift core (forward).
+/// SMC half is not wired (`unsupported`).
 pub fn run_cli(ctx: &Context, op: &WriteOp) -> Result<Option<Output>, Error> {
     match op {
         WriteOp::AwakeOff => {
@@ -384,7 +384,7 @@ pub fn run_cli(ctx: &Context, op: &WriteOp) -> Result<Option<Output>, Error> {
 
 /// `restore` (`restoreAll`): the display and keep-awake overrides here, then
 /// the SMC half `smc` (the fan/charge area's handler, which also writes the
-/// history line). `Ok(None)` from `smc`: not wired, the Swift core finishes.
+/// history line). `Ok(None)` from `smc`: not wired.
 pub fn restore(
     ctx: &Context,
     smc: impl FnOnce() -> Result<Option<Output>, Error>,
@@ -415,7 +415,7 @@ fn run_op(w: &TuneWriter, op: &WriteOp) -> Result<Output, Error> {
 }
 
 /// An MCP write tool by register name. `Ok(None)`: not one of these (or, for
-/// `restore`, the Swift core must finish the SMC half).
+/// `restore`, the SMC half is not wired).
 pub fn run_tool(
     ctx: &Context,
     name: &str,

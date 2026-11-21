@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 ### Internal
+- Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
+  `fan profile|target <value>` write the Swift file (`~/.symtune/fan-profile.json`) and the
+  history line themselves (the app agent plans them as risky commands; `fan.target` takes
+  `celsius`, `null` or `off` clears it); `status --watch` prints NDJSON until SIGINT, SIGTERM or
+  a closed pipe; `ai-usage serve [--port N]` serves the cached usage on 127.0.0.1 with the v0.12
+  routes, refusals and bytes (checked against the v0.12.2 binary); `version` runs the update
+  check through `/usr/bin/curl` (3 s limit, one-day cache in the corekit file, same texts and
+  JSON as v0.12.2); arguments that are not UTF-8 become U+FFFD as in Swift. `SYMCOCKPIT_LEGACY_BIN`,
+  `symcockpit-legacy` and the `libexec` lookup are gone; a test plants a tripwire in all three
+  places and runs every v0.12 command and MCP tool. Known difference: the texts of transport
+  errors in a failed update check are Foundation's wording chosen from curl's exit status.
 - Cockpit 2, wave 2D-2: the app (menu bar, HUD, window) reads every value and
   runs every action through one app-wide agent session (`AgentSession`:
   `symcockpit agent --stdio` from the bundle, started at launch, stdin closed at

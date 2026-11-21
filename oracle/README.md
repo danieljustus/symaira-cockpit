@@ -65,8 +65,9 @@ can be absent on one machine state and present on another; see Limits.
 `env.set` is applied on top of a cleared environment (`PATH=/usr/bin:/bin`);
 `isolate_xdg` means a fresh temporary `HOME` (also `CFFIXED_USER_HOME`),
 `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` per case. The capture
-and the `symcockpit-oracle` harness apply the same rules; the harness passes
-through only `SYMCOCKPIT_LEGACY_BIN`, so it can drive the Rust binary:
+and the `symcockpit-oracle` harness apply the same rules; the harness still passes
+`SYMCOCKPIT_LEGACY_BIN` on (native mode points it at a tripwire), but since wave 2D the Rust
+binary ignores it, so a forwarded case can no longer occur:
 
 | Variable | Why |
 | --- | --- |

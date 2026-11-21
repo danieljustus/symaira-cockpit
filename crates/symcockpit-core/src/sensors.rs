@@ -499,6 +499,16 @@ pub enum FanProfile {
 }
 
 impl FanProfile {
+    /// `FanProfile(rawValue: name.lowercased())`.
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.to_lowercase().as_str() {
+            "system" => Some(Self::System),
+            "comfort" => Some(Self::Comfort),
+            "performance" => Some(Self::Performance),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::System => "system",

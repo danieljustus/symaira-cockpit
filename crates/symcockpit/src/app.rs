@@ -10,12 +10,11 @@
 //! });
 //! ```
 //!
-//! A v0.12 command without a handler is forwarded to the Swift core, so areas
-//! can land one at a time. The newer areas (`areas.rs`) have no Swift
-//! counterpart and always run natively.
+//! A command without a handler answers `unsupported` (exit 4): nothing in this
+//! binary hands work to the Swift core any more.
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Map, Value};
 use symcockpit_contract::Error;
@@ -139,7 +138,7 @@ pub struct Context<'a> {
     pub paths: &'a Paths,
     /// `--data-dir` or the XDG data directory.
     pub data_dir: &'a Path,
-    /// The `--data-dir` value as typed, to hand on to the Swift core.
+    /// The `--data-dir` value as typed.
     pub data_dir_override: Option<&'a Path>,
     pub env: &'a BTreeMap<String, String>,
     pub services: &'a Services,
@@ -163,7 +162,7 @@ pub const AREA_COMMANDS: [&str; 9] = [
 ];
 
 /// The privileged write commands, wired in [`crate::write`] and absent from
-/// test apps (which therefore hand them to the Swift core).
+/// test apps (which therefore answer `unsupported`).
 pub const WRITE_COMMANDS: [&str; 6] = [
     "fan.set",
     "fan.auto",
@@ -212,9 +211,14 @@ pub trait OverridePort {
     fn keep_awake_active(&self) -> bool;
 }
 
+/// The newest release of the shipped repository, for the update check of `version`.
+pub trait ReleaseSource {
+    fn latest(&self) -> symcockpit_core::update_check::Fetched;
+}
+
 /// Ports to the platform. `hardware` and `overrides` stay `None` until the
-/// areas that own them are wired; `doctor`, `permissions` and `status` are
-/// forwarded to Swift while they are missing.
+/// areas that own them are wired; `doctor`, `permissions` and `status` answer
+/// `unsupported` while they are missing.
 pub struct Services {
     pub hardware: Option<Box<dyn HardwareFacts>>,
     pub overrides: Option<Box<dyn OverridePort>>,
@@ -225,6 +229,11 @@ pub struct Services {
     pub vault_entry_paths: BTreeMap<String, String>,
     /// Unix seconds to `yyyy-MM-dd HH:mm:ss` in the user's time zone.
     pub local_time: Box<dyn Fn(f64) -> String>,
+    /// `AIUsageEnabledProviders.loadPersisted()`: the providers the app has switched on.
+    pub enabled_ai_providers: Box<dyn Fn() -> std::collections::BTreeSet<String>>,
+    pub release_source: Box<dyn ReleaseSource>,
+    /// Whether stdout is a terminal (`version` checks for updates only there, or on request).
+    pub stdout_is_terminal: bool,
 }
 
 pub struct App {
@@ -232,6 +241,4 @@ pub struct App {
     pub paths: Paths,
     pub handlers: Handlers,
     pub services: Services,
-    /// The Swift core, when one can be found (see `legacy::resolve_legacy`).
-    pub legacy: Option<PathBuf>,
 }

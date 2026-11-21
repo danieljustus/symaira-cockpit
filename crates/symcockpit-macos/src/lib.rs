@@ -24,6 +24,7 @@ pub mod nvme;
 pub mod parent_check;
 pub mod power;
 pub mod powerui;
+pub mod prefs;
 pub mod process;
 pub mod runloop;
 pub mod signal;

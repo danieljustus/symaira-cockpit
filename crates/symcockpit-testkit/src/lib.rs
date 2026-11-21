@@ -8,7 +8,6 @@ pub mod display;
 pub mod hardware;
 pub mod input;
 pub mod kill;
-pub mod legacy;
 pub mod metrics;
 pub mod midi;
 pub mod power;

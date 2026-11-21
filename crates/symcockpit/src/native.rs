@@ -1,6 +1,6 @@
 //! Execution of one read request: a registered area handler, or one of the
 //! commands implemented in this crate. `Ok(None)` means "no native
-//! implementation (yet)": the caller forwards to the Swift core.
+//! implementation (yet)": the caller answers `unsupported`.
 
 use std::collections::BTreeSet;
 

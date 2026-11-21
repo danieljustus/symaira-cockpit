@@ -1,28 +1,36 @@
 //! The command line: argument parsing and the decision between answering
-//! natively, serving MCP and forwarding to the Swift core. Mirrors
+//! natively, serving MCP and running one of the two endless loops. Mirrors
 //! `Sources/symcockpit/main.swift` (root dispatch) and
 //! `tuning/Sources/SymCockpitCLI/` (per-command parsing) of v0.12, including
-//! the error texts. Anything this module does not fully understand is
-//! forwarded, so the Swift core stays the authority for it.
+//! the error texts. Nothing is handed to the Swift core: what has no handler
+//! answers `unsupported` (exit 4).
 
 use std::path::PathBuf;
 
 use serde_json::Value;
 use symcockpit_contract::{CommandSpec, Error, area_commands};
-use symcockpit_core::{ai_usage, history, profiles, status, write_commands};
+use symcockpit_core::{ai_usage, ai_usage_api, history, profiles, status, write_commands};
 
 use crate::app::{App, AreaInput, Context, Output, Params, ProcessSort, ProcessesParams, Request};
 use crate::writes::{self, WriteOp};
-use crate::{help, json, native};
+use crate::{fan_select, help, json, loops, native, version};
 
 /// What to do with the invocation.
 pub enum Action {
     /// Answered here.
     Done(Outcome),
-    /// Hand the original arguments to the Swift core.
-    Forward,
     /// Run the MCP server on stdio.
     Serve { data_dir_override: Option<PathBuf> },
+    /// `status --watch`: one NDJSON report per `interval` seconds until interrupted.
+    StatusWatch {
+        data_dir_override: Option<PathBuf>,
+        interval: f64,
+    },
+    /// `ai-usage serve`: the cached usage on 127.0.0.1 until interrupted.
+    AiUsageServe {
+        data_dir_override: Option<PathBuf>,
+        port: u16,
+    },
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -118,7 +126,7 @@ pub fn plan_with(app: &App, args: &[String], prompt: Prompt) -> Action {
                 2,
             ))
         }
-        "version" | "--version" | "-V" => Action::Forward,
+        "version" | "--version" | "-V" => Action::Done(version::outcome(app, args)),
         "help" | "--help" | "-h" => Action::Done(Outcome::out(help::ROOT_USAGE)),
         "operate" | "scope" => Action::Done(Outcome::err(
             format!(
@@ -200,13 +208,25 @@ fn tune(app: &App, args: &[String]) -> Action {
             Ok(Step::Run(request)) => native::run_read(app, ctx, &request),
             Ok(Step::Write(WriteOp::Restore)) => writes::restore(ctx, || smc_restore(app, ctx)),
             Ok(Step::Write(op)) => writes::run_cli(ctx, &op),
+            Ok(Step::Fan(change)) => fan_select::run(app, ctx, &change),
             Ok(Step::Text(text)) => return Action::Done(Outcome::out(text)),
-            Ok(Step::Forward) => return Action::Forward,
+            Ok(Step::Watch(interval)) => {
+                return Action::StatusWatch {
+                    data_dir_override: ctx.data_dir_override.map(PathBuf::from),
+                    interval,
+                };
+            }
+            Ok(Step::AiUsageServe(port)) => {
+                return Action::AiUsageServe {
+                    data_dir_override: ctx.data_dir_override.map(PathBuf::from),
+                    port,
+                };
+            }
             Err(error) => return Action::Done(Outcome::failure(&error)),
         };
         match result {
             Ok(Some(output)) => Action::Done(render(output)),
-            Ok(None) => Action::Forward,
+            Ok(None) => Action::Done(Outcome::failure(&loops::unsupported(command))),
             Err(error) => Action::Done(Outcome::failure(&error)),
         }
     })
@@ -412,14 +432,18 @@ fn render(output: Output) -> Outcome {
 
 /// The result of parsing one tune command line.
 enum Step {
-    /// Run this read request natively (or forward when nothing implements it).
+    /// Run this read request natively (`unsupported` when nothing implements it).
     Run(Request),
     /// Print this text and exit 0 (`--help`).
     Text(String),
-    /// Not a read the Swift core cannot do better: hand it over.
-    Forward,
+    /// `status --watch [--interval <duration>]`.
+    Watch(f64),
+    /// `ai-usage serve [--port N]`.
+    AiUsageServe(u16),
     /// An unprivileged write, run in this process.
     Write(WriteOp),
+    /// `fan profile <name>` / `fan target <°C>`: the user's own file only.
+    Fan(symcockpit_core::fan_select::Change),
 }
 
 fn run(command: &'static str, json: bool, params: Params) -> Result<Step, Error> {
@@ -435,8 +459,7 @@ fn unexpected(command: &str, arg: &str) -> Error {
 }
 
 /// The SMC half of `restore`: the fan/charge area's handler (root directly,
-/// otherwise the helper). `Ok(None)` where it is not wired (test apps): the
-/// Swift core finishes the restore.
+/// otherwise the helper). `Ok(None)` where it is not wired (test apps).
 pub(crate) fn smc_restore(app: &App, ctx: &Context) -> Result<Option<Output>, Error> {
     let Some(handler) = app.handlers.get("restore") else {
         return Ok(None);
@@ -449,7 +472,7 @@ pub(crate) fn smc_restore(app: &App, ctx: &Context) -> Result<Option<Output>, Er
     handler(ctx, &request).map(Some)
 }
 
-/// A privileged write: answered by the handler wired in [`crate::write`], else forwarded.
+/// A privileged write: answered by the handler wired in [`crate::write`].
 fn write(command: write_commands::Command) -> Result<Step, Error> {
     use write_commands::Command;
     let name = match &command {
@@ -540,7 +563,11 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
         "top" => processes("top", rest),
         "ai-usage" => {
             if rest.first().is_some_and(|a| a == "serve") {
-                return Ok(Step::Forward);
+                let args = &rest[1..];
+                if args.iter().any(|a| a == "--help" || a == "-h") {
+                    return Ok(Step::Text(ai_usage_api::HELP.to_owned()));
+                }
+                return ai_usage_api::parse_port(args).map(Step::AiUsageServe);
             }
             if is_help(rest) {
                 return Ok(Step::Text(ai_usage::HELP.to_owned()));
@@ -556,9 +583,8 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
         }
         "status" => {
             let options = status::parse_options(rest)?;
-            // The endless NDJSON loop stays with Swift until it has a native home.
             if options.watch {
-                Ok(Step::Forward)
+                Ok(Step::Watch(options.interval))
             } else {
                 run("status", options.json, Params::None)
             }
@@ -599,7 +625,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
             )),
             (false, "dim") => writes::parse_dim(rest).map(Step::Write),
             (false, "warmth") => writes::parse_warmth(rest).map(Step::Write),
-            (false, _) => Ok(Step::Forward),
+            (false, _) => Err(Error::Usage(format!("unknown command '{command}'"))),
         },
         "fan" => {
             if is_help(rest) {
@@ -614,8 +640,9 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 }
                 [sub, extra, ..] if sub == "status" => Err(unexpected("fan status", extra)),
                 [sub] if sub == "status" => run("fan.status", true, Params::None),
-                // Setting a profile or a target only writes the user's own file.
-                [sub, ..] if sub == "profile" || sub == "target" => Ok(Step::Forward),
+                [sub, args @ ..] if sub == "profile" || sub == "target" => {
+                    symcockpit_core::fan_select::parse(sub, args).map(Step::Fan)
+                }
                 _ => write(write_commands::parse_fan(rest)?),
             }
         }
@@ -640,7 +667,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 writes::parse_profile(subcommand, tail).map(Step::Write)
             }
         }
-        _ => Ok(Step::Forward),
+        _ => Err(Error::Usage(format!("unknown command '{command}'"))),
     }
 }
 

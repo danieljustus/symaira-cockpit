@@ -79,8 +79,10 @@ impl World {
     fn cli_with(&self, words: &[&str], prompt: Option<&dyn Fn(&str) -> bool>) -> Outcome {
         match plan_with(&self.app, &args(words), prompt) {
             Action::Done(outcome) => outcome,
-            Action::Forward => panic!("{words:?} was forwarded to the Swift core"),
             Action::Serve { .. } => panic!("{words:?} started the server"),
+            Action::StatusWatch { .. } | Action::AiUsageServe { .. } => {
+                panic!("{words:?} started a loop")
+            }
         }
     }
 
@@ -667,7 +669,7 @@ fn every_area_command_has_a_cli_route_and_help_and_a_family_usage() {
 }
 
 #[test]
-fn an_unwired_area_answers_unsupported_instead_of_reaching_the_swift_core() {
+fn an_unwired_area_answers_unsupported() {
     let tmp = tempfile::tempdir().unwrap();
     let bare = app(tmp.path());
     match plan_with(&bare, &args(&["audio", "devices"]), None) {
@@ -675,7 +677,7 @@ fn an_unwired_area_answers_unsupported_instead_of_reaching_the_swift_core() {
             assert_eq!(out.code, 4, "{}", out.stderr);
             assert!(out.stderr.contains("not available"));
         }
-        _ => panic!("an area command must never be forwarded"),
+        _ => panic!("an area command answers at once"),
     }
 }
 

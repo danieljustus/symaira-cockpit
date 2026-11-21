@@ -3,14 +3,23 @@
 
 #![allow(dead_code)] // each test binary uses a different subset
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::Value;
-use symcockpit::app::{App, Handlers, OverridePort, Services};
+use symcockpit::app::{App, Handlers, OverridePort, ReleaseSource, Services};
 use symcockpit::cli::{Action, Outcome, plan};
 use symcockpit_store::Paths;
 use symcockpit_testkit::symbrain::FakeSymbrain;
+
+/// A release source that was never asked: tests that expect no request fail loudly.
+pub struct NoNetwork;
+
+impl ReleaseSource for NoNetwork {
+    fn latest(&self) -> symcockpit_core::update_check::Fetched {
+        panic!("a test reached the network")
+    }
+}
 
 pub fn app(home: &Path) -> App {
     let env: BTreeMap<String, String> = [
@@ -33,8 +42,10 @@ pub fn app(home: &Path) -> App {
             )),
             vault_entry_paths: BTreeMap::new(),
             local_time: Box::new(|unix| format!("T{unix}")),
+            enabled_ai_providers: Box::new(BTreeSet::new),
+            release_source: Box::new(NoNetwork),
+            stdout_is_terminal: false,
         },
-        legacy: None,
     }
 }
 
@@ -69,17 +80,24 @@ pub fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_owned()).collect()
 }
 
-/// The outcome of a command answered natively; panics when it was forwarded.
+/// The outcome of a command answered in one go; panics when it started a long-running one.
 pub fn done(app: &App, list: &[&str]) -> Outcome {
     match plan(app, &args(list)) {
         Action::Done(outcome) => outcome,
-        Action::Forward => panic!("{list:?} was forwarded"),
         Action::Serve { .. } => panic!("{list:?} started the server"),
+        Action::StatusWatch { .. } | Action::AiUsageServe { .. } => {
+            panic!("{list:?} started a loop")
+        }
     }
 }
 
-pub fn forwarded(app: &App, list: &[&str]) -> bool {
-    matches!(plan(app, &args(list)), Action::Forward)
+/// Whether the command has no native handler in this app: exit 4 and the message of
+/// `unsupported`, the whole of what is left of the old hand-over to Swift.
+pub fn unavailable(app: &App, list: &[&str]) -> bool {
+    match plan(app, &args(list)) {
+        Action::Done(o) => o.code == 4 && o.stderr.contains("is not available in this build"),
+        _ => false,
+    }
 }
 
 pub struct Overrides(pub Value, pub bool);
