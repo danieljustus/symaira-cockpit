@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleExecutable</key><string>SymCockpitQuickLook</string>
+	<key>CFBundleIdentifier</key><string>com.symaira.cockpit.quicklook</string>
+	<key>CFBundleName</key><string>Symaira Cockpit Quick Look</string>
+	<key>CFBundleDisplayName</key><string>Symaira Cockpit Quick Look</string>
+	<key>CFBundlePackageType</key><string>XPC!</string>
+	<key>CFBundleShortVersionString</key><string>__VERSION__</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>LSMinimumSystemVersion</key><string>__MINOS__</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLIsDataBasedPreview</key><true/>
+			<key>QLSupportsSearchableItems</key><false/>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>public.folder</string>
+				<string>public.zip-archive</string>
+				<string>public.tar-archive</string>
+				<string>org.7-zip.7-zip-archive</string>
+			</array>
+		</dict>
+		<key>NSExtensionPointIdentifier</key><string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key><string>SymPreviewProvider</string>
+	</dict>
+</dict>
+</plist>

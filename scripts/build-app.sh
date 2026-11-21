@@ -197,6 +197,14 @@ printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
 #   name: Symaira Dev · type: Code Signing · self-signed
 IDENTITY="${CODE_SIGN_IDENTITY:--}"
 
+# Quick Look and Finder extensions (R70-R72): built without an Xcode project and signed
+# here with the same identity. They must exist before the app seal below. SKIP_EXTENSIONS=1
+# leaves them out (e.g. for a GUI-only iteration).
+if [[ "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
+  CODE_SIGN_IDENTITY="$IDENTITY" EXPECTED_TEAM_ID="$EXPECTED_TEAM_ID" COCKPIT_VERSION="$COCKPIT_VERSION" \
+    "$REPO_ROOT/scripts/build-extensions.sh" "$APP_PATH"
+fi
+
 # Nested code first: the helper is signed under its own identifier (the one
 # the app's XPC requirement pins) before the bundle seals it. The app only
 # ever registers the helper when it is itself Developer-ID signed, so an
@@ -206,7 +214,16 @@ if [[ "$IDENTITY" != "-" ]]; then
   HELPER_SIGN_ARGS+=(--options runtime)
 fi
 codesign "${HELPER_SIGN_ARGS[@]}" "$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
-codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none "$APP_PATH"
+# The app joins the extensions' app group (Finder jobs) only when a team id is known.
+APP_SIGN_ARGS=()
+if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
+  APP_ENTITLEMENTS="$(mktemp)"
+  printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict/></plist>' >"$APP_ENTITLEMENTS"
+  plutil -insert com.apple.security.application-groups -json "[\"$EXPECTED_TEAM_ID.group.com.symaira.cockpit\"]" "$APP_ENTITLEMENTS"
+  APP_SIGN_ARGS=(--entitlements "$APP_ENTITLEMENTS")
+fi
+codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none ${APP_SIGN_ARGS[@]+"${APP_SIGN_ARGS[@]}"} "$APP_PATH"
+[[ -z "${APP_ENTITLEMENTS:-}" ]] || rm -f "$APP_ENTITLEMENTS"
 
 if [[ "$IDENTITY" == "-" ]]; then
   printf '%s\n' \
