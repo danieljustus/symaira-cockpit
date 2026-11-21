@@ -132,6 +132,10 @@ while (my $line = <STDIN>) {
             reply($id, { plan_id => $p->{plan_id}, status => "confirmed", output => { applied => JSON::PP::true } });
         }
     } elsif ($method eq 'subscribe') {
+        unless (grep { $_ eq ($p->{command} // '') } @topics) {
+            fail($id, { code => -32602, message => "$p->{command} cannot be subscribed to" });
+            next;
+        }
         my $sid = $next_sub++;
         $subs{$sid} = { command => $p->{command}, seq => 0 };
         reply($id, { subscription_id => $sid, command => $p->{command}, interval_ms => $p->{interval_visible_ms} // 1000 });

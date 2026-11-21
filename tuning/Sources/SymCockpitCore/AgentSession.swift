@@ -22,8 +22,8 @@ import Foundation
 // MARK: - Decoding
 
 public enum AgentDecoding {
-    /// The agent prints the same JSON as the CLI: snake_case keys. Two Swift
-    /// types spell an acronym in capitals (`DisplayInfo.displayID`,
+    /// The agent prints the same JSON as the CLI: snake_case keys. A few Swift
+    /// properties spell an acronym in capitals (`displayID`, `maxEDRHeadroom`,
     /// `ProviderResult.providerID`), which `.convertFromSnakeCase` cannot
     /// produce, so those keys are mapped here (shortcut: by key name; upgrade
     /// when those types get explicit coding keys).
@@ -34,10 +34,9 @@ public enum AgentDecoding {
             let key = path.last!
             if key.intValue != nil { return key }
             var camel = camelCase(key.stringValue)
-            let parent = path.dropLast().last
-            if camel == "displayId" {
-                camel = "displayID"
-            } else if camel == "providerId", parent?.intValue != nil {
+            if let capitals = acronymKeys[camel] {
+                camel = capitals
+            } else if camel == "providerId", path.dropLast().last?.intValue != nil {
                 // A provider result (array element); the snapshot inside it keeps `providerId`.
                 camel = "providerID"
             }
@@ -45,6 +44,12 @@ public enum AgentDecoding {
         }
         return try decoder.decode(type, from: data)
     }
+
+    private static let acronymKeys = [
+        "displayId": "displayID",
+        "maxEdrHeadroom": "maxEDRHeadroom",
+        "potentialEdrHeadroom": "potentialEDRHeadroom",
+    ]
 
     static func camelCase(_ snake: String) -> String {
         let parts = snake.split(separator: "_", omittingEmptySubsequences: false)
