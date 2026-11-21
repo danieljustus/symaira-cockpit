@@ -70,7 +70,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "ble subscribe",
             None,
             Risk::Read,
-            object(json!({}), &[]),
+            object(
+                {
+                    let mut props = gatt_address();
+                    props["seconds"] = json!({"type": "number", "minimum": 1, "maximum": 60,
+                        "description": "How long to listen (default 10)."});
+                    props
+                },
+                &["device_id", "service", "characteristic"],
+            ),
         ),
         spec(
             "ble.write",
@@ -88,7 +96,10 @@ pub fn specs() -> Vec<CommandSpec> {
             "ble export",
             None,
             Risk::Read,
-            object(json!({}), &[]),
+            object(
+                json!({"format": {"type": "string", "enum": ["csv", "json"]}}),
+                &[],
+            ),
         ),
     ]
 }

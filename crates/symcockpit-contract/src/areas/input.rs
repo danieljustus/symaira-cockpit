@@ -6,19 +6,28 @@ use serde_json::json;
 use crate::{CommandSpec, Risk};
 
 pub fn specs() -> Vec<CommandSpec> {
-    let spec = |name, cli_path| CommandSpec {
+    let spec = |name, cli_path, input_schema| CommandSpec {
         name,
         cli_path,
         mcp_name: None,
         area: "input",
         risk: Risk::HumanOnly,
-        input_schema: json!({"type": "object", "properties": {}, "required": []}),
+        input_schema,
     };
+    let none = || json!({"type": "object", "properties": {}, "required": []});
     vec![
-        spec("input.status", "input status"),
-        spec("input.finder-cut", "input finder-cut"),
-        spec("input.haptics.status", "input haptics status"),
-        spec("input.haptics.test", "input haptics test"),
+        spec("input.status", "input status", none()),
+        spec(
+            "input.finder-cut",
+            "input finder-cut",
+            json!({
+                "type": "object",
+                "properties": {"state": {"type": "string", "enum": ["on", "off"]}},
+                "required": ["state"]
+            }),
+        ),
+        spec("input.haptics.status", "input haptics status", none()),
+        spec("input.haptics.test", "input haptics test", none()),
     ]
 }
 

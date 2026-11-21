@@ -31,14 +31,22 @@ pub struct CommandSpec {
     pub input_schema: Value,
 }
 
+/// The register: the v0.12 commands, then the areas, and where the areas start.
+static REGISTER: LazyLock<(Vec<CommandSpec>, usize)> = LazyLock::new(|| {
+    let mut all = v012();
+    let v012_len = all.len();
+    all.extend(crate::areas::all());
+    (all, v012_len)
+});
+
 /// The whole register, in a stable order: v0.12, then the areas.
 pub fn commands() -> &'static [CommandSpec] {
-    static COMMANDS: LazyLock<Vec<CommandSpec>> = LazyLock::new(|| {
-        let mut all = v012();
-        all.extend(crate::areas::all());
-        all
-    });
-    &COMMANDS
+    &REGISTER.0
+}
+
+/// The commands the areas added since v0.12 (everything after the v0.12 set).
+pub fn area_commands() -> &'static [CommandSpec] {
+    &REGISTER.0[REGISTER.1..]
 }
 
 fn object(properties: Value, required: &[&str]) -> Value {

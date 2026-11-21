@@ -356,11 +356,20 @@ fn handler_errors_become_stderr_lines_with_the_error_exit_code() {
 
 #[test]
 #[should_panic(expected = "no handler slot")]
-fn registering_a_write_command_is_a_programming_error() {
+fn registering_a_name_outside_the_register_is_a_programming_error() {
     let tmp = home();
     app(tmp.path())
         .handlers
-        .register("fan.set", |_, _| Ok(Output::text("")));
+        .register("fan.setz", |_, _| Ok(Output::text("")));
+}
+
+#[test]
+fn any_command_of_the_register_can_get_a_handler() {
+    let tmp = home();
+    let mut a = app(tmp.path());
+    for spec in symcockpit_contract::commands() {
+        a.handlers.register(spec.name, |_, _| Ok(Output::text("")));
+    }
 }
 
 #[test]

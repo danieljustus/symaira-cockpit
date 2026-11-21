@@ -2,7 +2,7 @@
 //! register into, the ports for platform facts, and the request/response
 //! types shared by the CLI dispatcher and the MCP server.
 //!
-//! Wiring an area (stage 1, read path) is one call per command:
+//! Wiring a command is one call, for any command of the register:
 //!
 //! ```ignore
 //! app.handlers.register("sensors", |ctx, _req| {
@@ -10,13 +10,14 @@
 //! });
 //! ```
 //!
-//! A command without a handler is forwarded to the Swift core, so areas can
-//! land one at a time.
+//! A v0.12 command without a handler is forwarded to the Swift core, so areas
+//! can land one at a time. The newer areas (`areas.rs`) have no Swift
+//! counterpart and always run natively.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use symcockpit_contract::Error;
 use symcockpit_core::ai_usage::UsageRunner;
 use symcockpit_core::system::HardwareFacts;
@@ -71,13 +72,27 @@ impl Default for ProcessesParams {
     }
 }
 
+/// Where the arguments of an area command come from: the words after its CLI
+/// path, or the JSON object of an MCP `tools/call`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AreaInput {
+    Words(Vec<String>),
+    Args(Map<String, Value>),
+}
+
 /// Command-specific parsed arguments.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Params {
     None,
     Processes(ProcessesParams),
-    History { limit: i64 },
-    AiUsage { provider: Option<String> },
+    History {
+        limit: i64,
+    },
+    AiUsage {
+        provider: Option<String>,
+    },
+    /// A command of one of the newer areas (`areas.rs`).
+    Area(AreaInput),
 }
 
 /// One read request, from the CLI or from an MCP `tools/call`.
@@ -95,7 +110,16 @@ pub struct Request {
 /// the Swift MCP server (compact); keys use snake_case.
 pub enum Output {
     Json(Value),
-    Text { stdout: String, stderr: String },
+    Text {
+        stdout: String,
+        stderr: String,
+    },
+    /// JSON with an exit code of its own: an action that ended `unconfirmed`,
+    /// `failed` or `skipped_changed` still prints its report.
+    Report {
+        value: Value,
+        code: u8,
+    },
 }
 
 impl Output {
@@ -121,8 +145,9 @@ pub struct Context<'a> {
 
 pub type Handler = Box<dyn Fn(&Context, &Request) -> Result<Output, Error>>;
 
-/// The read commands the stage-1 areas own. `doctor`, `permissions`, `status`,
-/// `history`, `profile.list` and `ai-usage` are native in this crate.
+/// The nine read commands wave 1 wired through handlers (`doctor`,
+/// `permissions`, `status`, `history`, `profile.list` and `ai-usage` are native
+/// in this crate). Not a gate: any command of the register can get a handler.
 pub const AREA_COMMANDS: [&str; 9] = [
     "sensors",
     "fan.status",
@@ -139,18 +164,20 @@ pub const AREA_COMMANDS: [&str; 9] = [
 pub struct Handlers(HashMap<&'static str, Handler>);
 
 impl Handlers {
-    /// Registers the native implementation of an area command.
+    /// Registers the native implementation of a command.
     ///
     /// # Panics
-    /// On a name outside [`AREA_COMMANDS`]: wiring a write command or a typo
-    /// here is a programming error, not a runtime condition.
+    /// On a name that is not in the register: a typo here is a programming
+    /// error, not a runtime condition.
     pub fn register(
         &mut self,
         command: &'static str,
         handler: impl Fn(&Context, &Request) -> Result<Output, Error> + 'static,
     ) {
         assert!(
-            AREA_COMMANDS.contains(&command),
+            symcockpit_contract::commands()
+                .iter()
+                .any(|c| c.name == command),
             "no handler slot for '{command}'"
         );
         self.0.insert(command, Box::new(handler));

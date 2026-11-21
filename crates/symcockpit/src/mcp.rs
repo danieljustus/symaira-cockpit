@@ -10,16 +10,20 @@
 //! failures as `isError: true` results instead of `-32603`, and pulls in
 //! schemars; matching v0.12 would need more code than the ~250 lines here.
 //!
-//! Read tools call the native handlers; tools without one, and every write
-//! tool, run the Swift core as a subprocess (see `legacy`).
+//! The 26 v0.12 tools keep their names, schemas and answers. Their read tools
+//! call the native handlers; their write tools run the Swift core as a
+//! subprocess (see `legacy`). The tools of the newer areas (`areas.rs`) are
+//! native, carry annotations and follow architecture 5.3: read and reversible
+//! tools act directly, risky ones only exist as `plan_*` plus `confirm_plan`.
 
 use std::io::{self, BufRead, Write};
 
 use serde_json::{Map, Value, json};
-use symcockpit_contract::{CommandSpec, Error, Risk, commands};
+use symcockpit_contract::{CommandSpec, Error, Risk, area_commands, commands};
 
 use crate::app::{
-    App, Context, DEFAULT_PROCESS_LIMIT, Output, Params, ProcessSort, ProcessesParams, Request,
+    App, AreaInput, Context, DEFAULT_PROCESS_LIMIT, Output, Params, ProcessSort, ProcessesParams,
+    Request,
 };
 use crate::{VERSION, json as swift_json, legacy};
 
@@ -116,35 +120,179 @@ const TOOLS: [(&str, &str); 26] = [
     ),
 ];
 
+/// Tools of the newer areas, in register order.
+const AREA_TOOLS: [(&str, &str); 24] = [
+    (
+        "get_storage_health",
+        "Read NVMe SMART health (temperature, spare, wear, media errors) with a good/warning/critical grade per drive. Never records a measurement; use `symcockpit storage health` for that.",
+    ),
+    (
+        "get_storage_health_history",
+        "Recorded SMART measurements, newest first, with what changed between them.",
+    ),
+    (
+        "run_speedtest",
+        "Measure sequential read/write speed of a folder with a temporary file (removed afterwards). The folder must be under the home directory or /Volumes; at most 1024 MiB.",
+    ),
+    (
+        "analyze_space",
+        "Size tree of a folder: the largest children per level and what is left in other.",
+    ),
+    (
+        "plan_clean",
+        "Scan the cleanup catalog (user caches, logs, Xcode derived data, optionally the Trash) and record a plan. Nothing is deleted until confirm_plan runs it.",
+    ),
+    (
+        "find_duplicates",
+        "Find files with identical content under a folder (read-only).",
+    ),
+    (
+        "plan_remove_duplicates",
+        "Record a plan that moves the selected duplicate files to the Trash; every group keeps at least one copy. Run it with confirm_plan.",
+    ),
+    (
+        "plan_uninstall_app",
+        "Record a plan that moves an app and the files it owns to the Trash. Documents are never included. Run it with confirm_plan.",
+    ),
+    (
+        "get_plan",
+        "Show a recorded plan: items, totals, expiry and, once confirmed, the results.",
+    ),
+    (
+        "confirm_plan",
+        "Run a recorded plan once. Every item is checked against its recorded identity first and reports confirmed, unconfirmed, failed, unsupported or skipped_changed.",
+    ),
+    (
+        "list_audio_devices",
+        "List audio devices with default input/output, volume, mute and format.",
+    ),
+    (
+        "get_audio_device",
+        "Read one audio device by its stable UID.",
+    ),
+    (
+        "list_midi_devices",
+        "List MIDI devices with their sources and destinations.",
+    ),
+    (
+        "set_default_audio_device",
+        "Make an audio device the default input or output. Reads the setting back.",
+    ),
+    (
+        "set_audio_volume",
+        "Set the volume (0.0–1.0) of an audio device. Reads the value back.",
+    ),
+    (
+        "set_audio_mute",
+        "Mute or unmute an audio device. Reads the state back.",
+    ),
+    (
+        "set_audio_app_volume",
+        "Set the volume of one app that plays audio. Needs a running mixer (the Cockpit app); a one-shot server has none and answers unsupported.",
+    ),
+    (
+        "plan_audio_aggregate",
+        "Record a plan that creates an aggregate or multi-output audio device. Run it with confirm_plan.",
+    ),
+    (
+        "plan_audio_format",
+        "Record a plan that changes the sample rate and bit depth of an audio device. Run it with confirm_plan.",
+    ),
+    (
+        "list_bluetooth_devices",
+        "List paired Bluetooth devices with connection state and battery level.",
+    ),
+    (
+        "scan_ble",
+        "Scan for Bluetooth LE devices for a few seconds. Never connects or disconnects anything.",
+    ),
+    (
+        "read_ble_characteristic",
+        "Connect to a BLE device, read one GATT characteristic and disconnect.",
+    ),
+    (
+        "plan_ble_write",
+        "Record a plan that writes bytes to a BLE characteristic. Run it with confirm_plan; the result states acknowledgement and readback separately.",
+    ),
+    (
+        "plan_kill_process",
+        "Record a plan that ends a process with SIGTERM. The plan holds its start time and path; confirm_plan skips it if the id now belongs to another process and reports whether it really exited.",
+    ),
+];
+
 pub struct Tool {
     pub name: &'static str,
     pub description: &'static str,
     pub spec: &'static CommandSpec,
+    /// One of the 26 v0.12 tools: listed exactly as v0.12 lists it.
+    pub legacy: bool,
+}
+
+fn is_plan_tool(name: &str) -> bool {
+    name.starts_with("plan_")
+}
+
+impl Tool {
+    /// A tool is read-only when it only looks: plan tools write a plan record.
+    pub fn is_read_only(&self) -> bool {
+        self.spec.risk == Risk::Read && !is_plan_tool(self.name)
+    }
+
+    /// MCP annotations of the newer tools; v0.12 listed none.
+    fn annotations(&self) -> Option<Value> {
+        if self.legacy {
+            return None;
+        }
+        Some(if self.is_read_only() {
+            json!({"readOnlyHint": true})
+        } else if self.name == "confirm_plan" {
+            json!({"readOnlyHint": false, "destructiveHint": true})
+        } else {
+            json!({"readOnlyHint": false, "destructiveHint": false})
+        })
+    }
 }
 
 /// The tools a client sees. Read-only mode (`mcp.mode`, `SYMTUNE_MCP_MODE`)
-/// keeps exactly the `Read` tools; a hidden tool is as unknown as a typo.
+/// keeps exactly the tools that only look; a hidden tool is as unknown as a
+/// typo.
 pub fn tools(read_only: bool) -> Vec<Tool> {
-    TOOLS
-        .iter()
-        .filter_map(|(name, description)| {
-            let spec = commands().iter().find(|c| c.mcp_name == Some(*name))?;
-            Some(Tool {
-                name,
-                description,
-                spec,
-            })
+    let v012 = TOOLS.iter().filter_map(|(name, description)| {
+        let spec = commands().iter().find(|c| c.mcp_name == Some(*name))?;
+        Some(Tool {
+            name,
+            description,
+            spec,
+            legacy: true,
         })
-        .filter(|t| !read_only || t.spec.risk == Risk::Read)
+    });
+    let areas = area_commands().iter().filter_map(|spec| {
+        let name = spec.mcp_name?;
+        let (_, description) = AREA_TOOLS.iter().find(|(n, _)| *n == name)?;
+        Some(Tool {
+            name,
+            description,
+            spec,
+            legacy: false,
+        })
+    });
+    v012.chain(areas)
+        .filter(|t| !read_only || t.is_read_only())
         .collect()
 }
 
 pub fn tools_list(tools: &[Tool]) -> Value {
-    json!({"tools": tools.iter().map(|t| json!({
-        "name": t.name,
-        "description": t.description,
-        "inputSchema": t.spec.input_schema,
-    })).collect::<Vec<_>>()})
+    json!({"tools": tools.iter().map(|t| {
+        let mut tool = json!({
+            "name": t.name,
+            "description": t.description,
+            "inputSchema": t.spec.input_schema,
+        });
+        if let Some(annotations) = t.annotations() {
+            tool["annotations"] = annotations;
+        }
+        tool
+    }).collect::<Vec<_>>()})
 }
 
 fn ok(id: &Value, result: Value) -> Value {
@@ -302,7 +450,9 @@ impl<'a> Server<'a> {
     }
 
     fn run_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<String, Error> {
-        let value = if tool.spec.risk == Risk::Read {
+        let value = if !tool.legacy {
+            self.area_tool(tool, arguments)?
+        } else if tool.spec.risk == Risk::Read {
             self.read_tool(tool, arguments)?
         } else {
             self.write_tool(tool, arguments)?
@@ -337,12 +487,33 @@ impl<'a> Server<'a> {
             params,
         };
         match crate::native::run_read(self.app, self.ctx, &request)? {
-            Some(Output::Json(value)) => Ok(value),
+            Some(Output::Json(value) | Output::Report { value, .. }) => Ok(value),
             Some(Output::Text { .. }) => Err(Error::Failed(format!(
                 "{}: handler returned text for a JSON request",
                 tool.name
             ))),
             None => self.through_legacy(&legacy_read_args(&request)?),
+        }
+    }
+
+    /// A tool of the newer areas: always native, arguments checked against
+    /// its schema by the handler.
+    fn area_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {
+        let request = Request {
+            command: tool.spec.name,
+            json: true,
+            params: Params::Area(AreaInput::Args(arguments.clone())),
+        };
+        match crate::native::run_read(self.app, self.ctx, &request)? {
+            Some(Output::Json(value) | Output::Report { value, .. }) => Ok(value),
+            Some(Output::Text { .. }) => Err(Error::Failed(format!(
+                "{}: handler returned text for a JSON request",
+                tool.name
+            ))),
+            None => Err(Error::Unsupported(format!(
+                "{} is not available in this build",
+                tool.name
+            ))),
         }
     }
 

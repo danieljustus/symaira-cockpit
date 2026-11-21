@@ -2,6 +2,8 @@
 //! The Swift core is replaced by a fake script; no real hardware, credential
 //! or configuration is touched (isolated HOME, cleared environment).
 
+mod common;
+
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
@@ -109,8 +111,9 @@ fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
     )
     .unwrap();
     assert_eq!(
-        frames[1]["result"], expected,
-        "tools/list must equal the recorded v0.12 result"
+        common::v012_part(&frames[1]["result"]),
+        expected,
+        "tools/list must hold the recorded v0.12 result"
     );
     assert_eq!(frames[2]["result"]["content"][0]["text"], "[]");
     assert_eq!(
@@ -138,13 +141,13 @@ fn config_read_only_mode_and_the_environment_override_both_apply() {
             &[("SYMTUNE_MCP_MODE", "read-only")],
             list
         )),
-        12
+        23
     );
     // Configuration file: [mcp] mode.
     let config = tmp.path().join("c/symtune");
     std::fs::create_dir_all(&config).unwrap();
     std::fs::write(config.join("config.toml"), "[mcp]\nmode = \"read-only\"\n").unwrap();
-    assert_eq!(count(&serve(tmp.path(), Some(&fake.path), &[], list)), 12);
+    assert_eq!(count(&serve(tmp.path(), Some(&fake.path), &[], list)), 23);
     // The environment wins over the file.
     assert_eq!(
         count(&serve(
@@ -153,7 +156,7 @@ fn config_read_only_mode_and_the_environment_override_both_apply() {
             &[("SYMTUNE_MCP_MODE", "full")],
             list
         )),
-        26
+        50
     );
     let call = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"restore"}}"#;
     let hidden = serve(tmp.path(), Some(&fake.path), &[], call);

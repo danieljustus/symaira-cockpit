@@ -836,6 +836,7 @@ dependencies = [
  "serde_json",
  "symcockpit-contract",
  "symcockpit-core",
+ "symcockpit-db",
  "symcockpit-macos",
  "symcockpit-store",
  "symcockpit-testkit",

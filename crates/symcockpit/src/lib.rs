@@ -5,6 +5,7 @@
 //! stdin, stdout, stderr and the exit code stay untouched.
 
 pub mod app;
+pub mod areas;
 pub mod cli;
 pub mod help;
 pub mod json;

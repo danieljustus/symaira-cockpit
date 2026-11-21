@@ -4,7 +4,7 @@
 pub mod areas;
 mod registry;
 
-pub use registry::{CommandSpec, commands};
+pub use registry::{CommandSpec, area_commands, commands};
 
 use serde::{Deserialize, Serialize};
 

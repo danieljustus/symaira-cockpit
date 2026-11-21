@@ -6,7 +6,7 @@ mod common;
 
 use std::path::Path;
 
-use common::app;
+use common::{app, v012_part};
 use serde_json::{Value, json};
 use symcockpit::app::{App, Context, Output};
 use symcockpit::mcp::{Server, tools, tools_list};
@@ -200,13 +200,14 @@ fn tools_list_equals_the_recorded_v012_result() {
     .unwrap();
     let expected: Value = serde_json::from_str(&fixture_text).unwrap();
     let listed = f.ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)["result"].clone();
-    assert_eq!(listed, expected);
-    assert_eq!(tools_list(&tools(false)), expected);
-    assert_eq!(listed["tools"].as_array().unwrap().len(), 26);
+    assert_eq!(v012_part(&listed), expected);
+    assert_eq!(v012_part(&tools_list(&tools(false))), expected);
+    // 26 from v0.12, then the tools of the areas.
+    assert_eq!(listed["tools"].as_array().unwrap().len(), 50);
 }
 
 #[test]
-fn read_only_mode_lists_exactly_the_twelve_read_tools_and_hides_the_rest() {
+fn read_only_mode_lists_only_tools_that_only_look_and_hides_the_rest() {
     let f = fixture();
     let list = f
         .ask_with(
@@ -222,7 +223,7 @@ fn read_only_mode_lists_exactly_the_twelve_read_tools_and_hides_the_rest() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(
-        names,
+        &names[..12],
         [
             "get_capabilities",
             "get_sensors",
@@ -238,6 +239,14 @@ fn read_only_mode_lists_exactly_the_twelve_read_tools_and_hides_the_rest() {
             "get_history"
         ]
     );
+    // After the 12 of v0.12 only read tools of the areas follow: no plan_*
+    // tool (it writes a plan record) and no confirm_plan.
+    assert_eq!(names.len(), 23);
+    assert!(
+        names[12..]
+            .iter()
+            .all(|n| !n.starts_with("plan_") && *n != "confirm_plan")
+    );
     for mode in ["read_only", "READONLY"] {
         let l = f
             .ask_with(
@@ -246,7 +255,7 @@ fn read_only_mode_lists_exactly_the_twelve_read_tools_and_hides_the_rest() {
                 r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
             )
             .unwrap();
-        assert_eq!(l["result"]["tools"].as_array().unwrap().len(), 12, "{mode}");
+        assert_eq!(l["result"]["tools"].as_array().unwrap().len(), 23, "{mode}");
     }
     // A hidden write tool is as unknown as a typo, and never reaches the Swift core.
     let mut f = fixture();

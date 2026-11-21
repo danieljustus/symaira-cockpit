@@ -24,6 +24,7 @@ fn json_of(app: &App, ctx: &Context, command: &'static str) -> Result<Value, Err
         .ok_or_else(|| Error::Failed(format!("{command}: no handler")))?(ctx, &request)?
     {
         Output::Json(value) => Ok(value),
+        Output::Report { value, .. } => Ok(value),
         Output::Text { .. } => Err(Error::Failed(format!(
             "{command}: handler returned text for a JSON request"
         ))),

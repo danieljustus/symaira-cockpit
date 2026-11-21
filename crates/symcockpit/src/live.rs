@@ -21,9 +21,13 @@ use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use symcockpit_contract::Error;
+use symcockpit_core::audio::AudioService;
 use symcockpit_core::battery::{ChargeLimitProbe, battery_json, read_battery};
+use symcockpit_core::bluetooth::{Advertisement, BleCentral, BleLink};
 use symcockpit_core::display::{any_edr_capable, brightness_get_json, displays_json};
 use symcockpit_core::metrics::{self, PowerReading, SystemMetricsService};
+use symcockpit_core::midi::MidiService;
+use symcockpit_core::plan::SystemClock;
 use symcockpit_core::power::{awake_status_json, battery_system_load_milliwatts};
 use symcockpit_core::processes::{
     ProcessSortKey, ProcessUsageService, processes_output, sample_twice,
@@ -34,15 +38,26 @@ use symcockpit_core::sensors::{
     sensors_json,
 };
 use symcockpit_core::system::{HardwareFacts, HostInfo, PrivilegedExecutable};
+use symcockpit_db::{plans::SqlitePlanStore, smart_history::SmartHistoryStore};
+use symcockpit_macos::apps::SystemApps;
 use symcockpit_macos::battery::{LiveBatterySource, shared_apple_health};
+use symcockpit_macos::bluetooth::{CoreBluetoothCentral, SystemProfiler};
+use symcockpit_macos::coreaudio::{RealAudioHal, RealTapHal, install_signal_handlers, interrupted};
+use symcockpit_macos::coremidi::RealMidiHal;
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
+use symcockpit_macos::fs_stats::{LiveSpeedHost, StdSpaceFs};
 use symcockpit_macos::host::live_metrics_service;
+use symcockpit_macos::input::{AfplaySound, JsonFileSettings, LiveProbe, MultitouchHaptics};
+use symcockpit_macos::nvme::IoKitNvme;
 use symcockpit_macos::power::LiveKeepAwakeStatus;
+use symcockpit_macos::process::LiveProcessControl;
 use symcockpit_macos::process::live_process_service;
 use symcockpit_macos::smc::{FileFanSelection, LiveHost, LiveSmc, PgrepGovernorProbe};
 use symcockpit_macos::system;
+use symcockpit_macos::trash::SystemRemover;
 
 use crate::app::{App, Output, OverridePort, Params};
+use crate::areas::{AudioKit, InputKit, Ports};
 use crate::platform::{self, RunFailure};
 
 /// The AppleSMC connection of this process, opened on the first read.
@@ -343,8 +358,71 @@ fn dispatcher_output(output: metrics::Output) -> Output {
     }
 }
 
-/// Registers the nine area handlers and fills `hardware` and `overrides`.
+/// A BLE central one process shares: CoreBluetooth is started on first use
+/// and kept, so a long-lived `serve` does not start one per tool call.
+struct SharedCentral(Rc<dyn BleCentral>);
+
+impl BleCentral for SharedCentral {
+    fn scan(&self, timeout: Duration) -> Result<Vec<Advertisement>, Error> {
+        self.0.scan(timeout)
+    }
+
+    fn connect(&self, id: &str, timeout: Duration) -> Result<Box<dyn BleLink>, Error> {
+        self.0.connect(id, timeout)
+    }
+}
+
+fn audio_kit() -> Result<AudioKit, Error> {
+    let service = Arc::new(AudioService::new(Arc::new(RealAudioHal::new())));
+    let midi = Arc::new(MidiService::new(Arc::new(RealMidiHal::new()?)));
+    Ok(AudioKit {
+        service,
+        midi,
+        tap: Some(Arc::new(RealTapHal::new())),
+        // Only a foreground mixer takes over SIGINT/SIGTERM; `serve` must keep
+        // dying on them.
+        before_foreground: Rc::new(install_signal_handlers),
+        stop: Rc::new(interrupted),
+    })
+}
+
+/// The ports of the newer areas on this Mac. Nothing is opened here.
+pub fn ports() -> Ports {
+    let audio: Rc<OnceCell<Result<AudioKit, Error>>> = Rc::default();
+    let central: Rc<OnceCell<Result<Rc<dyn BleCentral>, Error>>> = Rc::default();
+    Ports {
+        clock: Box::new(SystemClock),
+        nvme: Box::new(IoKitNvme),
+        history: Box::new(|path| Ok(Box::new(SmartHistoryStore::open(path)?))),
+        plans: Box::new(|path| Ok(Box::new(SqlitePlanStore::open(path)?))),
+        speed: Box::new(LiveSpeedHost::default()),
+        space: Box::new(StdSpaceFs),
+        remover: Box::new(SystemRemover),
+        apps: Box::new(|home| Box::new(SystemApps::new(home))),
+        processes: Box::new(LiveProcessControl),
+        sleep: Box::new(std::thread::sleep),
+        audio: Box::new(move || audio.get_or_init(audio_kit).clone()),
+        paired: Box::new(SystemProfiler),
+        central: Box::new(move || {
+            central
+                .get_or_init(|| {
+                    CoreBluetoothCentral::new().map(|c| Rc::new(c) as Rc<dyn BleCentral>)
+                })
+                .clone()
+                .map(|c| Box::new(SharedCentral(c)) as Box<dyn BleCentral>)
+        }),
+        input: InputKit {
+            settings: Box::new(|path| Box::new(JsonFileSettings::new(path))),
+            probe: Box::new(LiveProbe),
+            haptic: Box::new(MultitouchHaptics),
+            sound: Box::new(AfplaySound::default()),
+        },
+    }
+}
+
+/// Registers the area handlers and fills `hardware` and `overrides`.
 pub fn wire(app: &mut App) {
+    crate::areas::register(&mut app.handlers, Rc::new(ports()));
     let smc = SharedSmc::default();
     let metrics_service: Rc<OnceCell<SystemMetricsService>> = Rc::default();
     let process_service: Rc<OnceCell<ProcessUsageService>> = Rc::default();

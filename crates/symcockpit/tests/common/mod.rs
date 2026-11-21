@@ -38,6 +38,33 @@ pub fn app(home: &Path) -> App {
     }
 }
 
+/// `tools/list` without the tools of the newer areas: what v0.12 listed. The
+/// oracle fixture is compared with this, value for value.
+pub fn v012_part(result: &Value) -> Value {
+    let fixture: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../oracle/v0.12/cases/mcp-tools-list.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let names: Vec<&str> = fixture["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    let kept: Vec<Value> = result["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| names.contains(&t["name"].as_str().unwrap()))
+        .cloned()
+        .collect();
+    serde_json::json!({"tools": kept})
+}
+
 pub fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_owned()).collect()
 }
