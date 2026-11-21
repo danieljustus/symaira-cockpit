@@ -66,29 +66,30 @@ pub struct AudioKit {
 /// Input preferences and the devices behind them.
 pub struct InputKit {
     pub settings: Box<dyn Fn(&Path) -> Box<dyn SettingsStore>>,
-    pub probe: Box<dyn InputProbe>,
-    pub haptic: Box<dyn HapticBackend>,
-    pub sound: Box<dyn SoundBackend>,
+    pub probe: Rc<dyn InputProbe>,
+    pub haptic: Rc<dyn HapticBackend>,
+    pub sound: Rc<dyn SoundBackend>,
 }
 
 type Opened<T> = Box<dyn Fn() -> Result<T, Error>>;
 
-/// Everything the area handlers read from or write to the machine.
+/// Everything the area handlers read from or write to the machine. Shared
+/// pointers, so a test keeps a handle on its fake.
 pub struct Ports {
-    pub clock: Box<dyn Clock>,
-    pub nvme: Box<dyn NvmeSource>,
+    pub clock: Rc<dyn Clock>,
+    pub nvme: Rc<dyn NvmeSource>,
     /// `cockpit.sqlite` is opened by path, on use.
     pub history: Box<dyn Fn(&Path) -> Result<Box<dyn HistoryStore>, Error>>,
     pub plans: Box<dyn Fn(&Path) -> Result<Box<dyn PlanStore>, Error>>,
-    pub speed: Box<dyn SpeedHost>,
-    pub space: Box<dyn SpaceFs>,
-    pub remover: Box<dyn Remover>,
+    pub speed: Rc<dyn SpeedHost>,
+    pub space: Rc<dyn SpaceFs>,
+    pub remover: Rc<dyn Remover>,
     /// Built from the home directory.
     pub apps: Box<dyn Fn(&Path) -> Box<dyn Apps>>,
-    pub processes: Box<dyn ProcessControl>,
+    pub processes: Rc<dyn ProcessControl>,
     pub sleep: Box<dyn Fn(Duration)>,
     pub audio: Opened<AudioKit>,
-    pub paired: Box<dyn PairedDevices>,
+    pub paired: Rc<dyn PairedDevices>,
     pub central: Opened<Box<dyn BleCentral>>,
     pub input: InputKit,
 }

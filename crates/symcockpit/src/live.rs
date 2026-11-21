@@ -391,18 +391,18 @@ pub fn ports() -> Ports {
     let audio: Rc<OnceCell<Result<AudioKit, Error>>> = Rc::default();
     let central: Rc<OnceCell<Result<Rc<dyn BleCentral>, Error>>> = Rc::default();
     Ports {
-        clock: Box::new(SystemClock),
-        nvme: Box::new(IoKitNvme),
+        clock: Rc::new(SystemClock),
+        nvme: Rc::new(IoKitNvme),
         history: Box::new(|path| Ok(Box::new(SmartHistoryStore::open(path)?))),
         plans: Box::new(|path| Ok(Box::new(SqlitePlanStore::open(path)?))),
-        speed: Box::new(LiveSpeedHost::default()),
-        space: Box::new(StdSpaceFs),
-        remover: Box::new(SystemRemover),
+        speed: Rc::new(LiveSpeedHost::default()),
+        space: Rc::new(StdSpaceFs),
+        remover: Rc::new(SystemRemover),
         apps: Box::new(|home| Box::new(SystemApps::new(home))),
-        processes: Box::new(LiveProcessControl),
+        processes: Rc::new(LiveProcessControl),
         sleep: Box::new(std::thread::sleep),
         audio: Box::new(move || audio.get_or_init(audio_kit).clone()),
-        paired: Box::new(SystemProfiler),
+        paired: Rc::new(SystemProfiler),
         central: Box::new(move || {
             central
                 .get_or_init(|| {
@@ -413,9 +413,9 @@ pub fn ports() -> Ports {
         }),
         input: InputKit {
             settings: Box::new(|path| Box::new(JsonFileSettings::new(path))),
-            probe: Box::new(LiveProbe),
-            haptic: Box::new(MultitouchHaptics),
-            sound: Box::new(AfplaySound::default()),
+            probe: Rc::new(LiveProbe),
+            haptic: Rc::new(MultitouchHaptics),
+            sound: Rc::new(AfplaySound::default()),
         },
     }
 }
