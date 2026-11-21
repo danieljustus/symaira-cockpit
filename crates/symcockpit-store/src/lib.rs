@@ -1,10 +1,14 @@
-//! Persisted data formats shared with v0.12. Read-only: nothing in this crate
-//! creates, modifies or locks a file the Swift core owns.
+//! Persisted data formats shared with v0.12. Read-only, with one exception:
+//! `smc_restore` writes `smc-restore.json` (the privileged write path's
+//! restore record, same format and modes as Swift). Nothing here locks or
+//! modifies any other file the Swift core owns.
 
 mod config;
 mod history;
 mod paths;
 mod profiles;
+pub mod smc_restore;
+pub mod state_perms;
 mod toml;
 
 pub use config::{Config, Loaded, safety};
