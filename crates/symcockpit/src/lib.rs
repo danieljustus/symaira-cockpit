@@ -15,6 +15,7 @@ pub mod live;
 pub mod mcp;
 pub mod native;
 pub mod platform;
+pub mod write;
 
 use std::ffi::OsString;
 

@@ -192,6 +192,7 @@ pub fn app() -> App {
         legacy,
     };
     live::wire(&mut app);
+    crate::write::wire(&mut app);
     app
 }
 

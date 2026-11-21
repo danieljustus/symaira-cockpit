@@ -93,6 +93,8 @@ pub enum Params {
     },
     /// A command of one of the newer areas (`areas.rs`).
     Area(AreaInput),
+    /// A privileged write (`fan set`, `battery-limit`, `restore`, ...).
+    Write(symcockpit_core::write_commands::Command),
 }
 
 /// One read request, from the CLI or from an MCP `tools/call`.
@@ -158,6 +160,17 @@ pub const AREA_COMMANDS: [&str; 9] = [
     "metrics",
     "processes",
     "top",
+];
+
+/// The privileged write commands, wired in [`crate::write`] and absent from
+/// test apps (which therefore hand them to the Swift core).
+pub const WRITE_COMMANDS: [&str; 6] = [
+    "fan.set",
+    "fan.auto",
+    "fan.governor",
+    "battery-limit.set",
+    "battery-limit.clear",
+    "restore",
 ];
 
 #[derive(Default)]

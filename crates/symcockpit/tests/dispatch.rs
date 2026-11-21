@@ -289,8 +289,13 @@ fn help_of_read_commands_is_native_and_restore_is_forwarded() {
             .stdout
             .starts_with("Usage: symcockpit profile save")
     );
-    // The write families' usage text is native too (see the next test); `restore` has none.
-    assert!(forwarded(&a, &["restore", "--help"]));
+    // The write families' usage text is native too (see the next test); `restore` has none,
+    // so `--help` is an unexpected argument, as in v0.12.
+    let restore = done(&a, &["restore", "--help"]);
+    assert_eq!(
+        (restore.stderr.as_str(), restore.code),
+        ("symcockpit: restore: unexpected argument '--help'\n", 2)
+    );
 }
 
 #[test]
@@ -548,4 +553,100 @@ fn serve_is_a_separate_action_with_its_data_dir() {
         _ => panic!("not serving"),
     }
     assert_eq!(done(&a, &["serve", "--data-dir"]).code, 2);
+}
+
+#[test]
+fn write_commands_parse_natively_and_run_through_their_wired_handler() {
+    use symcockpit::app::WRITE_COMMANDS;
+    use symcockpit_core::write_commands::Command;
+
+    let tmp = home();
+    let mut a = app(tmp.path());
+    // Usage errors never reach a handler or the Swift core: v0.12's texts and exit 2.
+    for (line, message) in [
+        (
+            &["fan", "set"][..],
+            "fan set: expected a numeric value, e.g. `symcockpit fan set set 1.4`",
+        ),
+        (
+            &["fan", "set", "fast"],
+            "fan set: unexpected argument 'fast'",
+        ),
+        (&["fan", "auto", "x"], "fan auto: unexpected argument 'x'"),
+        (&["fan", "nan"], "Value must be finite."),
+        (
+            &["fan", "governor", "--state"],
+            "fan governor: --state requires a path.",
+        ),
+        (
+            &["battery-limit"],
+            "battery-limit set: expected an integer value, e.g. `symcockpit battery-limit set set 80`",
+        ),
+        (
+            &["battery-limit", "clear", "x"],
+            "battery-limit clear: unexpected argument 'x'",
+        ),
+        (&["restore", "now"], "restore: unexpected argument 'now'"),
+    ] {
+        let o = done(&a, line);
+        assert_eq!(
+            (o.stderr.as_str(), o.code),
+            (&*format!("symcockpit: {message}\n"), 2),
+            "{line:?}"
+        );
+    }
+
+    // Without a wired handler (a test app, a build without the live ports) the Swift core decides.
+    for line in [
+        &["fan", "set", "0.5"][..],
+        &["fan", "auto"],
+        &["fan", "governor"],
+        &["battery-limit", "set", "80"],
+        &["battery-limit", "clear"],
+        &["restore"],
+        &["fan", "profile", "comfort"],
+    ] {
+        assert!(forwarded(&a, line), "{line:?}");
+    }
+
+    // Wired: the parsed command reaches the handler, `{"applied": true}` comes back, errors keep their exit codes.
+    let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    for name in WRITE_COMMANDS {
+        let seen = seen.clone();
+        a.handlers.register(name, move |_, req: &Request| {
+            let Params::Write(command) = &req.params else {
+                panic!("not a write request");
+            };
+            seen.borrow_mut().push((req.command, command.clone()));
+            match command {
+                Command::Restore => Err(symcockpit_contract::Error::Permission("no".into())),
+                _ => Ok(Output::Json(json!({"applied": true}))),
+            }
+        });
+    }
+    let ok = done(&a, &["fan", "set", "0.5"]);
+    assert_eq!(
+        (ok.stdout.as_str(), ok.code),
+        ("{\n  \"applied\" : true\n}\n", 0)
+    );
+    assert_eq!(done(&a, &["fan", "0.25"]).code, 0);
+    assert_eq!(done(&a, &["fan", "auto"]).code, 0);
+    assert_eq!(done(&a, &["battery-limit", "set", "80"]).code, 0);
+    assert_eq!(done(&a, &["battery-limit", "clear"]).code, 0);
+    let denied = done(&a, &["restore"]);
+    assert_eq!(
+        (denied.stderr.as_str(), denied.code),
+        ("symcockpit: permission error: no\n", 3)
+    );
+    assert_eq!(
+        *seen.borrow(),
+        vec![
+            ("fan.set", Command::FanSet(0.5)),
+            ("fan.set", Command::FanSet(0.25)),
+            ("fan.auto", Command::FanAuto),
+            ("battery-limit.set", Command::ChargeSet(80)),
+            ("battery-limit.clear", Command::ChargeClear),
+            ("restore", Command::Restore),
+        ]
+    );
 }

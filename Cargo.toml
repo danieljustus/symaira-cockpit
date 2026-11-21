@@ -9,6 +9,8 @@ members = [
     "crates/symcockpit-store",
     "crates/symcockpit-db",
     "crates/symcockpit-ffi",
+    "crates/symcockpit-helper-proto",
+    "crates/symcockpit-helper",
     "crates/symcockpit",
     "crates/symcockpit-oracle",
 ]

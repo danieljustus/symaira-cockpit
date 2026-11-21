@@ -14,13 +14,13 @@ const MAX_ENUMERATION_KEYS: usize = 4096;
 const PROBE_KEY: [u8; 4] = *b"#KEY";
 
 #[derive(Clone)]
-struct KeyInfo {
-    size: usize,
-    data_type: [u8; 4],
-    block: ParamBlock,
+pub(super) struct KeyInfo {
+    pub(super) size: usize,
+    pub(super) data_type: [u8; 4],
+    pub(super) block: ParamBlock,
 }
 
-/// Live, read-only AppleSMC connection. Closed (`is_open() == false`) when the
+/// Live AppleSMC connection (reads here; the write command lives in `write`). Closed (`is_open() == false`) when the
 /// driver is missing, refuses the user client, or answers `kSMCKeyNotFound` to
 /// `#KEY` (macOS builds that block unprivileged SMC access, issue #210).
 pub struct LiveSmc {
@@ -37,7 +37,12 @@ impl LiveSmc {
         IoKit::connect().map_or_else(Self::closed, |io| Self::with_transport(Box::new(io)))
     }
 
-    fn closed() -> Self {
+    /// Reachable for a write: the firmware answered the open probe.
+    pub(super) fn is_open_for_write(&self) -> bool {
+        self.transport.is_some()
+    }
+
+    pub(super) fn closed() -> Self {
         Self {
             transport: None,
             key_info: Mutex::default(),
@@ -47,7 +52,7 @@ impl LiveSmc {
 
     /// A transport success only proves the driver answered; the firmware's own
     /// verdict (`result == 0` for `#KEY`) decides whether the SMC is usable.
-    fn with_transport(transport: Box<dyn Transport>) -> Self {
+    pub(super) fn with_transport(transport: Box<dyn Transport>) -> Self {
         let mut probe = ParamBlock::new(Command::ReadKeyInfo);
         probe.set_key(PROBE_KEY);
         let open = transport.call(&probe).is_some_and(|out| out.result() == 0);
@@ -57,12 +62,12 @@ impl LiveSmc {
         }
     }
 
-    fn call(&self, input: &ParamBlock) -> Option<ParamBlock> {
+    pub(super) fn call(&self, input: &ParamBlock) -> Option<ParamBlock> {
         self.transport.as_ref()?.call(input)
     }
 
     /// `READ_KEYINFO` for a key, cached. `None` for keys this Mac lacks.
-    fn key_info(&self, key: [u8; 4]) -> Option<KeyInfo> {
+    pub(super) fn key_info(&self, key: [u8; 4]) -> Option<KeyInfo> {
         if let Some(cached) = self.key_info.lock().unwrap().get(&key) {
             return cached.clone();
         }
@@ -118,7 +123,7 @@ fn parse_key_count(bytes: &[u8]) -> usize {
 }
 
 /// Swift encodes a key that is not exactly four bytes as 0, which never exists.
-fn key4(key: &str) -> Option<[u8; 4]> {
+pub(super) fn key4(key: &str) -> Option<[u8; 4]> {
     key.as_bytes().try_into().ok()
 }
 

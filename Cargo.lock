@@ -1127,6 +1127,7 @@ dependencies = [
  "symcockpit-contract",
  "symcockpit-core",
  "symcockpit-db",
+ "symcockpit-helper-proto",
  "symcockpit-macos",
  "symcockpit-store",
  "symcockpit-testkit",
@@ -1154,7 +1155,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "symcockpit-contract",
+ "symcockpit-helper-proto",
  "symcockpit-store",
+ "symcockpit-testkit",
  "tempfile",
 ]
 
@@ -1182,9 +1185,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "symcockpit-helper"
+version = "0.12.2"
+dependencies = [
+ "symcockpit-contract",
+ "symcockpit-core",
+ "symcockpit-helper-proto",
+ "symcockpit-macos",
+ "symcockpit-store",
+ "symcockpit-testkit",
+ "tempfile",
+]
+
+[[package]]
+name = "symcockpit-helper-proto"
+version = "0.12.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "symcockpit-macos"
 version = "0.12.2"
 dependencies = [
+ "block2",
  "core-foundation",
  "core-foundation-sys",
  "coremidi",
@@ -1204,7 +1229,9 @@ dependencies = [
  "serde_json",
  "symcockpit-contract",
  "symcockpit-core",
+ "symcockpit-helper-proto",
  "symcockpit-oracle",
+ "symcockpit-store",
  "symcockpit-testkit",
  "tempfile",
  "trash",
@@ -1240,6 +1267,7 @@ dependencies = [
  "symcockpit-db",
  "symcockpit-macos",
  "symcockpit-oracle",
+ "symcockpit-store",
  "tempfile",
 ]
 

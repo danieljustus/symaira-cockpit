@@ -1,0 +1,16 @@
+[package]
+name = "symcockpit-helper-proto"
+description = "Wire protocol between the Cockpit agent/CLI and the privileged helper (versioned JSON messages)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
