@@ -10,12 +10,10 @@
 | 0 | F2 Orakel-Fixtures aus Swift v0.12 (70 Fälle) | ✅ 2026-11-20; Abnahme Stufe 0: 70/70 grün gegen Swift und gegen das weiterleitende Rust-Binary | `oracle/v0.12/`, Rohdaten `Dev/evidence/symaira-cockpit/cockpit2-oracle/` |
 | 0 | F4 Desktop-Issue PDF-Kompression | ✅ [symaira-desktop#1408](https://github.com/danieljustus/symaira-desktop/issues/1408) | |
 | 0 | F3 Produktvertrag Revision 9 | ✅ 2026-11-20, kanonisch plus 8 Repos lokal committet | `Repos/docs/product-boundaries.md`, Backup `Repos/docs/docs-sync/2026-11-20-cockpit2-rev9/` |
-| 1 | Lesepfad: SMC, Sensoren, Lüfter, Leistung, IOReport, GPU, Prozesse, Akku, Displays; CLI und die 12 MCP-Lesetools aus Rust (von 26 Tools insgesamt); Prozess beenden über Plan | ⏳ 5 Worker parallel (1A SMC und Sensoren, 1B Akku und Energie, 1C Displays, 1D Metriken und Prozesse, 1E Dispatcher, serve, Systembefehle) | |
-| 2 | Schreibpfad, Rust-Helfer, Agent-Protokoll, App auf Rust, Swift-Kern entfernen | offen | |
-| 3 | Speicher | offen | |
-| 4 | Audio und MIDI | offen | |
-| 5 | Bluetooth und Eingabe | offen | |
-| 6 | Finder und Zwischenablage | offen | |
+| 1 | Lesepfad: SMC, Sensoren, Lüfter, Leistung, IOReport, GPU, Prozesse, Akku, Displays; CLI und die 12 MCP-Lesetools aus Rust (von 26 Tools insgesamt) | ✅ 2026-11-20 integriert; Orakel 70/70 voll und ohne Swift-Binary | `main` bis fcd8e78 |
+| 3, 4, 5 | Speicher (Gesundheit, Speedtest, Platz, Plan-Engine, Bereinigung, Duplikate, Deinstallation), Audio und MIDI, Bluetooth und Eingabe als Rust-Bereiche | ✅ 2026-11-21 zusammengeführt; fmt, clippy sauber, 527 Tests grün, Orakel 70/70 voll und nativ; Verdrahtung in CLI und MCP läuft (Integration 2, inkl. Prozess beenden über Plan) | `main` 5f43dd4 |
+| 2 | Schreibpfad: 2A Rust-Helfer, Lüfter, Ladegrenze, SMC-Restore; 2B Helligkeit, EDR, Dimmen, Wärme, Wachhalten, Profile; 2C App-Agent; danach 2D App auf Rust und Swift-Kern entfernen | ⏳ 2A bis 2C laufen parallel (Neustart 2026-11-21 nach Rate-Limit-Abbruch) | |
+| 6 | Finder und Zwischenablage | ⏳ läuft parallel | |
 | 7 | Release-Vorbereitung (arm64, Signatur, Cask mit CLI-Link, Formula nur CLI) | offen | |
 
 ## Gesammelte menschliche Abnahmen (am Ende)
