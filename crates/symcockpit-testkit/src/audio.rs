@@ -608,7 +608,7 @@ mod tests {
     use symcockpit_core::audio::mixer::{
         AppMixer, AppSetting, Mixer, MixerControl, Shared, State, run_loop,
     };
-    use symcockpit_core::audio::{AudioService, BoundAudioPlan, PlannedAction, Readback};
+    use symcockpit_core::audio::{AudioPlan, AudioService, Readback};
 
     use super::*;
 
@@ -919,20 +919,60 @@ mod tests {
     }
 
     #[test]
-    fn plans_are_risky_and_run_through_the_planned_action_trait() {
+    fn plans_are_risky_and_run_through_the_plan_engine() {
+        use crate::storage_clean::{FixedClock, MemoryStore};
+        use symcockpit_core::audio::AudioPlanAction;
+        use symcockpit_core::plan::Engine;
+
         let (hal, svc) = two();
         let svc = Arc::new(svc);
         let plan = svc.plan_format("a", 48000.0, None).unwrap();
-        let item = plan.item();
+        let item = plan.engine_item();
         assert_eq!(item["risk"], "risky");
         assert_eq!(item["action"], "audio.format.set");
-        let action: Box<dyn PlannedAction> = Box::new(BoundAudioPlan {
-            service: svc.clone(),
-            plan,
-        });
-        assert_eq!(action.risk(), symcockpit_contract::Risk::Risky);
-        assert_eq!(action.execute().outcome, Outcome::Confirmed);
+        // The recorded item gives back the same plan.
+        assert_eq!(AudioPlan::from_item(&item).unwrap(), plan);
+
+        let (store, clock) = (MemoryStore::default(), FixedClock::new(1_000));
+        let open = || Ok(svc.clone());
+        let action = AudioPlanAction {
+            kind: "audio.format.set",
+            service: &open,
+        };
+        let engine = Engine::new(&store, &clock).register(&action);
+        let stored = engine.create("audio_format", vec![item]).unwrap();
+        assert_eq!(
+            hal.device("a").unwrap().sample_rate,
+            Some(44100.0),
+            "planning writes nothing"
+        );
+        let report = engine.confirm(&stored.id).unwrap();
+        assert_eq!(report.status, Outcome::Confirmed);
         assert_eq!(hal.device("a").unwrap().sample_rate, Some(48000.0));
+    }
+
+    #[test]
+    fn a_device_that_changed_since_the_plan_is_skipped_at_confirm() {
+        use crate::storage_clean::{FixedClock, MemoryStore};
+        use symcockpit_core::audio::AudioPlanAction;
+        use symcockpit_core::plan::Engine;
+
+        let (hal, svc) = two();
+        let svc = Arc::new(svc);
+        let plan = svc.plan_format("a", 48000.0, None).unwrap();
+        let (store, clock) = (MemoryStore::default(), FixedClock::new(1_000));
+        let open = || Ok(svc.clone());
+        let action = AudioPlanAction {
+            kind: "audio.format.set",
+            service: &open,
+        };
+        let engine = Engine::new(&store, &clock).register(&action);
+        let stored = engine
+            .create("audio_format", vec![plan.engine_item()])
+            .unwrap();
+        hal.unplug("a");
+        let report = engine.confirm(&stored.id).unwrap();
+        assert_eq!(report.status, Outcome::SkippedChanged);
     }
 
     // ----------------------------------------------------------- R42 aggregates

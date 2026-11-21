@@ -185,8 +185,10 @@ mod tests {
     use serde_json::{Value, json};
     use symcockpit_contract::Outcome;
     use symcockpit_core::bluetooth::*;
+    use symcockpit_core::plan::Engine;
 
     use super::*;
+    use crate::storage_clean::{FixedClock, MemoryStore};
 
     const SVC: &str = "180F";
     const CHR: &str = "2A19";
@@ -356,8 +358,10 @@ mod tests {
     #[test]
     fn plan_touches_no_device() {
         let c = central();
-        let plan = plan_ble_write_json(&request(true)).unwrap();
-        assert_eq!(plan["item"]["value_hex"], "0a0b");
+        let (store, clock) = (MemoryStore::default(), FixedClock::new(1_000));
+        let plan = plan_ble_write_json(&Engine::new(&store, &clock), &request(true)).unwrap();
+        assert_eq!(plan["items"][0]["value_hex"], "0a0b");
+        assert_eq!(plan["kind"], "ble_write");
         assert_eq!(c.counters.borrow().connects, 0);
     }
 
@@ -450,6 +454,7 @@ mod tests {
         let mut l = log();
         let t = Duration::from_secs(1);
         let write = action(&c);
+        let (store, clock) = (MemoryStore::default(), FixedClock::new(1_000));
         let checks: Vec<(&str, Value)> = vec![
             ("bt.devices", bt_devices_json(&paired).unwrap()),
             (
@@ -470,7 +475,7 @@ mod tests {
             ),
             (
                 "ble.write.plan",
-                plan_ble_write_json(&request(true)).unwrap(),
+                plan_ble_write_json(&Engine::new(&store, &clock), &request(true)).unwrap(),
             ),
             (
                 "ble.write",

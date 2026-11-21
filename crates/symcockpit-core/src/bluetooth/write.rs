@@ -2,8 +2,8 @@
 //! reported separately, and the result is a post-condition (Q01).
 //!
 //! The write is an *action behind a trait* so the plan engine can hold it:
-//! `plan_ble_write_json` builds the plan item without touching a device, and
-//! `BleWriteAction::execute` runs it after confirmation.
+//! `plan_ble_write_json` records the plan item without touching a device, and
+//! [`BlePlanAction`] runs it after confirmation.
 
 use std::time::Duration;
 
@@ -12,6 +12,10 @@ use serde_json::{Value, json};
 use symcockpit_contract::{Error, Outcome};
 
 use super::ble::{BleCentral, WriteAck, normalize_uuid};
+use crate::plan::{Action, ItemResult};
+
+/// The `"action"` of a recorded BLE write.
+pub const BLE_WRITE_KIND: &str = "ble_write";
 
 /// ATT allows at most 512 bytes in one attribute value.
 const MAX_VALUE_LEN: usize = 512;
@@ -76,7 +80,7 @@ impl WriteRequest {
     /// The plan item the plan engine stores (`contract::Plan::items`).
     pub fn to_plan_item(&self) -> Value {
         json!({
-            "action": "ble_write",
+            "action": BLE_WRITE_KIND,
             "device_id": self.device_id,
             "service": self.service,
             "characteristic": self.characteristic,
@@ -245,6 +249,52 @@ impl BleWriteAction for LinkWriteAction<'_> {
             readback,
             outcome,
         })
+    }
+}
+
+/// Runs a recorded `ble_write` item. The central is built on first use, so
+/// confirming another kind of plan never starts Bluetooth.
+pub struct BlePlanAction<'a> {
+    pub central: &'a dyn Fn() -> Result<Box<dyn BleCentral>, Error>,
+    pub connect_timeout: Duration,
+}
+
+impl Action for BlePlanAction<'_> {
+    fn kind(&self) -> &'static str {
+        BLE_WRITE_KIND
+    }
+
+    fn still_valid(&self, item: &Value) -> Result<(), String> {
+        WriteRequest::from_plan_item(item)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn execute(&self, item: &Value) -> ItemResult {
+        let run = || -> Result<WriteReport, Error> {
+            let request = WriteRequest::from_plan_item(item)?;
+            let central = (self.central)()?;
+            LinkWriteAction {
+                central: &*central,
+                connect_timeout: self.connect_timeout,
+            }
+            .execute(&request)
+        };
+        match run() {
+            Ok(report) => {
+                let problems: Vec<String> = report
+                    .stages
+                    .iter()
+                    .filter(|s| s.status != "ok" && s.status != "not_applicable")
+                    .map(|s| format!("{:?}: {} ({})", s.stage, s.status, s.detail))
+                    .collect();
+                ItemResult::new(
+                    report.outcome,
+                    (!problems.is_empty()).then(|| problems.join("; ")),
+                )
+            }
+            Err(e) => ItemResult::new(Outcome::Failed, e.to_string()),
+        }
     }
 }
 

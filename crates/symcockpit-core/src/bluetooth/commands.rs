@@ -9,7 +9,8 @@ use symcockpit_contract::Error;
 use super::ble::{BleCentral, ScanFilter, normalize_uuid};
 use super::devices::PairedDevices;
 use super::log::{BleLog, ExportFormat, LogKind, export_csv, export_json};
-use super::write::{BleWriteAction, WriteReport, WriteRequest, to_hex};
+use super::write::{BLE_WRITE_KIND, BleWriteAction, WriteReport, WriteRequest, to_hex};
+use crate::plan::Engine;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -141,14 +142,15 @@ pub fn ble_subscribe_json(
     }))
 }
 
-/// MCP `plan_ble_write`: validates and describes the write; touches no device.
-pub fn plan_ble_write_json(request: &WriteRequest) -> Result<Value, Error> {
-    Ok(json!({
-        "risk": "risky",
-        "state": "requested",
-        "item": request.to_plan_item(),
-        "steps": ["request", "sent", "acknowledged", "readback"],
-    }))
+/// `plan_ble_write` / `ble write`: records the plan; no device is touched.
+pub fn plan_ble_write_json(engine: &Engine, request: &WriteRequest) -> Result<Value, Error> {
+    let mut item = request.to_plan_item();
+    item["target"] = json!(format!(
+        "{} {}/{}",
+        request.device_id, request.service, request.characteristic
+    ));
+    let plan = engine.create(BLE_WRITE_KIND, vec![item])?;
+    Ok(engine.plan_json(&plan))
 }
 
 /// `symcockpit ble write ...` after confirmation (TTY prompt or plan).

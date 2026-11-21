@@ -20,6 +20,6 @@ pub use commands::{
 pub use devices::{Battery, Level, PairedDevice, PairedDevices, parse_system_profiler};
 pub use log::{BleLog, ExportFormat, LogEntry, LogKind, export_csv, export_json};
 pub use write::{
-    AckState, BleWriteAction, LinkWriteAction, StageRecord, WriteReport, WriteRequest, WriteStage,
-    from_hex, to_hex,
+    AckState, BLE_WRITE_KIND, BlePlanAction, BleWriteAction, LinkWriteAction, StageRecord,
+    WriteReport, WriteRequest, WriteStage, from_hex, to_hex,
 };

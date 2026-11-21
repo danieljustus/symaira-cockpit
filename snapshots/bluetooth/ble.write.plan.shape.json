@@ -1,39 +1,60 @@
 {
   "properties": {
-    "item": {
-      "properties": {
-        "action": {
-          "type": "string"
-        },
-        "characteristic": {
-          "type": "string"
-        },
-        "device_id": {
-          "type": "string"
-        },
-        "service": {
-          "type": "string"
-        },
-        "value_hex": {
-          "type": "string"
-        },
-        "with_response": {
-          "type": "boolean"
-        }
-      },
-      "type": "object"
+    "created_at": {
+      "type": "string"
     },
-    "risk": {
+    "digest": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "expires_in_s": {
+      "type": "number"
+    },
+    "id": {
+      "type": "string"
+    },
+    "item_count": {
+      "type": "number"
+    },
+    "items": {
+      "items": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "characteristic": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "value_hex": {
+            "type": "string"
+          },
+          "with_response": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
       "type": "string"
     },
     "state": {
       "type": "string"
     },
-    "steps": {
-      "items": {
-        "type": "string"
-      },
-      "type": "array"
+    "total_bytes": {
+      "type": "number"
     }
   },
   "type": "object"

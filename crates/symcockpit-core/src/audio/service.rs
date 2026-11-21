@@ -18,6 +18,7 @@ use super::hal::{
     StreamFormat,
 };
 use super::registry::{Changes, DeviceHandle, DeviceRegistry};
+use crate::plan::{Action, ItemResult};
 
 /// Volume and mute are scalars the device may quantise; a readback within this
 /// distance counts as the requested value.
@@ -146,33 +147,92 @@ impl AudioPlan {
     }
 }
 
-/// An action the plan engine can hold, show and run. Implemented by
-/// [`BoundAudioPlan`]; the engine stores `Box<dyn PlannedAction>`.
-pub trait PlannedAction: Send {
-    fn action_id(&self) -> &'static str;
-    fn risk(&self) -> Risk;
-    fn item(&self) -> Value;
-    /// Revalidates identity first; never panics, always reports an outcome.
-    fn execute(&self) -> ActionReport;
+impl AudioPlan {
+    /// What the user sees as the target of the plan item.
+    fn target(&self) -> &str {
+        match &self.action {
+            AudioAction::SetFormat { uid, .. } | AudioAction::DeleteAggregate { uid } => uid,
+            AudioAction::CreateAggregate(spec) => &spec.name,
+        }
+    }
+
+    /// [`Self::item`] with the `target` the plan engine requires.
+    pub fn engine_item(&self) -> Value {
+        let mut item = self.item();
+        item["target"] = json!(self.target());
+        item
+    }
+
+    /// Inverse of [`Self::engine_item`]: the plan as it was recorded.
+    pub fn from_item(item: &Value) -> Result<AudioPlan, String> {
+        let params = &item["params"];
+        let text = |key: &str| {
+            params[key]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| format!("plan item without {key}"))
+        };
+        let action = match item["action"].as_str() {
+            Some("audio.format.set") => AudioAction::SetFormat {
+                uid: text("uid")?,
+                scope: Scope::parse(&text("direction")?).map_err(|e| e.to_string())?,
+                rate: params["rate"].as_f64().ok_or("plan item without rate")?,
+                bits: params["bits"].as_u64().and_then(|b| u32::try_from(b).ok()),
+            },
+            Some("audio.aggregate.create") => AudioAction::CreateAggregate(AggregateSpec {
+                name: text("name")?,
+                uid: text("uid")?,
+                main_uid: text("main")?,
+                member_uids: params["members"]
+                    .as_array()
+                    .ok_or("plan item without members")?
+                    .iter()
+                    .filter_map(|m| m.as_str().map(str::to_owned))
+                    .collect(),
+                stacked: params["multi_output"].as_bool().unwrap_or(false),
+            }),
+            Some("audio.aggregate.delete") => AudioAction::DeleteAggregate { uid: text("uid")? },
+            other => return Err(format!("not an audio plan item: {other:?}")),
+        };
+        Ok(AudioPlan {
+            action,
+            identity: item["identity"].clone(),
+        })
+    }
 }
 
-pub struct BoundAudioPlan {
-    pub service: Arc<AudioService>,
-    pub plan: AudioPlan,
+/// Runs the audio items of a stored plan. The service is built on first use,
+/// so confirming a cleanup plan never opens the audio HAL. The device identity
+/// is revalidated inside [`AudioService::execute`] (`skipped_changed`).
+pub struct AudioPlanAction<'a> {
+    pub kind: &'static str,
+    pub service: &'a dyn Fn() -> Result<Arc<AudioService>, Error>,
 }
 
-impl PlannedAction for BoundAudioPlan {
-    fn action_id(&self) -> &'static str {
-        self.plan.action_id()
+impl Action for AudioPlanAction<'_> {
+    fn kind(&self) -> &'static str {
+        self.kind
     }
-    fn risk(&self) -> Risk {
-        self.plan.risk()
+
+    fn still_valid(&self, item: &Value) -> Result<(), String> {
+        AudioPlan::from_item(item).map(|_| ())
     }
-    fn item(&self) -> Value {
-        self.plan.item()
-    }
-    fn execute(&self) -> ActionReport {
-        self.service.execute(&self.plan)
+
+    fn execute(&self, item: &Value) -> ItemResult {
+        let result = AudioPlan::from_item(item)
+            .map_err(Error::Failed)
+            .and_then(|plan| Ok((self.service)()?.execute(&plan)));
+        match result {
+            Ok(report) => {
+                let detail = report
+                    .error
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .or(report.detail);
+                ItemResult::new(report.outcome, detail)
+            }
+            Err(e) => ItemResult::new(Outcome::Failed, e.to_string()),
+        }
     }
 }
 

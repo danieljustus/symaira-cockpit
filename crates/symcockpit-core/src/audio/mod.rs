@@ -12,6 +12,5 @@ mod service;
 pub use hal::*;
 pub use registry::{Changes, DeviceHandle, DeviceRecord, DeviceRegistry};
 pub use service::{
-    ActionReport, AudioAction, AudioPlan, AudioService, BoundAudioPlan, PlannedAction, Readback,
-    VOLUME_TOLERANCE,
+    ActionReport, AudioAction, AudioPlan, AudioPlanAction, AudioService, Readback, VOLUME_TOLERANCE,
 };
