@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use symcockpit_contract::{Error, Outcome};
-use symcockpit_store::history_log;
 use symcockpit_store::state_perms::Owner;
+use symcockpit_store::{HistoryEvent, append_history_event};
 
 use crate::battery::BatterySource;
 use crate::charge_limit::{self, ChargeEnv, MacChargeLimit, Mechanism};
@@ -173,18 +173,17 @@ impl WriteEnv<'_> {
         values: (Option<f64>, Option<f64>, Option<f64>),
         result: &Result<(), Error>,
     ) {
-        let reason = result.as_ref().err().map(ToString::to_string);
-        let now = (self.now)();
-        let event = history_log::Event {
-            timestamp: &now,
-            action,
-            requested: values.0,
-            clamped: values.1,
-            applied: values.2,
-            result: if result.is_ok() { "success" } else { "failed" },
-            error_reason: reason.as_deref(),
+        let event = HistoryEvent {
+            timestamp: (self.now)(),
+            action: action.to_owned(),
+            requested_value: values.0,
+            clamped_value: values.1,
+            applied_value: values.2,
+            result: if result.is_ok() { "success" } else { "failed" }.to_owned(),
+            error_reason: result.as_ref().err().map(ToString::to_string),
         };
-        if let Err(e) = history_log::append(self.data_dir, self.owner, &event) {
+        let file = self.data_dir.join("history.ndjson");
+        if let Err(e) = append_history_event(&file, &event, self.owner) {
             eprintln!("symtune: warning: failed to write history event: {e}");
         }
     }

@@ -260,7 +260,7 @@ mod tests {
         r.writer.apply_dim(0.4).unwrap();
         r.writer.apply_warmth(0.6).unwrap();
         r.writer.apply_builtin_brightness(0.8).unwrap();
-        r.writer.restore_all();
+        r.writer.restore_displays();
         assert_eq!(r.writer.dim_level(), 1.0);
         assert_eq!(r.writer.warmth_level(), 0.0);
         assert!(r.writer.active_overrides().is_empty());
@@ -270,7 +270,7 @@ mod tests {
             "the original brightness is back"
         );
         r.writer.apply_warmth(0.3).unwrap();
-        r.writer.restore_all();
+        r.writer.restore_displays();
         assert_eq!(r.writer.warmth_level(), 0.0);
         assert_eq!(
             read_record(tmp.path()).unwrap(),
@@ -301,7 +301,7 @@ mod tests {
         );
         // A failed EDR attempt still resets the gamma table on restore.
         r.hw.calls.borrow_mut().clear();
-        r.writer.restore_all();
+        r.writer.restore_displays();
         assert!(r.hw.calls().contains(&"gamma.restore".to_owned()));
     }
 
@@ -521,21 +521,6 @@ mod tests {
         std::mem::forget(r.writer);
     }
 
-    #[test]
-    fn restore_runs_the_registered_smc_hook() {
-        let tmp = tempfile::tempdir().unwrap();
-        let r = rig(tmp.path());
-        let hits = Rc::new(Cell::new(0));
-        assert!(!r.writer.has_smc_restore());
-        let h = hits.clone();
-        r.writer
-            .set_smc_restore(Box::new(move || h.set(h.get() + 1)));
-        r.writer.restore_all();
-        assert_eq!(hits.get(), 1);
-        drop(r);
-        assert_eq!(hits.get(), 2, "restore-on-exit covers the SMC too");
-    }
-
     // ---- keep awake
 
     #[test]
@@ -600,7 +585,7 @@ mod tests {
         assert_eq!(saved.warmth, Some(f64::from(0.4_f32)));
         assert_eq!(saved.version.as_deref(), Some("0.12.2"));
 
-        r.writer.restore_all();
+        r.writer.restore_displays();
         assert_eq!(r.writer.dim_level(), 1.0);
         r.writer.load_profile("evening").unwrap();
         assert!((r.writer.dim_level() - 0.6).abs() < 1e-6);

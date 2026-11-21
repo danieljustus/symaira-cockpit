@@ -38,6 +38,7 @@ use symcockpit_macos::display_write::{
     pump_run_loop, restore_on_signal,
 };
 use symcockpit_macos::system::running_as_root;
+use symcockpit_store::state_perms::{Owner, owner_of_path, ownership_to_restore};
 use symcockpit_store::{HistoryEvent, append_history_event};
 
 use crate::app::{Context, Output};
@@ -217,7 +218,7 @@ impl KeepAwakeStatus for SessionView {
 
 struct FileHistory {
     file: PathBuf,
-    is_root: bool,
+    owner: Option<Owner>,
 }
 
 impl HistorySink for FileHistory {
@@ -233,7 +234,7 @@ impl HistorySink for FileHistory {
             result: if event.success { "success" } else { "failed" }.to_owned(),
             error_reason: event.error.clone(),
         };
-        if let Err(e) = append_history_event(&self.file, &stamped, self.is_root) {
+        if let Err(e) = append_history_event(&self.file, &stamped, self.owner) {
             // Swift's text; a lost history line never fails the command.
             eprintln!("symtune: warning: failed to write history event: {e}");
         }
@@ -278,7 +279,7 @@ fn build_live(ctx: &Context) -> Result<TuneWriter, Error> {
         power: Arc::new(LivePowerAssertions),
         history: Box::new(FileHistory {
             file: data_dir.join("history.ndjson"),
-            is_root,
+            owner: ownership_to_restore(&data_dir, is_root, &owner_of_path, None),
         }),
         limits: Limits::from(ctx.config),
         data_dir: data_dir.clone(),

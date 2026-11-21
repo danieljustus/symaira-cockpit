@@ -41,6 +41,7 @@ use symcockpit_contract::agent_proto::{
     UnsubscribeParams, VERSION_MISMATCH, VisibilityParams, command_error,
 };
 use symcockpit_contract::{CommandSpec, Error, Outcome, PROTOCOL_VERSION, Risk, commands, exit};
+use symcockpit_core::clock::{Monotonic, SystemMonotonic};
 use symcockpit_core::plan::{
     Action, Clock, Engine, ItemResult, PlanStore, StoredPlan, SystemClock,
 };
@@ -129,25 +130,6 @@ pub trait Dispatch {
 impl Dispatch for mcp::Server<'_> {
     fn run(&self, spec: &'static CommandSpec, params: &Map<String, Value>) -> Result<Value, Error> {
         self.run_spec(spec, params)
-    }
-}
-
-/// Milliseconds on a monotonic clock; a fake in tests.
-pub trait Mono {
-    fn now_ms(&self) -> u64;
-}
-
-pub struct RealMono(Instant);
-
-impl RealMono {
-    pub fn start() -> Self {
-        Self(Instant::now())
-    }
-}
-
-impl Mono for RealMono {
-    fn now_ms(&self) -> u64 {
-        u64::try_from(self.0.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
 
@@ -305,7 +287,7 @@ impl Subscription {
 /// clocks, so tests drive it with fakes and a counting dispatch.
 pub struct Session<'a> {
     dispatch: &'a dyn Dispatch,
-    mono: &'a dyn Mono,
+    mono: &'a dyn Monotonic,
     plan_clock: &'a dyn Clock,
     plans: MemoryPlans,
     ready: bool,
@@ -316,7 +298,11 @@ pub struct Session<'a> {
 }
 
 impl<'a> Session<'a> {
-    pub fn new(dispatch: &'a dyn Dispatch, mono: &'a dyn Mono, plan_clock: &'a dyn Clock) -> Self {
+    pub fn new(
+        dispatch: &'a dyn Dispatch,
+        mono: &'a dyn Monotonic,
+        plan_clock: &'a dyn Clock,
+    ) -> Self {
         Self {
             dispatch,
             mono,
@@ -692,7 +678,7 @@ fn wait_input(
 /// Serves until end of input, SIGTERM or a closed stdout. Returns the exit code.
 pub fn run_loop(
     session: &mut Session,
-    mono: &dyn Mono,
+    mono: &dyn Monotonic,
     inputs: &mpsc::Receiver<Input>,
     out: &mut impl Write,
 ) -> u8 {
@@ -703,7 +689,7 @@ pub fn run_loop(
 /// while a tap is installed.
 pub fn run_loop_with(
     session: &mut Session,
-    mono: &dyn Mono,
+    mono: &dyn Monotonic,
     inputs: &mpsc::Receiver<Input>,
     out: &mut impl Write,
     host: Option<&dyn AgentHost>,
@@ -844,7 +830,7 @@ pub fn main(app: &App, args: &[String]) -> u8 {
         services: &app.services,
     };
     let server = mcp::Server::new(app, &ctx);
-    let mono = RealMono::start();
+    let mono = SystemMonotonic;
     // The long-lived services (clipboard, mixer, Finder jobs, event tap, BLE) start and end with
     // this process. The run loop belongs to this, the main, thread.
     let platform =
@@ -910,10 +896,11 @@ mod tests {
         }
     }
 
-    impl Mono for Fake {
+    impl Monotonic for Fake {
         fn now_ms(&self) -> u64 {
             self.now.get()
         }
+        fn sleep(&self, _: Duration) {}
     }
 
     impl Dispatch for Fake {

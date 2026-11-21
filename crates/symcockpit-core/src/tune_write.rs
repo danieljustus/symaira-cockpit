@@ -1,7 +1,7 @@
 //! The unprivileged write surface of `TuneController`: brightness, extended
 //! brightness, dim, warmth, profiles, keep-awake and the restore of display and
 //! keep-awake overrides (the SMC half of `restore` belongs to the fan/charge
-//! area and plugs in through [`TuneWriter::set_smc_restore`]).
+//! area: `writes::restore` in the binary crate calls its handler).
 //!
 //! Hard rules (tuning/AGENTS.md): every value is clamped through the safety
 //! limits before it reaches a port, a non-finite value is refused first, and
@@ -104,7 +104,6 @@ pub struct TuneWriter {
     ports: WriterPorts,
     tracker: RefCell<Tracker>,
     coordinator: KeepAwakeCoordinator,
-    smc_restore: RefCell<Option<Box<dyn Fn()>>>,
     shut_down: Cell<bool>,
 }
 
@@ -125,21 +124,10 @@ impl TuneWriter {
             ports,
             tracker: RefCell::default(),
             coordinator,
-            smc_restore: RefCell::default(),
             shut_down: Cell::new(false),
         };
         writer.consume_persisted_restore();
         writer
-    }
-
-    /// The fan/charge area registers its restore here so `restore` and the
-    /// restore-on-exit cover the SMC too.
-    pub fn set_smc_restore(&self, restore: Box<dyn Fn()>) {
-        *self.smc_restore.borrow_mut() = Some(restore);
-    }
-
-    pub fn has_smc_restore(&self) -> bool {
-        self.smc_restore.borrow().is_some()
     }
 
     fn consume_persisted_restore(&self) {
@@ -326,18 +314,11 @@ impl TuneWriter {
     // -------------------------------------------------------------- restore
 
     /// The display half of `restoreAll`: what this process overrode, then the
-    /// dim overlay. No SMC and no history line: a caller that has no SMC hook
-    /// hands the rest to the Swift core, which logs the restore itself.
+    /// dim overlay. No SMC and no history line: the caller runs the fan/charge
+    /// area's `restore` handler, which logs the restore.
     pub fn restore_displays(&self) {
         self.restore_tracked();
         self.ports.display.reset_dim();
-    }
-
-    /// `restoreAll`: display overrides, the dim overlay, then the SMC hook.
-    pub fn restore_all(&self) {
-        self.restore_displays();
-        self.run_smc_restore();
-        self.log("restore", None, Ok(()));
     }
 
     fn restore_tracked(&self) {
@@ -351,12 +332,6 @@ impl TuneWriter {
         }
     }
 
-    fn run_smc_restore(&self) {
-        if let Some(restore) = self.smc_restore.borrow().as_ref() {
-            restore();
-        }
-    }
-
     /// Process end (`deinit`): idempotent, silent, no history line.
     pub fn shutdown(&self) {
         if self.shut_down.replace(true) {
@@ -365,7 +340,6 @@ impl TuneWriter {
         self.coordinator.end();
         self.restore_displays();
         self.ports.display.remove_extended();
-        self.run_smc_restore();
     }
 
     // ------------------------------------------------------------ keep-awake

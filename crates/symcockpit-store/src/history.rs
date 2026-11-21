@@ -4,9 +4,14 @@
 //! older flat shapes are migrated in memory. Unlike Swift this never creates
 //! the file, its directory or the lock file.
 
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use serde_json::{Map, Value};
+
+use crate::redact::redact;
+use crate::state_perms::{self, Owner};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HistoryRecord {
@@ -208,56 +213,70 @@ pub struct HistoryEvent {
 /// Events kept in the file (`CanonicalHistoryStore.maxEvents`).
 const MAX_EVENTS: usize = 1000;
 
+/// Swift's `JSONEncoder` writes 80.0 as `80`.
+fn number(v: f64) -> Value {
+    if v.fract() == 0.0 && v.abs() < 1e15 {
+        Value::from(v as i64)
+    } else {
+        Value::from(v)
+    }
+}
+
+/// The canonical line; every string passes `SecretRedactor` first
+/// (`CanonicalHistoryEvent.redacted()`).
 fn envelope(event: &HistoryEvent) -> String {
+    let (timestamp, action) = (redact(&event.timestamp), redact(&event.action));
     let mut payload = Map::new();
-    payload.insert("timestamp".into(), event.timestamp.clone().into());
-    payload.insert("action".into(), event.action.clone().into());
-    payload.insert("result".into(), event.result.clone().into());
+    payload.insert("timestamp".into(), timestamp.clone().into());
+    payload.insert("action".into(), action.clone().into());
+    payload.insert("result".into(), redact(&event.result).into());
     for (key, value) in [
         ("requested_value", event.requested_value),
         ("clamped_value", event.clamped_value),
         ("applied_value", event.applied_value),
     ] {
         if let Some(v) = value {
-            payload.insert(key.into(), v.into());
+            payload.insert(key.into(), number(v));
         }
     }
     if let Some(reason) = &event.error_reason {
-        payload.insert("error_reason".into(), reason.clone().into());
+        payload.insert("error_reason".into(), redact(reason).into());
     }
     // Keys sort alphabetically (serde_json's map is ordered), like Swift's `.sortedKeys`.
     serde_json::json!({
         "schema_version": CURRENT_SCHEMA_VERSION,
         "source": "tune",
-        "timestamp": event.timestamp,
-        "action": event.action,
+        "timestamp": timestamp,
+        "action": action,
         "payload": payload,
     })
     .to_string()
 }
 
-/// `CanonicalHistoryStore.append`: one NDJSON line under an exclusive lock on
-/// `<file>.lock`, a torn last line repaired first, the file trimmed to its
-/// newest `MAX_EVENTS`. Secrets in `error_reason` are the caller's to redact.
+/// The one history writer (`CanonicalHistoryStore.append`): one NDJSON line
+/// under an exclusive lock on `<file>.lock`, a torn last line repaired first,
+/// the file trimmed to its newest `MAX_EVENTS`, directory 0700, files 0600
+/// (handed to `owner` when a root process writes into a user's directory).
 pub fn append_history_event(
     file: &Path,
     event: &HistoryEvent,
-    is_root: bool,
+    owner: Option<Owner>,
 ) -> std::io::Result<()> {
     let dir = file
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    crate::state::ensure_private_dir(dir, is_root)?;
+    state_perms::ensure_directory(dir, owner)?;
     let mut lock_name = file.as_os_str().to_owned();
     lock_name.push(".lock");
     let lock_path = std::path::PathBuf::from(lock_name);
     let lock = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
+        .mode(0o600)
         .open(&lock_path)?;
     lock.lock()?;
-    let result = (|| {
+    let result = {
         let mut contents = std::fs::read(file).unwrap_or_default();
         if contents.last().is_some_and(|b| *b != b'\n') {
             let tail_start = contents
@@ -284,12 +303,38 @@ pub fn append_history_event(
             }
             contents = trimmed;
         }
-        crate::state::write_private_atomic(file, &contents, is_root)?;
-        Ok(())
-    })();
-    crate::state::secure_file(&lock_path, is_root);
+        replace_atomic(file, &contents, owner)
+    };
+    let _ = state_perms::apply_file_permissions(&lock_path, owner);
     let _ = lock.unlock();
     result
+}
+
+/// Temp file next to `file` (0600), then `rename`, then the owner.
+fn replace_atomic(file: &Path, bytes: &[u8], owner: Option<Owner>) -> std::io::Result<()> {
+    let temp = file.with_file_name(format!(
+        ".{}.{}.tmp",
+        file.file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default(),
+        std::process::id()
+    ));
+    let written = (|| {
+        let mut out = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temp)?;
+        out.write_all(bytes)?;
+        out.sync_all()?;
+        std::fs::rename(&temp, file)
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+        return written;
+    }
+    state_perms::apply_file_permissions(file, owner)
 }
 
 #[cfg(test)]
@@ -421,8 +466,8 @@ mod tests {
         let file = tmp.path().join("data/history.ndjson");
         let mut failed = event(1);
         failed.error_reason = Some("boom".into());
-        append_history_event(&file, &failed, false).unwrap();
-        append_history_event(&file, &event(2), false).unwrap();
+        append_history_event(&file, &failed, None).unwrap();
+        append_history_event(&file, &event(2), None).unwrap();
         let records = read_history_records(&file, None);
         assert_eq!(records.len(), 2);
         assert_eq!(
@@ -447,7 +492,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("history.ndjson");
         std::fs::write(&file, b"{\"torn\":").unwrap();
-        append_history_event(&file, &event(1), false).unwrap();
+        append_history_event(&file, &event(1), None).unwrap();
         assert_eq!(read_history_records(&file, None).len(), 1);
         let mut many = String::new();
         for n in 0..1000 {
@@ -455,10 +500,50 @@ mod tests {
             many.push('\n');
         }
         std::fs::write(&file, many).unwrap();
-        append_history_event(&file, &event(1000), false).unwrap();
+        append_history_event(&file, &event(1000), None).unwrap();
         let records = read_history_records(&file, None);
         assert_eq!(records.len(), 1000);
         assert_eq!(records[0].action, "brightness.set.1");
         assert_eq!(records[999].action, "brightness.set.1000");
+    }
+
+    #[test]
+    fn numbers_are_swift_numbers_and_strings_are_redacted() {
+        let mut e = event(1);
+        e.requested_value = Some(80.0);
+        e.clamped_value = Some(0.5);
+        e.error_reason = Some("denied, token=abcdefghijklmnop1234".into());
+        let line = envelope(&e);
+        assert!(line.contains("\"requested_value\":80,"), "{line}");
+        assert!(line.contains("\"clamped_value\":0.5"), "{line}");
+        assert!(
+            line.contains("\"error_reason\":\"denied, <redacted>\""),
+            "{line}"
+        );
+        assert!(!line.contains("abcdefghijklmnop"));
+    }
+
+    #[test]
+    fn the_file_is_private_and_parallel_writers_lose_no_line() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("data/history.ndjson");
+        let threads: Vec<_> = (0..8)
+            .map(|t| {
+                let file = file.clone();
+                std::thread::spawn(move || {
+                    for n in 0..10 {
+                        append_history_event(&file, &event(t * 10 + n), None).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(read_history_records(&file, None).len(), 80);
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(file.parent().unwrap()), 0o700);
+        assert_eq!(mode(&file), 0o600);
     }
 }
