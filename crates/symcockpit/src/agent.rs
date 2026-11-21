@@ -27,17 +27,18 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{self, BufRead, Read, Write};
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Arc;
+use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
 use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 use symcockpit_contract::agent_proto::{
     COMMAND_FAILED, CallParams, Capabilities, CommandInfo, ConfirmParams, DEFAULT_HIDDEN_MS,
-    DEFAULT_VISIBLE_MS, HelloParams, HelloResult, INTERNAL_ERROR, INVALID_PARAMS, INVALID_REQUEST,
-    MAX_INTERVAL_MS, MAX_SUBSCRIPTIONS, METHOD_NOT_FOUND, METHODS, MIN_INTERVAL_MS, NOT_READY,
-    PARSE_ERROR, SubscribeParams, TOO_MANY_SUBSCRIPTIONS, UnsubscribeParams, VERSION_MISMATCH,
-    VisibilityParams, command_error,
+    DEFAULT_VISIBLE_MS, HOST_METHODS, HelloParams, HelloResult, INTERNAL_ERROR, INVALID_PARAMS,
+    INVALID_REQUEST, MAX_INTERVAL_MS, MAX_SUBSCRIPTIONS, METHOD_NOT_FOUND, METHODS,
+    MIN_INTERVAL_MS, NOT_READY, PARSE_ERROR, SubscribeParams, TOO_MANY_SUBSCRIPTIONS,
+    UnsubscribeParams, VERSION_MISMATCH, VisibilityParams, command_error,
 };
 use symcockpit_contract::{CommandSpec, Error, Outcome, PROTOCOL_VERSION, Risk, commands, exit};
 use symcockpit_core::plan::{
@@ -46,15 +47,23 @@ use symcockpit_core::plan::{
 use symcockpit_macos::parent_check::{self, CodeSignature};
 
 use crate::app::{App, Context};
+use crate::host::{self, AgentHost, Host, HostConfig};
 use crate::{VERSION, mcp};
 
 /// Commands that are not data: servers, help, a daemon. `call` refuses them
 /// and `hello` does not list them.
 const NOT_CALLABLE: [&str; 5] = ["serve", "help", "version", "ai-usage.serve", "fan.governor"];
 
-/// Commands `subscribe` accepts: cheap, side-effect free reads. Owners of new
-/// read areas add their live commands here.
-const SUBSCRIBABLE: [&str; 10] = [
+/// Commands `subscribe` accepts: cheap, side-effect free reads (`read`, or `human_only` for the
+/// app's own status views). Owners of new read areas add their live commands here.
+///
+/// Left out on purpose, because one sample is expensive or has an effect the user would notice:
+/// `storage.health` (SMART reads), `storage.space` (walks volumes), `storage.speedtest` (writes a
+/// file), `bt.devices` (starts `system_profiler`, hundreds of milliseconds to seconds),
+/// `ble.scan` (keeps the radio scanning), `ble.read` / `ble.services` (talk to a peripheral),
+/// `ai-usage` (runs `symbrain`), and everything with a required argument. The app asks for those
+/// when the user opens the view or presses the button.
+const SUBSCRIBABLE: [&str; 18] = [
     "sensors",
     "battery",
     "displays",
@@ -65,6 +74,18 @@ const SUBSCRIBABLE: [&str; 10] = [
     "awake.status",
     "brightness.get",
     "fan.status",
+    // CoreAudio / CoreMIDI device lists: one HAL snapshot.
+    "audio.devices",
+    "audio.default.get",
+    "midi.devices",
+    // The hosted mixer's state: memory only.
+    "audio.mixer.status",
+    // Settings, counts and permission state (no content): two small files and one status call.
+    "clipboard.status",
+    "input.status",
+    "input.haptics.status",
+    // The BLE session's connections, subscriptions and log position: memory only.
+    "ble.session",
 ];
 
 /// Risky area commands plan themselves: their handler only records a plan
@@ -167,6 +188,11 @@ impl PlanStore for MemoryPlans {
 struct CommandAction<'a> {
     dispatch: &'a dyn Dispatch,
     last: RefCell<Option<Result<Value, Error>>>,
+}
+
+/// Cheap reads, and the app's own `human_only` status views.
+fn subscribable(spec: &CommandSpec) -> bool {
+    matches!(spec.risk, Risk::Read | Risk::HumanOnly)
 }
 
 fn callable(name: &str) -> Option<&'static CommandSpec> {
@@ -286,6 +312,7 @@ pub struct Session<'a> {
     visible: bool,
     next_id: u64,
     subs: BTreeMap<u64, Subscription>,
+    host: Option<&'a dyn AgentHost>,
 }
 
 impl<'a> Session<'a> {
@@ -299,7 +326,16 @@ impl<'a> Session<'a> {
             visible: true,
             next_id: 1,
             subs: BTreeMap::new(),
+            host: None,
         }
+    }
+
+    /// Adds the long-lived services of the app agent: their methods (`HOST_METHODS`) are served
+    /// and a command that can change their settings takes effect at once.
+    #[must_use]
+    pub fn with_host(mut self, host: &'a dyn AgentHost) -> Self {
+        self.host = Some(host);
+        self
     }
 
     pub fn subscription_count(&self) -> usize {
@@ -377,7 +413,7 @@ impl<'a> Session<'a> {
         match method {
             "ping" => return Ok(json!({})),
             "hello" => return self.hello(params),
-            m if !METHODS.contains(&m) => {
+            m if !METHODS.contains(&m) && !(self.host.is_some() && HOST_METHODS.contains(&m)) => {
                 return Err(Rpc::new(METHOD_NOT_FOUND, format!("Method not found: {m}")));
             }
             _ if !self.ready => {
@@ -390,8 +426,18 @@ impl<'a> Session<'a> {
             "confirm" => self.confirm(&parse::<ConfirmParams>(params)?),
             "subscribe" => self.subscribe(&parse(params)?, frames),
             "unsubscribe" => self.unsubscribe(&parse(params)?),
-            _ => self.set_visibility(&parse(params)?, frames),
+            "set_visibility" => self.set_visibility(&parse(params)?, frames),
+            host_method => self.host_method(host_method, params),
         }
+    }
+
+    /// An agent method (`HOST_METHODS`): the human's clipboard history and the service status.
+    fn host_method(&self, method: &str, params: Option<&Value>) -> Result<Value, Rpc> {
+        let host = self
+            .host
+            .ok_or_else(|| Rpc::new(METHOD_NOT_FOUND, format!("Method not found: {method}")))?;
+        let params: Map<String, Value> = parse(params)?;
+        host.call(method, &params).map_err(|e| Rpc::command(&e))
     }
 
     fn hello(&mut self, params: Option<&Value>) -> Result<Value, Rpc> {
@@ -417,10 +463,14 @@ impl<'a> Session<'a> {
             protocol_version: PROTOCOL_VERSION,
             server_version: VERSION.to_owned(),
             capabilities: Capabilities {
-                methods: METHODS.iter().map(|m| (*m).to_owned()).collect(),
+                methods: METHODS
+                    .iter()
+                    .chain(self.host.iter().flat_map(|_| HOST_METHODS.iter()))
+                    .map(|m| (*m).to_owned())
+                    .collect(),
                 topics: register
                     .iter()
-                    .filter(|c| c.risk == Risk::Read && SUBSCRIBABLE.contains(&c.name))
+                    .filter(|c| subscribable(c) && SUBSCRIBABLE.contains(&c.name))
                     .map(|c| c.name.to_owned())
                     .collect(),
                 max_subscriptions: MAX_SUBSCRIPTIONS,
@@ -465,10 +515,13 @@ impl<'a> Session<'a> {
                 "plan": engine.plan_json(&plan),
             }));
         }
-        let output = self
-            .dispatch
-            .run(spec, &call.params)
-            .map_err(|e| Rpc::command(&e))?;
+        let ran = self.dispatch.run(spec, &call.params);
+        if let Some(host) = self.host {
+            // A command that changed a setting (`clipboard pause`, `input finder-cut`) takes
+            // effect now, not at the next periodic check.
+            host.after_call(spec.name);
+        }
+        let output = ran.map_err(|e| Rpc::command(&e))?;
         Ok(json!({"status": "ok", "command": spec.name, "risk": spec.risk, "output": output}))
     }
 
@@ -493,7 +546,7 @@ impl<'a> Session<'a> {
     fn subscribe(&mut self, sub: &SubscribeParams, frames: &mut Vec<Value>) -> Result<Value, Rpc> {
         sub.validate().map_err(Rpc::params)?;
         let spec = Self::spec(&sub.command)?;
-        if spec.risk != Risk::Read || !SUBSCRIBABLE.contains(&spec.name) {
+        if !subscribable(spec) || !SUBSCRIBABLE.contains(&spec.name) {
             return Err(Rpc::params(format!(
                 "'{}' cannot be subscribed to",
                 spec.name
@@ -600,6 +653,42 @@ fn emit(out: &mut impl Write, frames: &[Value]) -> bool {
         .all(|f| writeln!(out, "{f}").and_then(|()| out.flush()).is_ok())
 }
 
+/// Waits for the next input. While a tap is installed the main thread must run its run loop
+/// (the tap's callbacks arrive there), so it spins it instead of blocking; the readers wake
+/// it after queueing a line.
+fn wait_input(
+    inputs: &mpsc::Receiver<Input>,
+    timeout: Option<Duration>,
+    host: Option<&dyn AgentHost>,
+) -> Result<Input, RecvTimeoutError> {
+    let Some(host) = host.filter(|h| h.spinning()) else {
+        return match timeout {
+            None => inputs.recv().map_err(|_| RecvTimeoutError::Disconnected),
+            Some(wait) => inputs.recv_timeout(wait),
+        };
+    };
+    let deadline = timeout.map(|t| Instant::now() + t);
+    loop {
+        match inputs.try_recv() {
+            Ok(input) => return Ok(input),
+            Err(TryRecvError::Disconnected) => return Err(RecvTimeoutError::Disconnected),
+            Err(TryRecvError::Empty) => {}
+        }
+        let left = match deadline {
+            // A woken run loop returns at once; the limit only bounds a lost wake-up.
+            None => Duration::from_secs(3600),
+            Some(d) => {
+                let left = d.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return Err(RecvTimeoutError::Timeout);
+                }
+                left
+            }
+        };
+        host.spin(left);
+    }
+}
+
 /// Serves until end of input, SIGTERM or a closed stdout. Returns the exit code.
 pub fn run_loop(
     session: &mut Session,
@@ -607,17 +696,35 @@ pub fn run_loop(
     inputs: &mpsc::Receiver<Input>,
     out: &mut impl Write,
 ) -> u8 {
+    run_loop_with(session, mono, inputs, out, None)
+}
+
+/// [`run_loop`] with the host: its periodic check shares the wait, and its run loop is spun
+/// while a tap is installed.
+pub fn run_loop_with(
+    session: &mut Session,
+    mono: &dyn Mono,
+    inputs: &mpsc::Receiver<Input>,
+    out: &mut impl Write,
+    host: Option<&dyn AgentHost>,
+) -> u8 {
     loop {
-        let input = match session.next_due_ms() {
-            None => inputs.recv().map_err(|_| RecvTimeoutError::Disconnected),
-            Some(due) => {
-                inputs.recv_timeout(Duration::from_millis(due.saturating_sub(mono.now_ms())))
-            }
+        let sample_due = session
+            .next_due_ms()
+            .map(|due| Duration::from_millis(due.saturating_sub(mono.now_ms())));
+        let timeout = match (sample_due, host.and_then(AgentHost::due_in)) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
         };
-        let frames = match input {
+        let frames = match wait_input(inputs, timeout, host) {
             Ok(Input::Line(line)) if line.trim().is_empty() => continue,
             Ok(Input::Line(line)) => session.handle_line(line.trim()),
-            Err(RecvTimeoutError::Timeout) => session.tick(),
+            Err(RecvTimeoutError::Timeout) => {
+                if let Some(host) = host {
+                    host.tick();
+                }
+                session.tick()
+            }
             Ok(Input::TooLong) => {
                 eprintln!("symcockpit: agent: input line over {MAX_LINE} bytes");
                 return exit::ERROR;
@@ -633,7 +740,10 @@ pub fn run_loop(
     }
 }
 
-fn spawn_stdin_reader(tx: mpsc::Sender<Input>) {
+/// Called after a line was queued, to wake a main thread that is spinning its run loop.
+type Wake = Arc<dyn Fn() + Send + Sync>;
+
+fn spawn_stdin_reader(tx: mpsc::Sender<Input>, wake: Wake) {
     std::thread::spawn(move || {
         let stdin = io::stdin();
         let mut stdin = stdin.lock();
@@ -648,20 +758,23 @@ fn spawn_stdin_reader(tx: mpsc::Sender<Input>) {
                 Ok(_) => Input::Line(String::from_utf8_lossy(&line).into_owned()),
             };
             let last = !matches!(input, Input::Line(_));
-            if tx.send(input).is_err() || last {
+            let sent = tx.send(input).is_ok();
+            wake();
+            if !sent || last {
                 return;
             }
         }
     });
 }
 
-fn spawn_signal_watcher(tx: mpsc::Sender<Input>) {
+fn spawn_signal_watcher(tx: mpsc::Sender<Input>, wake: Wake) {
     match symcockpit_macos::signal::terminate_pipe() {
         Ok(mut pipe) => {
             std::thread::spawn(move || {
                 let mut byte = [0u8; 1];
                 if pipe.read(&mut byte).is_ok_and(|n| n > 0) {
                     let _ = tx.send(Input::Terminate);
+                    wake();
                 }
             });
         }
@@ -690,6 +803,7 @@ pub fn gate(
 pub fn main(app: &App, args: &[String]) -> u8 {
     let mut stdio = false;
     let mut data_dir_override = None;
+    let mut finder_jobs_dir = None;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
@@ -697,6 +811,10 @@ pub fn main(app: &App, args: &[String]) -> u8 {
             "--data-dir" => match rest.next() {
                 Some(path) => data_dir_override = Some(std::path::PathBuf::from(path)),
                 None => return usage("--data-dir: expected a path"),
+            },
+            "--finder-jobs-dir" => match rest.next() {
+                Some(path) => finder_jobs_dir = Some(std::path::PathBuf::from(path)),
+                None => return usage("--finder-jobs-dir: expected a path"),
             },
             other => return usage(&format!("unknown argument '{other}'")),
         }
@@ -727,15 +845,45 @@ pub fn main(app: &App, args: &[String]) -> u8 {
     };
     let server = mcp::Server::new(app, &ctx);
     let mono = RealMono::start();
-    let mut session = Session::new(&server, &mono, &SystemClock);
+    // The long-lived services (clipboard, mixer, Finder jobs, event tap, BLE) start and end with
+    // this process. The run loop belongs to this, the main, thread.
+    let platform =
+        host::live::platform(app.paths.config_dir.clone(), host::live::MainRunLoop::new());
+    let host = Host::start(
+        platform,
+        HostConfig {
+            data_dir: data_dir.clone(),
+            finder_jobs_dir,
+            intervals: host::Intervals::default(),
+        },
+    );
+    let _installed = host.install();
+    let waker = host.waker();
+    let wake: Wake = Arc::new(move || {
+        if let Some(waker) = &waker {
+            waker.wake();
+        }
+    });
+    let mut session = Session::new(&server, &mono, &SystemClock).with_host(&host);
     let (tx, rx) = mpsc::channel();
-    spawn_stdin_reader(tx.clone());
-    spawn_signal_watcher(tx);
-    run_loop(&mut session, &mono, &rx, &mut io::stdout().lock())
+    spawn_stdin_reader(tx.clone(), Arc::clone(&wake));
+    spawn_signal_watcher(tx, wake);
+    let code = run_loop_with(
+        &mut session,
+        &mono,
+        &rx,
+        &mut io::stdout().lock(),
+        Some(&host),
+    );
+    // Every app's tap, every BLE connection and the event tap go before the process does.
+    host.end();
+    code
 }
 
 fn usage(message: &str) -> u8 {
-    eprintln!("symcockpit: agent: {message}\nusage: symcockpit agent --stdio [--data-dir <path>]");
+    eprintln!(
+        "symcockpit: agent: {message}\nusage: symcockpit agent --stdio [--data-dir <path>] [--finder-jobs-dir <path>]"
+    );
     exit::USAGE
 }
 

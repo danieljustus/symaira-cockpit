@@ -4,12 +4,12 @@
 use std::{ffi::CString, path::Path};
 
 use objc2_app_kit::{NSPasteboard, NSWorkspace};
-use objc2_foundation::NSString;
+use objc2_foundation::{NSData, NSString};
 use security_framework::passwords::delete_generic_password;
 use security_framework::passwords_options::PasswordOptions;
 use symcockpit_contract::Error;
 use symcockpit_core::clipboard::{
-    BackupExclusion, KEY_LEN, Key, KeyStore, PasteboardSource, random_key,
+    BackupExclusion, KEY_LEN, Key, KeyStore, PasteboardSink, PasteboardSource, random_key,
 };
 
 /// `NSPasteboard.general`, read through the port the privacy rules sit in front of.
@@ -52,6 +52,36 @@ impl PasteboardSource for SystemPasteboard {
         Self::general()
             .dataForType(&NSString::from_str("public.png"))
             .map(|d| d.to_vec())
+    }
+}
+
+impl SystemPasteboard {
+    fn write(
+        &self,
+        kind: &str,
+        put: impl FnOnce(&NSPasteboard, &NSString) -> bool,
+    ) -> Result<i64, Error> {
+        let pasteboard = Self::general();
+        pasteboard.clearContents();
+        if put(&pasteboard, &NSString::from_str(kind)) {
+            Ok(pasteboard.changeCount() as i64)
+        } else {
+            Err(Error::Failed("the pasteboard refused the clip".into()))
+        }
+    }
+}
+
+impl PasteboardSink for SystemPasteboard {
+    fn write_text(&self, text: &str) -> Result<i64, Error> {
+        self.write("public.utf8-plain-text", |pb, kind| {
+            pb.setString_forType(&NSString::from_str(text), kind)
+        })
+    }
+
+    fn write_png(&self, png: &[u8]) -> Result<i64, Error> {
+        self.write("public.png", |pb, kind| {
+            pb.setData_forType(Some(&NSData::with_bytes(png)), kind)
+        })
     }
 }
 

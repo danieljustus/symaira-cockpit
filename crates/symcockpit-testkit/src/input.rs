@@ -1,11 +1,13 @@
 //! Fakes for the input ports: no event tap, no actuator, no speaker.
 
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use symcockpit_contract::Error;
 use symcockpit_core::input::{
-    Access, FinderEnv, HapticBackend, HapticLevel, HapticPattern, InputProbe, InputSettings,
-    SettingsStore, SoundBackend,
+    Access, ActionHook, FinderEnv, HapticBackend, HapticLevel, HapticPattern, InputProbe,
+    InputSettings, RunningTap, SettingsStore, SoundBackend, Synthetic, TapHost,
 };
 
 /// System state for the Finder decision engine; every field can be changed mid-test.
@@ -117,6 +119,91 @@ impl InputProbe for FakeProbe {
     }
     fn secure_input_active(&self) -> bool {
         self.secure
+    }
+}
+
+/// A tap host the test drives from outside: counts starts and stops, can refuse, and lets the
+/// test fire the hook the way the real tap does after it replaced a key. Safe to share across
+/// threads (the agent's feedback runs on another one).
+#[derive(Clone, Default)]
+pub struct FakeTapHost(Arc<TapState>);
+
+#[derive(Default)]
+struct TapState {
+    starts: AtomicU32,
+    stops: AtomicU32,
+    refuse: Mutex<Option<Error>>,
+    hook: Mutex<Option<ActionHook>>,
+}
+
+struct FakeRunning(Arc<TapState>);
+
+impl RunningTap for FakeRunning {}
+
+impl Drop for FakeRunning {
+    fn drop(&mut self) {
+        self.0.stops.fetch_add(1, Ordering::SeqCst);
+        *self.0.hook.lock().unwrap() = None;
+    }
+}
+
+impl FakeTapHost {
+    pub fn refusing(error: Error) -> Self {
+        let host = Self::default();
+        host.refuse_with(Some(error));
+        host
+    }
+    pub fn refuse_with(&self, error: Option<Error>) {
+        *self.0.refuse.lock().unwrap() = error;
+    }
+    pub fn starts(&self) -> u32 {
+        self.0.starts.load(Ordering::SeqCst)
+    }
+    pub fn stops(&self) -> u32 {
+        self.0.stops.load(Ordering::SeqCst)
+    }
+    pub fn running(&self) -> bool {
+        self.0.hook.lock().unwrap().is_some()
+    }
+    /// The tap replaced a key. Returns false when no tap is running.
+    pub fn fire(&self, action: Synthetic) -> bool {
+        let hook = self.0.hook.lock().unwrap().clone();
+        hook.map(|hook| hook(action)).is_some()
+    }
+}
+
+impl TapHost for FakeTapHost {
+    fn start(&self, on_action: ActionHook) -> Result<Box<dyn RunningTap>, Error> {
+        if let Some(error) = self.0.refuse.lock().unwrap().clone() {
+            return Err(error);
+        }
+        self.0.starts.fetch_add(1, Ordering::SeqCst);
+        *self.0.hook.lock().unwrap() = Some(on_action);
+        Ok(Box::new(FakeRunning(Arc::clone(&self.0))))
+    }
+}
+
+/// Actuations and played sounds, observable from the test thread.
+#[derive(Clone, Default)]
+pub struct SharedFeedback {
+    pub actuations: Arc<AtomicU32>,
+    pub sounds: Arc<AtomicU32>,
+}
+
+impl HapticBackend for SharedFeedback {
+    fn probe(&self) -> HapticLevel {
+        HapticLevel::Available
+    }
+    fn actuate(&self, _pattern: HapticPattern) -> Result<(), HapticLevel> {
+        self.actuations.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+impl SoundBackend for SharedFeedback {
+    fn play(&self, _wav: &[u8]) -> Result<(), String> {
+        self.sounds.fetch_add(1, Ordering::SeqCst);
+        Ok(())
     }
 }
 

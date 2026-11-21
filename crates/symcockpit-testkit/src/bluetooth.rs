@@ -2,8 +2,9 @@
 //! "device" does and read the counters afterwards.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use symcockpit_contract::Error;
@@ -149,6 +150,202 @@ impl BleLink for FakeLink {
 
     fn disconnect(&self) {
         self.counters.borrow_mut().disconnects += 1;
+    }
+}
+
+struct SyncState {
+    ads: Vec<Advertisement>,
+    device: FakeDevice,
+    connect_error: Option<Error>,
+    counters: Counters,
+    /// Connections open right now.
+    open: u32,
+    /// Persistent subscriptions (`begin_subscription`).
+    subscribed: BTreeSet<(String, String)>,
+    pending: VecDeque<(String, String, Vec<u8>)>,
+}
+
+/// A central that is safe to share with the agent's BLE thread: the test scripts it and reads
+/// the counters while the thread runs. One peripheral for any id, like [`FakeCentral`].
+#[derive(Clone)]
+pub struct SyncCentral(Arc<Mutex<SyncState>>);
+
+impl SyncCentral {
+    pub fn new(ads: Vec<Advertisement>, device: FakeDevice) -> Self {
+        Self(Arc::new(Mutex::new(SyncState {
+            ads,
+            device,
+            connect_error: None,
+            counters: Counters::default(),
+            open: 0,
+            subscribed: BTreeSet::new(),
+            pending: VecDeque::new(),
+        })))
+    }
+    pub fn counters(&self) -> (u32, u32, u32) {
+        let s = self.0.lock().unwrap();
+        (
+            s.counters.scans,
+            s.counters.connects,
+            s.counters.disconnects,
+        )
+    }
+    pub fn open_links(&self) -> u32 {
+        self.0.lock().unwrap().open
+    }
+    pub fn refuse_connect(&self, error: Option<Error>) {
+        self.0.lock().unwrap().connect_error = error;
+    }
+    /// The peripheral notifies; delivered at the next poll when someone subscribed.
+    pub fn notify(&self, service: &str, characteristic: &str, value: &[u8]) {
+        self.0.lock().unwrap().pending.push_back((
+            service.to_owned(),
+            characteristic.to_owned(),
+            value.to_vec(),
+        ));
+    }
+    pub fn subscribed(&self) -> usize {
+        self.0.lock().unwrap().subscribed.len()
+    }
+    pub fn stored_value(&self, service: &str, characteristic: &str) -> Option<Vec<u8>> {
+        self.0
+            .lock()
+            .unwrap()
+            .device
+            .values
+            .get(&key(service, characteristic))
+            .cloned()
+    }
+}
+
+impl BleCentral for SyncCentral {
+    fn scan(&self, _timeout: Duration) -> Result<Vec<Advertisement>, Error> {
+        let mut s = self.0.lock().unwrap();
+        s.counters.scans += 1;
+        Ok(s.ads.clone())
+    }
+
+    fn connect(&self, _id: &str, _timeout: Duration) -> Result<Box<dyn BleLink>, Error> {
+        let mut s = self.0.lock().unwrap();
+        if let Some(e) = &s.connect_error {
+            return Err(e.clone());
+        }
+        s.counters.connects += 1;
+        s.open += 1;
+        Ok(Box::new(SyncLink(self.clone())))
+    }
+}
+
+struct SyncLink(SyncCentral);
+
+impl BleLink for SyncLink {
+    fn services(&self) -> Result<Vec<Service>, Error> {
+        Ok(self.0.0.lock().unwrap().device.services.clone())
+    }
+
+    fn read(&self, service: &str, characteristic: &str) -> Result<Vec<u8>, Error> {
+        self.0
+            .stored_value(service, characteristic)
+            .ok_or_else(|| Error::Unsupported("characteristic is not readable".into()))
+    }
+
+    fn write(
+        &self,
+        service: &str,
+        characteristic: &str,
+        value: &[u8],
+        with_response: bool,
+    ) -> Result<WriteAck, Error> {
+        let mut s = self.0.0.lock().unwrap();
+        match s.device.write.clone() {
+            WriteBehavior::Reject(m) => return Err(Error::Failed(m)),
+            WriteBehavior::Accept => {
+                s.device
+                    .values
+                    .insert(key(service, characteristic), value.to_vec());
+            }
+            WriteBehavior::AcceptButKeepOld => {}
+        }
+        Ok(if with_response {
+            WriteAck::Acknowledged
+        } else {
+            WriteAck::NotRequested
+        })
+    }
+
+    fn subscribe(
+        &self,
+        _service: &str,
+        _characteristic: &str,
+        _window: Duration,
+        _on_value: &mut dyn FnMut(Notification),
+    ) -> Result<(), Error> {
+        Err(Error::Unsupported(
+            "the sync fake only keeps subscriptions".into(),
+        ))
+    }
+
+    fn disconnect(&self) {
+        let mut s = self.0.0.lock().unwrap();
+        s.counters.disconnects += 1;
+        s.open = s.open.saturating_sub(1);
+    }
+
+    fn begin_subscription(&self, service: &str, characteristic: &str) -> Result<(), Error> {
+        self.0
+            .0
+            .lock()
+            .unwrap()
+            .subscribed
+            .insert(key(service, characteristic));
+        Ok(())
+    }
+
+    fn poll_subscriptions(
+        &self,
+        wait: Duration,
+        on_value: &mut dyn FnMut(&str, &str, Notification),
+    ) -> Result<(), Error> {
+        let (due, subscribed): (Vec<_>, _) = {
+            let mut s = self.0.0.lock().unwrap();
+            let subscribed = s.subscribed.clone();
+            let mut due = Vec::new();
+            let mut keep = VecDeque::new();
+            while let Some(n) = s.pending.pop_front() {
+                if subscribed.contains(&(n.0.clone(), n.1.clone())) {
+                    due.push(n);
+                } else {
+                    keep.push_back(n);
+                }
+            }
+            s.pending = keep;
+            (due, subscribed)
+        };
+        let _ = subscribed;
+        if due.is_empty() {
+            // Like the real link: wait for events up to `wait`.
+            std::thread::sleep(wait.min(Duration::from_millis(5)));
+        }
+        for (service, characteristic, value) in due {
+            on_value(
+                &service,
+                &characteristic,
+                Notification {
+                    elapsed_ms: 1,
+                    value,
+                },
+            );
+        }
+        Ok(())
+    }
+
+    fn end_subscription(&self, service: &str, characteristic: &str) {
+        self.0
+            .0
+            .lock()
+            .unwrap()
+            .subscribed
+            .remove(&key(service, characteristic));
     }
 }
 

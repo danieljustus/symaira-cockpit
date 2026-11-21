@@ -39,6 +39,19 @@ pub const METHODS: [&str; 7] = [
     "ping",
 ];
 
+/// Methods only the app agent serves, in addition to [`METHODS`] (additive, no version bump).
+/// None of them is a register command: the CLI and MCP have no name for them, so the human's
+/// clipboard history cannot be read from either (R73, D13). `clipboard.*` are `human_only`.
+pub const HOST_METHODS: [&str; 7] = [
+    "clipboard.list",
+    "clipboard.read",
+    "clipboard.copy",
+    "clipboard.delete",
+    "clipboard.settings",
+    "clipboard.configure",
+    "services",
+];
+
 /// `hello` params.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HelloParams {
@@ -234,7 +247,25 @@ mod tests {
 
     #[test]
     fn every_method_is_listed_once() {
-        let set: std::collections::BTreeSet<_> = METHODS.iter().collect();
-        assert_eq!(set.len(), METHODS.len());
+        let set: std::collections::BTreeSet<_> = METHODS.iter().chain(&HOST_METHODS).collect();
+        assert_eq!(set.len(), METHODS.len() + HOST_METHODS.len());
+    }
+
+    #[test]
+    fn no_host_method_is_a_register_command_or_tool() {
+        for method in HOST_METHODS {
+            for spec in crate::commands() {
+                assert_ne!(
+                    spec.name, method,
+                    "{method} would be reachable as a command"
+                );
+                assert_ne!(
+                    spec.cli_path.replace(' ', "."),
+                    method,
+                    "{method} has a CLI path"
+                );
+                assert_ne!(spec.mcp_name, Some(method), "{method} is a tool");
+            }
+        }
     }
 }

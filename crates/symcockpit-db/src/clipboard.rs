@@ -257,6 +257,34 @@ impl ClipStore for SqliteClipStore {
         }
     }
 
+    fn meta(&self, id: &str) -> Result<Option<ItemMeta>, Error> {
+        let row: Option<(String, i64, String, i64)> = self
+            .conn()
+            .query_row(
+                "SELECT id, created_at, kind, size FROM items WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()
+            .map_err(failed)?;
+        Ok(row.and_then(|(id, created_at, kind, size)| {
+            Some(ItemMeta {
+                id,
+                created_at,
+                kind: Kind::parse(&kind)?,
+                size: size as u64,
+            })
+        }))
+    }
+
+    fn delete(&self, id: &str) -> Result<bool, Error> {
+        if self.meta(id)?.is_none() {
+            return Ok(false);
+        }
+        self.delete_ids(&[id.to_owned()])?;
+        Ok(true)
+    }
+
     fn delete_all(&self) -> Result<u64, Error> {
         let ids: Vec<String> = {
             let conn = self.conn();
@@ -401,6 +429,29 @@ mod tests {
         blocker.execute_batch("DROP TRIGGER no_delete").unwrap();
         assert_eq!(store.delete_all().unwrap(), 2);
         assert_eq!((store.count().unwrap(), files(&dir)), (0, 0));
+    }
+
+    #[test]
+    fn one_item_is_found_by_id_and_deleted_with_its_attachment() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("clip");
+        let store = SqliteClipStore::open(&dir, &NoExclusion).unwrap();
+        store.insert(&item("big", INLINE_MAX + 1)).unwrap();
+        store.insert(&item("small", 10)).unwrap();
+        let meta = store.meta("big").unwrap().unwrap();
+        assert_eq!(
+            (meta.id.as_str(), meta.size),
+            ("big", INLINE_MAX as u64 + 1)
+        );
+        assert!(store.meta("nope").unwrap().is_none());
+        assert_eq!((store.count().unwrap(), files(&dir)), (2, 1));
+        assert!(store.delete("big").unwrap());
+        assert_eq!((store.count().unwrap(), files(&dir)), (1, 0));
+        assert!(
+            !store.delete("big").unwrap(),
+            "a second delete finds nothing"
+        );
+        assert!(store.read_sealed("small").unwrap().is_some());
     }
 
     #[test]

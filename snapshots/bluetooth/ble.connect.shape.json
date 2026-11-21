@@ -1,0 +1,14 @@
+{
+  "properties": {
+    "connected": {
+      "type": "boolean"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "new": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

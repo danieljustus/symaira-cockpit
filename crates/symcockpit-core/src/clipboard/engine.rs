@@ -174,6 +174,11 @@ pub struct Poller {
 }
 
 impl Poller {
+    /// The clipboard changed because we wrote it ourselves: that is not a new copy.
+    pub fn ignore_change(&mut self, count: i64) {
+        self.last = Some(count);
+    }
+
     /// `None`: nothing changed. Otherwise what happened to the new content.
     pub fn poll(
         &mut self,

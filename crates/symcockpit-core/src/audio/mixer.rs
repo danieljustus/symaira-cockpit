@@ -593,8 +593,9 @@ pub fn run_loop(
             .flatten()
             .and_then(|o| audio.device_uid(o).ok())
     };
-    lock().on_default_output(current_output().as_deref());
+    // The epoch first: a change that lands between the two reads is then still noticed.
     let mut seen = audio.change_epoch();
+    lock().on_default_output(current_output().as_deref());
     let mut settle: Option<u32> = None;
     let mut ticks = 0u32;
     while !stop() {

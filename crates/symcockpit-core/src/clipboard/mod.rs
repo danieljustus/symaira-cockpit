@@ -11,6 +11,7 @@
 mod commands;
 mod crypto;
 mod engine;
+mod human;
 mod settings;
 
 pub use commands::{
@@ -20,6 +21,10 @@ pub use commands::{
 pub use crypto::{KEY_LEN, Key, open, random_key, seal};
 pub use engine::{
     Capture, Clip, Outcome, Payload, Poller, SECURE_TYPES, SkipReason, decide, open_item,
+};
+pub use human::{
+    base64, clip_copy_back, clip_delete_json, clip_list_json, clip_read_json, settings_json,
+    update_settings,
 };
 pub use settings::{ClipboardSettings, DEFAULT_EXCLUDED_APPS};
 
@@ -82,6 +87,10 @@ pub trait ClipStore {
     fn list(&self, limit: usize) -> Result<Vec<ItemMeta>, Error>;
     fn count(&self) -> Result<u64, Error>;
     fn read_sealed(&self, id: &str) -> Result<Option<Vec<u8>>, Error>;
+    /// The clear metadata of one item; `None` when it is gone.
+    fn meta(&self, id: &str) -> Result<Option<ItemMeta>, Error>;
+    /// Removes one item (metadata first, then its attachment); `false` when it was not there.
+    fn delete(&self, id: &str) -> Result<bool, Error>;
     /// Removes every item. Metadata first; attachment files only after that commit succeeded.
     fn delete_all(&self) -> Result<u64, Error>;
     /// Applies the retention rules; returns how many items went.
@@ -104,4 +113,11 @@ pub trait PasteboardSource {
 /// Port: keeps the clipboard directory out of Time Machine backups.
 pub trait BackupExclusion {
     fn exclude(&self, path: &std::path::Path) -> Result<(), Error>;
+}
+
+/// Port: puts a clip back on the pasteboard (the human's "copy again"). Returns the new
+/// change count so the poller can skip its own write instead of storing it a second time.
+pub trait PasteboardSink {
+    fn write_text(&self, text: &str) -> Result<i64, Error>;
+    fn write_png(&self, png: &[u8]) -> Result<i64, Error>;
 }

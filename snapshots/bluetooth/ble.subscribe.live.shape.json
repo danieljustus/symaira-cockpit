@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "characteristic": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "expires_in_s": {
+      "type": "null"
+    },
+    "service": {
+      "type": "string"
+    },
+    "subscribed": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

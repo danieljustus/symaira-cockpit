@@ -11,6 +11,7 @@ pub mod app;
 pub mod areas;
 pub mod cli;
 pub mod help;
+pub mod host;
 pub mod json;
 pub mod legacy;
 pub mod live;
@@ -36,6 +37,18 @@ pub(crate) fn hardware_writes_blocked() -> Result<(), symcockpit_contract::Error
     if cfg!(debug_assertions) && std::env::var_os(NO_HARDWARE_ENV).is_some() {
         return Err(symcockpit_contract::Error::Unsupported(format!(
             "hardware writes are disabled ({NO_HARDWARE_ENV})"
+        )));
+    }
+    Ok(())
+}
+
+/// The same switch for the agent's long-lived services (clipboard, mixer, Finder jobs, event
+/// tap, BLE, click feedback): a debug binary a test started must never start one on the real
+/// machine. They answer `unsupported` instead. Release builds never read it.
+pub(crate) fn service_blocked(service: &str) -> Result<(), symcockpit_contract::Error> {
+    if cfg!(debug_assertions) && std::env::var_os(NO_HARDWARE_ENV).is_some() {
+        return Err(symcockpit_contract::Error::Unsupported(format!(
+            "{service} is disabled ({NO_HARDWARE_ENV})"
         )));
     }
     Ok(())

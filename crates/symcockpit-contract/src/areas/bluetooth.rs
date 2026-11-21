@@ -90,6 +90,63 @@ pub fn specs() -> Vec<CommandSpec> {
                 &["device_id", "service", "characteristic", "value_hex"],
             ),
         ),
+        // The live session (R51 to R53): connections, subscriptions and the log live in the running
+        // app agent; a one-shot command has no session and answers `unsupported`. No MCP tool.
+        spec(
+            "ble.connect",
+            "ble connect",
+            None,
+            Risk::Reversible,
+            object(
+                json!({"device_id": {"type": "string", "description": "Peripheral id from a scan."}}),
+                &["device_id"],
+            ),
+        ),
+        spec(
+            "ble.disconnect",
+            "ble disconnect",
+            None,
+            Risk::Reversible,
+            object(
+                json!({"device_id": {"type": "string", "description": "Peripheral id."}}),
+                &["device_id"],
+            ),
+        ),
+        spec(
+            "ble.services",
+            "ble services",
+            None,
+            Risk::Read,
+            object(
+                json!({"device_id": {"type": "string", "description": "Peripheral id; connects if needed."}}),
+                &["device_id"],
+            ),
+        ),
+        spec(
+            "ble.unsubscribe",
+            "ble unsubscribe",
+            None,
+            Risk::Reversible,
+            object(gatt_address(), &["device_id", "service", "characteristic"]),
+        ),
+        spec(
+            "ble.log",
+            "ble log",
+            None,
+            Risk::Read,
+            object(
+                json!({"since": {"type": "integer", "minimum": 0,
+                    "description": "Only entries with a sequence number of at least this."}}),
+                &[],
+            ),
+        ),
+        spec(
+            "ble.session",
+            "ble session",
+            None,
+            Risk::Read,
+            object(json!({}), &[]),
+        ),
         // Raw logs leave the machine only when a human asks (Q08).
         spec(
             "ble.export",
@@ -124,6 +181,22 @@ mod tests {
                 ("plan_ble_write", Risk::Risky),
             ]
         );
+    }
+
+    #[test]
+    fn the_session_commands_are_no_mcp_tools() {
+        for name in [
+            "ble.connect",
+            "ble.disconnect",
+            "ble.services",
+            "ble.unsubscribe",
+            "ble.log",
+            "ble.session",
+        ] {
+            let spec = specs().into_iter().find(|s| s.name == name).unwrap();
+            assert!(spec.mcp_name.is_none(), "{name}");
+            assert_ne!(spec.risk, Risk::Risky, "{name}: only a write is risky");
+        }
     }
 
     #[test]

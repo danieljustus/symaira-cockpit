@@ -25,6 +25,7 @@ pub mod parent_check;
 pub mod power;
 pub mod powerui;
 pub mod process;
+pub mod runloop;
 pub mod signal;
 pub mod smc;
 pub mod system;
