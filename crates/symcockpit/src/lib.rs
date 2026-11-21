@@ -4,6 +4,7 @@
 //! always do; everything else is `exec`ed into the legacy Swift binary so
 //! stdin, stdout, stderr and the exit code stay untouched.
 
+pub mod agent;
 pub mod app;
 pub mod cli;
 pub mod help;
@@ -76,6 +77,10 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
     else {
         return forward(args);
     };
+    // Internal command of the app bundle: not in the help text or the oracle.
+    if strings.first().map(String::as_str) == Some("agent") {
+        return agent::main(app, &strings[1..]);
+    }
     match cli::plan(app, &strings) {
         cli::Action::Done(outcome) => write_all(
             outcome.stdout.as_bytes(),

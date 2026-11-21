@@ -833,6 +833,7 @@ name = "symcockpit"
 version = "0.12.2"
 dependencies = [
  "jiff 0.2.42",
+ "serde",
  "serde_json",
  "symcockpit-contract",
  "symcockpit-core",
