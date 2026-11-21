@@ -9,6 +9,13 @@
   `status`, `doctor`, `permissions`, plus `--help` of the write families). Only
   state-changing commands are still handed to the Swift core. The oracle passes
   70/70 with and without a Swift binary (`make oracle`, `make oracle-native`).
+- Cockpit 2, wave 2C: `symcockpit agent --stdio`, the app's child process
+  (JSON-RPC 2.0 as NDJSON: `hello` with protocol version, `call` through the
+  MCP dispatch path with plan/confirm for risky commands, `subscribe` with
+  visible/hidden intervals, measurement only while subscribed). It starts only
+  under the signed Cockpit app (exit 3 otherwise; the test switch exists in
+  debug builds only). Protocol: `docs/agent-protocol.md`; Swift client
+  `AgentClient` in SymCockpitCore. The app does not use it yet.
 
 ## [0.12.2] (2026-11-18)
 
