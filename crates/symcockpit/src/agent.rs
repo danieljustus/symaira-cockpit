@@ -67,9 +67,14 @@ const SUBSCRIBABLE: [&str; 10] = [
     "fan.status",
 ];
 
-/// The one risky command that already is the second step of a plan of its
-/// own (storage cleanup): running it needs no further confirmation.
-const OWN_CONFIRMATION: &str = "plan.confirm";
+/// Risky area commands plan themselves: their handler only records a plan
+/// (with item identities) that `plan.confirm`, itself the second step, runs.
+/// Only the v0.12 risky commands, which act at once, get the agent's plan.
+fn plans_itself(spec: &CommandSpec) -> bool {
+    symcockpit_contract::area_commands()
+        .iter()
+        .any(|c| c.name == spec.name)
+}
 
 const PLAN_KIND: &str = "agent_command";
 const ACTION: &str = "command";
@@ -442,7 +447,7 @@ impl<'a> Session<'a> {
 
     fn call(&mut self, call: &CallParams) -> Result<Value, Rpc> {
         let spec = Self::spec(&call.command)?;
-        if spec.risk == Risk::Risky && spec.name != OWN_CONFIRMATION {
+        if spec.risk == Risk::Risky && !plans_itself(spec) {
             let engine = Engine::new(&self.plans, self.plan_clock);
             let item = json!({
                 "action": ACTION,

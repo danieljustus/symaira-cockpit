@@ -450,14 +450,17 @@ impl<'a> Server<'a> {
     }
 
     fn run_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<String, Error> {
-        let value = if !tool.legacy {
-            self.area_tool(tool, arguments)?
+        Ok(swift_json::compact(&self.tool_value(tool, arguments)?))
+    }
+
+    fn tool_value(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {
+        if !tool.legacy {
+            self.area_tool(tool, arguments)
         } else if tool.spec.risk == Risk::Read {
-            self.read_tool(tool, arguments)?
+            self.read_tool(tool, arguments)
         } else {
-            self.write_tool(tool, arguments)?
-        };
-        Ok(swift_json::compact(&value))
+            self.write_tool(tool, arguments)
+        }
     }
 
     /// Runs one register command exactly as `tools/call` would, for callers
@@ -472,12 +475,9 @@ impl<'a> Server<'a> {
             name: spec.mcp_name.unwrap_or(spec.name),
             description: "",
             spec,
+            legacy: TOOLS.iter().any(|(name, _)| spec.mcp_name == Some(*name)),
         };
-        if spec.risk == Risk::Read {
-            self.read_tool(&tool, arguments)
-        } else {
-            self.write_tool(&tool, arguments)
-        }
+        self.tool_value(&tool, arguments)
     }
 
     fn read_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {

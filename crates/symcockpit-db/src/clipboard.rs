@@ -338,10 +338,10 @@ impl symcockpit_core::clipboard::SettingsStore for JsonSettings {
     }
 }
 
-/// Where the history lives: `$XDG_DATA_HOME/symtune/clipboard` or `~/.local/share/symtune/clipboard`.
-pub fn default_dir(xdg_data_home: Option<&str>, home: Option<&str>) -> Result<PathBuf, Error> {
-    let db = crate::default_path(xdg_data_home, home)?;
-    Ok(db.with_file_name("clipboard"))
+/// Where the history lives: `<data dir>/clipboard`, next to `cockpit.sqlite`
+/// in the data directory `symcockpit-store::Paths` resolves (or `--data-dir`).
+pub fn dir_in(data_dir: &Path) -> PathBuf {
+    data_dir.join("clipboard")
 }
 
 #[cfg(test)]
@@ -446,7 +446,9 @@ mod tests {
         SqliteClipStore::open(&dir, &NoExclusion).unwrap();
         assert!(SqliteClipStore::open_existing(&dir).unwrap().is_some());
         assert!(dir.join("clipboard.sqlite").is_file() && !dir.join("cockpit.sqlite").exists());
-        let p = default_dir(Some("/data"), None).unwrap();
-        assert_eq!(p, Path::new("/data/symtune/clipboard"));
+        assert_eq!(
+            dir_in(Path::new("/data/symtune")),
+            Path::new("/data/symtune/clipboard")
+        );
     }
 }
