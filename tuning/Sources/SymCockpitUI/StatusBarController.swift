@@ -39,15 +39,19 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     }()
     private var hasShoulderSpacer = false
     private let popover = NSPopover()
-    private let controller: TuneController
+    /// The app-wide session with the Cockpit agent; the app delegate starts and ends it.
+    private let session: AgentSession
+    /// The user's config.toml: preferences and the bounds of the brightness sliders.
+    private let config: TuneConfig
     private let preferencesManager: PreferencesManager
     public let appearancePreferences = CockpitAppearancePreferences()
     let aiUsagePreferences = AIUsagePreferences()
     let fanHelperPreferences: FanHelperPreferences
-    private(set) lazy var aiUsageModel = AIUsageViewModel(
-        controller: controller,
-        preferences: aiUsagePreferences
-    )
+    private(set) lazy var aiUsageModel: AIUsageViewModel = {
+        let model = AIUsageViewModel(session: session, preferences: aiUsagePreferences)
+        model.requiresVisibility = true
+        return model
+    }()
     private let model: TuneViewModel
     private let processesModel: ProcessesViewModel
     private var preferencesWindow: NSWindow?
@@ -76,7 +80,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// preference is always readable; the tap only ever runs in a host that
     /// offers it via ``isBrightnessKeyHandlingOffered``.
     let brightnessKeyPreferences = BrightnessKeyPreferences()
-    private lazy var brightnessKeyController = BrightnessKeyController(controller: controller)
+    private lazy var brightnessKeyController = BrightnessKeyController(session: session)
 
     /// Last title rendered into the status button, to skip redundant updates.
     private var renderedSegments: [StatusItemSegment]?
@@ -133,10 +137,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// Title of the preferences window.
     public var preferencesWindowTitle: String = "Symaira Cockpit Preferences"
 
-    /// Reason string attached to the Keep Awake power assertion
-    /// (`pmset -g assertions`).
-    public var keepAwakeAssertionReason: String = "Symaira Cockpit menu bar"
-
     /// Whether this host offers the notch as a readout surface.
     ///
     /// The standalone Tune app leaves it `false`, so its menu bar behaves
@@ -166,43 +166,29 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     private let updateVersionProvider: () -> String
 
     /// The status item uses the family version in the standalone Tune app and
-    /// the unified cockpit version in the shipped GUI.
-    public override convenience init() {
-        self.init(updateVersionProvider: { TuneVersion.current })
-    }
-
-    public init(updateVersionProvider: @escaping () -> String) {
+    /// the unified cockpit version in the shipped GUI. `session` is the agent
+    /// session of the app; the caller starts it and ends it.
+    public init(session: AgentSession, updateVersionProvider: @escaping () -> String = { TuneVersion.current }) {
+        self.session = session
         self.updateVersionProvider = updateVersionProvider
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Load persisted configuration from config.toml so saved preferences
         // survive a relaunch (issue #357). The CLI uses the same loader
         // (main.swift:457); the app must too.
         let config = ConfigPaths().loadConfig()
-        // The optional privileged fan helper (issue #405). Creating the client
-        // has no side effects; it only routes fan changes once the user opted
-        // in and the helper is registered and approved.
-        let fanHelperClient = FanHelperClient()
-        self.fanHelperPreferences = FanHelperPreferences(client: fanHelperClient)
-        self.controller = TuneController(config: config, fanHelper: fanHelperClient)
+        self.config = config
+        // The optional privileged fan helper (issue #405): only its SMAppService
+        // registration lives in the app. The fan commands go through the agent.
+        self.fanHelperPreferences = FanHelperPreferences(client: FanHelperClient())
         let preferences = PreferencesManager(config: config)
         self.preferencesManager = preferences
-        self.model = TuneViewModel(controller: controller, preferences: preferences)
-        self.processesModel = ProcessesViewModel(controller: controller)
+        self.model = TuneViewModel(session: session, preferences: preferences)
+        self.processesModel = ProcessesViewModel(session: session)
         super.init()
         appearancePreferences.apply()
         configureButton()
         setupPopover()
         observePreferences()
-        // With the helper enabled, a stored governed position is re-applied
-        // at launch (the helper restored the fans when the app last quit).
-        let resumeController = controller
-        Task.detached(priority: .utility) { resumeController.resumeFanProfileViaHelper() }
-        // A CLI/MCP `fan profile …` changes only the stored profile; the root
-        // helper reads no user files, so the app reconciles it on every
-        // heartbeat (system stops the helper, another position retargets it).
-        fanHelperClient.setHeartbeatObserver { [weak resumeController] in
-            resumeController?.reconcileFanProfileWithHelper()
-        }
         model.onStatusItemTextChanged = { [weak self] segments in
             self?.renderStatusItem(segments: segments)
         }
@@ -231,6 +217,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(self)
             model.stop()
             aiUsageModel.stop()
+            processesModel.setVisible(false)
         }
     }
 
@@ -554,8 +541,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         chrome: TunePanelChrome = .popover
     ) -> MainStatusView {
         MainStatusView(
-            controller: controller,
             model: model,
+            config: config,
             aiUsageModel: aiUsageModel,
             processesModel: processesModel,
             updateChecker: updateChecker,
@@ -565,7 +552,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             openCockpitTitle: openCockpitTitle,
             panelTitle: panelTitle,
             panelVersion: updateVersionProvider(),
-            keepAwakeAssertionReason: keepAwakeAssertionReason,
             maxHeight: maxHeight,
             chrome: chrome,
             readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
@@ -690,6 +676,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // Switch the model to the interactive tier (faster cadence, full
         // sensor set) now that the panel is on screen.
         model.setDetailVisible(true)
+        aiUsageModel.isVisible = true
     }
 
     /// Open the Preferences window.
@@ -710,7 +697,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
                 // A key was saved/cleared: the provider now resolves lazily,
                 // but its cached snapshot must be dropped and the usage card
                 // refreshed so the live state shows immediately (issue #324).
-                self?.controller.resetAIUsageCache()
                 self?.aiUsageModel.refreshNow()
             },
             fanHelper: fanHelperPreferences
@@ -734,6 +720,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     public func popoverDidClose(_ notification: Notification) {
         // Drop back to the idle tier: metrics only, at a glanceable cadence.
         model.setDetailVisible(false)
+        aiUsageModel.isVisible = false
         // The process card's `onDisappear` is not guaranteed for a popover that
         // is torn down; stop sampling explicitly so a closed panel costs nothing.
         processesModel.setVisible(false)
@@ -766,12 +753,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
 
     @objc private func handleWake() {
         model.recordWakeGap()
-        // The Apple Silicon charge-limit inhibit bit resets on sleep; re-assert
-        // the configured limit (band-controlled) after every wake.
-        controller.reconcileChargeLimit()
-        // macOS also resets the display's gamma table across sleep, which drops
-        // an active brightness boost or warmth shift without telling anyone.
-        controller.reassertDisplayOverrides()
     }
 
     // MARK: - Embedding
@@ -794,6 +775,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// panel is on screen (the popover does this on open/close itself).
     public func setEmbeddedPanelVisible(_ visible: Bool) {
         model.setDetailVisible(visible)
+        aiUsageModel.isVisible = visible
         processesModel.setVisible(visible)
     }
 }

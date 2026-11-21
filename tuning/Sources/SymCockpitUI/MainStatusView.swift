@@ -38,8 +38,9 @@ public enum TunePanelChrome: Sendable {
 
 @MainActor
 struct MainStatusView: View {
-    let controller: TuneController
     let model: TuneViewModel
+    /// The user's config.toml, for the bounds of the brightness controls.
+    let config: TuneConfig
     let aiUsageModel: AIUsageViewModel
     let processesModel: ProcessesViewModel
     @ObservedObject var updateChecker: AppUpdateChecker
@@ -58,9 +59,6 @@ struct MainStatusView: View {
     /// ``StatusHeaderView``).
     var panelTitle: String = "SYMAIRA COCKPIT"
     var panelVersion: String = TuneVersion.current
-
-    /// Reason string for the Keep Awake power assertion (branding override).
-    var keepAwakeAssertionReason: String = "Symaira Cockpit menu bar"
 
     /// Height budget for the popover, from the screen the menu bar is on.
     /// The panel grows with its content up to this cap and scrolls beyond it —
@@ -118,6 +116,10 @@ struct MainStatusView: View {
                     openCockpitRow(onOpenCockpit)
                 }
             }
+            // Why nothing is measured, when the agent is not running: a diagnosis, never a stale value.
+            if let diagnosis = model.diagnosis {
+                AgentDiagnosisCard(diagnosis: diagnosis, restart: { model.restartAgent() })
+            }
             // The window title bar and sidebar already say what this page is;
             // a second "This Mac" heading here only repeated them.
             LiveSummaryStrip(model: model, isExpanded: chrome == .embedded)
@@ -173,8 +175,8 @@ struct MainStatusView: View {
                 pairedLayout {
                     if shows(.displayControls) {
                         DisplayControlsCard(
-                            controller: controller,
                             model: model,
+                            config: config,
                             brightnessKeys: brightnessKeyPreferences,
                             brightnessKeyController: brightnessKeyController
                         )
@@ -198,12 +200,12 @@ struct MainStatusView: View {
                 }
                 pairedLayout {
                     if shows(.keepAwake) {
-                        KeepAwakeSection(controller: controller, model: model, assertionReason: keepAwakeAssertionReason)
+                        KeepAwakeSection(model: model)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                     if shows(.fanControl, hardwareAvailable: hasFans) {
                         FanControlCard(
-                            controller: controller, model: model,
+                            model: model,
                             preferencesManager: preferencesManager,
                             openPreferences: openPreferences
                         )
@@ -433,9 +435,7 @@ private struct StorageVolumesSection: View {
 
 /// Keep-awake card plus the duration/display-sleep choices it owns.
 private struct KeepAwakeSection: View {
-    let controller: TuneController
     let model: TuneViewModel
-    let assertionReason: String
 
     /// Duration presets: indefinite + 15m, 30m, 1h, 2h, 4h, 8h
     private static let presets: [(label: String, seconds: TimeInterval?)] = [
@@ -485,21 +485,13 @@ private struct KeepAwakeSection: View {
     }
 
     private func toggle() {
-        do {
-            if controller.keepAwakeSessionStatus().active {
-                controller.endKeepAwakeSession()
-            } else {
-                try controller.beginKeepAwakeSession(
-                    duration: Self.presets[durationIndex].seconds,
-                    preventDisplaySleep: preventDisplaySleep,
-                    reason: assertionReason
-                )
-            }
-            awakeError = nil
-        } catch {
-            awakeError = SecretRedactor.redact(error.localizedDescription)
+        let wasActive = model.keepAwake.active
+        let duration = Self.presets[durationIndex].seconds
+        let preventDisplaySleep = preventDisplaySleep
+        Task {
+            let outcome = await model.setKeepAwake(!wasActive, preventDisplaySleep: preventDisplaySleep, duration: duration)
+            awakeError = outcome.failureMessage.map(SecretRedactor.redact)
         }
-        model.refreshNow()
     }
 }
 

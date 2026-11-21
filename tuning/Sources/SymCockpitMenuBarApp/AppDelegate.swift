@@ -1,4 +1,5 @@
 @preconcurrency import AppKit
+import SymCockpitCore
 import SymCockpitUI
 
 /// Application delegate for the Symaira Cockpit menu-bar app.
@@ -8,6 +9,9 @@ import SymCockpitUI
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
+    /// The Cockpit agent (`symcockpit agent --stdio`) next to this executable;
+    /// without one the panel shows why instead of readings.
+    private let session = AgentSession.bundled()
 
     /// AppKit's default `@main` entry point (`NSApplicationMain`) only wires up
     /// the delegate when a main nib/storyboard instantiates it. This app has
@@ -23,11 +27,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
-        statusBarController = StatusBarController()
+        statusBarController = StatusBarController(session: session)
+        Task { await session.start() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         statusBarController = nil
+        session.stop()
     }
 
     /// Installs a minimal main menu so that standard text-editing keyboard

@@ -97,7 +97,8 @@ build_extension() {
   local ent="$WORK/$exe.entitlements"
   cp "$REPO_ROOT/extensions/entitlements/$dir.entitlements" "$ent"
   if [[ -n "$APP_GROUP" && "$dir" == findersync ]]; then
-    plutil -insert com.apple.security.application-groups -json "[\"$APP_GROUP\"]" "$ent"
+    # Dots in the key are escaped: plutil reads an unescaped one as a key path.
+    plutil -insert 'com\.apple\.security\.application-groups' -json "[\"$APP_GROUP\"]" "$ent"
   fi
   local sign=(codesign --force --sign "$IDENTITY" "$TIMESTAMP" --entitlements "$ent")
   [[ "$IDENTITY" == "-" ]] || sign+=(--options runtime)

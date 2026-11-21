@@ -36,7 +36,7 @@ decision, never the handler's. `snapshots/mcp/tools_list.json` follows with
 | Path | Role | Language |
 | :--- | :--- | :--- |
 | `Sources/symcockpit/` | tune-only dispatcher and version report | Swift 6 |
-| `Sources/SymCockpitApp/` | tune-only menu-bar and window GUI | Swift 6 (SwiftUI/AppKit) |
+| `Sources/SymCockpitApp/` | tune-only menu-bar and window GUI; owns the app-wide `AgentSession` (starts it at launch, closes it at quit) | Swift 6 (SwiftUI/AppKit) |
 | `tuning/` | thermals, power, display and brightness | Swift 6 (AppKit/IOKit) |
 | `history/` | canonical history store, replay codec, secret redaction and bounded subprocess runner | Swift 6 |
 | `extensions/` | Quick Look and FinderSync extensions (Swift, no Xcode project; `scripts/build-extensions.sh`, `docs/extensions.md`), linked against `crates/symcockpit-ffi` | Swift 6 |
@@ -131,9 +131,13 @@ products adopt it.
   `SymVaultCredentialStore.reference(for:)` builds an opaque `symvault://` URI;
   that reference — never a secret — goes into the child environment for
   `symbrain usage`, which resolves it itself. Tests protect this boundary.
-- **The GUI owns no logic.** It reads `SymCockpitCore` and embeds `SymCockpitUI`'s
+- **The GUI owns no logic.** It reads the Cockpit agent (`symcockpit agent --stdio`,
+  `docs/agent-protocol.md`) through the app-wide `AgentSession` and embeds `SymCockpitUI`'s
   panel rather than reimplementing it, so the window cannot report something
-  `symcockpit` would contradict.
+  `symcockpit` would contradict. The UI never constructs a `TuneController`: data come
+  from agent events, actions are agent commands (a risky one is a plan the user confirms
+  in the app). Presentation state (sparkline buffers, status-item text) may live in the
+  app. Without a running agent the UI shows a diagnosis, never old values.
 - **One panel, two chromes.** `MainStatusView` renders the same cards for the
   popover and cockpit window; `TunePanelChrome` decides only the frame. Do not
   fork the panel for the window.

@@ -77,6 +77,48 @@ grep -q "^Identifier=$HELPER_ID$" <<<"$HELPER_SIGNATURE" || {
   exit 1
 }
 
+# The Rust binaries (Cockpit 2): the agent the app starts (and the CLI the cask
+# links) next to the app executable, and the helper above. Both must be arm64
+# and validly signed. The agent is run once for `version`, which reads nothing
+# from the Mac; the helper is never run (it would serve XPC).
+AGENT_ID="com.symaira.cockpit.symcockpit"
+AGENT_EXECUTABLE="$APP_PATH/Contents/MacOS/symcockpit"
+[[ -x "$AGENT_EXECUTABLE" ]] || {
+  printf 'Agent executable is missing or not executable: %s\n' "$AGENT_EXECUTABLE" >&2
+  exit 1
+}
+for rust_binary in "$AGENT_EXECUTABLE" "$HELPER_EXECUTABLE"; do
+  [[ "$(lipo -archs "$rust_binary")" == "arm64" ]] || {
+    printf 'Rust binary must be arm64: %s (%s)\n' "$rust_binary" "$(lipo -archs "$rust_binary" 2>&1)" >&2
+    exit 1
+  }
+  codesign --verify --strict "$rust_binary" || {
+    printf 'Rust binary signature is invalid: %s\n' "$rust_binary" >&2
+    exit 1
+  }
+done
+grep -q "^Identifier=$AGENT_ID$" <<<"$(codesign --display --verbose=2 "$AGENT_EXECUTABLE" 2>&1 || true)" || {
+  printf 'Agent must be signed with identifier %s\n' "$AGENT_ID" >&2
+  exit 1
+}
+AGENT_VERSION=$("$AGENT_EXECUTABLE" version --no-update-check) || {
+  printf '`symcockpit version` failed in the bundle: %s\n' "$AGENT_EXECUTABLE" >&2
+  exit 1
+}
+grep -q '^symcockpit ' <<<"$AGENT_VERSION" || {
+  printf 'Unexpected `symcockpit version` output: %s\n' "$AGENT_VERSION" >&2
+  exit 1
+}
+# With a team id given (release builds), it must be baked into both binaries.
+if [[ -n "${EXPECTED_TEAM_ID:-}" ]]; then
+  for rust_binary in "$AGENT_EXECUTABLE" "$HELPER_EXECUTABLE"; do
+    grep -aq "$EXPECTED_TEAM_ID" "$rust_binary" || {
+      printf 'Team identifier %s is not baked into %s\n' "$EXPECTED_TEAM_ID" "$rust_binary" >&2
+      exit 1
+    }
+  done
+fi
+
 THEME_RESOURCES="$APP_PATH/Contents/Resources/symaira-corekit_SymairaTheme.bundle/Contents/Resources"
 for resource in GoogleSansFlex.ttf GoogleSansFlex-OFL.txt GoogleSansFlex-TRADEMARKS.md default.metallib; do
   [[ -s "$THEME_RESOURCES/$resource" ]] || {

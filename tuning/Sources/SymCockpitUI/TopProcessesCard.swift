@@ -73,7 +73,7 @@ struct TopProcessesCard: View {
                 if model.sortedBy == .gpu {
                     gpuEmptyState
                 } else {
-                    Text(model.isWarmingUp ? "Sampling…" : "No readable processes.")
+                    Text(model.problem ?? (model.isWarmingUp ? "Sampling…" : "No readable processes."))
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTokens.ink3)
                         .padding(.vertical, SymairaSpacing.small)
