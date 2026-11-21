@@ -13,10 +13,10 @@ use std::process::ExitCode;
 
 use symcockpit_core::helper_engine::Engine;
 use symcockpit_helper::{Exit, Service, run, system_clock};
-use symcockpit_helper_proto::signing::{app_requirement, helper_requirement};
+use symcockpit_helper_proto::signing::{Role, app_requirement, helper_requirement};
 use symcockpit_macos::helper::{
-    LiveHelperPorts, embedded_team_identifier, install_termination_handlers, serve,
-    termination_requested,
+    LiveHelperPorts, connection_requirement, embedded_team_identifier,
+    install_termination_handlers, serve, termination_requested,
 };
 use symcockpit_store::Config;
 
@@ -75,6 +75,12 @@ fn main() -> ExitCode {
         .get(1)
         .map_or_else(|| PathBuf::from(DEFAULT_DATA_DIR), PathBuf::from);
 
+    // Fail closed before touching the SMC: an unsigned or foreign build must
+    // neither serve nor recover (a recovery writes the SMC as root).
+    if let Err(reason) = connection_requirement(Role::HelperAcceptingClient) {
+        log(&format!("refusing to serve: {reason}"));
+        return ExitCode::FAILURE;
+    }
     install_termination_handlers();
     let ports = LiveHelperPorts::open(Config::default());
     let engine = Engine::new(Box::new(ports), &data_dir, None, env!("CARGO_PKG_VERSION"));

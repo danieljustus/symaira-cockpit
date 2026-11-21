@@ -87,14 +87,11 @@ fn run(ctx: &Context, command: &Command) -> Result<Output, Error> {
     if route(&env, command) == Route::Helper
         && let (Some(action), Ok(client)) = (helper_action(command), HelperClient::connect())
     {
-        match client.request(&symcockpit_helper_proto::Request::new(action)) {
-            Ok(reply) => {
-                let result = reply_to_result(reply);
-                log_outcome(&env, command, &result);
-                return result.map(|()| applied());
-            }
-            // Not reachable (not installed, not approved): the direct write decides.
-            Err(_) => {}
+        // A transport error (not installed, not approved) falls through: the direct write decides.
+        if let Ok(reply) = client.request(&symcockpit_helper_proto::Request::new(action)) {
+            let result = reply_to_result(reply);
+            log_outcome(&env, command, &result);
+            return result.map(|()| applied());
         }
     }
     execute(&env, command).map(|()| applied())

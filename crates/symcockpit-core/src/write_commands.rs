@@ -130,7 +130,7 @@ pub fn parse_battery_limit(rest: &[String]) -> Result<Command, Error> {
     let percent = parse_int(rest, "battery-limit set")?;
     // Swift hands the value on as a Double; Double(Int.max) is not an Int.
     // Only values that round up to 2^63 get here; Swift prints that as below.
-    if percent as f64 >= 9.223_372_036_854_775_807e18 {
+    if percent as f64 >= (1u64 << 63) as f64 {
         return Err(Error::Usage(
             "battery-limit: percent value is not a representable integer (got 9.223372036854776e+18)."
                 .into(),
