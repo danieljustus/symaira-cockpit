@@ -936,6 +936,7 @@ dependencies = [
  "symcockpit-db",
  "symcockpit-macos",
  "symcockpit-oracle",
+ "symcockpit-store",
  "tempfile",
 ]
 

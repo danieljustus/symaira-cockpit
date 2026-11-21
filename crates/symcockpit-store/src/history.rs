@@ -192,6 +192,106 @@ pub fn parse_iso8601(text: &str) -> Option<f64> {
     Some((days * 86_400 + h * 3600 + mi * 60 + s - offset) as f64 + fraction)
 }
 
+/// One tune write event, as `HistoryService.logEvent` records it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistoryEvent {
+    /// `yyyy-MM-ddTHH:mm:ssZ` (UTC), as Swift's `.iso8601` writes it.
+    pub timestamp: String,
+    pub action: String,
+    pub requested_value: Option<f64>,
+    pub clamped_value: Option<f64>,
+    pub applied_value: Option<f64>,
+    pub result: String,
+    pub error_reason: Option<String>,
+}
+
+/// Events kept in the file (`CanonicalHistoryStore.maxEvents`).
+const MAX_EVENTS: usize = 1000;
+
+fn envelope(event: &HistoryEvent) -> String {
+    let mut payload = Map::new();
+    payload.insert("timestamp".into(), event.timestamp.clone().into());
+    payload.insert("action".into(), event.action.clone().into());
+    payload.insert("result".into(), event.result.clone().into());
+    for (key, value) in [
+        ("requested_value", event.requested_value),
+        ("clamped_value", event.clamped_value),
+        ("applied_value", event.applied_value),
+    ] {
+        if let Some(v) = value {
+            payload.insert(key.into(), v.into());
+        }
+    }
+    if let Some(reason) = &event.error_reason {
+        payload.insert("error_reason".into(), reason.clone().into());
+    }
+    // Keys sort alphabetically (serde_json's map is ordered), like Swift's `.sortedKeys`.
+    serde_json::json!({
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "source": "tune",
+        "timestamp": event.timestamp,
+        "action": event.action,
+        "payload": payload,
+    })
+    .to_string()
+}
+
+/// `CanonicalHistoryStore.append`: one NDJSON line under an exclusive lock on
+/// `<file>.lock`, a torn last line repaired first, the file trimmed to its
+/// newest `MAX_EVENTS`. Secrets in `error_reason` are the caller's to redact.
+pub fn append_history_event(
+    file: &Path,
+    event: &HistoryEvent,
+    is_root: bool,
+) -> std::io::Result<()> {
+    let dir = file
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    crate::state::ensure_private_dir(dir, is_root)?;
+    let mut lock_name = file.as_os_str().to_owned();
+    lock_name.push(".lock");
+    let lock_path = std::path::PathBuf::from(lock_name);
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&lock_path)?;
+    lock.lock()?;
+    let result = (|| {
+        let mut contents = std::fs::read(file).unwrap_or_default();
+        if contents.last().is_some_and(|b| *b != b'\n') {
+            let tail_start = contents
+                .iter()
+                .rposition(|b| *b == b'\n')
+                .map_or(0, |i| i + 1);
+            if decode_record(&contents[tail_start..]).is_some() {
+                contents.push(b'\n');
+            } else {
+                contents.truncate(tail_start);
+            }
+        }
+        contents.extend_from_slice(envelope(event).as_bytes());
+        contents.push(b'\n');
+        let lines: Vec<&[u8]> = contents
+            .split(|b| *b == b'\n')
+            .filter(|l| !l.is_empty())
+            .collect();
+        if lines.len() > MAX_EVENTS {
+            let mut trimmed = Vec::new();
+            for line in &lines[lines.len() - MAX_EVENTS..] {
+                trimmed.extend_from_slice(line);
+                trimmed.push(b'\n');
+            }
+            contents = trimmed;
+        }
+        crate::state::write_private_atomic(file, &contents, is_root)?;
+        Ok(())
+    })();
+    crate::state::secure_file(&lock_path, is_root);
+    let _ = lock.unlock();
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,5 +401,64 @@ mod tests {
         ] {
             assert_eq!(parse_iso8601(bad), None, "{bad}");
         }
+    }
+
+    fn event(n: u32) -> HistoryEvent {
+        HistoryEvent {
+            timestamp: "2026-11-21T10:00:00Z".into(),
+            action: format!("brightness.set.{n}"),
+            requested_value: Some(2.0),
+            clamped_value: Some(1.0),
+            applied_value: None,
+            result: "success".into(),
+            error_reason: None,
+        }
+    }
+
+    #[test]
+    fn appended_events_read_back_as_canonical_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("data/history.ndjson");
+        let mut failed = event(1);
+        failed.error_reason = Some("boom".into());
+        append_history_event(&file, &failed, false).unwrap();
+        append_history_event(&file, &event(2), false).unwrap();
+        let records = read_history_records(&file, None);
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            (records[0].source.as_str(), records[0].action.as_str()),
+            ("tune", "brightness.set.1")
+        );
+        assert_eq!(records[0].payload["error_reason"], "boom");
+        assert_eq!(records[1].payload["requested_value"], 2.0);
+        assert!(
+            !records[1].payload.contains_key("applied_value"),
+            "nil is omitted like Swift"
+        );
+        let line = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            line.starts_with("{\"action\":\"brightness.set.1\",\"payload\":{"),
+            "{line}"
+        );
+    }
+
+    #[test]
+    fn a_torn_last_line_is_repaired_and_the_file_is_trimmed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("history.ndjson");
+        std::fs::write(&file, b"{\"torn\":").unwrap();
+        append_history_event(&file, &event(1), false).unwrap();
+        assert_eq!(read_history_records(&file, None).len(), 1);
+        let mut many = String::new();
+        for n in 0..1000 {
+            many.push_str(&envelope(&event(n)));
+            many.push('\n');
+        }
+        std::fs::write(&file, many).unwrap();
+        append_history_event(&file, &event(1000), false).unwrap();
+        let records = read_history_records(&file, None);
+        assert_eq!(records.len(), 1000);
+        assert_eq!(records[0].action, "brightness.set.1");
+        assert_eq!(records[999].action, "brightness.set.1000");
     }
 }

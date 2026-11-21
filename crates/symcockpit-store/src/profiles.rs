@@ -44,6 +44,57 @@ fn decode(bytes: &[u8]) -> Option<Profile> {
     })
 }
 
+/// `TuneProfile.isValidProfileName`: letters, digits, `-` and `_` only.
+pub fn is_valid_profile_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn profile_file(dir: &Path, name: &str) -> std::path::PathBuf {
+    dir.join(format!("profile-{name}.json"))
+}
+
+/// The file `ProfileService.saveProfile` writes: sorted keys, camelCase,
+/// dates as seconds since 2001-01-01, absent optionals omitted.
+pub fn write_profile(dir: &Path, profile: &Profile, is_root: bool) -> std::io::Result<()> {
+    let mut o = serde_json::Map::new();
+    o.insert("name".into(), profile.name.clone().into());
+    o.insert("createdAt".into(), profile.created_at.into());
+    o.insert("updatedAt".into(), profile.updated_at.into());
+    for (key, value) in [
+        ("brightness", profile.brightness),
+        ("dim", profile.dim),
+        ("warmth", profile.warmth),
+    ] {
+        if let Some(v) = value {
+            o.insert(key.into(), v.into());
+        }
+    }
+    if let Some(v) = &profile.version {
+        o.insert("version".into(), v.clone().into());
+    }
+    let text = serde_json::to_string_pretty(&Value::Object(o)).map_err(std::io::Error::other)?;
+    crate::state::write_private_atomic(&profile_file(dir, &profile.name), text.as_bytes(), is_root)
+}
+
+/// One profile by name. `NotFound` for a missing file, `InvalidData` for one
+/// that does not decode. The name must already be valid.
+pub fn read_profile(dir: &Path, name: &str) -> std::io::Result<Profile> {
+    let bytes = std::fs::read(profile_file(dir, name))?;
+    decode(&bytes)
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "undecodable profile"))
+}
+
+/// Deletes a profile; a missing one is fine (`fileExists` guard in Swift).
+pub fn delete_profile(dir: &Path, name: &str) -> std::io::Result<()> {
+    match std::fs::remove_file(profile_file(dir, name)) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
+}
+
 /// Valid profiles sorted by name. Unreadable or undecodable files are
 /// skipped; a missing directory is an empty list.
 pub fn read_profiles(dir: &Path) -> Vec<Profile> {
@@ -109,5 +160,49 @@ mod tests {
     #[test]
     fn missing_directory_is_an_empty_list() {
         assert!(read_profiles(Path::new("/nonexistent-dir-for-test")).is_empty());
+    }
+
+    #[test]
+    fn names_follow_the_swift_rule() {
+        for ok in ["work", "a-b_C9", "0"] {
+            assert!(is_valid_profile_name(ok), "{ok}");
+        }
+        for bad in ["", "a/b", "..", "a..b", "a b", "a\0b", "ä", "a.json"] {
+            assert!(!is_valid_profile_name(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn written_profiles_read_back_and_delete_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let profile = Profile {
+            name: "work".into(),
+            brightness: Some(0.7),
+            dim: Some(1.0),
+            warmth: None,
+            version: Some("0.12.2".into()),
+            created_at: 785_000_000.5,
+            updated_at: 785_000_000.5,
+        };
+        write_profile(tmp.path(), &profile, false).unwrap();
+        assert_eq!(read_profile(tmp.path(), "work").unwrap(), profile);
+        assert_eq!(read_profiles(tmp.path()), std::slice::from_ref(&profile));
+        let text = std::fs::read_to_string(tmp.path().join("profile-work.json")).unwrap();
+        assert!(
+            text.contains("\"createdAt\"") && !text.contains("warmth"),
+            "{text}"
+        );
+        assert_eq!(
+            read_profile(tmp.path(), "nope").unwrap_err().kind(),
+            std::io::ErrorKind::NotFound
+        );
+        std::fs::write(tmp.path().join("profile-bad.json"), "{}").unwrap();
+        assert_eq!(
+            read_profile(tmp.path(), "bad").unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        delete_profile(tmp.path(), "work").unwrap();
+        delete_profile(tmp.path(), "work").unwrap();
+        assert!(read_profiles(tmp.path()).is_empty());
     }
 }
