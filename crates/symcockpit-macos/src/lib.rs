@@ -31,4 +31,5 @@ pub mod smc;
 pub mod system;
 pub mod trash;
 pub mod volumes;
+pub mod wake;
 pub mod xpc;

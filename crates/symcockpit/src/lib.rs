@@ -18,6 +18,7 @@ pub mod live;
 pub mod mcp;
 pub mod native;
 pub mod platform;
+pub mod wake;
 pub mod write;
 pub mod writes;
 
@@ -182,11 +183,12 @@ fn serve(app: &app::App, data_dir_override: Option<std::path::PathBuf>) -> u8 {
         services: &app.services,
     };
     let server = mcp::Server::new(app, &ctx);
-    match mcp::serve(
-        &server,
-        writes::PumpedStdin::spawn(),
-        std::io::stdout().lock(),
-    ) {
+    // Held overrides survive a sleep: the display half and the charge limit are put back.
+    let mut input = writes::PumpedStdin::spawn();
+    if let Some(source) = wake::live_source() {
+        input.watch_wake(&source, || wake::after_wake(&ctx));
+    }
+    match mcp::serve(&server, input, std::io::stdout().lock()) {
         Ok(()) => exit::OK,
         Err(error) => {
             eprintln!("symcockpit: serve: {error}");

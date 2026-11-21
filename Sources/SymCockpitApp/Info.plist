@@ -30,6 +30,10 @@
          which point CockpitWindowController raises the activation policy. -->
     <key>LSUIElement</key>
     <true/>
+    <!-- The app group of the Finder extension's jobs (empty: no team id, no group). The app
+         passes <container>/jobs to its agent; build-app.sh fills it in. -->
+    <key>SymCockpitAppGroup</key>
+    <string>__GROUP__</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key>

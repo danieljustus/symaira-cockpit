@@ -6,7 +6,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use symcockpit_contract::{Error, Outcome};
-use symcockpit_core::charge_limit::{self, ChargeEnv, Mechanism, reconcile};
+use symcockpit_core::charge_limit::{self, BandStep, ChargeEnv, Mechanism, band_step, reconcile};
 use symcockpit_core::fan::FanEnv;
 use symcockpit_core::restore::RestoreTracker;
 use symcockpit_core::sensors::ChargeLimitKeyFamily;
@@ -326,6 +326,29 @@ fn reconcile_reasserts_after_wake_and_releases_below_the_band() {
     assert_eq!(rig.smc.get("CHTE").unwrap().bytes, [0, 0, 0, 0]);
     // No reading: nothing.
     assert!(!rig.with(false, |e| reconcile(e, 80, None)));
+}
+
+#[test]
+fn the_band_inhibits_at_the_target_releases_below_it_and_otherwise_keeps() {
+    use BandStep::{Inhibit, Keep, Release};
+    // (inhibited, percent) at target 80, hysteresis 5.
+    for (inhibited, percent, step) in [
+        (false, 80, Inhibit),
+        (false, 100, Inhibit),
+        (true, 80, Keep),
+        (true, 77, Keep),
+        (false, 77, Keep),
+        (true, 75, Release),
+        (true, 40, Release),
+        // Already allowed below the band: nothing to write.
+        (false, 40, Keep),
+    ] {
+        assert_eq!(
+            band_step(inhibited, percent, 80, 5),
+            step,
+            "{inhibited} {percent}"
+        );
+    }
 }
 
 // -- restore record ------------------------------------------------------------------------

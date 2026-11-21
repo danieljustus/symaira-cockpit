@@ -261,6 +261,30 @@ pub fn clear(env: &ChargeEnv) -> Result<ChargeResult, Error> {
     }
 }
 
+/// What the band asks for at a given charge: inhibit at or above the target, release only
+/// once the battery is `hysteresis` percent below it while inhibited, otherwise keep the state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BandStep {
+    Inhibit,
+    Release,
+    Keep,
+}
+
+pub fn band_step(inhibited: bool, percent: i64, target: i64, hysteresis: i64) -> BandStep {
+    if percent >= target {
+        // Lapsed on wake (or never re-applied): re-assert.
+        if inhibited {
+            BandStep::Keep
+        } else {
+            BandStep::Inhibit
+        }
+    } else if percent <= target - hysteresis && inhibited {
+        BandStep::Release
+    } else {
+        BandStep::Keep
+    }
+}
+
 /// Hysteresis control for a long-lived process (SMC path): inhibit at or above
 /// the target, re-allow only once the battery has dropped `hysteresis` percent
 /// below it, keep the current state inside the band (`reconcileChargeLimit`).
@@ -286,12 +310,14 @@ pub fn reconcile(env: &ChargeEnv, target: i64, current_percent: Option<i64>) -> 
             ok
         }
     };
-    if percent >= target {
-        // Lapsed on wake (or never re-applied): re-assert.
-        return !inhibited && write_state(on);
+    match band_step(
+        inhibited,
+        percent,
+        target,
+        env.config.charge_limit_hysteresis_percent,
+    ) {
+        BandStep::Inhibit => write_state(on),
+        BandStep::Release => write_state(off),
+        BandStep::Keep => false,
     }
-    if percent <= target - env.config.charge_limit_hysteresis_percent && inhibited {
-        return write_state(off);
-    }
-    false
 }

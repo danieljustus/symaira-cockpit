@@ -23,6 +23,17 @@ EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST")
 LS_UI_ELEMENT=$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$INFO_PLIST")
 EXECUTABLE="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
+# The Finder jobs' app group (the app hands <container>/jobs to its agent): never the
+# template placeholder, and the team's group when a team id is given and extensions are built.
+APP_GROUP=$(/usr/libexec/PlistBuddy -c 'Print :SymCockpitAppGroup' "$INFO_PLIST" 2>/dev/null || true)
+WANT_GROUP=""
+if [[ -n "${EXPECTED_TEAM_ID:-}" && -d "$APP_PATH/Contents/PlugIns" ]]; then
+  WANT_GROUP="$EXPECTED_TEAM_ID.group.com.symaira.cockpit"
+fi
+[[ "$APP_GROUP" == "$WANT_GROUP" ]] || {
+  printf 'SymCockpitAppGroup is "%s", expected "%s"\n' "$APP_GROUP" "$WANT_GROUP" >&2
+  exit 1
+}
 
 [[ -x "$EXECUTABLE" ]] || {
   printf 'App executable is missing or not executable: %s\n' "$EXECUTABLE" >&2

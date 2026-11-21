@@ -8,7 +8,7 @@
 #
 # Environment (set by the test):
 #   FAKE_AGENT_FIXTURES  JSON file: { "<command>": <output>, ... } for calls and samples
-#   FAKE_AGENT_LOG       every request is appended here as one JSON line {method, params}
+#   FAKE_AGENT_LOG       the arguments after the scenario ({argv}), then every request, one JSON line each {method, params}
 #   FAKE_AGENT_MARKER    path used by `crash_once`
 #
 # Scenarios: ok | version (hello refused, -32010) | refuse (stderr + exit 3) |
@@ -29,6 +29,8 @@ if ($scenario eq 'refuse') {
 }
 my $log;
 if ($ENV{FAKE_AGENT_LOG}) { open($log, '>>', $ENV{FAKE_AGENT_LOG}) or die "log: $!"; select((select($log), $| = 1)[0]); }
+# The arguments after the scenario, so a test can see how the app started the agent.
+print $log $json->encode({ argv => [@ARGV] }), "\n" if $log;
 my $data = {};
 if ($ENV{FAKE_AGENT_FIXTURES}) {
     open(my $fh, '<', $ENV{FAKE_AGENT_FIXTURES}) or die "fixtures: $!";

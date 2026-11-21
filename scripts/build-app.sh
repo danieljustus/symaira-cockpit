@@ -186,6 +186,12 @@ done
 cp -R "$ICON_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icon"
 cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icns"
 
+# The app group of the Finder jobs: named in Info.plist exactly when the app gets the
+# entitlement below (a team id, and extensions to talk to), as the FinderSync extension reads it.
+APP_GROUP=""
+if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
+  APP_GROUP="$EXPECTED_TEAM_ID.group.com.symaira.cockpit"
+fi
 # The Info.plist template carries Xcode's build-setting placeholders so it can
 # also be consumed by an Xcode target later; substitute them here.
 DEPLOYMENT_TARGET="$(sed -n 's/.*\.macOS(\.v\([0-9]*\)).*/\1.0/p' Package.swift | head -1)"
@@ -194,6 +200,7 @@ sed \
   -e "s|\$(PRODUCT_BUNDLE_IDENTIFIER)|$BUNDLE_ID|g" \
   -e "s|\$(MACOSX_DEPLOYMENT_TARGET)|${DEPLOYMENT_TARGET:-26.0}|g" \
   -e "s|\$(COCKPIT_VERSION)|$COCKPIT_VERSION|g" \
+  -e "s|__GROUP__|$APP_GROUP|g" \
   Sources/SymCockpitApp/Info.plist > "$APP_PATH/Contents/Info.plist"
 
 if ACTOOL="$(xcrun --find actool 2>/dev/null || true)" && [[ -n "$ACTOOL" ]]; then
@@ -262,7 +269,7 @@ if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
   APP_ENTITLEMENTS="$(mktemp)"
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict/></plist>' >"$APP_ENTITLEMENTS"
   # Dots in the key are escaped: plutil reads an unescaped one as a key path.
-  plutil -insert 'com\.apple\.security\.application-groups' -json "[\"$EXPECTED_TEAM_ID.group.com.symaira.cockpit\"]" "$APP_ENTITLEMENTS"
+  plutil -insert 'com\.apple\.security\.application-groups' -json "[\"$APP_GROUP\"]" "$APP_ENTITLEMENTS"
   APP_SIGN_ARGS=(--entitlements "$APP_ENTITLEMENTS")
 fi
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none ${APP_SIGN_ARGS[@]+"${APP_SIGN_ARGS[@]}"} "$APP_PATH"

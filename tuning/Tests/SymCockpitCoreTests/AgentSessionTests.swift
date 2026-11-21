@@ -62,6 +62,49 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertTrue(condition(), "timed out waiting for \(description)")
     }
 
+    // MARK: - How the app starts the agent
+
+    func testTheAgentGetsTheFinderJobsDirectoryOfTheAppGroupContainer() {
+        let container = URL(fileURLWithPath: "/containers/group.example")
+        var asked: [String] = []
+        let arguments = AgentSession.agentArguments(appGroup: "TEAM.group.com.symaira.cockpit") {
+            asked.append($0)
+            return container
+        }
+        XCTAssertEqual(arguments, ["agent", "--stdio", "--finder-jobs-dir", "/containers/group.example/jobs"])
+        XCTAssertEqual(asked, ["TEAM.group.com.symaira.cockpit"])
+    }
+
+    func testWithoutAUsableAppGroupTheAgentStartsWithoutTheArgument() {
+        let plain = ["agent", "--stdio"]
+        let neverAsked: (String) -> URL? = { _ in XCTFail("no group, no lookup"); return nil }
+        // No key in Info.plist (an unsigned or ad-hoc build), or an empty one.
+        XCTAssertEqual(AgentSession.agentArguments(appGroup: nil, container: neverAsked), plain)
+        XCTAssertEqual(AgentSession.agentArguments(appGroup: "", container: neverAsked), plain)
+        // A group macOS cannot resolve: not an error either.
+        XCTAssertEqual(AgentSession.agentArguments(appGroup: "TEAM.group.x") { _ in nil }, plain)
+    }
+
+    func testTheArgumentsReachTheAgentProcessInOrder() async throws {
+        let jobs = directory.appendingPathComponent("group").path
+        let agent = AgentSession(configuration: .init(
+            executable: URL(fileURLWithPath: "/usr/bin/perl"),
+            arguments: [Self.fixtureDirectory.appendingPathComponent("fake-agent.pl").path, "ok"]
+                + AgentSession.agentArguments(appGroup: "TEAM.group.x") { _ in URL(fileURLWithPath: jobs) },
+            environment: [
+                "FAKE_AGENT_FIXTURES": Self.fixtureDirectory.appendingPathComponent("agent-fixtures.json").path,
+                "FAKE_AGENT_LOG": log.path,
+            ],
+            startTimeout: 10, requestTimeout: 5
+        ))
+        await agent.start()
+        defer { agent.stop() }
+        guard case .ready = agent.state else { return XCTFail("\(agent.state)") }
+        let first = try XCTUnwrap(String(contentsOf: log, encoding: .utf8).split(separator: "\n").first)
+        let object = try JSONSerialization.jsonObject(with: Data(first.utf8)) as? [String: Any]
+        XCTAssertEqual(object?["argv"] as? [String], ["agent", "--stdio", "--finder-jobs-dir", jobs + "/jobs"])
+    }
+
     // MARK: - Lifecycle
 
     func testStartReachesReadyWithTheAgentsVersionAndStopEndsIt() async {
