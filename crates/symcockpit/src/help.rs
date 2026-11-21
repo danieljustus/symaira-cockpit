@@ -1,7 +1,7 @@
 //! The help texts of the read commands, byte for byte as v0.12 prints them
 //! (checked against `oracle/v0.12/cases/*-help.stdout` in the tests below).
 //! The `--help` of the write families (`dim`, `warmth`, `fan`, `battery-limit`) is
-//! plain usage text and answered here too; anything that changes state is forwarded.
+//! plain usage text and answered here too.
 
 /// `symcockpit help` / `--help` / `-h`; also printed on stderr for usage errors.
 pub const ROOT_USAGE: &str = "symcockpit — this machine: hardware and system tuning\n\nUsage:\n  symcockpit <command> [options]\n\nCommands:\n  sensors, battery, displays, metrics, status, processes, top\n  awake, brightness, extbright, dim, warmth, restore, profile\n  fan, battery-limit, ai-usage, doctor, permissions, history, serve\n\n  version [--json] [--no-update-check]    symcockpit version plus the component versions\n  --version, -V                           aliases for `symcockpit version`\n  help                This text\n\nExamples:\n  symcockpit doctor\n\nsymcockpit covers this machine's thermals, power, display and brightness.\nOperate and Scope moved to Symaira Brain as optional modules; the legacy\ndispatcher commands are removed.\n\nThe `symcockpit tune <command>` prefix was removed in v0.12 after its\ndeprecation window (v0.8 and v0.9); run `symcockpit <command>` directly.\n";

@@ -511,41 +511,61 @@ pub fn process_alive(pid: u32) -> bool {
     status == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
-/// Lets SIGINT and SIGTERM act normally again in this thread. A blocked mask
-/// survives `exec`, so it is lifted before the process hands over to Swift.
-pub fn unblock_interrupts() {
-    // SAFETY: builds a local signal set and unblocks it for this thread.
-    unsafe {
-        let mut set: libc::sigset_t = std::mem::zeroed();
-        libc::sigemptyset(&mut set);
-        libc::sigaddset(&mut set, libc::SIGINT);
-        libc::sigaddset(&mut set, libc::SIGTERM);
-        libc::pthread_sigmask(libc::SIG_UNBLOCK, &set, std::ptr::null_mut());
+/// Write end of the self-pipe the signal handler feeds (`-1` until armed).
+static SIGNAL_PIPE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+extern "C" fn on_interrupt(_: c_int) {
+    use std::sync::atomic::Ordering;
+    let fd = SIGNAL_PIPE.load(Ordering::Relaxed);
+    if fd >= 0 {
+        // SAFETY: `write` is async-signal-safe; the byte lives on this stack frame.
+        unsafe { libc::write(fd, [1_u8].as_ptr().cast(), 1) };
     }
 }
 
-/// Restore-on-interrupt: SIGINT and SIGTERM are blocked in this thread (call it
-/// from the main thread before spawning others, so they inherit the mask, or a
-/// stray thread would take the signal and end the process unrestored) and a dedicated thread
-/// waits for them, runs `restore`, then ends the process with status 0 as
-/// `OverrideTracker.registerSignalHandlers` does. `restore` runs off the main
-/// thread, so it may only do what is safe there (the brightness write from the
-/// restore record); windows, gamma tables and assertions die with the process.
+/// Restore-on-interrupt, as `OverrideTracker.registerSignalHandlers`: on SIGINT
+/// or SIGTERM a dedicated thread runs `restore`, then ends the process with
+/// status 0. The handler only writes a byte to a self-pipe (async-signal-safe),
+/// so it does not matter which thread receives the signal, and `exec` resets the
+/// handlers, so nothing leaks into a forwarded Swift core. `restore` runs off the
+/// main thread, so it may only do what is safe there (the brightness write from
+/// the restore record); windows, gamma tables and assertions die with the process.
+/// Arm once; a second call is ignored.
 pub fn restore_on_signal(restore: impl FnOnce() + Send + 'static) {
-    // SAFETY: builds a signal set and blocks it for this thread; both calls only
-    // read and write the local `set`.
-    let set = unsafe {
-        let mut set: libc::sigset_t = std::mem::zeroed();
-        libc::sigemptyset(&mut set);
-        libc::sigaddset(&mut set, libc::SIGINT);
-        libc::sigaddset(&mut set, libc::SIGTERM);
-        libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut());
-        set
-    };
+    use std::sync::atomic::Ordering;
+    if SIGNAL_PIPE.load(Ordering::Relaxed) >= 0 {
+        return;
+    }
+    let mut fds: [c_int; 2] = [-1, -1];
+    // SAFETY: `fds` has room for the two descriptors `pipe` writes.
+    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
+        return;
+    }
+    let [read_fd, write_fd] = fds;
+    SIGNAL_PIPE.store(write_fd, Ordering::Relaxed);
+    for signal in [libc::SIGINT, libc::SIGTERM] {
+        // SAFETY: `action` is fully initialised (zeroed, empty mask, handler and
+        // flags set) before it is handed to `sigaction`, and the handler is async-signal-safe.
+        unsafe {
+            let mut action: libc::sigaction = std::mem::zeroed();
+            action.sa_sigaction = on_interrupt as extern "C" fn(c_int) as usize;
+            action.sa_flags = libc::SA_RESTART;
+            libc::sigemptyset(&mut action.sa_mask);
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
+    }
     std::thread::spawn(move || {
-        let mut signal: c_int = 0;
-        // SAFETY: `set` is the initialized set above; `signal` is a valid out pointer.
-        unsafe { libc::sigwait(&set, &mut signal) };
+        let mut byte = 0_u8;
+        loop {
+            // SAFETY: reads one byte into a valid local; retried on EINTR.
+            let n = unsafe { libc::read(read_fd, (&raw mut byte).cast(), 1) };
+            if n == 1 {
+                break;
+            }
+            if n < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+                return;
+            }
+        }
         restore();
         // SAFETY: `_exit` skips destructors on purpose: the main thread may be
         // mid-call, and everything that matters was restored from the record.
@@ -569,5 +589,62 @@ mod tests {
         // The test harness never runs on the main thread; nothing is shown.
         assert!(LiveDim::new().is_err());
         assert!(LiveEdr::new().is_err());
+    }
+
+    /// Child half of `interrupts_restore_and_exit_with_status_zero`: only acts
+    /// when the parent test re-executes this binary with the marker variable.
+    #[test]
+    fn signal_child() {
+        let Some(marker) = std::env::var_os("SYMCOCKPIT_SIGNAL_CHILD_MARKER") else {
+            return;
+        };
+        restore_on_signal(move || std::fs::write(marker, "restored").unwrap());
+        std::fs::write(
+            std::env::var_os("SYMCOCKPIT_SIGNAL_CHILD_READY").unwrap(),
+            "up",
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
+
+    /// Real signals, no hardware: SIGTERM and SIGINT both run the restore
+    /// closure once and end the process with status 0 (like the Swift handlers).
+    #[test]
+    fn interrupts_restore_and_exit_with_status_zero() {
+        for (signal, name) in [(libc::SIGTERM, "TERM"), (libc::SIGINT, "INT")] {
+            let tmp = tempfile::tempdir().unwrap();
+            let (marker, ready) = (tmp.path().join("marker"), tmp.path().join("ready"));
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "display_write::tests::signal_child",
+                    "--nocapture",
+                ])
+                .env("SYMCOCKPIT_SIGNAL_CHILD_MARKER", &marker)
+                .env("SYMCOCKPIT_SIGNAL_CHILD_READY", &ready)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            for _ in 0..500 {
+                if ready.exists() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            assert!(
+                ready.exists(),
+                "SIG{name}: the child never armed its handler"
+            );
+            // SAFETY: signals a child process this test just spawned.
+            unsafe { libc::kill(libc::pid_t::try_from(child.id()).unwrap(), signal) };
+            let status = child.wait().unwrap();
+            assert_eq!(status.code(), Some(0), "SIG{name}");
+            assert_eq!(
+                std::fs::read_to_string(&marker).unwrap(),
+                "restored",
+                "SIG{name}"
+            );
+        }
     }
 }

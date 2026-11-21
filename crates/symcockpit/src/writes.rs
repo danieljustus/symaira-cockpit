@@ -35,13 +35,16 @@ use symcockpit_core::tune_write::{
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::display_write::{
     CoreGraphicsGamma, LiveBrightnessSink, LiveDim, LiveEdr, LivePowerAssertions, process_alive,
-    pump_run_loop, restore_on_signal, unblock_interrupts,
+    pump_run_loop, restore_on_signal,
 };
 use symcockpit_macos::system::running_as_root;
 use symcockpit_store::{HistoryEvent, append_history_event};
 
-use crate::VERSION;
 use crate::app::{Context, Output};
+
+/// `TuneVersion.current`: the Tune component baseline that profiles record as
+/// their `version`, independent of the release version (`Version.swift`).
+pub const PROFILE_VERSION: &str = "0.10.0";
 
 /// A parsed unprivileged write.
 #[derive(Clone, Debug, PartialEq)]
@@ -188,8 +191,6 @@ pub fn shutdown() {
     if let Some(writer) = WRITER.with(|w| w.borrow_mut().take()) {
         writer.shutdown();
     }
-    // Nothing left to restore; the mask must not leak into an exec'd Swift core.
-    unblock_interrupts();
 }
 
 /// The display half of `ActiveOverrides` (`status`); empty while no write ran.
@@ -243,8 +244,7 @@ impl HistorySink for FileHistory {
 static INTERRUPT_TARGET: OnceLock<(PathBuf, u32)> = OnceLock::new();
 static ARMED: Once = Once::new();
 
-/// Restore-on-interrupt, armed from the main thread before any other thread
-/// exists (`serve`, every write): SIGINT/SIGTERM put the brightness back from
+/// Restore-on-interrupt, armed at start for `serve` and every write: SIGINT/SIGTERM put the brightness back from
 /// the record and end the process with status 0, as the Swift handlers do. With
 /// nothing overridden yet the interrupt just ends the process.
 pub fn arm_interrupt_restore() {
@@ -283,7 +283,7 @@ fn build_live(ctx: &Context) -> Result<TuneWriter, Error> {
         limits: Limits::from(ctx.config),
         data_dir: data_dir.clone(),
         is_root,
-        version: VERSION.to_owned(),
+        version: PROFILE_VERSION.to_owned(),
         pid,
         process_alive: Box::new(process_alive),
     });
@@ -563,5 +563,40 @@ impl BufRead for PumpedStdin {
 
     fn consume(&mut self, amount: usize) {
         self.position = (self.position + amount).min(self.buffer.len());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_profile_version_is_the_swift_tune_component_version() {
+        let swift = include_str!("../../../tuning/Sources/SymCockpitCore/Version.swift");
+        assert!(swift.contains(&format!("current = \"{PROFILE_VERSION}\"")));
+    }
+
+    #[test]
+    fn swift_double_descriptions() {
+        for (value, text) in [
+            (1800.0, "1800.0"),
+            (0.5, "0.5"),
+            (0.0, "0.0"),
+            (86_400.0, "86400.0"),
+            (1e20, "1e+20"),
+            (1.5e-7, "1.5e-07"),
+        ] {
+            assert_eq!(swift_description(value), text);
+        }
+    }
+
+    #[test]
+    fn values_parse_like_swift_double() {
+        let a = |v: &[&str]| v.iter().map(ToString::to_string).collect::<Vec<_>>();
+        assert_eq!(parse_value(&a(&["set", "0.5"]), "x"), Ok(0.5));
+        assert_eq!(parse_value(&a(&["0.5"]), "x"), Ok(0.5));
+        assert_eq!(parse_value(&a(&["set", ".5"]), "x"), Ok(0.5));
+        assert_eq!(parse_value(&a(&["1e-1"]), "x"), Ok(0.1));
+        assert!(parse_value(&a(&["0,5"]), "x").is_err());
     }
 }

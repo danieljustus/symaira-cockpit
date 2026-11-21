@@ -1,7 +1,9 @@
 //! `symcockpit` during the strangler migration (ADR 0003). Read commands run
 //! natively as soon as their area is wired in (`app::Handlers`), `version`,
 //! `help`, `history`, `profile list`, `ai-usage` and the MCP server `serve`
-//! always do; everything else is `exec`ed into the legacy Swift binary so
+//! always do, and so do the unprivileged writes (`writes`: brightness, extended
+//! brightness, dim, warmth, awake, profiles, and the display half of `restore`);
+//! everything else is `exec`ed into the legacy Swift binary so
 //! stdin, stdout, stderr and the exit code stay untouched.
 
 pub mod app;
@@ -78,7 +80,7 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
         return forward(args);
     };
     // Restore-on-interrupt for the commands that can hold an override. Armed
-    // here, in production only: it blocks signals and starts a thread.
+    // here, in production only: it installs signal handlers and starts a thread.
     if matches!(
         strings.first().map(String::as_str),
         Some(
