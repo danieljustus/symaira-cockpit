@@ -5,6 +5,7 @@
 
 mod config;
 mod history;
+pub mod history_log;
 mod paths;
 mod profiles;
 pub mod smc_restore;

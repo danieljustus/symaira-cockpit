@@ -271,7 +271,7 @@ pub fn require_thermal_headroom(env: &FanEnv, cooling_increase: bool) -> Result<
 // Service
 // ---------------------------------------------------------------------------
 
-fn fan_count(smc: &dyn SmcPort) -> usize {
+pub fn fan_count(smc: &dyn SmcPort) -> usize {
     read_key_uint(smc, "FNum").unwrap_or(0) as usize
 }
 

@@ -24,3 +24,4 @@ pub mod smc_write;
 pub mod status;
 pub mod storage;
 pub mod system;
+pub mod write_commands;
