@@ -42,7 +42,7 @@ run when those paths are modified.
 | `json_shape` | `argv`, `expect_exit`, `fixture` | stdout is JSON; its shape equals the fixture |
 | `exact` | `argv`, `expect_exit`, `fixture`, `normalize` | stdout, after the regex replacements in `normalize` (`{"pattern","replacement"}`), equals the fixture byte for byte |
 | `exit_code` | `argv`, `expect_exit` | exit code only |
-| `mcp_tools_list` | `fixture` | `result` of `tools/list` equals the fixture (value equality; object keys are sorted in the file because the Swift server emits them in random order) |
+| `mcp_tools_list` | `fixture` | the 26 v0.12 tools in `result` of `tools/list` equal the fixture (value equality; object keys are sorted in the file because the Swift server emits them in random order). Further tools are allowed only if the command register declares them (`mcp_name`) **and** `snapshots/mcp/tools_list.json` holds exactly the tool the server lists; an undeclared tool, a tool without snapshot, a snapshot that differs and a snapshot tool the server no longer lists each fail the case |
 | `mcp_call_shape` | `tool`, `arguments`, `fixture` | shape of `result.content[0].text` parsed as JSON (`result` itself if it is not JSON) |
 
 ### Shape form (`*.shape.json`)
@@ -127,6 +127,15 @@ raw output. Objects that use device data as **keys** (a dictionary keyed by
 process or interface name) must not be recorded as properties; v0.12 has none
 (every such collection is an array of objects). If one appears, record it as a
 generic map and extend the format deliberately.
+
+## Newer tools (Cockpit 2)
+
+The oracle freezes v0.12; it does not grow. The areas added since (storage,
+audio, Bluetooth, ...) show up in `tools/list` as extra tools. They are
+checked against the register and `snapshots/mcp/tools_list.json`, which the
+`symcockpit` test `the_new_tools_match_their_schema_snapshot` keeps current
+(`SYMCOCKPIT_UPDATE_SNAPSHOTS=1` rewrites it; review the diff). The fixture
+under `oracle/v0.12/` is never edited for a new tool.
 
 ## Limits
 

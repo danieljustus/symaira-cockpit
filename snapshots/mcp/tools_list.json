@@ -1,0 +1,601 @@
+{
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Read NVMe SMART health (temperature, spare, wear, media errors) with a good/warning/critical grade per drive. Never records a measurement; use `symcockpit storage health` for that.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_storage_health"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Recorded SMART measurements, newest first, with what changed between them.",
+      "inputSchema": {
+        "properties": {
+          "device": {
+            "description": "Device key as printed by get_storage_health (`location:model`); default all.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "How many measurements to return, newest first (1–1000, default 20).",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "get_storage_health_history"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Measure sequential read/write speed of a folder with a temporary file (removed afterwards). The folder must be under the home directory or /Volumes; at most 1024 MiB.",
+      "inputSchema": {
+        "properties": {
+          "cache_mode": {
+            "description": "uncached (default) asks the OS to bypass its file cache (F_NOCACHE).",
+            "enum": [
+              "uncached",
+              "cached"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Directory to test; must be under the home directory or /Volumes (default: home).",
+            "type": "string"
+          },
+          "size_mib": {
+            "description": "Test file size in MiB (2^20 bytes), 1–1024, default 256.",
+            "maximum": 1024,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "run_speedtest"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Size tree of a folder: the largest children per level and what is left in other.",
+      "inputSchema": {
+        "properties": {
+          "depth": {
+            "description": "Levels of the tree to return (1–16, default 2).",
+            "maximum": 16,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "limit": {
+            "description": "Largest children kept per directory (1–200, default 10).",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Directory to analyze.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "name": "analyze_space"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Scan the cleanup catalog (user caches, logs, Xcode derived data, optionally the Trash) and record a plan. Nothing is deleted until confirm_plan runs it.",
+      "inputSchema": {
+        "properties": {
+          "categories": {
+            "description": "Catalog categories to scan; default: all except empty_trash.",
+            "items": {
+              "enum": [
+                "user_caches",
+                "user_logs",
+                "xcode_derived_data",
+                "empty_trash"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "plan_clean"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Find files with identical content under a folder (read-only).",
+      "inputSchema": {
+        "properties": {
+          "min_size": {
+            "description": "Ignore files smaller than this many bytes (default 1).",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Folder to scan.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "name": "find_duplicates"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that moves the selected duplicate files to the Trash; every group keeps at least one copy. Run it with confirm_plan.",
+      "inputSchema": {
+        "properties": {
+          "min_size": {
+            "description": "Ignore files smaller than this many bytes (default 1).",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Folder that was scanned.",
+            "type": "string"
+          },
+          "select": {
+            "description": "Files to move to the Trash; every group keeps at least one copy.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "select"
+        ],
+        "type": "object"
+      },
+      "name": "plan_remove_duplicates"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that moves an app and the files it owns to the Trash. Documents are never included. Run it with confirm_plan.",
+      "inputSchema": {
+        "properties": {
+          "app": {
+            "description": "Path of the .app bundle or its bundle id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app"
+        ],
+        "type": "object"
+      },
+      "name": "plan_uninstall_app"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Show a recorded plan: items, totals, expiry and, once confirmed, the results.",
+      "inputSchema": {
+        "properties": {
+          "plan_id": {
+            "description": "Id of a plan, as returned by a plan_* tool.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_plan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Run a recorded plan once. Every item is checked against its recorded identity first and reports confirmed, unconfirmed, failed, unsupported or skipped_changed.",
+      "inputSchema": {
+        "properties": {
+          "plan_id": {
+            "description": "Id of a plan, as returned by a plan_* tool.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object"
+      },
+      "name": "confirm_plan"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "List audio devices with default input/output, volume, mute and format.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "list_audio_devices"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Read one audio device by its stable UID.",
+      "inputSchema": {
+        "properties": {
+          "uid": {
+            "description": "Stable device UID as listed by list_audio_devices.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid"
+        ],
+        "type": "object"
+      },
+      "name": "get_audio_device"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "List MIDI devices with their sources and destinations.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "list_midi_devices"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Make an audio device the default input or output. Reads the setting back.",
+      "inputSchema": {
+        "properties": {
+          "direction": {
+            "enum": [
+              "input",
+              "output"
+            ],
+            "type": "string"
+          },
+          "uid": {
+            "description": "Stable device UID as listed by list_audio_devices.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direction",
+          "uid"
+        ],
+        "type": "object"
+      },
+      "name": "set_default_audio_device"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Set the volume (0.0–1.0) of an audio device. Reads the value back.",
+      "inputSchema": {
+        "properties": {
+          "direction": {
+            "description": "Which side of the device; default: output if it has the control, else input.",
+            "enum": [
+              "input",
+              "output"
+            ],
+            "type": "string"
+          },
+          "uid": {
+            "description": "Stable device UID as listed by list_audio_devices.",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "uid",
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "set_audio_volume"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Mute or unmute an audio device. Reads the state back.",
+      "inputSchema": {
+        "properties": {
+          "direction": {
+            "description": "Which side of the device; default: output if it has the control, else input.",
+            "enum": [
+              "input",
+              "output"
+            ],
+            "type": "string"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "uid": {
+            "description": "Stable device UID as listed by list_audio_devices.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "muted"
+        ],
+        "type": "object"
+      },
+      "name": "set_audio_mute"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Set the volume of one app that plays audio. Needs a running mixer (the Cockpit app); a one-shot server has none and answers unsupported.",
+      "inputSchema": {
+        "properties": {
+          "app": {
+            "description": "Process id or bundle identifier of an app that plays audio.",
+            "type": "string"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "volume": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "app",
+          "volume"
+        ],
+        "type": "object"
+      },
+      "name": "set_audio_app_volume"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that changes the sample rate and bit depth of an audio device. Run it with confirm_plan.",
+      "inputSchema": {
+        "properties": {
+          "bits": {
+            "description": "Bits per sample; omit to change the rate only.",
+            "type": "integer"
+          },
+          "rate": {
+            "description": "Sample rate in Hz.",
+            "type": "number"
+          },
+          "uid": {
+            "description": "Stable device UID as listed by list_audio_devices.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "rate"
+        ],
+        "type": "object"
+      },
+      "name": "plan_audio_format"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that creates an aggregate or multi-output audio device. Run it with confirm_plan.",
+      "inputSchema": {
+        "properties": {
+          "main": {
+            "description": "Clock source UID; default: the first member.",
+            "type": "string"
+          },
+          "members": {
+            "description": "Device UIDs.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "type": "array"
+          },
+          "multi_output": {
+            "description": "Play the same audio on every member.",
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "members"
+        ],
+        "type": "object"
+      },
+      "name": "plan_audio_aggregate"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "List paired Bluetooth devices with connection state and battery level.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "list_bluetooth_devices"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Scan for Bluetooth LE devices for a few seconds. Never connects or disconnects anything.",
+      "inputSchema": {
+        "properties": {
+          "filter": {
+            "description": "Shows only devices whose name, id or service matches. Never disconnects.",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "Scan duration (default 5).",
+            "maximum": 30,
+            "minimum": 1,
+            "type": "number"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "scan_ble"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Connect to a BLE device, read one GATT characteristic and disconnect.",
+      "inputSchema": {
+        "properties": {
+          "characteristic": {
+            "description": "Characteristic UUID.",
+            "type": "string"
+          },
+          "device_id": {
+            "description": "Peripheral id from scan_ble.",
+            "type": "string"
+          },
+          "service": {
+            "description": "Service UUID (4, 8 or 36 characters).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "service",
+          "characteristic"
+        ],
+        "type": "object"
+      },
+      "name": "read_ble_characteristic"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that writes bytes to a BLE characteristic. Run it with confirm_plan; the result states acknowledgement and readback separately.",
+      "inputSchema": {
+        "properties": {
+          "characteristic": {
+            "description": "Characteristic UUID.",
+            "type": "string"
+          },
+          "device_id": {
+            "description": "Peripheral id from scan_ble.",
+            "type": "string"
+          },
+          "service": {
+            "description": "Service UUID (4, 8 or 36 characters).",
+            "type": "string"
+          },
+          "value_hex": {
+            "description": "Bytes to write as hex, 1 to 512 bytes.",
+            "type": "string"
+          },
+          "with_response": {
+            "description": "Write with response (default true): the peripheral acknowledges.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "device_id",
+          "service",
+          "characteristic",
+          "value_hex"
+        ],
+        "type": "object"
+      },
+      "name": "plan_ble_write"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Record a plan that ends a process with SIGTERM. The plan holds its start time and path; confirm_plan skips it if the id now belongs to another process and reports whether it really exited.",
+      "inputSchema": {
+        "properties": {
+          "pid": {
+            "description": "Process id to end with SIGTERM. The plan records its start time and path; confirm_plan skips it if another process reused the id.",
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid"
+        ],
+        "type": "object"
+      },
+      "name": "plan_kill_process"
+    }
+  ]
+}

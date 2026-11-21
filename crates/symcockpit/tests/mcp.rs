@@ -206,6 +206,80 @@ fn tools_list_equals_the_recorded_v012_result() {
     assert_eq!(listed["tools"].as_array().unwrap().len(), 50);
 }
 
+/// The tools of the newer areas, as listed, against `snapshots/mcp/tools_list.json`.
+/// `SYMCOCKPIT_UPDATE_SNAPSHOTS=1` rewrites the file; review the diff.
+#[test]
+fn the_new_tools_match_their_schema_snapshot() {
+    let f = fixture();
+    let listed = f.ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)["result"].clone();
+    let v012 = v012_part(&listed);
+    let newer: Vec<Value> = listed["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| !v012["tools"].as_array().unwrap().contains(t))
+        .cloned()
+        .collect();
+    let actual = json!({"tools": newer});
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../snapshots/mcp/tools_list.json");
+    if std::env::var_os("SYMCOCKPIT_UPDATE_SNAPSHOTS").is_some() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, serde_json::to_string_pretty(&actual).unwrap() + "\n").unwrap();
+    }
+    let expected: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        actual, expected,
+        "tool list changed: update the snapshot on purpose"
+    );
+    // Every tool of the register is listed, has a description, and is declared once.
+    let register: Vec<&str> = symcockpit_contract::commands()
+        .iter()
+        .filter_map(|c| c.mcp_name)
+        .collect();
+    let mut names: Vec<&str> = listed["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    names.sort_unstable();
+    let mut sorted = register.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "register and tools/list disagree");
+    for tool in listed["tools"].as_array().unwrap() {
+        assert!(!tool["description"].as_str().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn no_human_only_command_is_ever_listed_and_annotations_follow_the_risk() {
+    let f = fixture();
+    let listed = f.ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)["result"].clone();
+    for tool in listed["tools"].as_array().unwrap() {
+        let name = tool["name"].as_str().unwrap();
+        let spec = symcockpit_contract::commands()
+            .iter()
+            .find(|c| c.mcp_name == Some(name))
+            .unwrap();
+        assert_ne!(spec.risk, symcockpit_contract::Risk::HumanOnly, "{name}");
+        let hints = &tool["annotations"];
+        if v012_part(&listed)["tools"]
+            .as_array()
+            .unwrap()
+            .contains(tool)
+        {
+            assert!(hints.is_null(), "{name}: v0.12 lists no annotations");
+        } else if name == "confirm_plan" {
+            assert_eq!(hints["destructiveHint"], true);
+        } else if spec.risk == symcockpit_contract::Risk::Read && !name.starts_with("plan_") {
+            assert_eq!(hints["readOnlyHint"], true, "{name}");
+        } else {
+            assert_eq!(hints["readOnlyHint"], false, "{name}");
+            assert_eq!(hints["destructiveHint"], false, "{name}");
+        }
+    }
+}
+
 #[test]
 fn read_only_mode_lists_only_tools_that_only_look_and_hides_the_rest() {
     let f = fixture();

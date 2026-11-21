@@ -289,7 +289,16 @@ fn run_case(
             let mut session = McpSession::start(bin, env, init, timeout)?;
             let actual = session.request("tools/list", json!({}))?;
             let expected = read_json(&dir.join(fixture(case)?))?;
-            result.errors.extend(compare_tools_list(&expected, &actual));
+            // Fixtures live in oracle/<version>/; the snapshots of the newer tools in snapshots/.
+            let snapshot_file = dir.join("../../snapshots/mcp/tools_list.json");
+            let snapshot = if snapshot_file.is_file() {
+                read_json(&snapshot_file)?
+            } else {
+                Value::Null
+            };
+            result
+                .errors
+                .extend(compare_tools_list(&expected, &actual, &snapshot));
         }
         Kind::McpCallShape => {
             let tool = case.tool.as_deref().ok_or("mcp_call_shape needs a tool")?;
@@ -328,28 +337,51 @@ fn compare_shape(
     Ok(())
 }
 
-/// Tool-list differences by name first, then any other difference in the full `result`.
-pub fn compare_tools_list(expected: &Value, actual: &Value) -> Vec<String> {
-    let names = |v: &Value| -> Vec<String> {
-        v["tools"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|t| t["name"].as_str().map(str::to_owned))
-            .collect()
-    };
-    let (want, got) = (names(expected), names(actual));
-    let mut errors: Vec<String> = want
+/// `tools/list` against the frozen v0.12 result: the v0.12 tools must match it
+/// value for value; any other tool is allowed only when the register declares
+/// it (`mcp_name`) and `snapshot` (the schema snapshot of the newer tools,
+/// `{"tools": [...]}` or `null`) holds exactly the tool the server lists.
+/// Differences by name come first, then any other difference.
+pub fn compare_tools_list(expected: &Value, actual: &Value, snapshot: &Value) -> Vec<String> {
+    let list = |v: &Value| v["tools"].as_array().cloned().unwrap_or_default();
+    let name = |t: &Value| t["name"].as_str().unwrap_or_default().to_owned();
+    let (want, got, snap) = (list(expected), list(actual), list(snapshot));
+    let want_names: Vec<String> = want.iter().map(name).collect();
+    let got_names: Vec<String> = got.iter().map(name).collect();
+    let mut errors: Vec<String> = want_names
         .iter()
-        .filter(|n| !got.contains(n))
+        .filter(|n| !got_names.contains(n))
         .map(|n| format!("missing tool '{n}'"))
         .collect();
+    let v012: Vec<Value> = got
+        .iter()
+        .filter(|t| want_names.contains(&name(t)))
+        .cloned()
+        .collect();
+    errors.extend(shape::equal(expected, &json!({"tools": v012})));
+    for tool in got.iter().filter(|t| !want_names.contains(&name(t))) {
+        let n = name(tool);
+        if !symcockpit_contract::commands()
+            .iter()
+            .any(|c| c.mcp_name == Some(n.as_str()))
+        {
+            errors.push(format!("unexpected tool '{n}'"));
+        } else if let Some(declared) = snap.iter().find(|s| name(s) == n) {
+            errors.extend(
+                shape::equal(declared, tool)
+                    .into_iter()
+                    .map(|e| format!("tool '{n}' differs from its snapshot: {e}")),
+            );
+        } else {
+            errors.push(format!("tool '{n}' has no schema snapshot"));
+        }
+    }
     errors.extend(
-        got.iter()
-            .filter(|n| !want.contains(n))
-            .map(|n| format!("unexpected tool '{n}'")),
+        snap.iter()
+            .map(name)
+            .filter(|n| !got_names.contains(n))
+            .map(|n| format!("snapshot tool '{n}' is not listed")),
     );
-    errors.extend(shape::equal(expected, actual));
     errors
 }
 
@@ -407,19 +439,21 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_reports_missing_extra_and_changed_tools() {
+    fn tools_list_reports_missing_undeclared_and_changed_tools() {
         let tool = |name: &str, max: Value| json!({"name": name, "inputSchema": {"maximum": max}});
         let expected = json!({"tools": [tool("a", json!(1)), tool("b", json!(1))]});
         assert!(
             compare_tools_list(
                 &expected,
-                &json!({"tools": [tool("a", json!(1.0)), tool("b", json!(1))]})
+                &json!({"tools": [tool("a", json!(1.0)), tool("b", json!(1))]}),
+                &Value::Null
             )
             .is_empty()
         );
         let errors = compare_tools_list(
             &expected,
             &json!({"tools": [tool("a", json!(1)), tool("c", json!(1))]}),
+            &Value::Null,
         );
         assert!(
             errors.contains(&"missing tool 'b'".to_owned()),
@@ -432,10 +466,44 @@ mod tests {
         let changed = compare_tools_list(
             &expected,
             &json!({"tools": [tool("a", json!(2)), tool("b", json!(1))]}),
+            &Value::Null,
         );
         assert_eq!(
             changed,
             ["$.tools[0].inputSchema.maximum: expected 1, got 2"]
         );
+    }
+
+    #[test]
+    fn a_new_tool_needs_a_register_entry_and_an_equal_snapshot() {
+        let tool = |name: &str, max: i64| json!({"name": name, "inputSchema": {"maximum": max}});
+        let expected = json!({"tools": [tool("get_sensors", 1)]});
+        // `get_storage_health` is declared in the register.
+        let listed = json!({"tools": [tool("get_sensors", 1), tool("get_storage_health", 5)]});
+        let snapshot = json!({"tools": [tool("get_storage_health", 5)]});
+        assert!(compare_tools_list(&expected, &listed, &snapshot).is_empty());
+        // Declared but no snapshot, or a snapshot that differs.
+        assert_eq!(
+            compare_tools_list(&expected, &listed, &Value::Null),
+            ["tool 'get_storage_health' has no schema snapshot"]
+        );
+        let stale = json!({"tools": [tool("get_storage_health", 6)]});
+        let errors = compare_tools_list(&expected, &listed, &stale);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("differs from its snapshot"),
+            "{errors:?}"
+        );
+        // A tool the register does not declare is refused even with a snapshot.
+        let rogue = json!({"tools": [tool("get_sensors", 1), tool("rogue_tool", 1)]});
+        let errors = compare_tools_list(
+            &expected,
+            &rogue,
+            &json!({"tools": [tool("rogue_tool", 1)]}),
+        );
+        assert_eq!(errors, ["unexpected tool 'rogue_tool'"]);
+        // A snapshot tool the server stopped listing.
+        let errors = compare_tools_list(&expected, &expected, &snapshot);
+        assert_eq!(errors, ["snapshot tool 'get_storage_health' is not listed"]);
     }
 }
