@@ -17,7 +17,7 @@ export DEVELOPER_DIR = $(TOOLCHAIN)
 DEV_EXTERNAL := $(HOME)/.local/bin/dev-external
 CARGO ?= $(if $(wildcard $(DEV_EXTERNAL)),$(DEV_EXTERNAL) cargo,cargo)
 
-.PHONY: build test build-%% test-%% build-app smoke-app run-app clean rust-build rust-test oracle oracle-native
+.PHONY: build test build-%% test-%% build-app smoke-app run-app clean rust-build rust-test rust-test-agent-release oracle oracle-native
 
 ## build: Build all packages
 build:
@@ -42,6 +42,10 @@ rust-build:
 ## rust-test: Test the Rust workspace
 rust-test:
 	$(CARGO) test --workspace --locked
+
+## rust-test-agent-release: The release build of `symcockpit agent` has no parent-check bypass
+rust-test-agent-release:
+	$(CARGO) test --release --locked -p symcockpit --test agent_release
 
 ## oracle: Compare a binary with the frozen v0.12 oracle: make oracle BIN=<path to symcockpit>
 oracle:

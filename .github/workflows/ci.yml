@@ -210,6 +210,8 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets --locked -- -D warnings
           cargo test --locked
+          # The debug-only parent-check switch of `symcockpit agent` is not in release.
+          cargo test --release --locked -p symcockpit --test agent_release
 
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.

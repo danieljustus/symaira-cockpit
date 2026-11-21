@@ -1,6 +1,7 @@
 //! Command register and wire vocabulary shared by CLI, MCP and the app
 //! protocol (ADR 0001). Pure data: no I/O, no platform access.
 
+pub mod agent_proto;
 pub mod areas;
 mod registry;
 

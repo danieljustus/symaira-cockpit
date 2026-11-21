@@ -460,6 +460,26 @@ impl<'a> Server<'a> {
         Ok(swift_json::compact(&value))
     }
 
+    /// Runs one register command exactly as `tools/call` would, for callers
+    /// other than MCP (the app agent, `agent.rs`): the same argument parsing,
+    /// native handlers and Swift fallback, without MCP's tool filtering.
+    pub fn run_spec(
+        &self,
+        spec: &'static CommandSpec,
+        arguments: &Map<String, Value>,
+    ) -> Result<Value, Error> {
+        let tool = Tool {
+            name: spec.mcp_name.unwrap_or(spec.name),
+            description: "",
+            spec,
+        };
+        if spec.risk == Risk::Read {
+            self.read_tool(&tool, arguments)
+        } else {
+            self.write_tool(&tool, arguments)
+        }
+    }
+
     fn read_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {
         let params = match tool.spec.name {
             "processes" => {
