@@ -684,9 +684,9 @@ fn the_data_dir_override_moves_the_database() {
     let w = world();
     let other = w.home().join("elsewhere");
     let out = w.cli(&[
+        "storage",
         "--data-dir",
         other.to_str().unwrap(),
-        "storage",
         "health",
         "--json",
     ]);

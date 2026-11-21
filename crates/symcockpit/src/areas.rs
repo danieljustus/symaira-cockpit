@@ -186,9 +186,11 @@ fn parse_scalar(kind: &str, text: &str, what: &str) -> Result<Value, Error> {
 /// a property of the schema; arrays also accept their singular.
 fn property_of<'a>(props: &'a Map<String, Value>, flag: &str) -> Option<&'a str> {
     let snake = flag.replace('-', "_");
+    let plural_y = snake.strip_suffix('y').map(|s| format!("{s}ies"));
     props
         .get_key_value(&snake)
         .or_else(|| props.get_key_value(&format!("{snake}s")))
+        .or_else(|| plural_y.and_then(|p| props.get_key_value(&p)))
         .map(|(key, _)| key.as_str())
 }
 

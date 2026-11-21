@@ -214,13 +214,13 @@ fn tune(app: &App, args: &[String]) -> Action {
 /// First words the areas own. A word v0.12 owns (`processes`) only counts
 /// when a longer area path matches.
 fn area_family(args: &[String]) -> Option<&'static str> {
-    let (_, args) = extract_data_dir(args).ok()?;
+    let (_, stripped) = extract_data_dir(args).ok()?;
     let first = args.first()?;
     area_commands()
         .iter()
         .filter_map(|c| c.cli_path.split(' ').next())
         .find(|family| family == first)
-        .filter(|family| !DIRECT.contains(family) || resolve_area(&args).is_some())
+        .filter(|family| !DIRECT.contains(family) || resolve_area(&stripped).is_some())
 }
 
 /// The longest CLI path of an area command that starts the arguments, and
