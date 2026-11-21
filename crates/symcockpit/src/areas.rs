@@ -106,6 +106,7 @@ fn handler_for(name: &str) -> Option<Run> {
         "bt" | "ble" => bluetooth,
         "input" => input,
         "processes" => kill,
+        "clipboard" => clipboard,
         _ => return None,
     })
 }
@@ -770,6 +771,31 @@ fn input(ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Error> {
         "input.finder-cut" => input_finder_cut_json(&*store, text(&args, "state")? == "on")?,
         "input.haptics.status" => input_haptics_status_json(&*store, &*kit.haptic)?,
         "input.haptics.test" => input_haptics_test_json(&*store, &*kit.haptic, &*kit.sound)?,
+        other => return Err(Error::Failed(format!("{other}: no handler"))),
+    };
+    Ok(Output::Json(value))
+}
+
+/// Clipboard history management (R73, D13). No command returns clip content;
+/// only the app reads the history. Creating the store is the app's job, so a
+/// command here only opens an existing one.
+fn clipboard(_ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Error> {
+    use symcockpit_core::clipboard::{
+        ClipStore, clipboard_clear_json, clipboard_pause_json, clipboard_resume_json,
+        clipboard_status_json,
+    };
+    use symcockpit_db::clipboard::{JsonSettings, SqliteClipStore, dir_in};
+
+    let dir = dir_in(ctx.data_dir);
+    let settings = JsonSettings::new(&dir);
+    let open = || -> Result<Option<Box<dyn ClipStore>>, Error> {
+        Ok(SqliteClipStore::open_existing(&dir)?.map(|s| Box::new(s) as Box<dyn ClipStore>))
+    };
+    let value = match req.command {
+        "clipboard.status" => clipboard_status_json(&settings, &open)?,
+        "clipboard.pause" => clipboard_pause_json(&settings)?,
+        "clipboard.resume" => clipboard_resume_json(&settings)?,
+        "clipboard.clear" => clipboard_clear_json(&open)?,
         other => return Err(Error::Failed(format!("{other}: no handler"))),
     };
     Ok(Output::Json(value))

@@ -366,3 +366,35 @@ fn storage_is_private_excluded_from_backups_and_a_damaged_settings_file_means_of
         serde_json::from_str(&clipboard_pause_json(&r.settings).unwrap().to_string()).unwrap();
     assert_eq!(v["paused"], true);
 }
+
+#[test]
+fn the_four_commands_match_their_shape_snapshots() {
+    use symcockpit_testkit::snapshot::check;
+    let mut r = Rig::new();
+    r.enable();
+    r.pb.copy_text("a.b", SECRET);
+    r.poll();
+    let open = || {
+        SqliteClipStore::open_existing(&r.dir).map(|s| s.map(|s| Box::new(s) as Box<dyn ClipStore>))
+    };
+    check(
+        "clipboard",
+        "clipboard.status",
+        &clipboard_status_json(&r.settings, &open).unwrap(),
+    );
+    check(
+        "clipboard",
+        "clipboard.pause",
+        &clipboard_pause_json(&r.settings).unwrap(),
+    );
+    check(
+        "clipboard",
+        "clipboard.resume",
+        &clipboard_resume_json(&r.settings).unwrap(),
+    );
+    check(
+        "clipboard",
+        "clipboard.clear",
+        &clipboard_clear_json(&open).unwrap(),
+    );
+}

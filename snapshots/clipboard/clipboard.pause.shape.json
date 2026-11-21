@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "paused": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

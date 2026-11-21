@@ -22,6 +22,7 @@ pub fn all() -> Vec<CommandSpec> {
         bluetooth::specs(),
         input::specs(),
         processes::specs(),
+        clipboard::specs(),
     ]
     .concat()
 }

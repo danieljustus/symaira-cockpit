@@ -1,0 +1,26 @@
+{
+  "properties": {
+    "capturing": {
+      "type": "boolean"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "excluded_apps": {
+      "type": "number"
+    },
+    "items": {
+      "type": "number"
+    },
+    "max_age_days": {
+      "type": "number"
+    },
+    "max_items": {
+      "type": "number"
+    },
+    "paused": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

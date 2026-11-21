@@ -25,8 +25,6 @@ pub fn specs() -> Vec<CommandSpec> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use super::*;
     use crate::commands;
 
@@ -62,16 +60,10 @@ mod tests {
     }
 
     #[test]
-    fn names_are_unique_and_collide_with_nothing_in_the_register() {
-        let existing = commands();
-        let mut seen = BTreeSet::new();
+    fn the_register_carries_the_clipboard_commands() {
+        // Uniqueness of names and paths across the register: registry tests.
         for s in specs() {
-            assert!(seen.insert(s.name));
-            assert!(
-                existing
-                    .iter()
-                    .all(|e| e.name != s.name && e.cli_path != s.cli_path)
-            );
+            assert!(commands().iter().any(|c| c.name == s.name), "{}", s.name);
         }
     }
 }

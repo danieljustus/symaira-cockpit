@@ -1,0 +1,8 @@
+{
+  "properties": {
+    "cleared": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}
