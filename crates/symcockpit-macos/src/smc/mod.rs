@@ -1,12 +1,17 @@
-//! AppleSMC read path (Cockpit 2 stage 1: strictly read-only).
+//! AppleSMC access. `iokit` is the only module with raw FFI; everything else
+//! is safe code.
 //!
-//! `iokit` is the only module with raw FFI; everything else is safe code.
-//! There is no write selector anywhere in this crate (see `iokit::Command`).
+//! The read path (`iokit::Command`) has no write variant: the type system keeps
+//! the readers read-only. The one write command (`6`, `kSMCWriteKey`) exists
+//! only in `write`, behind the key allowlist of
+//! `symcockpit_core::smc_write::is_allowed`, and is only ever reached by the
+//! privileged paths (the helper, and the CLI as root).
 
 mod host;
 mod iokit;
 mod live;
 mod probe;
+mod write;
 
 pub use host::LiveHost;
 pub use live::LiveSmc;

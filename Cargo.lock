@@ -889,6 +889,8 @@ dependencies = [
  "symcockpit-helper-proto",
  "symcockpit-macos",
  "symcockpit-store",
+ "symcockpit-testkit",
+ "tempfile",
 ]
 
 [[package]]
@@ -903,6 +905,7 @@ dependencies = [
 name = "symcockpit-macos"
 version = "0.12.2"
 dependencies = [
+ "block2",
  "core-foundation",
  "core-foundation-sys",
  "coremidi",
@@ -921,7 +924,9 @@ dependencies = [
  "serde_json",
  "symcockpit-contract",
  "symcockpit-core",
+ "symcockpit-helper-proto",
  "symcockpit-oracle",
+ "symcockpit-store",
  "symcockpit-testkit",
  "tempfile",
  "trash",
