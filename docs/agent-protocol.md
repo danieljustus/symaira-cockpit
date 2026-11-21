@@ -260,9 +260,22 @@ There is no automatic restart; the app calls `restart()` and subscribes again.
 `AgentClientTests` run it against a Perl fake agent (no Rust binary, no
 hardware).
 
+`AgentSession` (SymCockpitCore) is the app-wide layer on top: one session per
+app run (`AgentSession.bundled()` takes `symcockpit` from the directory of the
+app's executable), started at launch and stopped (stdin closed) at quit. It keeps
+the subscriptions of the views and sets them up again after a restart, derives
+`set_visibility` from the views that report themselves visible, and turns calls
+into `ActionOutcome` (`done`, `needsConfirmation(plan)`, `failed`). The app shows a
+failed state as a diagnosis (`AgentDiagnosis`) with a restart button. Its tests
+(`AgentSessionTests`, and the view-model tests in `AgentViewModelTests`) use the
+same fake agent (`tuning/Tests/SymCockpitCoreTests/Fixtures/fake-agent.pl`).
+Runtime acceptance of the app on the agent: `docs/app-acceptance.md`.
+
 ## Not part of this version
 
-- The app does not use the agent yet (wave 2D).
+- Setting a fan profile or a Cool target: the register describes `fan.profile`
+  and `fan.target` without an argument (wave 2D-1). The app takes the argument
+  name from `hello` (`input_schema`) and says so when there is none.
 - Finder jobs, clipboard history and the privileged helper's XPC are not
   protocol methods; they arrive with their areas through new commands and
   topics.

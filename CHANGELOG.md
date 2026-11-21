@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Internal
+- Cockpit 2, wave 2D-2: the app (menu bar, HUD, window) reads every value and
+  runs every action through one app-wide agent session (`AgentSession`:
+  `symcockpit agent --stdio` from the bundle, started at launch, stdin closed at
+  quit). Views subscribe only while they are on screen; a failed, missing or
+  version-conflicting agent is shown as a diagnosis with a manual restart, never
+  as stale values; risky commands (fans) come back as a plan the user confirms in
+  the app. `TuneController` is no longer used by the app or its UI. `build-app.sh`
+  embeds the Rust `symcockpit` (agent and CLI) and `symcockpit-helper` (replaces
+  the Swift helper under the same identity) with the team id baked in. Runbook for
+  the runtime acceptance: `docs/app-acceptance.md`.
 - Cockpit 2, wave 6 (R70-R73): `symcockpit-ffi` staticlib lists folders and ZIP, TAR and 7z
   archives with limits and never unpacks; Quick Look and FinderSync extensions are built by
   `scripts/build-extensions.sh` and embedded in the app (not registered or enabled; see

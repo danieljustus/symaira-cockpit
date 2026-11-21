@@ -261,7 +261,8 @@ APP_SIGN_ARGS=()
 if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
   APP_ENTITLEMENTS="$(mktemp)"
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict/></plist>' >"$APP_ENTITLEMENTS"
-  plutil -insert com.apple.security.application-groups -json "[\"$EXPECTED_TEAM_ID.group.com.symaira.cockpit\"]" "$APP_ENTITLEMENTS"
+  # Dots in the key are escaped: plutil reads an unescaped one as a key path.
+  plutil -insert 'com\.apple\.security\.application-groups' -json "[\"$EXPECTED_TEAM_ID.group.com.symaira.cockpit\"]" "$APP_ENTITLEMENTS"
   APP_SIGN_ARGS=(--entitlements "$APP_ENTITLEMENTS")
 fi
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none ${APP_SIGN_ARGS[@]+"${APP_SIGN_ARGS[@]}"} "$APP_PATH"
