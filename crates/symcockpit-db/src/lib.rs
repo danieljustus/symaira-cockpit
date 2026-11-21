@@ -11,6 +11,7 @@ use std::{io, path::Path};
 use symaira_core_sqlite::{Connection, Entry, MigrationSource};
 use symcockpit_contract::Error;
 
+pub mod clipboard;
 pub mod plans;
 pub mod smart_history;
 

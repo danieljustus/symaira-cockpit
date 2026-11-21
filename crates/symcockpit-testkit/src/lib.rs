@@ -3,6 +3,7 @@
 pub mod audio;
 pub mod battery;
 pub mod bluetooth;
+pub mod clipboard;
 pub mod display;
 pub mod hardware;
 pub mod input;

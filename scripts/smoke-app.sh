@@ -92,6 +92,37 @@ for resource in llm_providers.json llm_errors.json; do
   }
 done
 
+# Quick Look and FinderSync extensions (R70-R72). Structure and signature only: nothing is
+# registered or launched here. SKIP_EXTENSIONS=1 builds have none and skip this block.
+if [[ -d "$APP_PATH/Contents/PlugIns" ]]; then
+  for entry in "SymCockpitQuickLook:com.apple.quicklook.preview:com.symaira.cockpit.quicklook" \
+    "SymCockpitFinderSync:com.apple.FinderSync:com.symaira.cockpit.findersync"; do
+    IFS=: read -r EXT_NAME EXT_POINT EXT_ID <<<"$entry"
+    APPEX="$APP_PATH/Contents/PlugIns/$EXT_NAME.appex"
+    [[ -x "$APPEX/Contents/MacOS/$EXT_NAME" ]] || {
+      printf 'Extension executable is missing: %s\n' "$APPEX" >&2
+      exit 1
+    }
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APPEX/Contents/Info.plist")" == "$EXT_ID" ]] || {
+      printf 'Extension %s must have the bundle identifier %s\n' "$EXT_NAME" "$EXT_ID" >&2
+      exit 1
+    }
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$APPEX/Contents/Info.plist")" == "$EXT_POINT" ]] || {
+      printf 'Extension %s must extend %s\n' "$EXT_NAME" "$EXT_POINT" >&2
+      exit 1
+    }
+    codesign --verify --strict "$APPEX" || {
+      printf 'Extension signature is invalid: %s\n' "$APPEX" >&2
+      exit 1
+    }
+    # App extensions must be sandboxed; macOS refuses to load them otherwise.
+    codesign --display --entitlements - "$APPEX" 2>&1 | grep -q 'com.apple.security.app-sandbox' || {
+      printf 'Extension %s lacks the app-sandbox entitlement\n' "$EXT_NAME" >&2
+      exit 1
+    }
+  done
+fi
+
 SIGNATURE_INFO=$(codesign --display --verbose=2 "$APP_PATH" 2>&1 || true)
 if grep -q '^Signature=adhoc$' <<<"$SIGNATURE_INFO"; then
   printf '%s\n' 'Bundle smoke check: ad-hoc unsigned build (expected outside release).'

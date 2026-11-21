@@ -7,9 +7,11 @@
 pub mod apps;
 pub mod battery;
 pub mod bluetooth;
+pub mod clipboard;
 pub mod coreaudio;
 pub mod coremidi;
 pub mod display;
+pub mod finder;
 pub mod fs_stats;
 pub mod gpu;
 pub mod host;

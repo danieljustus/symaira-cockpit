@@ -1,0 +1,35 @@
+[package]
+name = "symcockpit-ffi"
+description = "C ABI for the Quick Look and Finder extensions: bounded folder and archive listings as JSON (ADR 0004)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "symcockpit_ffi"
+# staticlib is what the extensions link; rlib lets `cargo test` and clippy build it like any crate.
+crate-type = ["staticlib", "rlib"]
+
+# `unsafe` is denied crate-wide and allowed in `ffi` only: the pointer handling at the C boundary (ADR 0004).
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+serde_json.workspace = true
+# Archives are only listed, never unpacked: no compression features. Stored/deflated
+# data is never decoded; zip reads the central directory, tar skips entry bodies, 7z
+# needs LZMA for its (usually compressed) header, which `sevenz-rust2` always includes.
+zip = { version = "=9.8.1", default-features = false }
+tar = { version = "=0.4.46", default-features = false }
+sevenz-rust2 = { version = "=0.25.0", default-features = false }
+
+[dev-dependencies]
+tempfile.workspace = true
+# Test fixtures only: writing a 7z needs the encoder.
+sevenz-rust2 = { version = "=0.25.0", default-features = false, features = ["compress"] }

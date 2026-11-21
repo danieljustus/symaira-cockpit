@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Internal
+- Cockpit 2, wave 6 (R70-R73): `symcockpit-ffi` staticlib lists folders and ZIP, TAR and 7z
+  archives with limits and never unpacks; Quick Look and FinderSync extensions are built by
+  `scripts/build-extensions.sh` and embedded in the app (not registered or enabled; see
+  `docs/extensions.md`); Finder context actions travel as job files with schema, expiry and an
+  exclusive claim (`symcockpit-core::finder`); an opt-in, encrypted clipboard history for humans
+  (`symcockpit-core::clipboard`, `symcockpit-db::clipboard`) with `clipboard
+  status|pause|resume|clear` specs and no MCP or CLI read path. The CLI commands are not wired
+  into `symcockpit` yet.
 - Cockpit 2, wave 1: the Rust `symcockpit` answers every read command and read
   MCP tool natively (`sensors`, `fan status|profile|target`, `battery`,
   `awake status`, `displays`, `brightness get`, `metrics`, `processes`, `top`,
