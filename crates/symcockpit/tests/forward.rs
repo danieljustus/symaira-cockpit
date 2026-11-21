@@ -117,7 +117,7 @@ fn missing_legacy_binary_exits_4_with_a_message() {
     let exe = tmp.path().join("symcockpit");
     std::fs::copy(env!("CARGO_BIN_EXE_symcockpit"), &exe).unwrap();
     let out = Command::new(&exe)
-        .arg("dim")
+        .arg("battery-limit")
         .env_remove("SYMCOCKPIT_LEGACY_BIN")
         .output()
         .unwrap();
@@ -130,7 +130,7 @@ fn missing_legacy_binary_exits_4_with_a_message() {
     );
     // An override pointing nowhere fails the same way.
     let out = Command::new(&exe)
-        .arg("dim")
+        .arg("battery-limit")
         .env("SYMCOCKPIT_LEGACY_BIN", tmp.path().join("gone"))
         .output()
         .unwrap();
@@ -145,7 +145,7 @@ fn sibling_legacy_binary_is_found_next_to_the_executable() {
     let sibling = fake_legacy(tmp.path());
     std::fs::rename(&sibling, tmp.path().join("symcockpit-legacy")).unwrap();
     let out = Command::new(&exe)
-        .arg("dim")
+        .arg("battery-limit")
         .env_remove("SYMCOCKPIT_LEGACY_BIN")
         .env("FAKE_EXIT", "0")
         .output()
@@ -153,6 +153,6 @@ fn sibling_legacy_binary_is_found_next_to_the_executable() {
     assert!(
         String::from_utf8(out.stdout)
             .unwrap()
-            .starts_with("argc=1\n[dim]")
+            .starts_with("argc=1\n[battery-limit]")
     );
 }

@@ -21,6 +21,12 @@ struct Fixture {
 fn fixture() -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let app = app(tmp.path());
+    // The display, keep-awake and profile writes run in-process: fakes only.
+    symcockpit::writes::install(
+        symcockpit_testkit::tune_write::rig(&app.paths.data_dir)
+            .split()
+            .0,
+    );
     Fixture { tmp, app }
 }
 
@@ -438,24 +444,15 @@ fn read_tools_without_handler_run_the_matching_cli_command() {
 }
 
 #[test]
-fn write_tools_run_the_cli_prefix_with_the_validated_value() {
+fn fan_and_charge_tools_run_the_cli_prefix_with_the_validated_value() {
     let mut f = fixture();
     let fake = f.with_legacy("{\n  \"applied\" : true\n}\n", "", 0);
     for (tool, arguments) in [
-        ("set_brightness", json!({"value": 0.5})),
-        ("set_extended_brightness", json!({"value": 1.4})),
-        ("set_dim", json!({"value": "0.3"})),
-        ("reset_dim", json!({})),
-        ("set_warmth", json!({"value": 1})),
-        ("reset_warmth", json!({})),
         ("restore", json!({})),
         ("set_fan", json!({"fraction": 0.25})),
         ("set_charge_limit", json!({"percent": 80})),
         ("set_charge_limit", json!({"percent": "75"})),
         ("clear_charge_limit", json!({})),
-        ("save_profile", json!({"name": "work"})),
-        ("load_profile", json!({"name": "work"})),
-        ("delete_profile", json!({"name": "work"})),
     ] {
         assert_eq!(
             text_of(&f.call(tool, arguments.clone())),
@@ -463,23 +460,15 @@ fn write_tools_run_the_cli_prefix_with_the_validated_value() {
             "{tool} {arguments}"
         );
     }
+    // `restore` restores the displays here and leaves the SMC half to Swift.
     assert_eq!(
         fake.calls(),
         [
-            vec!["brightness", "set", "0.5"],
-            vec!["extbright", "set", "1.4"],
-            vec!["dim", "set", "0.3"],
-            vec!["dim", "reset"],
-            vec!["warmth", "set", "1"],
-            vec!["warmth", "reset"],
             vec!["restore"],
             vec!["fan", "set", "0.25"],
             vec!["battery-limit", "set", "80"],
             vec!["battery-limit", "set", "75"],
             vec!["battery-limit", "clear"],
-            vec!["profile", "save", "work"],
-            vec!["profile", "load", "work"],
-            vec!["profile", "delete", "work"],
         ]
     );
 }
@@ -548,31 +537,6 @@ fn write_tool_argument_errors_never_reach_the_swift_core() {
         );
     }
     assert!(fake.calls().is_empty());
-}
-
-#[test]
-fn keep_awake_stop_runs_awake_off_and_start_is_an_honest_unsupported() {
-    let mut f = fixture();
-    let fake = f.with_legacy("{\"active\":false}", "", 0);
-    assert_eq!(
-        text_of(&f.call("keep_awake", json!({"enabled": false}))),
-        r#"{"active":false}"#
-    );
-    assert_eq!(
-        text_of(&f.call("keep_awake", json!({}))),
-        r#"{"active":false}"#
-    );
-    let start = f.call(
-        "keep_awake",
-        json!({"enabled": true, "prevent_display_sleep": true, "duration_seconds": 60}),
-    );
-    assert_eq!(error_of(&start).0, -32603);
-    assert!(
-        error_of(&start)
-            .1
-            .starts_with("unsupported: keep_awake sessions need the long-lived Swift server")
-    );
-    assert_eq!(fake.calls(), [vec!["awake", "off"], vec!["awake", "off"]]);
 }
 
 #[test]

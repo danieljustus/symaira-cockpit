@@ -13,6 +13,7 @@ pub mod live;
 pub mod mcp;
 pub mod native;
 pub mod platform;
+pub mod writes;
 
 use std::ffi::OsString;
 
@@ -76,15 +77,22 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
     else {
         return forward(args);
     };
-    match cli::plan(app, &strings) {
+    let code = match cli::plan(app, &strings) {
         cli::Action::Done(outcome) => write_all(
             outcome.stdout.as_bytes(),
             outcome.stderr.as_bytes(),
             outcome.code,
         ),
-        cli::Action::Forward => forward(args),
+        cli::Action::Forward => {
+            // Whatever this process overrode is put back before the exec.
+            writes::shutdown();
+            return forward(args);
+        }
         cli::Action::Serve { data_dir_override } => serve(app, data_dir_override),
-    }
+    };
+    // Restore-on-exit for the display and keep-awake overrides.
+    writes::shutdown();
+    code
 }
 
 fn write_all(stdout: &[u8], stderr: &[u8], code: u8) -> u8 {
@@ -116,7 +124,11 @@ fn serve(app: &app::App, data_dir_override: Option<std::path::PathBuf>) -> u8 {
         services: &app.services,
     };
     let server = mcp::Server::new(app, &ctx);
-    match mcp::serve(&server, std::io::stdin().lock(), std::io::stdout().lock()) {
+    match mcp::serve(
+        &server,
+        writes::PumpedStdin::spawn(),
+        std::io::stdout().lock(),
+    ) {
         Ok(()) => exit::OK,
         Err(error) => {
             eprintln!("symcockpit: serve: {error}");

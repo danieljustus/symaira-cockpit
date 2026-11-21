@@ -122,7 +122,7 @@ fn bare_fan_profile_and_target_read_and_write_family_help_is_native() {
 }
 
 #[test]
-fn writes_and_other_commands_are_always_forwarded() {
+fn fan_charge_and_the_endless_loops_are_always_forwarded() {
     let tmp = home();
     let mut a = app(tmp.path());
     a.handlers
@@ -133,22 +133,11 @@ fn writes_and_other_commands_are_always_forwarded() {
         &["fan", "profile", "comfort"],
         &["fan", "target", "70"],
         &["fan", "governor"],
-        &["brightness", "set", "0.5"],
-        &["extbright", "set", "1.2"],
-        &["dim", "reset"],
-        &["warmth", "set", "0.1"],
-        &["restore"],
         &["battery-limit", "set", "80"],
-        &["awake"],
-        &["awake", "off"],
-        &["awake", "--seconds", "5"],
-        &["profile", "save", "x"],
-        &["profile", "load", "x"],
-        &["profile", "delete", "x"],
+        &["battery-limit", "clear"],
         &["ai-usage", "serve"],
         &["status", "--watch"],
         &["status", "--watch", "--interval", "2s"],
-        &["extbright"],
     ] {
         assert!(forwarded(&a, l), "{l:?}");
     }
@@ -289,8 +278,13 @@ fn help_of_read_commands_is_native_and_restore_is_forwarded() {
             .stdout
             .starts_with("Usage: symcockpit profile save")
     );
-    // The write families' usage text is native too (see the next test); `restore` has none.
-    assert!(forwarded(&a, &["restore", "--help"]));
+    // The write families' usage text is native too (see the next test); `restore`
+    // has none: Swift treats `--help` as an unexpected argument (exit 2).
+    let restore = done(&a, &["restore", "--help"]);
+    assert_eq!(
+        (restore.stderr.as_str(), restore.code),
+        ("symcockpit: restore: unexpected argument '--help'\n", 2)
+    );
 }
 
 #[test]

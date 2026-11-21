@@ -65,7 +65,7 @@ const SESSION: &str = concat!(
     "\n",
     r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_history","arguments":{}}}"#,
     "\n",
-    r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"set_dim","arguments":{"value":0.5}}}"#,
+    r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"set_fan","arguments":{"fraction":0.5}}}"#,
     "\n",
     "garbage\n",
     r#"{"jsonrpc":"2.0","id":5,"method":"ping"}"#,
@@ -119,7 +119,7 @@ fn a_full_session_answers_in_order_and_keeps_stdout_clean() {
     );
     assert_eq!(frames[4]["error"]["code"], -32700);
     assert_eq!(frames[5]["result"], json!({}));
-    assert_eq!(fake.calls(), [["dim", "set", "0.5"]]);
+    assert_eq!(fake.calls(), [["fan", "set", "0.5"]]);
     // Nothing was created in the (isolated) data or config directories.
     assert!(!tmp.path().join("d").exists() && !tmp.path().join("c").exists());
 }

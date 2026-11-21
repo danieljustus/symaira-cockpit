@@ -137,6 +137,11 @@ impl DisplayWriter {
         self.edr.has_pending_watch()
     }
 
+    /// Whether the dim windows or the extended-brightness trigger are on screen.
+    pub fn has_overlay(&self) -> bool {
+        self.dim_level.get() < 1.0 || self.edr.is_active()
+    }
+
     pub fn pump(&self, now: Instant) {
         self.edr.tick(now);
     }

@@ -149,6 +149,11 @@ impl EdrOverlay {
         }
     }
 
+    /// Whether any display has an extended-brightness target (its trigger is on screen).
+    pub fn is_active(&self) -> bool {
+        !self.targets.borrow().is_empty()
+    }
+
     /// Whether a watch is waiting for headroom (the caller must keep pumping).
     pub fn has_pending_watch(&self) -> bool {
         !self.watches.borrow().is_empty()

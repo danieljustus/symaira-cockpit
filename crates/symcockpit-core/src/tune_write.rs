@@ -325,14 +325,22 @@ impl TuneWriter {
 
     // -------------------------------------------------------------- restore
 
+    /// The display half of `restoreAll`: what this process overrode, then the
+    /// dim overlay. No SMC and no history line: a caller that has no SMC hook
+    /// hands the rest to the Swift core, which logs the restore itself.
+    pub fn restore_displays(&self) {
+        self.restore_tracked();
+        self.ports.display.reset_dim();
+    }
+
     /// `restoreAll`: display overrides, the dim overlay, then the SMC hook.
     pub fn restore_all(&self) {
-        self.restore_overrides();
-        self.ports.display.reset_dim();
+        self.restore_displays();
+        self.run_smc_restore();
         self.log("restore", None, Ok(()));
     }
 
-    fn restore_overrides(&self) {
+    fn restore_tracked(&self) {
         let tracker = std::mem::take(&mut *self.tracker.borrow_mut());
         if tracker.has_overrides() {
             self.ports.display.restore_display_overrides(
@@ -341,6 +349,9 @@ impl TuneWriter {
             );
             clear_record(&self.ports.data_dir);
         }
+    }
+
+    fn run_smc_restore(&self) {
         if let Some(restore) = self.smc_restore.borrow().as_ref() {
             restore();
         }
@@ -352,9 +363,9 @@ impl TuneWriter {
             return;
         }
         self.coordinator.end();
-        self.restore_overrides();
-        self.ports.display.reset_dim();
+        self.restore_displays();
         self.ports.display.remove_extended();
+        self.run_smc_restore();
     }
 
     // ------------------------------------------------------------ keep-awake
@@ -449,10 +460,11 @@ impl TuneWriter {
                 format!("The data couldn’t be read because it is missing or malformed ({e}).")
             };
             let kind = if e.kind() == std::io::ErrorKind::NotFound { "NSError" } else { "DecodingError" };
-            Error::Failed(
-                json!({"error": kind, "message": redact(&message), "localized": redact(&message)})
-                    .to_string(),
-            )
+            // Keys in declaration order, as `ErrorReport` encodes them.
+            let text = Value::String(redact(&message)).to_string();
+            Error::Failed(format!(
+                "{{\"error\":\"{kind}\",\"message\":{text},\"localized\":{text}}}"
+            ))
         })
     }
 
@@ -471,6 +483,11 @@ impl TuneWriter {
     /// Whether the caller must keep a run loop turning for the display layer.
     pub fn needs_pump(&self) -> bool {
         self.ports.display.needs_pump()
+    }
+
+    /// Whether an overlay is on screen, so the caller must keep the run loop turning.
+    pub fn needs_overlay_run_loop(&self) -> bool {
+        self.ports.display.has_overlay()
     }
 
     pub fn pump(&self, now: std::time::Instant) {

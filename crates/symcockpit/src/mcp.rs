@@ -347,6 +347,12 @@ impl<'a> Server<'a> {
     }
 
     fn write_tool(&self, tool: &Tool, arguments: &Map<String, Value>) -> Result<Value, Error> {
+        // The reversible display, keep-awake and profile writes run in this
+        // process (their overrides live as long as it does); the rest, and the
+        // SMC half of `restore`, belong to the Swift core for now.
+        if let Some(value) = crate::writes::run_tool(self.ctx, tool.spec.name, arguments)? {
+            return Ok(value);
+        }
         self.through_legacy(&write_args(tool, arguments)?)
     }
 
@@ -406,7 +412,7 @@ fn legacy_read_args(request: &Request) -> Result<Vec<String>, Error> {
 }
 
 /// `requireDouble`: a number, or a string that parses as one.
-fn require_double(arguments: &Map<String, Value>, name: &str) -> Result<f64, Error> {
+pub(crate) fn require_double(arguments: &Map<String, Value>, name: &str) -> Result<f64, Error> {
     let number = match arguments.get(name) {
         Some(Value::Number(n)) => n.as_f64(),
         Some(Value::String(s)) => s.parse::<f64>().ok(),
@@ -473,7 +479,7 @@ fn write_args(tool: &Tool, arguments: &Map<String, Value>) -> Result<Vec<String>
 }
 
 /// `KeepAwakeTool.validatedDuration`.
-fn validate_duration(value: Option<&Value>) -> Result<(), Error> {
+pub(crate) fn validate_duration(value: Option<&Value>) -> Result<(), Error> {
     let Some(value) = value.filter(|v| !v.is_null()) else {
         return Ok(());
     };

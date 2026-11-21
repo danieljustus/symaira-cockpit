@@ -162,6 +162,36 @@ pub struct Rig {
     pub dir: PathBuf,
 }
 
+/// What a [`Rig`] recorded, once its writer has moved elsewhere.
+pub struct Observers {
+    pub hw: Rc<Hardware>,
+    pub power: Arc<FakePower>,
+    pub history: Rc<RefCell<Vec<LogEvent>>>,
+    pub dir: PathBuf,
+}
+
+impl Rig {
+    /// The writer (to install or drop) and the observers of its fakes.
+    pub fn split(self) -> (TuneWriter, Observers) {
+        let Rig {
+            writer,
+            hw,
+            power,
+            history,
+            dir,
+        } = self;
+        (
+            writer,
+            Observers {
+                hw,
+                power,
+                history,
+                dir,
+            },
+        )
+    }
+}
+
 /// A writer on fakes with its state under `dir` (a temp directory).
 pub fn rig_with(
     dir: &Path,

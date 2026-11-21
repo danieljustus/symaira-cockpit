@@ -19,7 +19,7 @@ use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use symcockpit_contract::Error;
 use symcockpit_core::battery::{ChargeLimitProbe, battery_json, read_battery};
 use symcockpit_core::display::{any_edr_capable, brightness_get_json, displays_json};
@@ -37,7 +37,6 @@ use symcockpit_core::system::{HardwareFacts, HostInfo, PrivilegedExecutable};
 use symcockpit_macos::battery::{LiveBatterySource, shared_apple_health};
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::host::live_metrics_service;
-use symcockpit_macos::power::LiveKeepAwakeStatus;
 use symcockpit_macos::process::live_process_service;
 use symcockpit_macos::smc::{FileFanSelection, LiveHost, LiveSmc, PgrepGovernorProbe};
 use symcockpit_macos::system;
@@ -119,16 +118,17 @@ impl<S: SmcPort> LiveOverrides<S> {
 
 impl<S: SmcPort> OverridePort for LiveOverrides<S> {
     fn active_overrides(&self) -> Value {
-        let mut overrides = Map::new();
+        // The display half is the bookkeeping of this process's writer (`OverrideTracker`).
+        let mut overrides = crate::writes::active_override_fields();
         if let Some(fraction) = self.fan_fraction() {
             overrides.insert("fan_fraction".into(), json!(fraction));
         }
         Value::Object(overrides)
     }
 
-    /// A read-only process holds no keep-awake session.
+    /// The session of this process: a read-only process holds none.
     fn keep_awake_active(&self) -> bool {
-        false
+        crate::writes::keep_awake_active()
     }
 }
 
@@ -372,7 +372,7 @@ pub fn wire(app: &mut App) {
         ))
     });
     handlers.register("awake.status", |_, _| {
-        json_output(awake_status_json(&LiveKeepAwakeStatus))
+        json_output(awake_status_json(&crate::writes::SessionView))
     });
     handlers.register("displays", |_, _| {
         json_output(displays_json(&LiveDisplays::new()?))

@@ -12,6 +12,7 @@ use symcockpit_contract::Error;
 use symcockpit_core::{ai_usage, history, profiles, status};
 
 use crate::app::{App, Context, Output, Params, ProcessSort, ProcessesParams, Request};
+use crate::writes::{self, WriteOp};
 use crate::{help, json, native};
 
 /// What to do with the invocation.
@@ -154,10 +155,10 @@ fn tune(app: &App, args: &[String]) -> Action {
         })
     };
 
-    let request = match parse(command, &args[1..]) {
-        Ok(Step::Run(request)) => request,
+    let step = match parse(command, &args[1..]) {
         Ok(Step::Text(text)) => return done(Outcome::out(text)),
         Ok(Step::Forward) => return Action::Forward,
+        Ok(step) => step,
         Err(error) => return done(Outcome::failure(&error)),
     };
     let data_dir = data_dir_override
@@ -171,7 +172,12 @@ fn tune(app: &App, args: &[String]) -> Action {
         env: &app.env,
         services: &app.services,
     };
-    match native::run_read(app, &ctx, &request) {
+    let result = match step {
+        Step::Run(request) => native::run_read(app, &ctx, &request),
+        Step::Write(op) => writes::run_cli(&ctx, &op),
+        Step::Text(_) | Step::Forward => unreachable!("answered above"),
+    };
+    match result {
         Ok(Some(output)) => done(render(output)),
         Ok(None) => Action::Forward,
         Err(error) => done(Outcome::failure(&error)),
@@ -197,6 +203,8 @@ enum Step {
     Text(String),
     /// Not a read the Swift core cannot do better: hand it over.
     Forward,
+    /// An unprivileged write, run in this process.
+    Write(WriteOp),
 }
 
 fn run(command: &'static str, json: bool, params: Params) -> Result<Step, Error> {
@@ -326,7 +334,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
         }
         "awake" => match rest.first().map(String::as_str) {
             Some("status") => run("awake.status", true, Params::None),
-            _ => Ok(Step::Forward),
+            _ => writes::parse_awake(rest).map(Step::Write),
         },
         "brightness" => {
             if rest.is_empty() || rest[0] == "get" {
@@ -335,14 +343,18 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 }
                 run("brightness.get", true, Params::None)
             } else {
-                Ok(Step::Forward)
+                writes::parse_brightness_set(rest).map(Step::Write)
             }
         }
-        "dim" | "warmth" | "battery-limit" => match is_help(rest) {
-            true => Ok(Step::Text(
+        "extbright" => writes::parse_extbright(rest).map(Step::Write),
+        "restore" => writes::parse_restore(rest).map(Step::Write),
+        "dim" | "warmth" | "battery-limit" => match (is_help(rest), command) {
+            (true, _) => Ok(Step::Text(
                 help::write_family(command).unwrap_or_default().to_owned(),
             )),
-            false => Ok(Step::Forward),
+            (false, "dim") => writes::parse_dim(rest).map(Step::Write),
+            (false, "warmth") => writes::parse_warmth(rest).map(Step::Write),
+            (false, _) => Ok(Step::Forward),
         },
         "fan" => {
             if is_help(rest) {
@@ -378,7 +390,7 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
             if subcommand == "list" {
                 run("profile.list", true, Params::None)
             } else {
-                Ok(Step::Forward)
+                writes::parse_profile(subcommand, tail).map(Step::Write)
             }
         }
         _ => Ok(Step::Forward),
