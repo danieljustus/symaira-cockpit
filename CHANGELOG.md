@@ -10,6 +10,18 @@
   state-changing commands are still handed to the Swift core. The oracle passes
   70/70 with and without a Swift binary (`make oracle`, `make oracle-native`).
 
+- Cockpit 2, integration 2: the areas storage (`storage health|speedtest|space|clean|duplicates`,
+  `apps uninstall`, `plan show|confirm`), audio and MIDI (`audio …`, `midi devices`),
+  Bluetooth (`bt devices`, `ble scan|read|subscribe|write`), input (`input …`, CLI only) and
+  ending a process (`processes kill <pid>`) are wired natively into the CLI and `serve`
+  (24 new MCP tools next to the 26 of v0.12, with `readOnlyHint`/`destructiveHint`). Risky actions
+  record a plan first; they run with `plan confirm <id>` or `<command> --confirm <id>`, at a
+  terminal after a question; there is no `--yes`, and agents only get `plan_*` plus `confirm_plan`.
+  Ending a process stores PID plus start time and path, checks them again at confirm, sends SIGTERM
+  and reports confirmed, unconfirmed or failed. One `cockpit.sqlite` and one plan engine serve all
+  areas; the oracle now demands the 26 v0.12 tools exactly and new tools only if declared and
+  snapshotted.
+
 ## [0.12.2] (2026-11-18)
 
 ### Fixed

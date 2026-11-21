@@ -20,6 +20,17 @@ This repo is the result of merging the archived `symaira-tune`,
 cutover; their old Homebrew formulae/casks remain only as compatibility
 history. No release is implied by this source cutover.
 
+## Adding an area command (Cockpit 2)
+
+One `specs()` in `crates/symcockpit-contract/src/areas/<area>.rs`, one line in
+`areas::all()`, one handler family in `crates/symcockpit/src/areas.rs` (ports
+in `Ports`, live adapters in `live::ports`), a description in `mcp.rs`
+(`AREA_TOOLS`) if agents get a tool, and a shape snapshot. Risky commands only
+*record a plan* (`plan_*` tool, `Risk::Risky`); an action kind registers in
+`areas::with_engine`. Exposure (architecture 5.3) is the register's
+decision, never the handler's. `snapshots/mcp/tools_list.json` follows with
+`SYMCOCKPIT_UPDATE_SNAPSHOTS=1 cargo test -p symcockpit --test mcp`.
+
 ## Layout
 
 | Path | Role | Language |
@@ -28,7 +39,7 @@ history. No release is implied by this source cutover.
 | `Sources/SymCockpitApp/` | tune-only menu-bar and window GUI | Swift 6 (SwiftUI/AppKit) |
 | `tuning/` | thermals, power, display and brightness | Swift 6 (AppKit/IOKit) |
 | `history/` | canonical history store, replay codec, secret redaction and bounded subprocess runner | Swift 6 |
-| `crates/` | Cockpit 2 Rust workspace (ADR 0001/0003), growing next to the Swift code: `symcockpit-contract` (command register, risk classes, exit codes), `-core`, `-macos` (the only crate allowed `unsafe`), `-testkit`, `-store`, `symcockpit` (bin: `version` natively, everything else `exec`ed into the Swift binary via `SYMCOCKPIT_LEGACY_BIN`) and `symcockpit-oracle` (compares a binary with the frozen v0.12 fixtures in `oracle/`) | Rust 1.98 |
+| `crates/` | Cockpit 2 Rust workspace (ADR 0001/0003), growing next to the Swift code: `symcockpit-contract` (command register, risk classes, exit codes), `-core` (logic behind ports; `plan` is the one two-step plan engine), `-macos` (the only crate allowed `unsafe`), `-testkit` (fakes, one shape-snapshot helper), `-store` (v0.12 files), `-db` (the one SQLite access, `cockpit.sqlite`), `symcockpit` (bin: the read commands, the newer areas in `areas.rs`, `version` and `serve` natively, the remaining v0.12 write commands `exec`ed into the Swift binary via `SYMCOCKPIT_LEGACY_BIN`) and `symcockpit-oracle` (compares a binary with the frozen v0.12 fixtures in `oracle/`) | Rust 1.98 |
 
 `SymCockpitCLI` is a library target consumed by both Tune's own executable target
 and the root dispatcher, so Tune stays independently buildable while
