@@ -42,14 +42,6 @@ impl SmartHistoryStore {
         })
     }
 
-    /// The default location from the process environment.
-    pub fn open_default() -> Result<Self, Error> {
-        Self::open(&crate::default_path(
-            std::env::var("XDG_DATA_HOME").ok().as_deref(),
-            std::env::var("HOME").ok().as_deref(),
-        )?)
-    }
-
     fn sample(r: &rusqlite::Row<'_>) -> rusqlite::Result<(SmartSample, String)> {
         let page: Vec<u8> = r.get(7)?;
         let location: String = r.get(4)?;
@@ -233,23 +225,5 @@ mod tests {
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, crate::all_migrations().len() as i64);
-    }
-
-    #[test]
-    fn default_path_follows_xdg_then_home() {
-        use crate::default_path;
-        assert_eq!(
-            default_path(Some("/x"), Some("/h")).unwrap(),
-            Path::new("/x/symtune/cockpit.sqlite")
-        );
-        assert_eq!(
-            default_path(Some("rel"), Some("/h")).unwrap(),
-            Path::new("/h/.local/share/symtune/cockpit.sqlite")
-        );
-        assert_eq!(
-            default_path(None, Some("/h")).unwrap(),
-            Path::new("/h/.local/share/symtune/cockpit.sqlite")
-        );
-        assert!(matches!(default_path(None, None), Err(Error::Config(_))));
     }
 }

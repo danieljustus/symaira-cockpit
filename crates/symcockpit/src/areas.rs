@@ -362,7 +362,7 @@ fn render(req: &Request, value: Value, text: impl FnOnce(&Value) -> String) -> O
 }
 
 fn db_path(ctx: &Context) -> PathBuf {
-    ctx.data_dir.join("cockpit.sqlite")
+    ctx.data_dir.join(symcockpit_db::FILE_NAME)
 }
 
 // --------------------------------------------------------------------- plans

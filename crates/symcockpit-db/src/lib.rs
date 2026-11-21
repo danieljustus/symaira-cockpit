@@ -6,10 +6,7 @@
 //! `symcockpit-store` because core depends on store (read side) and these
 //! adapters implement core traits.
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 
 use symaira_core_sqlite::{Connection, Entry, MigrationSource};
 use symcockpit_contract::Error;
@@ -51,15 +48,38 @@ pub fn open(path: &Path) -> Result<Connection, Error> {
     Ok(conn)
 }
 
-/// `$XDG_DATA_HOME/symtune/cockpit.sqlite`, else `$HOME/.local/share/symtune/cockpit.sqlite`.
-pub fn default_path(xdg_data_home: Option<&str>, home: Option<&str>) -> Result<PathBuf, Error> {
-    let base = match xdg_data_home.filter(|p| Path::new(p).is_absolute()) {
-        Some(x) => PathBuf::from(x),
-        None => Path::new(
-            home.filter(|h| !h.is_empty())
-                .ok_or_else(|| Error::Config("HOME is not set".into()))?,
-        )
-        .join(".local/share"),
-    };
-    Ok(base.join("symtune/cockpit.sqlite"))
+/// The file lives at `<data dir>/cockpit.sqlite`; the data directory is the
+/// one `symcockpit-store::Paths` resolves (or `--data-dir`), so there is one
+/// place that knows where Cockpit keeps its data.
+pub const FILE_NAME: &str = "cockpit.sqlite";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_file_holds_history_and_plans_in_wal_mode_and_reopens_cleanly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data").join(FILE_NAME);
+        let tables = |conn: &Connection| -> Vec<String> {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+                .unwrap();
+            stmt.query_map([], |r| r.get(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        let conn = open(&path).unwrap();
+        let mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        let first = tables(&conn);
+        assert!(first.contains(&"plans".to_owned()), "{first:?}");
+        assert!(first.contains(&"smart_samples".to_owned()), "{first:?}");
+        drop(conn);
+        // A second open applies nothing twice.
+        assert_eq!(tables(&open(&path).unwrap()), first);
+    }
 }
