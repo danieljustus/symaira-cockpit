@@ -511,8 +511,22 @@ pub fn process_alive(pid: u32) -> bool {
     status == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
+/// Lets SIGINT and SIGTERM act normally again in this thread. A blocked mask
+/// survives `exec`, so it is lifted before the process hands over to Swift.
+pub fn unblock_interrupts() {
+    // SAFETY: builds a local signal set and unblocks it for this thread.
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGINT);
+        libc::sigaddset(&mut set, libc::SIGTERM);
+        libc::pthread_sigmask(libc::SIG_UNBLOCK, &set, std::ptr::null_mut());
+    }
+}
+
 /// Restore-on-interrupt: SIGINT and SIGTERM are blocked in this thread (call it
-/// before spawning others, so they inherit the mask) and a dedicated thread
+/// from the main thread before spawning others, so they inherit the mask, or a
+/// stray thread would take the signal and end the process unrestored) and a dedicated thread
 /// waits for them, runs `restore`, then ends the process with status 0 as
 /// `OverrideTracker.registerSignalHandlers` does. `restore` runs off the main
 /// thread, so it may only do what is safe there (the brightness write from the

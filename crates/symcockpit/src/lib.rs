@@ -77,6 +77,23 @@ pub fn run_with(app: &app::App, args: Vec<OsString>) -> u8 {
     else {
         return forward(args);
     };
+    // Restore-on-interrupt for the commands that can hold an override. Armed
+    // here, in production only: it blocks signals and starts a thread.
+    if matches!(
+        strings.first().map(String::as_str),
+        Some(
+            "serve"
+                | "awake"
+                | "brightness"
+                | "extbright"
+                | "dim"
+                | "warmth"
+                | "profile"
+                | "restore"
+        )
+    ) {
+        writes::arm_interrupt_restore();
+    }
     let code = match cli::plan(app, &strings) {
         cli::Action::Done(outcome) => write_all(
             outcome.stdout.as_bytes(),

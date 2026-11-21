@@ -19,7 +19,7 @@ use std::io::{self, BufRead, Read};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Once, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use serde_json::{Map, Value, json};
@@ -35,7 +35,7 @@ use symcockpit_core::tune_write::{
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::display_write::{
     CoreGraphicsGamma, LiveBrightnessSink, LiveDim, LiveEdr, LivePowerAssertions, process_alive,
-    pump_run_loop, restore_on_signal,
+    pump_run_loop, restore_on_signal, unblock_interrupts,
 };
 use symcockpit_macos::system::running_as_root;
 use symcockpit_store::{HistoryEvent, append_history_event};
@@ -188,6 +188,8 @@ pub fn shutdown() {
     if let Some(writer) = WRITER.with(|w| w.borrow_mut().take()) {
         writer.shutdown();
     }
+    // Nothing left to restore; the mask must not leak into an exec'd Swift core.
+    unblock_interrupts();
 }
 
 /// The display half of `ActiveOverrides` (`status`); empty while no write ran.
@@ -237,7 +239,24 @@ impl HistorySink for FileHistory {
     }
 }
 
-static SIGNALS: Once = Once::new();
+/// Where the interrupt handler finds the record of this process's brightness override.
+static INTERRUPT_TARGET: OnceLock<(PathBuf, u32)> = OnceLock::new();
+static ARMED: Once = Once::new();
+
+/// Restore-on-interrupt, armed from the main thread before any other thread
+/// exists (`serve`, every write): SIGINT/SIGTERM put the brightness back from
+/// the record and end the process with status 0, as the Swift handlers do. With
+/// nothing overridden yet the interrupt just ends the process.
+pub fn arm_interrupt_restore() {
+    ARMED.call_once(|| {
+        restore_on_signal(|| {
+            if let Some((dir, pid)) = INTERRUPT_TARGET.get() {
+                let _ =
+                    restore_from_record(dir, &LiveBrightnessSink::new(), &|owner| owner == *pid);
+            }
+        });
+    });
+}
 
 fn build_live(ctx: &Context) -> Result<TuneWriter, Error> {
     let gamma = Rc::new(GammaController::new(Box::new(CoreGraphicsGamma)));
@@ -268,14 +287,7 @@ fn build_live(ctx: &Context) -> Result<TuneWriter, Error> {
         pid,
         process_alive: Box::new(process_alive),
     });
-    // Interrupt: the brightness is put back from the record, the rest dies with
-    // the process (windows, gamma tables and assertions are per process).
-    SIGNALS.call_once(|| {
-        restore_on_signal(move || {
-            let _ =
-                restore_from_record(&data_dir, &LiveBrightnessSink::new(), &|owner| owner == pid);
-        });
-    });
+    let _ = INTERRUPT_TARGET.set((data_dir, pid));
     Ok(writer)
 }
 
@@ -484,7 +496,8 @@ pub struct PumpedStdin {
 
 impl PumpedStdin {
     pub fn spawn() -> Self {
-        let (tx, rx) = mpsc::channel();
+        // Bounded: a client flooding stdin waits, as with a plain blocking read.
+        let (tx, rx) = mpsc::sync_channel(16);
         std::thread::spawn(move || {
             let mut stdin = io::stdin().lock();
             let mut chunk = vec![0_u8; 64 * 1024];
