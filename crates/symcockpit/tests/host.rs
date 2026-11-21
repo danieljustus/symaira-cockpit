@@ -667,7 +667,7 @@ fn nothing_is_captured_without_the_users_opt_in_even_when_the_agent_runs() {
 #[test]
 fn the_finder_tap_follows_the_setting_the_cli_and_the_app_write_and_clicks_on_a_replaced_key() {
     let w = world();
-    let settings = JsonFileSettings::new(&w.app.paths.config_dir.join("input.json"));
+    let settings = JsonFileSettings::new(w.app.paths.config_dir.join("input.json"));
     w.session(true, |rpc| {
         assert_eq!(
             rpc.call("input.status", json!({}))["finder_cut"]["enabled"],
