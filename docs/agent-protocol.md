@@ -19,7 +19,7 @@ shows can contradict the CLI (R06).
 ## Starting the agent
 
 ```
-symcockpit agent --stdio [--data-dir <path>]
+symcockpit agent --stdio [--data-dir <path>] [--finder-jobs-dir <path>]
 ```
 
 The command is internal to the app bundle and not part of `--help`.
@@ -83,8 +83,62 @@ events it caused.
 | `subscribe` | no | `command`, `params?`, `interval_visible_ms?`, `interval_hidden_ms?` | `{subscription_id, command, interval_ms}` |
 | `unsubscribe` | no | `subscription_id` | `{subscription_id, active}` |
 | `set_visibility` | no | `visible` | `{visible, active}` |
+| `services` | no | — | state of the hosted services (see below) |
+| `clipboard.list` | no | `limit?` (default 100) | metadata of the history entries, no content |
+| `clipboard.read` | no | `id` | one entry, decrypted |
+| `clipboard.copy` | no | `id` | puts the entry back on the pasteboard |
+| `clipboard.delete` | no | `id` | removes one entry |
+| `clipboard.settings` | no | — | opt-in, pause, exclusions, retention limits |
+| `clipboard.configure` | no | any of `enabled`, `paused`, `excluded_apps`, `max_items`, `max_age_secs`, `max_item_bytes` | the settings after the change (unknown keys: usage error) |
 
 Unknown request fields are ignored; clients must ignore unknown response fields.
+
+### Hosted services (wave 2D-S)
+
+Some things cannot live in a one-shot process: the clipboard capture, the
+per-app mixer, Finder jobs, the Finder ⌘X/⌘V event tap with click feedback and
+the BLE session. The agent hosts them (`host/`); a one-shot `symcockpit …` and
+`serve` never do, so there `audio mixer set` and `ble connect` answer
+`unsupported`. Rules that hold for all of them:
+
+- **Nothing runs for a feature the user did not switch on** (Q04). The clipboard
+  thread does not exist while capture is off or paused; the tap exists only with
+  its setting *and* the Accessibility permission; the mixer follower runs only
+  while an app is being followed; BLE and Finder jobs do nothing without a request
+  or a job file.
+- **Lifecycle = the agent's.** On EOF, SIGTERM or a closed stdout the agent
+  releases every app's audio tap (no app is left silent), closes BLE connections,
+  removes the tap and joins its threads, then exits 0.
+- **A missing permission or capability is reported, never invented**:
+  `class: "permission"` / `"unsupported"`, and in `services` the state `permission`
+  or `unsupported`. No TCC dialog is triggered (spike S1 has not run).
+- **Human-only methods.** `clipboard.list/read/copy/delete/settings/configure` are
+  agent methods, not register commands: they have no CLI path and no MCP tool, and
+  `call` rejects them. Only the app, through its own process, can read history
+  content. `clipboard.status/pause/resume/clear` stay register commands (no content).
+- **BLE.** Connections, subscriptions and the log live in the agent's memory;
+  `ble.export` (`format: "csv"` after RFC 4180, or `"json"` with the raw bytes) reads
+  that log. Filters change the display only, never what is logged.
+- **Finder jobs.** The FinderSync extension writes `jobs/<uuid>.json` into the app
+  group container; the app passes that directory as `--finder-jobs-dir`. The agent
+  runs each valid job once (60 s expiry, duplicates refused) and writes
+  `<uuid>.result.json`. Without the argument no job directory is watched.
+- **Settings take effect at once.** After every `call` the host re-reads the
+  settings the command may have changed (`clipboard.pause`, `input.finder-cut`, …).
+- **Run loop.** While a tap is installed the main thread spins its CFRunLoop between
+  requests, so the tap callback is delivered; the protocol is unchanged.
+
+`services` result: one object with `clipboard` (`state`, e.g. `off`, `running`, `paused`,
+`failed`, plus `last_error`), `input_tap`, `mixer`, `ble` and
+`finder_jobs` (counts only).
+
+Added topics (cheap, memory or two small files, no content): `audio.devices`,
+`audio.default.get`, `midi.devices`, `audio.mixer.status`, `clipboard.status`,
+`input.status`, `input.haptics.status`, `ble.session`. Deliberately **not**
+topics: `storage.health` (SMART), `storage.speedtest`, `storage.space` (walks
+volumes), `bt.devices` and `ble.scan` (radio), `ai-usage` (network). Only these
+status views of human-only areas are subscribable; no command that changes
+something is.
 
 ### `hello`
 
@@ -263,9 +317,10 @@ hardware).
 ## Not part of this version
 
 - The app does not use the agent yet (wave 2D).
-- Finder jobs, clipboard history and the privileged helper's XPC are not
-  protocol methods; they arrive with their areas through new commands and
-  topics.
+- The privileged helper's XPC is not a protocol method.
+- The hosted services were built against fakes; the real pasteboard, Keychain,
+  CGEvent tap, Process Taps and CoreBluetooth were not exercised (needs hardware
+  and TCC, spike S1/S4).
 - If spike S1 shows that the child process cannot hold the required TCC
   permissions, decision D14 (a Rust library inside the app) is the fallback; it
   is not built here.
