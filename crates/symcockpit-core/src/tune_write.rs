@@ -460,10 +460,10 @@ impl TuneWriter {
                 format!("The data couldn’t be read because it is missing or malformed ({e}).")
             };
             let kind = if e.kind() == std::io::ErrorKind::NotFound { "NSError" } else { "DecodingError" };
-            // Keys in declaration order, as `ErrorReport` encodes them.
+            // Key order as the v0.12 binary printed it (a plain `JSONEncoder`, no sorting).
             let text = Value::String(redact(&message)).to_string();
             Error::Failed(format!(
-                "{{\"error\":\"{kind}\",\"message\":{text},\"localized\":{text}}}"
+                "{{\"message\":{text},\"localized\":{text},\"error\":\"{kind}\"}}"
             ))
         })
     }

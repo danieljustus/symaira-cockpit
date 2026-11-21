@@ -294,7 +294,13 @@ fn profiles_round_trip_through_the_cli() {
     );
     let missing = done(&e.app, &["profile", "load", "night"]);
     assert_eq!(missing.code, 1);
-    assert!(missing.stderr.starts_with("symcockpit: {\"error\":\"NSError\",\"message\":\"The file “profile-night.json” couldn’t be opened"), "{}", missing.stderr);
+    assert!(
+        missing.stderr.starts_with(
+            "symcockpit: {\"message\":\"The file “profile-night.json” couldn’t be opened"
+        ),
+        "{}",
+        missing.stderr
+    );
     let bad = done(&e.app, &["profile", "load", "../x"]);
     assert_eq!(
         (bad.stderr.as_str(), bad.code),
