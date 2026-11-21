@@ -153,32 +153,6 @@ impl BleLink for FakeLink {
 }
 
 #[cfg(test)]
-pub(crate) fn snapshot_check(area: &str, id: &str, value: &serde_json::Value) {
-    use symcockpit_oracle::shape;
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../snapshots")
-        .join(area)
-        .join(format!("{id}.shape.json"));
-    let actual = shape::derive(value).expect("output has a consistent shape");
-    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let text = serde_json::to_string_pretty(&actual).unwrap() + "\n";
-        std::fs::write(&path, text).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("missing snapshot {}: {e}", path.display()));
-    let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
-    let diff = shape::compare(&expected, &actual);
-    assert!(
-        diff.errors.is_empty() && diff.hints.is_empty(),
-        "{id}: {:?} {:?}",
-        diff.errors,
-        diff.hints
-    );
-}
-
-#[cfg(test)]
 mod tests {
     use std::time::Duration;
 
@@ -491,7 +465,7 @@ mod tests {
             ),
         ];
         for (id, value) in &checks {
-            snapshot_check("bluetooth", id, value);
+            crate::snapshot::check("bluetooth", id, value);
         }
     }
 }

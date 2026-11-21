@@ -119,10 +119,8 @@ pub fn specs() -> Vec<CommandSpec> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use super::*;
-    use crate::commands;
 
     #[test]
     fn only_confirmation_is_risky_and_every_tool_is_named() {

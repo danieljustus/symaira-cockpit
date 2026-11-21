@@ -231,7 +231,7 @@ fn resolve_area(args: &[String]) -> Option<(&'static CommandSpec, &[String])> {
         .filter_map(|spec| {
             let words: Vec<&str> = spec.cli_path.split(' ').collect();
             let matches = args.len() >= words.len() && words.iter().zip(args).all(|(w, a)| w == a);
-            matches.then(|| (spec, words.len()))
+            matches.then_some((spec, words.len()))
         })
         .max_by_key(|(_, n)| *n)
         .map(|(spec, n)| (spec, &args[n..]))

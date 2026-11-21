@@ -1550,25 +1550,11 @@ mod tests {
 
     #[test]
     fn every_command_output_matches_its_shape_snapshot() {
-        let update = std::env::var_os("SYMCOCKPIT_UPDATE_SNAPSHOTS").is_some();
         let dir = snapshot_dir();
         let mut ids = Vec::new();
         for (id, value) in snapshot_values() {
             ids.push(id);
-            let actual = symcockpit_oracle::shape::derive(&value).unwrap();
-            let file = dir.join(format!("{id}.shape.json"));
-            if update {
-                std::fs::create_dir_all(&dir).unwrap();
-                std::fs::write(&file, serde_json::to_string_pretty(&actual).unwrap() + "\n")
-                    .unwrap();
-            }
-            let expected: Value = serde_json::from_str(
-                &std::fs::read_to_string(&file)
-                    .unwrap_or_else(|e| panic!("{}: {e}", file.display())),
-            )
-            .unwrap();
-            let diff = symcockpit_oracle::shape::compare(&expected, &actual);
-            assert!(diff.errors.is_empty(), "{id}: {:?}", diff.errors);
+            crate::snapshot::check("audio", id, &value);
         }
         // every audio/midi command has a snapshot and no snapshot is orphaned
         let mut specs: Vec<&str> = symcockpit_contract::areas::audio::specs()

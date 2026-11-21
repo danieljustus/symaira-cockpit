@@ -366,7 +366,6 @@ mod tests {
     };
     use symcockpit_core::storage::space::{SpaceParams, space_json};
     use symcockpit_core::storage::speedtest::{Limits, SpeedtestParams, speedtest_json};
-    use symcockpit_oracle::shape;
 
     use super::*;
 
@@ -375,25 +374,8 @@ mod tests {
 
     // ---- shape snapshots ------------------------------------------------------
 
-    /// Compare the shape of `actual` with `snapshots/storage_health/<id>.shape.json`.
-    /// `SYMCOCKPIT_UPDATE_SNAPSHOTS=1` rewrites the file instead; review the diff.
     fn check_shape(id: &str, actual: &Value) {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../../snapshots/storage_health/{id}.shape.json"));
-        let got = shape::derive(actual).unwrap();
-        if std::env::var_os("SYMCOCKPIT_UPDATE_SNAPSHOTS").is_some() {
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(&path, serde_json::to_string_pretty(&got).unwrap() + "\n").unwrap();
-        }
-        let want: Value = serde_json::from_slice(
-            &fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
-        )
-        .unwrap();
-        let diff = shape::compare(&want, &got);
-        assert!(
-            diff.errors.is_empty() && diff.hints.is_empty(),
-            "{id}: {diff:?}"
-        );
+        crate::snapshot::check("storage_health", id, actual);
     }
 
     fn health_fixture() -> (FakeNvme, MemoryHistory) {

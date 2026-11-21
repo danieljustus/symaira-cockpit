@@ -205,7 +205,6 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
-    use crate::commands;
 
     #[test]
     fn the_mandated_mcp_surface_is_exactly_what_is_exposed() {

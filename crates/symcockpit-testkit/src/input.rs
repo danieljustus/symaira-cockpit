@@ -125,7 +125,6 @@ mod tests {
     use symcockpit_core::input::*;
 
     use super::*;
-    use crate::bluetooth::snapshot_check;
 
     fn cmd(key: Key) -> TapEvent {
         TapEvent::Key(KeyEvent {
@@ -391,7 +390,7 @@ mod tests {
             ),
         ];
         for (id, value) in &checks {
-            snapshot_check("input", id, value);
+            crate::snapshot::check("input", id, value);
         }
     }
 }

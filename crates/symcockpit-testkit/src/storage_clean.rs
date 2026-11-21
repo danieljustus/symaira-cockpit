@@ -1105,21 +1105,7 @@ mod tests {
     // ---- wire shapes (snapshots) -----------------------------------------
 
     fn snapshot(id: &str, value: &Value) {
-        use symcockpit_oracle::shape;
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../snapshots/storage_clean")
-            .join(format!("{id}.shape.json"));
-        let actual = shape::derive(value).unwrap();
-        if std::env::var_os("SYMCOCKPIT_UPDATE_SNAPSHOTS").is_some() {
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(&path, serde_json::to_string_pretty(&actual).unwrap() + "\n").unwrap();
-        }
-        let expected: Value = serde_json::from_slice(
-            &fs::read(&path).unwrap_or_else(|e| panic!("missing snapshot {}: {e}", path.display())),
-        )
-        .unwrap();
-        let diff = shape::equal(&expected, &actual);
-        assert!(diff.is_empty(), "{id}: {diff:?}");
+        crate::snapshot::check("storage_clean", id, value);
     }
 
     #[test]

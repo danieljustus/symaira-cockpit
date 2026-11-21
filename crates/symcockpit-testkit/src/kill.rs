@@ -117,6 +117,7 @@ mod tests {
         assert_eq!(plan["kind"], "kill_process");
         assert_eq!(plan["items"][0]["target"], "Hog (pid 321)");
         assert_eq!(plan["items"][0]["identity"]["started_s"], 77);
+        crate::snapshot::check("processes", "processes.kill", &plan);
         assert_eq!(fake.terminated.get(), 0, "planning must not signal");
     }
 

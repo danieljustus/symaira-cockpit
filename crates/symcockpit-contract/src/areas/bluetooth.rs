@@ -106,10 +106,8 @@ pub fn specs() -> Vec<CommandSpec> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
 
     use super::*;
-    use crate::commands;
 
     #[test]
     fn mcp_surface_is_exactly_the_four_agreed_tools() {

@@ -1,0 +1,72 @@
+{
+  "properties": {
+    "created_at": {
+      "type": "string"
+    },
+    "digest": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "expires_in_s": {
+      "type": "number"
+    },
+    "id": {
+      "type": "string"
+    },
+    "item_count": {
+      "type": "number"
+    },
+    "items": {
+      "items": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "identity": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "started_s": {
+                "type": "number"
+              },
+              "started_us": {
+                "type": "number"
+              },
+              "uid": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "total_bytes": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}
