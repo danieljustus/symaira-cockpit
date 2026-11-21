@@ -167,7 +167,7 @@ impl WriteEnv<'_> {
         }
     }
 
-    fn history(
+    pub fn history(
         &self,
         action: &str,
         values: (Option<f64>, Option<f64>, Option<f64>),
@@ -337,6 +337,98 @@ pub fn run_governor(
     // The loop handed the fans back itself; the record has nothing left to undo.
     tracker.forget_fans();
     result.map_err(|e| fan_err(env, e))
+}
+
+// ---------------------------------------------------------------------------
+// Through the privileged helper (XPC)
+// ---------------------------------------------------------------------------
+
+/// Where a command is carried out.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Route {
+    /// This process writes (root, or refused with exit 3).
+    Direct,
+    /// The running helper writes; fall back to [`Route::Direct`] only when it cannot be reached.
+    Helper,
+}
+
+/// Root writes itself. Without root the helper takes what it can do: the
+/// fan commands, the SMC charge limit and the restore. The governor loop
+/// runs in its own process, and the macOS charge limit is not an SMC write
+/// (the helper does not offer it), so both stay direct.
+pub fn route(env: &WriteEnv, command: &Command) -> Route {
+    if env.is_root {
+        return Route::Direct;
+    }
+    match command {
+        Command::FanGovernor { .. } => Route::Direct,
+        Command::ChargeSet(_) | Command::ChargeClear => {
+            match charge_limit::select(&env.fan, env.mac) {
+                Mechanism::Smc(_) => Route::Helper,
+                _ => Route::Direct,
+            }
+        }
+        _ => Route::Helper,
+    }
+}
+
+/// The typed helper request for `command` (a fixed fraction gets the longest
+/// lease, as the direct write holds until `fan auto`/`restore`).
+pub fn helper_action(command: &Command) -> Option<symcockpit_helper_proto::Action> {
+    use symcockpit_helper_proto::{Action, MAX_LEASE_MS};
+    Some(match command {
+        Command::FanSet(fraction) => Action::FanSetTarget {
+            fraction: *fraction,
+            lease_ms: MAX_LEASE_MS,
+        },
+        Command::FanAuto => Action::FanSetAuto,
+        Command::ChargeSet(percent) => Action::ChargeLimitSmc {
+            percent: Some(*percent),
+        },
+        Command::ChargeClear => Action::ChargeLimitSmc { percent: None },
+        Command::Restore => Action::SmcRestore,
+        Command::FanGovernor { .. } => return None,
+    })
+}
+
+/// A helper reply as the CLI's result; the texts are the helper's own.
+pub fn reply_to_result(reply: symcockpit_helper_proto::Reply) -> Result<(), Error> {
+    use symcockpit_helper_proto::{ErrorKind, Reply};
+    match reply {
+        Reply::Ok => Ok(()),
+        Reply::Error { kind, message } => Err(match kind {
+            ErrorKind::Usage => Error::Usage(message),
+            ErrorKind::Permission => Error::Permission(message),
+            ErrorKind::Unsupported => Error::Unsupported(message),
+            ErrorKind::Unconfirmed | ErrorKind::Failed => Error::Failed(message),
+        }),
+        other => Err(Error::Failed(format!("unexpected helper reply: {other:?}"))),
+    }
+}
+
+/// The history line for a command the helper carried out (the helper keeps
+/// no user history).
+pub fn log_outcome(env: &WriteEnv, command: &Command, result: &Result<(), Error>) {
+    let cfg = env.fan.config;
+    let ok = result.is_ok();
+    let (action, values) = match command {
+        Command::FanSet(f) => {
+            let clamped = fan::clamp_fan_fraction(*f, cfg.fan_fraction_min, cfg.fan_fraction_max);
+            ("fan.set", (Some(*f), Some(clamped), ok.then_some(clamped)))
+        }
+        Command::FanAuto => ("fan.auto", (None, None, None)),
+        Command::ChargeSet(p) => {
+            let clamped = (*p).clamp(cfg.charge_limit_min, cfg.charge_limit_max) as f64;
+            (
+                "battery-limit.set",
+                (Some(*p as f64), Some(clamped), ok.then_some(clamped)),
+            )
+        }
+        Command::ChargeClear => ("battery-limit.clear", (None, None, None)),
+        Command::Restore => ("restore", (None, None, None)),
+        Command::FanGovernor { .. } => return,
+    };
+    env.history(action, values, result);
 }
 
 // ---------------------------------------------------------------------------

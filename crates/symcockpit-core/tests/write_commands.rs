@@ -7,9 +7,11 @@ use symcockpit_core::fan::FanEnv;
 use symcockpit_core::plan::Action;
 use symcockpit_core::sensors::{FanProfile, FanSelection, FanSelectionSource};
 use symcockpit_core::write_commands::{
-    Command, WriteAction, WriteEnv, charge_identity, execute, fan_identity, parse_battery_limit,
-    parse_fan, parse_restore, plan_item, run_governor,
+    Command, Route, WriteAction, WriteEnv, charge_identity, execute, fan_identity, helper_action,
+    log_outcome, parse_battery_limit, parse_fan, parse_restore, plan_item, reply_to_result, route,
+    run_governor,
 };
+use symcockpit_helper_proto::{Action as HelperAction, ErrorKind, Reply};
 use symcockpit_store::Config;
 use symcockpit_store::smc_restore;
 use symcockpit_testkit::battery::FakeBatterySource;
@@ -508,4 +510,97 @@ fn an_unsupported_charge_plan_reports_unsupported() {
         WriteAction::new(env, "battery-limit.set").execute(&item)
     });
     assert_eq!(result.outcome, Outcome::Unsupported);
+}
+
+// -- routing and the helper ---------------------------------------------------------
+
+#[test]
+fn root_writes_itself_and_without_root_the_helper_takes_the_smc_work() {
+    let rig = Rig::new(FakeSmcRw::m4_pro_like().with_chte(false));
+    let routes = |root: bool| {
+        rig.with(root, |env| {
+            [
+                Command::FanSet(0.5),
+                Command::FanAuto,
+                Command::ChargeSet(80),
+                Command::ChargeClear,
+                Command::Restore,
+                Command::FanGovernor { state: None },
+            ]
+            .map(|c| route(env, &c))
+        })
+    };
+    assert_eq!(routes(true), [Route::Direct; 6]);
+    assert_eq!(
+        routes(false),
+        [
+            Route::Helper,
+            Route::Helper,
+            Route::Helper,
+            Route::Helper,
+            Route::Helper,
+            Route::Direct
+        ]
+    );
+    // No SMC charge key: the macOS limit is not the helper's job.
+    let rig = Rig::new(FakeSmcRw::m4_pro_like());
+    rig.with(false, |env| {
+        assert_eq!(route(env, &Command::ChargeSet(80)), Route::Direct);
+        assert_eq!(route(env, &Command::FanSet(0.5)), Route::Helper);
+    });
+}
+
+#[test]
+fn commands_map_to_typed_helper_requests_and_replies_to_swift_errors() {
+    assert_eq!(
+        helper_action(&Command::FanSet(0.5)),
+        Some(HelperAction::FanSetTarget {
+            fraction: 0.5,
+            lease_ms: 3_600_000
+        })
+    );
+    assert_eq!(
+        helper_action(&Command::FanAuto),
+        Some(HelperAction::FanSetAuto)
+    );
+    assert_eq!(
+        helper_action(&Command::ChargeSet(80)),
+        Some(HelperAction::ChargeLimitSmc { percent: Some(80) })
+    );
+    assert_eq!(
+        helper_action(&Command::ChargeClear),
+        Some(HelperAction::ChargeLimitSmc { percent: None })
+    );
+    assert_eq!(
+        helper_action(&Command::Restore),
+        Some(HelperAction::SmcRestore)
+    );
+    assert_eq!(helper_action(&Command::FanGovernor { state: None }), None);
+
+    assert_eq!(reply_to_result(Reply::Ok), Ok(()));
+    let error = |kind| reply_to_result(Reply::error(kind, "m")).unwrap_err();
+    assert_eq!(error(ErrorKind::Permission).exit_code(), 3);
+    assert_eq!(error(ErrorKind::Unsupported).exit_code(), 4);
+    assert_eq!(error(ErrorKind::Usage).exit_code(), 2);
+    assert_eq!(error(ErrorKind::Unconfirmed).exit_code(), 1);
+    assert_eq!(error(ErrorKind::Failed).exit_code(), 1);
+    assert!(reply_to_result(Reply::Heartbeat { governing: true }).is_err());
+}
+
+#[test]
+fn a_command_the_helper_carried_out_still_lands_in_the_users_history() {
+    let rig = Rig::new(two_fans());
+    rig.with(false, |env| {
+        log_outcome(env, &Command::FanSet(0.5), &Ok(()));
+        log_outcome(
+            env,
+            &Command::ChargeSet(80),
+            &Err(Error::Permission("no".into())),
+        );
+    });
+    let log = rig.history();
+    assert_eq!(log[0]["payload"]["applied_value"], 0.5);
+    assert_eq!(log[1]["payload"]["result"], "failed");
+    assert_eq!(log[1]["payload"]["clamped_value"], 80);
+    assert!(log[1]["payload"].get("applied_value").is_none());
 }

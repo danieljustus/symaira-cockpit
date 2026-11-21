@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 use symcockpit_contract::Error;
-use symcockpit_core::{ai_usage, history, profiles, status};
+use symcockpit_core::{ai_usage, history, profiles, status, write_commands};
 
 use crate::app::{App, Context, Output, Params, ProcessSort, ProcessesParams, Request};
 use crate::{help, json, native};
@@ -211,6 +211,20 @@ fn unexpected(command: &str, arg: &str) -> Error {
     Error::Usage(format!("{command}: unexpected argument '{arg}'"))
 }
 
+/// A privileged write: answered by the handler wired in [`crate::write`], else forwarded.
+fn write(command: write_commands::Command) -> Result<Step, Error> {
+    use write_commands::Command;
+    let name = match &command {
+        Command::FanSet(_) => "fan.set",
+        Command::FanAuto => "fan.auto",
+        Command::FanGovernor { .. } => "fan.governor",
+        Command::ChargeSet(_) => "battery-limit.set",
+        Command::ChargeClear => "battery-limit.clear",
+        Command::Restore => "restore",
+    };
+    run(name, true, Params::Write(command))
+}
+
 /// The always-JSON read commands: `--help`, `--json` as a no-op, nothing else.
 fn always_json(command: &'static str, name: &'static str, rest: &[String]) -> Result<Step, Error> {
     if is_help(rest) {
@@ -338,6 +352,8 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 Ok(Step::Forward)
             }
         }
+        "battery-limit" if !is_help(rest) => write(write_commands::parse_battery_limit(rest)?),
+        "restore" => write(write_commands::parse_restore(rest)?),
         "dim" | "warmth" | "battery-limit" => match is_help(rest) {
             true => Ok(Step::Text(
                 help::write_family(command).unwrap_or_default().to_owned(),
@@ -357,7 +373,9 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 }
                 [sub, extra, ..] if sub == "status" => Err(unexpected("fan status", extra)),
                 [sub] if sub == "status" => run("fan.status", true, Params::None),
-                _ => Ok(Step::Forward),
+                // Setting a profile or a target only writes the user's own file.
+                [sub, ..] if sub == "profile" || sub == "target" => Ok(Step::Forward),
+                _ => write(write_commands::parse_fan(rest)?),
             }
         }
         "profile" => {

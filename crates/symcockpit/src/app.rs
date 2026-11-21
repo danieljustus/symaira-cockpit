@@ -76,8 +76,14 @@ impl Default for ProcessesParams {
 pub enum Params {
     None,
     Processes(ProcessesParams),
-    History { limit: i64 },
-    AiUsage { provider: Option<String> },
+    History {
+        limit: i64,
+    },
+    AiUsage {
+        provider: Option<String>,
+    },
+    /// A privileged write (`fan set`, `battery-limit`, `restore`, ...).
+    Write(symcockpit_core::write_commands::Command),
 }
 
 /// One read request, from the CLI or from an MCP `tools/call`.
@@ -135,6 +141,17 @@ pub const AREA_COMMANDS: [&str; 9] = [
     "top",
 ];
 
+/// The privileged write commands, wired in [`crate::write`] and absent from
+/// test apps (which therefore hand them to the Swift core).
+pub const WRITE_COMMANDS: [&str; 6] = [
+    "fan.set",
+    "fan.auto",
+    "fan.governor",
+    "battery-limit.set",
+    "battery-limit.clear",
+    "restore",
+];
+
 #[derive(Default)]
 pub struct Handlers(HashMap<&'static str, Handler>);
 
@@ -152,6 +169,22 @@ impl Handlers {
         assert!(
             AREA_COMMANDS.contains(&command),
             "no handler slot for '{command}'"
+        );
+        self.0.insert(command, Box::new(handler));
+    }
+
+    /// [`Self::register`] for a name in [`WRITE_COMMANDS`].
+    ///
+    /// # Panics
+    /// On any other name.
+    pub fn register_write(
+        &mut self,
+        command: &'static str,
+        handler: impl Fn(&Context, &Request) -> Result<Output, Error> + 'static,
+    ) {
+        assert!(
+            WRITE_COMMANDS.contains(&command),
+            "no write handler slot for '{command}'"
         );
         self.0.insert(command, Box::new(handler));
     }

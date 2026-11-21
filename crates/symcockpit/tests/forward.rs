@@ -49,14 +49,14 @@ fn forwards_argv_stdio_and_exit_code_unchanged() {
     let legacy = fake_legacy(tmp.path());
     let out = run(
         Some(&legacy),
-        &["fan", "--json", "", "a b", "--data-dir=x y", "é"],
+        &["dim", "--json", "", "a b", "--data-dir=x y", "é"],
         "in-bytes",
         "3",
     );
     assert_eq!(out.status.code(), Some(3));
     assert_eq!(
         String::from_utf8(out.stdout).unwrap(),
-        "argc=6\n[fan]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
+        "argc=6\n[dim]\n[--json]\n[]\n[a b]\n[--data-dir=x y]\n[é]\nin-bytes"
     );
     assert_eq!(String::from_utf8(out.stderr).unwrap(), "to-stderr\n");
 }
