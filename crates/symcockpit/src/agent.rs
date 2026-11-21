@@ -1317,6 +1317,209 @@ mod tests {
         assert_eq!(run_loop(&mut s, &fake, &rx, &mut Vec::new()), exit::ERROR);
     }
 
+    // ---------------------------------------------------------- the host
+
+    /// A host that records what the session asks of it.
+    #[derive(Default)]
+    struct FakeHost {
+        calls: RefCell<Vec<String>>,
+        after: RefCell<Vec<String>>,
+        spinning: Cell<bool>,
+        spins: Cell<u32>,
+        ticks: Cell<u32>,
+        due: Cell<Option<Duration>>,
+    }
+
+    impl AgentHost for FakeHost {
+        fn call(&self, method: &str, params: &Map<String, Value>) -> Result<Value, Error> {
+            self.calls
+                .borrow_mut()
+                .push(format!("{method} {}", Value::Object(params.clone())));
+            match method {
+                "clipboard.read" => Err(Error::Usage("missing argument 'id'".into())),
+                _ => Ok(json!({"method": method})),
+            }
+        }
+        fn after_call(&self, command: &str) {
+            self.after.borrow_mut().push(command.to_owned());
+        }
+        fn due_in(&self) -> Option<Duration> {
+            self.due.get()
+        }
+        fn tick(&self) {
+            self.ticks.set(self.ticks.get() + 1);
+            self.due.set(None);
+        }
+        fn spinning(&self) -> bool {
+            self.spinning.get()
+        }
+        fn spin(&self, limit: Duration) {
+            self.spins.set(self.spins.get() + 1);
+            std::thread::sleep(limit.min(Duration::from_millis(2)));
+        }
+    }
+
+    #[test]
+    fn host_methods_exist_only_with_a_host_and_keep_their_error_classes() {
+        let fake = Fake::new();
+        let clock = FixedClock(Cell::new(0));
+        let host = FakeHost::default();
+        // Without a host the methods are unknown, like any other.
+        let mut plain = Session::new(&fake, &fake, &clock);
+        hello(&mut plain);
+        let r = plain.handle_line(&rpc("clipboard.list", 2, json!({})));
+        assert_eq!(r[0]["error"]["code"], METHOD_NOT_FOUND);
+        let r = plain.handle_line(&rpc("hello", 3, json!({"protocol_version": 1})));
+        assert_eq!(
+            r[0]["result"]["capabilities"]["methods"]
+                .as_array()
+                .unwrap()
+                .len(),
+            7
+        );
+
+        let mut s = Session::new(&fake, &fake, &clock).with_host(&host);
+        // Not before hello.
+        let r = s.handle_line(&rpc("clipboard.list", 1, json!({})));
+        assert_eq!(r[0]["error"]["code"], NOT_READY);
+        let hello = hello(&mut s);
+        let methods = hello["result"]["capabilities"]["methods"]
+            .as_array()
+            .unwrap();
+        assert_eq!(methods.len(), 7 + HOST_METHODS.len());
+        let r = s.handle_line(&rpc("clipboard.list", 2, json!({"limit": 5})));
+        assert_eq!(r[0]["result"], json!({"method": "clipboard.list"}));
+        assert_eq!(host.calls.borrow()[0], "clipboard.list {\"limit\":5}");
+        // A failing method keeps the CLI exit class of its error.
+        let r = s.handle_line(&rpc("clipboard.read", 3, json!({})));
+        assert_eq!(r[0]["error"]["code"], COMMAND_FAILED);
+        assert_eq!(r[0]["error"]["data"]["class"], "usage");
+        // Params must be an object.
+        let r = s.handle_line(&rpc("services", 4, json!([1])));
+        assert_eq!(r[0]["error"]["code"], INVALID_PARAMS);
+        // The register commands never reach the host's methods.
+        let r = s.handle_line(&rpc("call", 5, json!({"command": "clipboard.list"})));
+        assert_eq!(r[0]["error"]["code"], INVALID_PARAMS);
+    }
+
+    #[test]
+    fn a_command_tells_the_host_so_a_changed_setting_takes_effect_at_once() {
+        let fake = Fake::new();
+        let clock = FixedClock(Cell::new(0));
+        let host = FakeHost::default();
+        let mut s = Session::new(&fake, &fake, &clock).with_host(&host);
+        hello(&mut s);
+        s.handle_line(&rpc("call", 2, json!({"command": "clipboard.pause"})));
+        s.handle_line(&rpc(
+            "call",
+            3,
+            json!({"command": "input.finder-cut", "params": {"state": "on"}}),
+        ));
+        // Even a failed command may have changed a file.
+        *fake.fail_with.borrow_mut() = Some(Error::Failed("x".into()));
+        s.handle_line(&rpc("call", 4, json!({"command": "clipboard.resume"})));
+        assert_eq!(
+            *host.after.borrow(),
+            ["clipboard.pause", "input.finder-cut", "clipboard.resume"]
+        );
+    }
+
+    #[test]
+    fn human_only_status_views_can_be_subscribed_but_no_other_human_only_command() {
+        let fake = Fake::new();
+        let clock = FixedClock(Cell::new(0));
+        let mut s = Session::new(&fake, &fake, &clock);
+        let hello = hello(&mut s);
+        let topics: Vec<&str> = hello["result"]["capabilities"]["topics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.as_str().unwrap())
+            .collect();
+        assert!(topics.contains(&"clipboard.status") && topics.contains(&"input.status"));
+        for t in &topics {
+            assert!(SUBSCRIBABLE.contains(t), "{t}");
+        }
+        let r = s.handle_line(&rpc("subscribe", 2, json!({"command": "clipboard.status"})));
+        assert!(r[0]["result"]["subscription_id"].is_u64(), "{r:?}");
+        for command in [
+            "clipboard.clear",
+            "input.haptics.test",
+            "input.finder-cut",
+            "ble.connect",
+        ] {
+            let r = s.handle_line(&rpc("subscribe", 3, json!({"command": command})));
+            assert_eq!(r[0]["error"]["code"], INVALID_PARAMS, "{command}");
+        }
+        // Expensive reads stay out of the topic list.
+        for command in [
+            "storage.health",
+            "storage.space",
+            "storage.speedtest",
+            "bt.devices",
+            "ble.scan",
+            "ai-usage",
+        ] {
+            assert!(!SUBSCRIBABLE.contains(&command), "{command}");
+        }
+    }
+
+    #[test]
+    fn a_main_thread_with_a_tap_spins_its_run_loop_and_still_sees_every_input() {
+        let host = FakeHost::default();
+        host.spinning.set(true);
+        let (tx, rx) = mpsc::channel();
+        // Nothing queued: the deadline ends the wait, after spinning.
+        let r = wait_input(&rx, Some(Duration::from_millis(20)), Some(&host));
+        assert!(matches!(r, Err(RecvTimeoutError::Timeout)));
+        assert!(host.spins.get() >= 1);
+        // A line queued from another thread ends it at once.
+        let sender = tx.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            sender.send(Input::Line("x".into())).unwrap();
+        });
+        let r = wait_input(&rx, None, Some(&host));
+        assert!(matches!(r, Ok(Input::Line(l)) if l == "x"));
+        drop(tx);
+        let r = wait_input(&rx, None, Some(&host));
+        assert!(matches!(r, Err(RecvTimeoutError::Disconnected)));
+        // Without a tap the thread blocks on the channel and never spins.
+        host.spinning.set(false);
+        let spins = host.spins.get();
+        let (tx, rx) = mpsc::channel();
+        tx.send(Input::Eof).unwrap();
+        assert!(matches!(wait_input(&rx, None, Some(&host)), Ok(Input::Eof)));
+        assert_eq!(host.spins.get(), spins);
+    }
+
+    #[test]
+    fn the_hosts_periodic_check_shares_the_loops_wait_and_ends_with_it() {
+        let fake = Fake::new();
+        let clock = FixedClock(Cell::new(0));
+        let host = FakeHost::default();
+        host.due.set(Some(Duration::from_millis(10)));
+        let mut s = Session::new(&fake, &fake, &clock).with_host(&host);
+        let (tx, rx) = mpsc::channel();
+        let sender = tx.clone();
+        std::thread::spawn(move || {
+            // Long enough for the periodic check to fire first.
+            std::thread::sleep(Duration::from_millis(300));
+            sender.send(Input::Eof).unwrap();
+        });
+        let mut out = Vec::new();
+        assert_eq!(
+            run_loop_with(&mut s, &fake, &rx, &mut out, Some(&host)),
+            exit::OK
+        );
+        assert_eq!(
+            host.ticks.get(),
+            1,
+            "the check ran once, then had nothing due"
+        );
+        assert!(out.is_empty());
+    }
+
     // ---------------------------------------------------------- parent gate
 
     struct Sig(Result<(), String>);

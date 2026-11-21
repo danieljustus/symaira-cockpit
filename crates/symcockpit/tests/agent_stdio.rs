@@ -48,11 +48,14 @@ struct Agent {
 
 impl Agent {
     fn start(home: &Path, legacy: Option<&Path>) -> Self {
+        Self::start_with(home, legacy, &[])
+    }
+
+    fn start_with(home: &Path, legacy: Option<&Path>, extra: &[&str]) -> Self {
         let data = home.join("data");
-        let mut cmd = command(
-            home,
-            &["agent", "--stdio", "--data-dir", data.to_str().unwrap()],
-        );
+        let mut args = vec!["agent", "--stdio", "--data-dir", data.to_str().unwrap()];
+        args.extend_from_slice(extra);
+        let mut cmd = command(home, &args);
         cmd.env(SWITCH, "1");
         if let Some(legacy) = legacy {
             cmd.env("SYMCOCKPIT_LEGACY_BIN", legacy);
@@ -320,9 +323,147 @@ fn usage_errors_come_before_the_parent_check() {
         &["agent"][..],
         &["agent", "--stdio", "--bogus"],
         &["agent", "--data-dir"],
+        &["agent", "--stdio", "--finder-jobs-dir"],
     ] {
         let out = command(tmp.path(), args).output().unwrap();
         assert_eq!(out.status.code(), Some(2), "{args:?}");
         assert!(out.stdout.is_empty());
     }
+}
+
+// ------------------------------------------ the long-lived services (wave 2D-S), as a process
+
+const OFF_BY: &str = "SYMCOCKPIT_TEST_NO_HARDWARE";
+
+#[test]
+fn the_services_start_only_on_the_users_settings_and_never_reach_the_real_machine_in_a_test() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = tmp.path().join("jobs");
+    let mut agent = Agent::start_with(
+        tmp.path(),
+        None,
+        &["--finder-jobs-dir", jobs.to_str().unwrap()],
+    );
+    let hello = agent.hello();
+    let methods = hello["result"]["capabilities"]["methods"]
+        .as_array()
+        .unwrap();
+    for m in symcockpit_contract::agent_proto::HOST_METHODS {
+        assert!(methods.iter().any(|x| x == m), "{m}");
+    }
+
+    // A fresh agent runs nothing: no capture, no tap, no mixer, no session, nothing created.
+    let (r, _) = agent.request("services", json!({}));
+    let s = &r["result"];
+    assert_eq!(s["clipboard"]["state"], "off", "{s}");
+    assert_eq!(s["input_tap"]["finder_cut"], "off");
+    assert_eq!(s["mixer"]["running"], false);
+    assert_eq!(s["ble"]["connections"], json!([]));
+    assert_eq!(s["finder_jobs"]["succeeded"], 0);
+    assert!(!tmp.path().join("data/clipboard").exists());
+
+    // The opt-in: the service wants to start, and in a test binary it is blocked, which the
+    // state says plainly instead of touching the user's pasteboard or Keychain.
+    let (r, _) = agent.request("clipboard.configure", json!({"enabled": true}));
+    assert_eq!(r["result"]["state"], "failed", "{r}");
+    assert!(
+        r["result"]["last_error"].as_str().unwrap().contains(OFF_BY),
+        "{r}"
+    );
+    let (r, _) = agent.request("clipboard.settings", json!({}));
+    assert_eq!(r["result"]["enabled"], true);
+    let (r, _) = agent.request("clipboard.list", json!({}));
+    assert_eq!(r["result"]["count"], 0);
+    let (r, _) = agent.request("clipboard.read", json!({"id": "nope"}));
+    assert_eq!(r["error"]["code"], -32000, "{r}");
+    let (r, _) = agent.request("clipboard.read", json!({}));
+    assert_eq!(r["error"]["data"]["class"], "usage");
+
+    // The Finder tap: switched on by the CLI's own command, still never installed in a test.
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "input.finder-cut", "params": {"state": "on"}}),
+    );
+    assert_eq!(r["result"]["status"], "ok", "{r}");
+    let (r, _) = agent.request("services", json!({}));
+    let state = r["result"]["input_tap"]["finder_cut"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        ["permission", "unsupported"].contains(&state.as_str()),
+        "{r}"
+    );
+
+    // BLE: the session exists, the radio is never opened.
+    let (r, _) = agent.request("call", json!({"command": "ble.session"}));
+    assert_eq!(r["result"]["output"]["log_entries"], 0, "{r}");
+    let (r, _) = agent.request(
+        "call",
+        json!({"command": "ble.connect", "params": {"device_id": "x"}}),
+    );
+    assert_eq!(r["error"]["data"]["class"], "unsupported", "{r}");
+    assert!(
+        r["error"]["message"].as_str().unwrap().contains(OFF_BY),
+        "{r}"
+    );
+
+    // A Finder job: validated, run once, answered; the pasteboard effect is blocked.
+    let inbox = symcockpit_core::finder::Inbox::new(&jobs);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let job = symcockpit_core::finder::Job {
+        id: symcockpit_core::finder::new_job_id(),
+        action: symcockpit_core::finder::Action::CopyPath,
+        paths: vec!["/tmp/x".into()],
+        created_at: now,
+        expires_at: now + 60,
+    };
+    inbox.submit(&job).unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    let result = loop {
+        if let Some(result) = inbox.result(&job.id) {
+            break result;
+        }
+        assert!(std::time::Instant::now() < deadline, "no result file");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    assert_eq!(result["state"], "failed", "{result}");
+    assert!(
+        result["detail"].as_str().unwrap().contains(OFF_BY),
+        "{result}"
+    );
+
+    // Closing stdin ends everything, exit 0.
+    agent.close_stdin();
+    let (code, stderr) = agent.finish(Duration::from_secs(10));
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
+
+#[test]
+fn sigterm_ends_an_agent_with_running_services_cleanly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = tmp.path().join("jobs");
+    let mut agent = Agent::start_with(
+        tmp.path(),
+        None,
+        &["--finder-jobs-dir", jobs.to_str().unwrap()],
+    );
+    agent.hello();
+    agent.request("clipboard.configure", json!({"enabled": true}));
+    agent.request(
+        "subscribe",
+        json!({"command": "ble.session", "interval_visible_ms": 100, "interval_hidden_ms": 100}),
+    );
+    // stdin stays open: only the signal can end it.
+    let status = Command::new("/bin/kill")
+        .args(["-TERM", &agent.child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let (code, stderr) = agent.finish(Duration::from_secs(10));
+    assert_eq!(code, Some(0), "{stderr}");
 }

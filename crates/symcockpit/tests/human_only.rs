@@ -200,3 +200,117 @@ fn the_mcp_server_source_does_not_know_the_clipboard_or_finder_areas() {
         assert!(!mcp.contains(word), "src/mcp.rs mentions {word}");
     }
 }
+
+// ------------------------------------------------- the agent's clipboard methods (wave 2D-S)
+//
+// The human reads, copies back, deletes and configures the history through agent methods
+// (`HOST_METHODS`). They are not register commands, so none of the three doors an agent or a
+// script could use exists for them.
+
+fn cli(home: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_symcockpit"))
+        .args(args)
+        .env_clear()
+        .env("SYMCOCKPIT_TEST_NO_HARDWARE", "1")
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join("c"))
+        .env("XDG_DATA_HOME", home.join("d"))
+        .env("XDG_CACHE_HOME", home.join("ca"))
+        .env("SYMCOCKPIT_CHECK_UPDATES", "0")
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn the_clipboard_methods_of_the_agent_are_no_command_line_commands() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("d/symtune/clipboard");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("settings.json"), br#"{"enabled":true}"#).unwrap();
+    let before = snapshot(&dir);
+    for word in ["list", "read", "copy", "delete", "settings", "configure"] {
+        let out = cli(tmp.path(), &["clipboard", word, "some-id"]);
+        assert_eq!(out.status.code(), Some(2), "clipboard {word}");
+        assert!(out.stdout.is_empty(), "clipboard {word} printed something");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("unknown command"),
+            "clipboard {word}"
+        );
+    }
+    // The commands the CLI does have say so, and none of them lists a content command.
+    let help = cli(tmp.path(), &["clipboard", "--help"]);
+    let text = String::from_utf8_lossy(&help.stdout).into_owned();
+    for word in ["status", "pause", "resume", "clear"] {
+        assert!(text.contains(&format!("clipboard {word}")), "{text}");
+    }
+    for word in ["list", "read", "copy", "delete", "settings", "configure"] {
+        assert!(!text.contains(&format!("clipboard {word}")), "{text}");
+    }
+    assert_eq!(snapshot(&dir), before, "nothing was opened or rewritten");
+}
+
+#[test]
+fn serve_cannot_reach_the_clipboard_methods_by_any_name() {
+    use symcockpit_contract::agent_proto::HOST_METHODS;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut names: Vec<String> = Vec::new();
+    for method in HOST_METHODS {
+        names.push(method.to_owned());
+        names.push(method.replace('.', "_"));
+        names.push(method.replace('.', "-"));
+    }
+    names.extend(
+        [
+            "get_clipboard_history",
+            "read_clipboard",
+            "list_clipboard_items",
+            "copy_clipboard_item",
+            "delete_clipboard_item",
+            "get_clipboard_settings",
+        ]
+        .map(str::to_owned),
+    );
+    let mut input = INIT.to_owned();
+    input += &rpc(2, "tools/list", json!({}));
+    for (i, name) in names.iter().enumerate() {
+        input += &rpc(
+            10 + i as u32,
+            "tools/call",
+            json!({"name": name, "arguments": {"id": "x"}}),
+        );
+    }
+    let out = serve(tmp.path(), &input);
+    let rs = responses(&out);
+    assert_eq!(rs.len(), 2 + names.len());
+    let tools = rs[1]["result"]["tools"].as_array().unwrap();
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        assert!(!names.iter().any(|n| n == name), "{name} is a tool");
+    }
+    for r in &rs[2..] {
+        assert!(r.get("error").is_some(), "must be an error: {r}");
+        assert!(r["result"].is_null());
+    }
+}
+
+#[test]
+fn neither_the_cli_nor_the_mcp_server_knows_the_host_that_serves_the_human_methods() {
+    for (file, source) in [
+        ("src/mcp.rs", include_str!("../src/mcp.rs")),
+        ("src/cli.rs", include_str!("../src/cli.rs")),
+    ] {
+        for word in [
+            "HOST_METHODS",
+            "host::",
+            "AgentHost",
+            "clipboard.list",
+            "clipboard.read",
+            "clipboard.copy",
+            "clipboard.delete",
+            "clipboard.configure",
+        ] {
+            assert!(!source.contains(word), "{file} mentions {word}");
+        }
+    }
+}
