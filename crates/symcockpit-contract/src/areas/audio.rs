@@ -1,5 +1,5 @@
-//! Audio and MIDI commands (R40 to R44). The coordinator appends `specs()` to
-//! the register in `registry.rs`.
+//! Audio and MIDI commands (R40 to R44). [`specs`] joins the register
+//! through [`super::all`].
 //!
 //! Risk classes: reading and the reversible scalars (default device, volume,
 //! mute, per-app volume) act directly; format changes and aggregates are audio
@@ -206,25 +206,6 @@ mod tests {
 
     use super::*;
     use crate::commands;
-
-    #[test]
-    fn names_paths_and_tools_are_unique_and_do_not_collide_with_the_register() {
-        let mut names = BTreeSet::new();
-        let mut paths = BTreeSet::new();
-        let mut tools = BTreeSet::new();
-        for c in commands() {
-            names.insert(c.name);
-            paths.insert(c.cli_path);
-            tools.extend(c.mcp_name);
-        }
-        for s in specs() {
-            assert!(names.insert(s.name), "name {}", s.name);
-            assert!(paths.insert(s.cli_path), "cli_path {}", s.cli_path);
-            if let Some(t) = s.mcp_name {
-                assert!(tools.insert(t), "tool {t}");
-            }
-        }
-    }
 
     #[test]
     fn the_mandated_mcp_surface_is_exactly_what_is_exposed() {

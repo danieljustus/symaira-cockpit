@@ -4,7 +4,7 @@
 //! Creating a plan is `read` (nothing changes); confirming it is `risky`
 //! (D10). MCP agents get only the `plan_*`, `find_duplicates`, `get_plan` and
 //! `confirm_plan` tools; there is no `--yes` and no direct delete.
-//! The coordinator appends [`specs`] to the register.
+//! [`specs`] joins the register through [`super::all`].
 
 use serde_json::{Value, json};
 
@@ -123,18 +123,6 @@ mod tests {
 
     use super::*;
     use crate::commands;
-
-    #[test]
-    fn no_collision_with_the_register_or_itself() {
-        let (mut names, mut paths, mut tools) = (HashSet::new(), HashSet::new(), HashSet::new());
-        for c in commands().iter().cloned().chain(specs()) {
-            assert!(names.insert(c.name), "name {}", c.name);
-            assert!(paths.insert(c.cli_path), "cli path {}", c.cli_path);
-            if let Some(t) = c.mcp_name {
-                assert!(tools.insert(t), "tool {t}");
-            }
-        }
-    }
 
     #[test]
     fn only_confirmation_is_risky_and_every_tool_is_named() {

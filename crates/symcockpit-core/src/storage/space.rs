@@ -20,7 +20,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use symcockpit_contract::Error;
 
-use super::health::{Clock, bounded, number, rfc3339};
+use super::health::{bounded, number, rfc3339};
+use crate::plan::Clock;
 
 pub const DEFAULT_DEPTH: usize = 2;
 pub const MAX_DEPTH: usize = 16;
@@ -288,7 +289,7 @@ pub fn space_json(
     let tree = walk.visit(&root, &entry, 0);
     Ok(json!({
         "schema": 1,
-        "measured_at": rfc3339(clock.now_unix()),
+        "measured_at": rfc3339(clock.now()),
         "path": entry.name,
         "unit": "byte",
         "depth": params.depth,

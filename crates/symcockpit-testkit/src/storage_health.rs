@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use symcockpit_contract::Error;
+use symcockpit_core::plan::Clock;
 use symcockpit_core::storage::health::{
-    Clock, HistoryStore, Location, NvmeDevice, NvmeSource, SmartReadError, SmartSample,
+    HistoryStore, Location, NvmeDevice, NvmeSource, SmartReadError, SmartSample,
 };
 use symcockpit_core::storage::space::{FsEntry, Kind, SpaceFs};
 use symcockpit_core::storage::speedtest::{CacheMode, SpeedHost, TestFile};
@@ -19,7 +20,7 @@ use symcockpit_core::storage::speedtest::{CacheMode, SpeedHost, TestFile};
 pub struct FixedClock(pub i64);
 
 impl Clock for FixedClock {
-    fn now_unix(&self) -> i64 {
+    fn now(&self) -> i64 {
         self.0
     }
 }

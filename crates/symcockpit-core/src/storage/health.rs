@@ -10,6 +10,8 @@ use std::fmt::Write as _;
 use serde_json::{Map, Value, json};
 use symcockpit_contract::Error;
 
+use crate::plan::Clock;
+
 /// Version of the rule table below. Stored with every measurement.
 pub const RULES_VERSION: u32 = 1;
 
@@ -307,11 +309,6 @@ pub trait NvmeSource {
     fn devices(&self) -> Result<Vec<NvmeDevice>, Error>;
 }
 
-/// Wall clock in whole seconds since the Unix epoch.
-pub trait Clock {
-    fn now_unix(&self) -> i64;
-}
-
 /// A stored measurement: the raw log page plus what was concluded from it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SmartSample {
@@ -454,7 +451,7 @@ pub fn health_json(
         ));
     }
     devices.sort_by_key(|d| (d.location.as_str(), d.model.clone(), d.firmware.clone()));
-    let now = clock.now_unix();
+    let now = clock.now();
     let at = rfc3339(now);
     let mut overall: Option<Grade> = None;
     let mut out = Vec::new();

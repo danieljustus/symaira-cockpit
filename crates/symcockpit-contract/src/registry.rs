@@ -1,9 +1,11 @@
-//! The v0.12 command set: every CLI command and every MCP tool the Swift
-//! binary ships, with its risk class and MCP input schema.
+//! The command register: every CLI command and every MCP tool, with its risk
+//! class and MCP input schema. The v0.12 set is spelled out below; every area
+//! appends its own `specs()` through [`crate::areas::all`].
 //!
-//! One entry per CLI command path; `mcp_name` is set when v0.12 also exposes
-//! it as an MCP tool. Risky tools keep their v0.12 MCP names for compatibility
-//! (they move behind `plan_*`/`confirm_plan` in a later stage).
+//! One entry per CLI command path; `mcp_name` is set when agents can call it.
+//! The risky v0.12 tools keep their names for compatibility (they move behind
+//! `plan_*`/`confirm_plan` with the fan and charge-limit work, wave 2A); the
+//! risky tools of the areas are `plan_*` only.
 
 use std::sync::LazyLock;
 
@@ -22,16 +24,20 @@ pub struct CommandSpec {
     pub cli_path: &'static str,
     /// MCP tool name, `None` when agents cannot call it.
     pub mcp_name: Option<&'static str>,
-    /// Functional area: `monitor`, `tune` or `system`.
+    /// Functional area: `monitor`, `tune`, `system`, or one of the newer areas.
     pub area: &'static str,
     pub risk: Risk,
     /// JSON Schema of the MCP tool arguments, exactly as v0.12 lists it.
     pub input_schema: Value,
 }
 
-/// The whole register, in a stable order.
+/// The whole register, in a stable order: v0.12, then the areas.
 pub fn commands() -> &'static [CommandSpec] {
-    static COMMANDS: LazyLock<Vec<CommandSpec>> = LazyLock::new(build);
+    static COMMANDS: LazyLock<Vec<CommandSpec>> = LazyLock::new(|| {
+        let mut all = v012();
+        all.extend(crate::areas::all());
+        all
+    });
     &COMMANDS
 }
 
@@ -54,7 +60,7 @@ fn named() -> Value {
     object(json!({"name": {"type": "string"}}), &["name"])
 }
 
-fn build() -> Vec<CommandSpec> {
+fn v012() -> Vec<CommandSpec> {
     use Risk::{Read, Reversible, Risky};
     let spec = |name, cli_path, mcp_name, area, risk, input_schema| CommandSpec {
         name,
@@ -447,11 +453,14 @@ mod tests {
     }
 
     #[test]
-    fn register_holds_exactly_the_v012_mcp_tools() {
+    fn register_lists_the_v012_mcp_tools_before_every_new_one() {
         let got: Vec<_> = commands().iter().filter_map(|c| c.mcp_name).collect();
-        let want: BTreeSet<_> = V012_MCP_TOOLS.into_iter().collect();
-        assert_eq!(got.len(), want.len());
-        assert_eq!(got.into_iter().collect::<BTreeSet<_>>(), want);
+        let mut v012: Vec<_> = V012_MCP_TOOLS.to_vec();
+        let mut first: Vec<_> = got[..V012_MCP_TOOLS.len()].to_vec();
+        v012.sort_unstable();
+        first.sort_unstable();
+        assert_eq!(first, v012, "the v0.12 tools come before every new tool");
+        assert!(got.len() > V012_MCP_TOOLS.len(), "the areas add tools");
     }
 
     #[test]
@@ -460,7 +469,53 @@ mod tests {
             .iter()
             .filter_map(|c| c.cli_path.split(' ').next())
             .collect();
-        assert_eq!(top, V012_CLI_COMMANDS.into_iter().collect::<BTreeSet<_>>());
+        for word in V012_CLI_COMMANDS {
+            assert!(top.contains(word), "{word}");
+        }
+    }
+
+    #[test]
+    fn areas_never_shadow_a_v012_command() {
+        // A new path may only extend a v0.12 command (`processes kill`), never
+        // reuse its first word for something unrelated.
+        let v012_paths: BTreeSet<_> = v012().iter().map(|c| c.cli_path).collect();
+        for c in crate::areas::all() {
+            let first = c.cli_path.split(' ').next().unwrap();
+            if V012_CLI_COMMANDS.contains(&first) {
+                assert!(
+                    v012_paths.contains(first) && first == "processes",
+                    "{} reuses the v0.12 word {first}",
+                    c.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_area_spec_is_in_the_register_exactly_once() {
+        for c in crate::areas::all() {
+            assert_eq!(
+                commands().iter().filter(|r| r.name == c.name).count(),
+                1,
+                "{}",
+                c.name
+            );
+        }
+    }
+
+    #[test]
+    fn agents_see_plans_for_risky_area_commands_and_never_human_only_ones() {
+        let v012: BTreeSet<_> = V012_MCP_TOOLS.into_iter().collect();
+        for c in commands() {
+            let Some(tool) = c.mcp_name else { continue };
+            assert_ne!(c.risk, Risk::HumanOnly, "{} is exposed", c.name);
+            if c.risk == Risk::Risky && !v012.contains(tool) {
+                assert!(
+                    tool.starts_with("plan_") || tool == "confirm_plan",
+                    "risky tool {tool} must be a plan tool"
+                );
+            }
+        }
     }
 
     #[test]

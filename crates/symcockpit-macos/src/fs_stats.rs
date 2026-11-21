@@ -14,20 +14,8 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use symcockpit_core::storage::health::Clock;
 use symcockpit_core::storage::space::{FsEntry, Kind, SpaceFs};
 use symcockpit_core::storage::speedtest::{CacheMode, SpeedHost, TestFile};
-
-/// Wall clock.
-pub struct SystemClock;
-
-impl Clock for SystemClock {
-    fn now_unix(&self) -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs() as i64)
-    }
-}
 
 /// Bytes available to a normal user on the volume holding `path`.
 pub fn available_bytes(path: &Path) -> io::Result<u64> {
@@ -203,6 +191,7 @@ impl SpaceFs for StdSpaceFs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use symcockpit_core::plan::SystemClock;
     use symcockpit_core::storage::space::{SpaceParams, space_json};
     use symcockpit_core::storage::speedtest::{Limits, SpeedtestParams, speedtest_json};
 

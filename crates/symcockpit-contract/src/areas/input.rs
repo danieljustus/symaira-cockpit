@@ -60,18 +60,4 @@ mod tests {
             }
         }
     }
-
-    #[test]
-    fn names_are_unique_and_collide_with_nothing_in_the_register() {
-        let existing = commands();
-        let mut names = BTreeSet::new();
-        for s in specs() {
-            assert!(names.insert(s.name));
-            assert!(
-                existing
-                    .iter()
-                    .all(|e| e.name != s.name && e.cli_path != s.cli_path)
-            );
-        }
-    }
 }

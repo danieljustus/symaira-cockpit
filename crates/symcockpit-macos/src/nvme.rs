@@ -363,7 +363,7 @@ impl NvmeSource for IoKitNvme {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fs_stats::SystemClock;
+    use symcockpit_core::plan::SystemClock;
     use symcockpit_core::storage::health::{HealthParams, health_json};
 
     /// Real internal (and any external) NVMe: read-only, as the current user.

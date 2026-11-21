@@ -1,4 +1,4 @@
-//! Bluetooth commands (R50 to R53). Appended to the register by the coordinator.
+//! Bluetooth commands (R50 to R53). [`specs`] joins the register through [`super::all`].
 
 use serde_json::json;
 
@@ -99,28 +99,6 @@ mod tests {
 
     use super::*;
     use crate::commands;
-
-    #[test]
-    fn names_are_unique_and_collide_with_nothing_in_the_register() {
-        let mine = specs();
-        let existing = commands();
-        let mut names = BTreeSet::new();
-        for s in &mine {
-            assert!(names.insert(s.name), "duplicate {}", s.name);
-            assert!(existing.iter().all(|e| e.name != s.name), "{}", s.name);
-            assert!(
-                existing.iter().all(|e| e.cli_path != s.cli_path),
-                "{}",
-                s.cli_path
-            );
-            if let Some(m) = s.mcp_name {
-                assert!(existing.iter().all(|e| e.mcp_name != Some(m)), "{m}");
-            }
-            assert_eq!(s.area, "bluetooth");
-        }
-        let cli: BTreeSet<_> = mine.iter().map(|s| s.cli_path).collect();
-        assert_eq!(cli.len(), mine.len());
-    }
 
     #[test]
     fn mcp_surface_is_exactly_the_four_agreed_tools() {

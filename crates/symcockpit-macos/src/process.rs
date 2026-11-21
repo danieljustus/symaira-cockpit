@@ -10,6 +10,8 @@ use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use symcockpit_contract::Error;
+use symcockpit_core::kill::{ProcessControl, ProcessIdentity, SignalError};
 use symcockpit_core::processes::{
     DefaultGpuProcessSource, GpuProcessReporting, IoRegistryGpuProcessSource,
     PowermetricsGpuProcessSource, PowermetricsRunner, ProcessSample, ProcessSampleSet,
@@ -200,6 +202,73 @@ pub fn live_gpu_source() -> Box<dyn GpuProcessReporting> {
 /// The process service of one process (keep it: CPU percentages need the previous sweep).
 pub fn live_process_service() -> ProcessUsageService {
     ProcessUsageService::new(Box::new(LibprocProcessSampleSource), live_gpu_source())
+}
+
+/// The live process table for ending a process: identity from `proc_pidinfo`,
+/// SIGTERM through `kill(2)`.
+pub struct LiveProcessControl;
+
+impl ProcessControl for LiveProcessControl {
+    fn identity(&self, pid: i32) -> Result<Option<ProcessIdentity>, Error> {
+        let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::zeroed();
+        let size = size_of::<libc::proc_bsdinfo>() as libc::c_int;
+        // SAFETY: `info` is a writable proc_bsdinfo of `size` bytes.
+        let got = unsafe {
+            libc::proc_pidinfo(
+                pid,
+                libc::PROC_PIDTBSDINFO,
+                0,
+                info.as_mut_ptr().cast(),
+                size,
+            )
+        };
+        if got != size {
+            let errno = std::io::Error::last_os_error();
+            return match errno.raw_os_error() {
+                Some(libc::ESRCH) | Some(0) | None => Ok(None),
+                _ => Err(Error::Failed(format!("process {pid}: {errno}"))),
+            };
+        }
+        // SAFETY: fully written when the kernel returned exactly `size` bytes.
+        let info = unsafe { info.assume_init() };
+        // A killed child that nobody has waited for yet: already gone.
+        if info.pbi_status == libc::SZOMB {
+            return Ok(None);
+        }
+        let mut path = vec![0 as libc::c_char; PATH_BUFFER_SIZE];
+        // SAFETY: the buffer is writable for `path.len()` bytes.
+        let len = unsafe { libc::proc_pidpath(pid, path.as_mut_ptr().cast(), path.len() as u32) };
+        Ok(Some(ProcessIdentity {
+            pid,
+            name: name_of(pid),
+            path: (len > 0).then(|| decode_name_buffer(&path)),
+            started_s: info.pbi_start_tvsec as i64,
+            started_us: info.pbi_start_tvusec as i64,
+            uid: info.pbi_uid,
+        }))
+    }
+
+    fn terminate(&self, pid: i32) -> Result<(), SignalError> {
+        // SAFETY: kill(2) takes two plain integers.
+        if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
+            return Ok(());
+        }
+        let errno = std::io::Error::last_os_error();
+        Err(match errno.raw_os_error() {
+            Some(libc::ESRCH) => SignalError::NotFound,
+            Some(libc::EPERM) => SignalError::Denied(errno.to_string()),
+            _ => SignalError::Other(errno.to_string()),
+        })
+    }
+
+    fn current_pid(&self) -> i32 {
+        std::process::id() as i32
+    }
+
+    fn current_uid(&self) -> u32 {
+        // SAFETY: geteuid has no preconditions.
+        unsafe { libc::geteuid() }
+    }
 }
 
 #[cfg(test)]

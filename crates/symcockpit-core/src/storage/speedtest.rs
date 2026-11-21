@@ -12,7 +12,8 @@ use serde_json::{Value, json};
 use symcockpit_contract::Error;
 use symcockpit_contract::areas::storage_health::{MCP_SPEEDTEST_MAX_MIB, SPEEDTEST_DEFAULT_MIB};
 
-use super::health::{Clock, bounded, number, rfc3339};
+use super::health::{bounded, number, rfc3339};
+use crate::plan::Clock;
 
 pub const MIB: u64 = 1 << 20;
 pub const MB: u64 = 1_000_000;
@@ -295,7 +296,7 @@ pub fn speedtest_json(
         )));
     }
 
-    let started = rfc3339(clock.now_unix());
+    let started = rfc3339(clock.now());
     let dir = target.join(format!("{SESSION_PREFIX}{}", host.session_id()));
     host.create_dir(&dir)
         .map_err(|e| io_err("create session directory", &e))?;

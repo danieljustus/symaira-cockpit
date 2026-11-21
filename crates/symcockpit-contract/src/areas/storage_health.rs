@@ -1,6 +1,6 @@
 //! Command specs of the storage health area: NVMe SMART, speed test, space analysis
-//! (R30 to R33). Not yet part of [`crate::commands`]; the coordinator appends
-//! [`specs`] to the register.
+//! (R30 to R33). [`specs`] joins the register through
+//! [`super::all`].
 
 use serde_json::{Value, json};
 
@@ -113,35 +113,6 @@ mod tests {
 
     use super::*;
     use crate::commands;
-
-    #[test]
-    fn no_collision_with_the_register_or_among_themselves() {
-        let ours = specs();
-        let existing = commands();
-        let mut seen = BTreeSet::new();
-        for c in &ours {
-            for key in [Some(c.name), Some(c.cli_path), c.mcp_name]
-                .into_iter()
-                .flatten()
-            {
-                assert!(seen.insert(key), "duplicate {key}");
-            }
-            assert!(
-                !existing.iter().any(|e| e.name == c.name
-                    || e.cli_path == c.cli_path
-                    || (e.mcp_name.is_some() && e.mcp_name == c.mcp_name)),
-                "{} collides",
-                c.name
-            );
-            assert_eq!(c.area, "storage");
-        }
-        // `storage` must not shadow a v0.12 top-level command.
-        assert!(
-            !existing
-                .iter()
-                .any(|e| e.cli_path.split(' ').next() == Some("storage"))
-        );
-    }
 
     #[test]
     fn risks_and_exposure() {

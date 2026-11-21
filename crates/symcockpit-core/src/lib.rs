@@ -7,6 +7,7 @@ pub mod bluetooth;
 pub mod display;
 pub mod history;
 pub mod input;
+pub mod kill;
 pub mod metrics;
 pub mod midi;
 pub mod plan;
