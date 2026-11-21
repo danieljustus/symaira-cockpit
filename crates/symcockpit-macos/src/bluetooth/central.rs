@@ -14,6 +14,7 @@
 //! the delegate wiring is covered by compile-time protocol checks and the
 //! pure logic by fakes in `symcockpit-testkit`.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -433,6 +434,7 @@ impl BleCentral for CoreBluetoothCentral {
             _bridge: self.bridge.clone(),
             rx: self.rx.clone(),
             id: id.to_owned(),
+            started: RefCell::default(),
         }))
     }
 }
@@ -443,6 +445,8 @@ struct Link {
     _bridge: Retained<Bridge>,
     rx: Rc<Receiver<Event>>,
     id: String,
+    /// When each persistent subscription (`begin_subscription`) started.
+    started: RefCell<HashMap<(String, String), Instant>>,
 }
 
 fn property_names(p: CBCharacteristicProperties) -> Vec<String> {
@@ -543,6 +547,37 @@ impl Link {
         Err(Error::Failed(format!(
             "no characteristic {uuid} in service {service} on this device"
         )))
+    }
+
+    /// Checks that the characteristic notifies, turns notifications on and waits for the
+    /// confirmation. Shared by the timed and the persistent subscription.
+    fn enable_notifications(
+        &self,
+        service: &str,
+        characteristic: &str,
+    ) -> Result<Retained<CBCharacteristic>, Error> {
+        let c = self.characteristic(service, characteristic)?;
+        // SAFETY: plain getter.
+        let props = unsafe { c.properties() };
+        if !props
+            .intersects(CBCharacteristicProperties::Notify | CBCharacteristicProperties::Indicate)
+        {
+            return Err(Error::Unsupported("characteristic does not notify".into()));
+        }
+        // SAFETY: documented subscription request.
+        unsafe { self.peripheral.setNotifyValue_forCharacteristic(true, &c) };
+        self.wait("subscribe", |e| match e {
+            Event::NotifyState {
+                service: s,
+                characteristic: ch,
+                error,
+            } if s == service && ch == characteristic => Some(match error {
+                Some(e) => Err(Error::Failed(format!("subscribe failed: {e}"))),
+                None => Ok(()),
+            }),
+            _ => None,
+        })?;
+        Ok(c)
     }
 
     fn wait<T>(
@@ -662,27 +697,7 @@ impl BleLink for Link {
         window: Duration,
         on_value: &mut dyn FnMut(Notification),
     ) -> Result<(), Error> {
-        let c = self.characteristic(service, characteristic)?;
-        // SAFETY: plain getter.
-        let props = unsafe { c.properties() };
-        if !props
-            .intersects(CBCharacteristicProperties::Notify | CBCharacteristicProperties::Indicate)
-        {
-            return Err(Error::Unsupported("characteristic does not notify".into()));
-        }
-        // SAFETY: documented subscription request.
-        unsafe { self.peripheral.setNotifyValue_forCharacteristic(true, &c) };
-        self.wait("subscribe", |e| match e {
-            Event::NotifyState {
-                service: s,
-                characteristic: ch,
-                error,
-            } if s == service && ch == characteristic => Some(match error {
-                Some(e) => Err(Error::Failed(format!("subscribe failed: {e}"))),
-                None => Ok(()),
-            }),
-            _ => None,
-        })?;
+        let c = self.enable_notifications(service, characteristic)?;
         let started = Instant::now();
         let deadline = started + window;
         while let Some(event) = recv_until(&self.rx, deadline)? {
@@ -703,6 +718,56 @@ impl BleLink for Link {
         // SAFETY: ends the subscription started above.
         unsafe { self.peripheral.setNotifyValue_forCharacteristic(false, &c) };
         Ok(())
+    }
+
+    fn begin_subscription(&self, service: &str, characteristic: &str) -> Result<(), Error> {
+        self.enable_notifications(service, characteristic)?;
+        self.started.borrow_mut().insert(
+            (service.to_owned(), characteristic.to_owned()),
+            Instant::now(),
+        );
+        Ok(())
+    }
+
+    fn poll_subscriptions(
+        &self,
+        wait: Duration,
+        on_value: &mut dyn FnMut(&str, &str, Notification),
+    ) -> Result<(), Error> {
+        let deadline = Instant::now() + wait;
+        while let Some(event) = recv_until(&self.rx, deadline)? {
+            if let Event::Value {
+                service,
+                characteristic,
+                result: Ok(value),
+            } = event
+                && let Some(started) = self
+                    .started
+                    .borrow()
+                    .get(&(service.clone(), characteristic.clone()))
+            {
+                on_value(
+                    &service,
+                    &characteristic,
+                    Notification {
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                        value,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn end_subscription(&self, service: &str, characteristic: &str) {
+        let key = (service.to_owned(), characteristic.to_owned());
+        if self.started.borrow_mut().remove(&key).is_none() {
+            return;
+        }
+        if let Ok(c) = self.characteristic(service, characteristic) {
+            // SAFETY: ends the subscription started in `begin_subscription`.
+            unsafe { self.peripheral.setNotifyValue_forCharacteristic(false, &c) };
+        }
     }
 
     fn disconnect(&self) {

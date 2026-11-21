@@ -36,3 +36,18 @@ pub trait InputProbe {
     fn event_tap_access(&self) -> Access;
     fn secure_input_active(&self) -> bool;
 }
+
+/// Called on the tap's thread after it replaced a key; must return quickly.
+pub type ActionHook = std::sync::Arc<dyn Fn(Synthetic) + Send + Sync>;
+
+/// A running Finder-cut tap. Dropping it removes the tap.
+pub trait RunningTap {}
+
+/// Port: installs the Finder ⌘X/⌘V tap on the calling thread's run loop, which the caller (the
+/// app agent's main thread) keeps spinning. `Error::Permission` without the permission.
+pub trait TapHost {
+    fn start(
+        &self,
+        on_action: ActionHook,
+    ) -> Result<Box<dyn RunningTap>, symcockpit_contract::Error>;
+}

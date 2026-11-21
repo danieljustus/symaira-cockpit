@@ -17,6 +17,8 @@ pub enum LogKind {
     Disconnect,
     Read,
     Notify,
+    Subscribe,
+    Unsubscribe,
     WriteRequested,
     WriteAcknowledged,
     WriteReadback,
@@ -40,6 +42,8 @@ pub struct BleLog {
     cap: usize,
     entries: std::collections::VecDeque<LogEntry>,
     clock: Box<dyn Fn() -> u64>,
+    /// Entries ever pushed; entry `i` of `entries` has sequence number `pushed - len + i`.
+    pushed: u64,
 }
 
 impl BleLog {
@@ -57,6 +61,7 @@ impl BleLog {
             cap: cap.max(1),
             entries: Default::default(),
             clock: Box::new(clock),
+            pushed: 0,
         }
     }
 
@@ -87,6 +92,24 @@ impl BleLog {
             self.entries.pop_front();
         }
         self.entries.push_back(entry);
+        self.pushed += 1;
+    }
+
+    /// Number of entries ever logged: the next entry's sequence number.
+    pub fn total(&self) -> u64 {
+        self.pushed
+    }
+
+    /// Entries with a sequence number of at least `since`, with their numbers (those already
+    /// pushed out of the bounded log are gone).
+    pub fn since(&self, since: u64) -> impl Iterator<Item = (u64, &LogEntry)> {
+        let first = self.pushed - self.entries.len() as u64;
+        let skip = since.saturating_sub(first) as usize;
+        self.entries
+            .iter()
+            .enumerate()
+            .skip(skip)
+            .map(move |(i, e)| (first + i as u64, e))
     }
 
     pub fn entries(&self) -> impl Iterator<Item = &LogEntry> {
@@ -280,6 +303,20 @@ mod tests {
         }
         let kept: Vec<u8> = log.entries().map(|e| e.bytes[0]).collect();
         assert_eq!(kept, [1, 2]);
+    }
+
+    #[test]
+    fn entries_carry_sequence_numbers_that_survive_eviction() {
+        let mut log = BleLog::new(3);
+        for i in 0..5u8 {
+            log.push(entry("x", &[i]));
+        }
+        assert_eq!(log.total(), 5);
+        let all: Vec<(u64, u8)> = log.since(0).map(|(n, e)| (n, e.bytes[0])).collect();
+        assert_eq!(all, [(2, 2), (3, 3), (4, 4)]);
+        let tail: Vec<u64> = log.since(4).map(|(n, _)| n).collect();
+        assert_eq!(tail, [4]);
+        assert_eq!(log.since(5).count(), 0);
     }
 
     #[test]

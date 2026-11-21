@@ -9,4 +9,4 @@ mod tap;
 pub use haptics::MultitouchHaptics;
 pub use settings::JsonFileSettings;
 pub use sound::AfplaySound;
-pub use tap::{FinderCutTap, LiveProbe};
+pub use tap::{FinderCutTap, LiveProbe, LiveTapHost, OnAction};

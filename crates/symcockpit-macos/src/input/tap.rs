@@ -167,9 +167,13 @@ impl InputProbe for LiveProbe {
     }
 }
 
+/// Called on the tap's thread after an event was replaced; must return quickly.
+pub type OnAction = Arc<dyn Fn(Synthetic) + Send + Sync>;
+
 struct TapState {
     engine: Mutex<FinderCut>,
     tap: Mutex<*mut c_void>,
+    on_action: Option<OnAction>,
 }
 
 // SAFETY: the raw tap pointer is only used to re-enable the tap; CGEventTapEnable
@@ -271,6 +275,9 @@ fn handle(state: &TapState, kind: u32, event: *mut c_void, raw: *const TapState)
         Action::Replace(synthetic) => {
             drop(engine);
             post_synthetic(synthetic);
+            if let Some(on_action) = &state.on_action {
+                on_action(synthetic);
+            }
             if synthetic == Synthetic::Copy {
                 // SAFETY: `raw` came from `Arc::into_raw`; the extra count is
                 // released when the watcher thread ends.
@@ -282,6 +289,20 @@ fn handle(state: &TapState, kind: u32, event: *mut c_void, raw: *const TapState)
             }
             std::ptr::null_mut() // swallow the original key
         }
+    }
+}
+
+/// The production [`symcockpit_core::input::TapHost`].
+pub struct LiveTapHost;
+
+impl symcockpit_core::input::RunningTap for FinderCutTap {}
+
+impl symcockpit_core::input::TapHost for LiveTapHost {
+    fn start(
+        &self,
+        on_action: OnAction,
+    ) -> Result<Box<dyn symcockpit_core::input::RunningTap>, Error> {
+        Ok(Box::new(FinderCutTap::start_with(Some(on_action))?))
     }
 }
 
@@ -297,9 +318,16 @@ impl FinderCutTap {
     /// Installs the tap on the current thread's run loop.
     /// `Error::Permission` without the Accessibility permission.
     pub fn start() -> Result<Self, Error> {
+        Self::start_with(None)
+    }
+
+    /// [`Self::start`], telling `on_action` about every replaced key (the
+    /// agent plays haptics and sound from there).
+    pub fn start_with(on_action: Option<OnAction>) -> Result<Self, Error> {
         let state = Arc::into_raw(Arc::new(TapState {
             engine: Mutex::new(FinderCut::default()),
             tap: Mutex::new(std::ptr::null_mut()),
+            on_action,
         }));
         // SAFETY: `state` stays valid until `stop` reclaims it; the callback is
         // an `extern "C"` function with the signature CGEventTapCreate expects.

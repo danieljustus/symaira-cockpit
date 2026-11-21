@@ -400,11 +400,16 @@ fn with_engine<T>(
         central: &*ports.central,
         connect_timeout: Duration::from_secs(10),
     };
+    // Inside the app agent a confirmed write goes through the live session's connection.
+    let hosted_write = crate::host::ble().map(crate::host::ble::HostedWrite);
     let mut engine = Engine::new(&*store, &*ports.clock)
         .register(&trash)
         .register(&delete)
-        .register(&kill)
-        .register(&ble);
+        .register(&kill);
+    engine = match &hosted_write {
+        Some(hosted) => engine.register(hosted),
+        None => engine.register(&ble),
+    };
     for action in &audio {
         engine = engine.register(action as &dyn Action);
     }
@@ -660,11 +665,13 @@ fn audio(ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Error> {
     if matches!(command, Command::MixerRun { .. }) {
         (kit.before_foreground)();
     }
+    let hosted_mixer = crate::host::mixer();
     let audio_ctx = audio_cli::Context {
         audio: &kit.service,
         midi: &kit.midi,
         tap: kit.tap.clone(),
-        mixer: None,
+        // Inside the app agent the hosted mixer answers `audio mixer set`; a one-shot has none.
+        mixer: hosted_mixer.as_deref(),
         stop: &*kit.stop,
     };
     let value = audio_cli::run(&command, &audio_ctx)?;
@@ -698,6 +705,14 @@ fn bluetooth(ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Erro
     } else {
         args_of(req)?
     };
+    // Inside the app agent the session (connections, subscriptions, log) answers.
+    if req.command.starts_with("ble.")
+        && req.command != "ble.write"
+        && !services_only
+        && let Some(session) = crate::host::ble()
+    {
+        return session.run(req.command, &args).map(Output::Json);
+    }
     let mut log = BleLog::new(1000);
     let seconds =
         |key: &str, default: f64| args.get(key).and_then(Value::as_f64).unwrap_or(default);
@@ -747,11 +762,12 @@ fn bluetooth(ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Erro
             )?;
             with_engine(ports, ctx, |e| plan_ble_write_json(e, &request))?
         }
-        // shortcut: the log lives in the memory of one process, and a one-shot
-        // command ends with it; exporting needs the long-lived app agent.
-        "ble.export" => {
+        // The session (connections, subscriptions, log) lives in the running app agent; a
+        // one-shot command ends with its process and has none to export, list or close.
+        "ble.export" | "ble.connect" | "ble.disconnect" | "ble.services" | "ble.unsubscribe"
+        | "ble.log" | "ble.session" => {
             return Err(Error::Unsupported(
-                "the BLE log lives in the running app agent; a one-shot command has none to export"
+                "the BLE session lives in the running app agent; a one-shot command has none"
                     .into(),
             ));
         }

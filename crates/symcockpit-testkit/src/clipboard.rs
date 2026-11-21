@@ -3,10 +3,13 @@
 use std::{
     cell::{Cell, RefCell},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use symcockpit_contract::Error;
-use symcockpit_core::clipboard::{BackupExclusion, Key, KeyStore, PasteboardSource, random_key};
+use symcockpit_core::clipboard::{
+    BackupExclusion, Key, KeyStore, PasteboardSink, PasteboardSource, random_key,
+};
 
 /// A key kept in memory; counts how often it was asked for (it must stay 0 when nothing is stored).
 pub struct FakeKeys {
@@ -101,5 +104,102 @@ impl PasteboardSource for FakePasteboard {
     fn read_png(&self) -> Option<Vec<u8>> {
         self.content_reads.set(self.content_reads.get() + 1);
         self.png.borrow().clone()
+    }
+}
+
+#[derive(Default)]
+struct SharedState {
+    change_count: i64,
+    types: Vec<String>,
+    source: Option<String>,
+    text: Option<String>,
+    png: Option<Vec<u8>>,
+    count_reads: u32,
+    content_reads: u32,
+    writes: Vec<String>,
+}
+
+/// A pasteboard that is both source and sink and can be shared with the agent's clipboard
+/// thread: the test copies, the thread polls. Counts every read, so a test can prove that
+/// nothing touched the pasteboard while the feature was off.
+#[derive(Clone, Default)]
+pub struct SharedPasteboard(Arc<Mutex<SharedState>>);
+
+impl SharedPasteboard {
+    pub fn copy_text(&self, source: &str, text: &str) {
+        let mut s = self.0.lock().unwrap();
+        s.change_count += 1;
+        s.types = vec!["public.utf8-plain-text".to_owned()];
+        s.source = Some(source.to_owned());
+        s.text = Some(text.to_owned());
+        s.png = None;
+    }
+    pub fn copy_secret(&self, source: &str, text: &str) {
+        self.copy_text(source, text);
+        self.0
+            .lock()
+            .unwrap()
+            .types
+            .push("org.nspasteboard.ConcealedType".to_owned());
+    }
+    /// How often anything at all was read from it (change count, types, content).
+    pub fn reads(&self) -> u32 {
+        self.0.lock().unwrap().count_reads
+    }
+    pub fn content_reads(&self) -> u32 {
+        self.0.lock().unwrap().content_reads
+    }
+    /// What the human put back with "copy again": `text:<..>` or `png:<n bytes>`.
+    pub fn writes(&self) -> Vec<String> {
+        self.0.lock().unwrap().writes.clone()
+    }
+    pub fn text(&self) -> Option<String> {
+        self.0.lock().unwrap().text.clone()
+    }
+}
+
+impl PasteboardSource for SharedPasteboard {
+    fn change_count(&self) -> i64 {
+        let mut s = self.0.lock().unwrap();
+        s.count_reads += 1;
+        s.change_count
+    }
+    fn types(&self) -> Vec<String> {
+        let mut s = self.0.lock().unwrap();
+        s.count_reads += 1;
+        s.types.clone()
+    }
+    fn source_bundle_id(&self) -> Option<String> {
+        self.0.lock().unwrap().source.clone()
+    }
+    fn read_text(&self) -> Option<String> {
+        let mut s = self.0.lock().unwrap();
+        s.content_reads += 1;
+        s.text.clone()
+    }
+    fn read_png(&self) -> Option<Vec<u8>> {
+        let mut s = self.0.lock().unwrap();
+        s.content_reads += 1;
+        s.png.clone()
+    }
+}
+
+impl PasteboardSink for SharedPasteboard {
+    fn write_text(&self, text: &str) -> Result<i64, Error> {
+        let mut s = self.0.lock().unwrap();
+        s.change_count += 1;
+        s.types = vec!["public.utf8-plain-text".to_owned()];
+        s.source = None;
+        s.text = Some(text.to_owned());
+        s.writes.push(format!("text:{text}"));
+        Ok(s.change_count)
+    }
+    fn write_png(&self, png: &[u8]) -> Result<i64, Error> {
+        let mut s = self.0.lock().unwrap();
+        s.change_count += 1;
+        s.types = vec!["public.png".to_owned()];
+        s.png = Some(png.to_vec());
+        s.writes.push(format!("png:{} bytes", png.len()));
+        Ok(s.change_count)
     }
 }

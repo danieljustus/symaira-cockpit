@@ -1,0 +1,34 @@
+{
+  "properties": {
+    "connections": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "log_entries": {
+      "type": "number"
+    },
+    "log_seq": {
+      "type": "number"
+    },
+    "subscriptions": {
+      "items": {
+        "properties": {
+          "characteristic": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}

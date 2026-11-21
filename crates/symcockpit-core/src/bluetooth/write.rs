@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use symcockpit_contract::{Error, Outcome};
 
-use super::ble::{BleCentral, WriteAck, normalize_uuid};
+use super::ble::{BleCentral, BleLink, WriteAck, normalize_uuid};
 use crate::plan::{Action, ItemResult};
 
 /// The `"action"` of a recorded BLE write.
@@ -167,93 +167,112 @@ pub struct LinkWriteAction<'a> {
     pub connect_timeout: Duration,
 }
 
-impl BleWriteAction for LinkWriteAction<'_> {
-    fn execute(&self, req: &WriteRequest) -> Result<WriteReport, Error> {
-        let link = self.central.connect(&req.device_id, self.connect_timeout)?;
-        let record = |stage, status, detail: &str| StageRecord {
-            stage,
-            status,
-            detail: detail.to_owned(),
-        };
-        let mut stages = vec![record(WriteStage::Requested, "ok", "accepted locally")];
-        let written = link.write(
-            &req.service,
-            &req.characteristic,
-            &req.value,
-            req.with_response,
-        );
-        let (ack, wrote) = match written {
-            Ok(WriteAck::Acknowledged) => {
-                stages.push(record(WriteStage::Sent, "ok", "handed to the transport"));
+/// Writes on an open connection and reports every stage separately (R52): requested, sent,
+/// acknowledged, readback. The link stays open.
+pub fn write_on_link(link: &dyn BleLink, req: &WriteRequest) -> WriteReport {
+    let record = |stage, status, detail: &str| StageRecord {
+        stage,
+        status,
+        detail: detail.to_owned(),
+    };
+    let mut stages = vec![record(WriteStage::Requested, "ok", "accepted locally")];
+    let written = link.write(
+        &req.service,
+        &req.characteristic,
+        &req.value,
+        req.with_response,
+    );
+    let (ack, wrote) = match written {
+        Ok(WriteAck::Acknowledged) => {
+            stages.push(record(WriteStage::Sent, "ok", "handed to the transport"));
+            stages.push(record(
+                WriteStage::Acknowledged,
+                "ok",
+                "peripheral confirmed",
+            ));
+            (AckState::Acknowledged, true)
+        }
+        Ok(WriteAck::NotRequested) => {
+            stages.push(record(WriteStage::Sent, "ok", "handed to the transport"));
+            stages.push(record(
+                WriteStage::Acknowledged,
+                "not_applicable",
+                "write without response",
+            ));
+            (AckState::NotApplicable, true)
+        }
+        Err(e) => {
+            stages.push(record(WriteStage::Sent, "failed", &e.to_string()));
+            stages.push(record(
+                WriteStage::Acknowledged,
+                "failed",
+                "no acknowledgement",
+            ));
+            (AckState::Failed, false)
+        }
+    };
+    let mut readback = None;
+    let outcome = if !wrote {
+        stages.push(record(WriteStage::Readback, "unavailable", "write failed"));
+        Outcome::Failed
+    } else {
+        match link.read(&req.service, &req.characteristic) {
+            Ok(v) => {
+                let same = v == req.value;
                 stages.push(record(
-                    WriteStage::Acknowledged,
-                    "ok",
-                    "peripheral confirmed",
-                ));
-                (AckState::Acknowledged, true)
-            }
-            Ok(WriteAck::NotRequested) => {
-                stages.push(record(WriteStage::Sent, "ok", "handed to the transport"));
-                stages.push(record(
-                    WriteStage::Acknowledged,
-                    "not_applicable",
-                    "write without response",
-                ));
-                (AckState::NotApplicable, true)
-            }
-            Err(e) => {
-                stages.push(record(WriteStage::Sent, "failed", &e.to_string()));
-                stages.push(record(
-                    WriteStage::Acknowledged,
-                    "failed",
-                    "no acknowledgement",
-                ));
-                (AckState::Failed, false)
-            }
-        };
-        let mut readback = None;
-        let outcome = if !wrote {
-            stages.push(record(WriteStage::Readback, "unavailable", "write failed"));
-            Outcome::Failed
-        } else {
-            match link.read(&req.service, &req.characteristic) {
-                Ok(v) => {
-                    let same = v == req.value;
-                    stages.push(record(
-                        WriteStage::Readback,
-                        if same { "ok" } else { "failed" },
-                        if same {
-                            "value matches"
-                        } else {
-                            "value differs"
-                        },
-                    ));
-                    readback = Some(v);
+                    WriteStage::Readback,
+                    if same { "ok" } else { "failed" },
                     if same {
-                        Outcome::Confirmed
+                        "value matches"
                     } else {
-                        Outcome::Unconfirmed
-                    }
-                }
-                Err(e) => {
-                    stages.push(record(WriteStage::Readback, "unavailable", &e.to_string()));
+                        "value differs"
+                    },
+                ));
+                readback = Some(v);
+                if same {
+                    Outcome::Confirmed
+                } else {
                     Outcome::Unconfirmed
                 }
             }
-        };
-        link.disconnect();
-        Ok(WriteReport {
-            request: req.clone(),
-            stages,
-            ack,
-            readback,
-            outcome,
-        })
+            Err(e) => {
+                stages.push(record(WriteStage::Readback, "unavailable", &e.to_string()));
+                Outcome::Unconfirmed
+            }
+        }
+    };
+    WriteReport {
+        request: req.clone(),
+        stages,
+        ack,
+        readback,
+        outcome,
     }
 }
 
-/// Runs a recorded `ble_write` item. The central is built on first use, so
-/// confirming another kind of plan never starts Bluetooth.
+/// What a plan item reports for a finished write: the outcome, and every stage that was not ok.
+pub fn item_result(report: &WriteReport) -> ItemResult {
+    let problems: Vec<String> = report
+        .stages
+        .iter()
+        .filter(|s| s.status != "ok" && s.status != "not_applicable")
+        .map(|s| format!("{:?}: {} ({})", s.stage, s.status, s.detail))
+        .collect();
+    ItemResult::new(
+        report.outcome,
+        (!problems.is_empty()).then(|| problems.join("; ")),
+    )
+}
+
+impl BleWriteAction for LinkWriteAction<'_> {
+    fn execute(&self, req: &WriteRequest) -> Result<WriteReport, Error> {
+        let link = self.central.connect(&req.device_id, self.connect_timeout)?;
+        let report = write_on_link(&*link, req);
+        link.disconnect();
+        Ok(report)
+    }
+}
+
 pub struct BlePlanAction<'a> {
     pub central: &'a dyn Fn() -> Result<Box<dyn BleCentral>, Error>,
     pub connect_timeout: Duration,
@@ -281,18 +300,7 @@ impl Action for BlePlanAction<'_> {
             .execute(&request)
         };
         match run() {
-            Ok(report) => {
-                let problems: Vec<String> = report
-                    .stages
-                    .iter()
-                    .filter(|s| s.status != "ok" && s.status != "not_applicable")
-                    .map(|s| format!("{:?}: {} ({})", s.stage, s.status, s.detail))
-                    .collect();
-                ItemResult::new(
-                    report.outcome,
-                    (!problems.is_empty()).then(|| problems.join("; ")),
-                )
-            }
+            Ok(report) => item_result(&report),
             Err(e) => ItemResult::new(Outcome::Failed, e.to_string()),
         }
     }

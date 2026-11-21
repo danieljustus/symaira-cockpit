@@ -97,6 +97,32 @@ pub trait BleLink {
         on_value: &mut dyn FnMut(Notification),
     ) -> Result<(), Error>;
     fn disconnect(&self);
+
+    /// Turns notifications on and leaves them on (the app agent's long-lived subscription).
+    /// shortcut: the CoreBluetooth adapter does not tag value events with their peripheral, so
+    /// the agent keeps live subscriptions on one link at a time; tag the events and route them
+    /// per link to lift that.
+    fn begin_subscription(&self, service: &str, characteristic: &str) -> Result<(), Error> {
+        let _ = (service, characteristic);
+        Err(Error::Unsupported(
+            "this connection cannot keep a subscription".into(),
+        ))
+    }
+
+    /// Hands over what arrived within `wait`, as `(service, characteristic, notification)`.
+    fn poll_subscriptions(
+        &self,
+        wait: Duration,
+        on_value: &mut dyn FnMut(&str, &str, Notification),
+    ) -> Result<(), Error> {
+        let _ = (wait, on_value);
+        Ok(())
+    }
+
+    /// Turns the notifications of `begin_subscription` off again.
+    fn end_subscription(&self, service: &str, characteristic: &str) {
+        let _ = (service, characteristic);
+    }
 }
 
 /// The local Bluetooth radio acting as BLE central.

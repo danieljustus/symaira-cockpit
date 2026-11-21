@@ -21,5 +21,5 @@ pub use devices::{Battery, Level, PairedDevice, PairedDevices, parse_system_prof
 pub use log::{BleLog, ExportFormat, LogEntry, LogKind, export_csv, export_json};
 pub use write::{
     AckState, BLE_WRITE_KIND, BlePlanAction, BleWriteAction, LinkWriteAction, StageRecord,
-    WriteReport, WriteRequest, WriteStage, from_hex, to_hex,
+    WriteReport, WriteRequest, WriteStage, from_hex, item_result, to_hex, write_on_link,
 };
