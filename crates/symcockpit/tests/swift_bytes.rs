@@ -69,9 +69,13 @@ fn version_report_matches_the_swift_bytes() {
     ] {
         let out = command(home.path()).args(args).output().unwrap();
         assert_eq!(out.status.code(), Some(0));
+        // The fixtures are the v0.12.2 bytes; the version in them follows this build, so
+        // that bumping the release (scripts/set-version.sh) does not break the comparison.
         assert_eq!(
             String::from_utf8(out.stdout).unwrap(),
-            String::from_utf8(expected(file)).unwrap(),
+            String::from_utf8(expected(file))
+                .unwrap()
+                .replace("0.12.2", env!("CARGO_PKG_VERSION")),
             "{args:?}"
         );
     }

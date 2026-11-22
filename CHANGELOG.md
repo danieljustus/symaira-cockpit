@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Packaging
+- Cockpit 2, wave 7: the release pipeline ships the Rust binary and is Apple Silicon only
+  (architecture D16; Intel is not supported). `release.yml` builds
+  `cargo build --release --locked -p symcockpit --target aarch64-apple-darwin` on the pinned
+  toolchain and publishes `symcockpit_<version>_darwin_arm64.tar.gz` plus `checksums.txt`
+  (`scripts/package-cli.sh`), replacing the universal Swift tarball
+  `symcockpit_<version>_darwin_universal.tar.gz`. The app job builds the bundle arm64 only
+  with the Rust agent, the privileged helper and both extensions, and no longer re-signs
+  every Mach-O after the build: that re-sign sealed the Quick Look and FinderSync
+  extensions without their sandbox and app-group entitlements. `scripts/build-app.sh` and
+  `scripts/build-extensions.sh` sign nested parts first with one identity, Hardened Runtime
+  and a secure timestamp (`CODE_SIGN_TIMESTAMP=--timestamp`), each part keeping its own
+  entitlements; `scripts/smoke-app.sh` with `REQUIRE_RELEASE_SIGNATURE=true` verifies it.
+  Notarization (`scripts/notarize.sh`) is fail-closed for the app and the DMG: only
+  `status == Accepted` passes, then staple and validate; assets keep their names
+  (`Symaira-Cockpit-<version>-macos.dmg`, `.zip`).
+- Homebrew: the formula installs only the CLI (arm64 tarball, `depends_on arch: :arm64`,
+  macOS 26); the cask installs the app and links `symcockpit` from inside the bundle
+  (`binary`), with a wider `zap` (`~/.config|.cache|.local/share/symtune`, `~/.symtune`,
+  the app group container, preferences). Homebrew has no way to declare the
+  formula/cask conflict (a cask's `conflicts_with` accepts only `cask:`; a formula's
+  `conflicts_with cask:` is ignored and crashes `brew style`), so installing both fails at
+  the link step; the README says to install one. The Ruby files are templates in
+  `packaging/homebrew/` rendered by `scripts/render-homebrew.sh` instead of shell
+  heredocs in the workflow.
+- One version source: `[workspace.package] version` in `Cargo.toml`. `scripts/set-version.sh
+  <x.y.z>` writes it, the pins between crates, the workspace entries of `Cargo.lock` and
+  `CockpitVersion.swift` (the GUI; the Info.plist files take it from there at build time).
+  `scripts/check-version.sh` verifies they agree (CI `changes` job), equal the tag, the
+  built binary's `version --json` and an assembled bundle (release workflow). CI gained an
+  `app-bundle` job that assembles and smoke-checks the app ad hoc on arm64. A bump drill
+  (0.12.3, `cargo test --locked`: 962 tests) found one test that pinned the version
+  (`swift_bytes`); it now follows the build.
+
 ### Internal
 - Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
   `fan profile|target <value>` write the Swift file (`~/.symtune/fan-profile.json`) and the

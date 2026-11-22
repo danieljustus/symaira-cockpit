@@ -176,6 +176,52 @@ if [[ -d "$APP_PATH/Contents/PlugIns" ]]; then
   done
 fi
 
+# Release gate (REQUIRE_RELEASE_SIGNATURE=true, needs EXPECTED_TEAM_ID): every Mach-O in the bundle
+# must come out of build-app.sh with the Developer ID of the expected team, Hardened Runtime and a
+# secure timestamp, which is what notarization checks. Nothing may be re-signed afterwards: that
+# would drop the per-part entitlements (the extensions' sandbox, the app group).
+if [[ "${REQUIRE_RELEASE_SIGNATURE:-false}" == "true" ]]; then
+  [[ -n "${EXPECTED_TEAM_ID:-}" ]] || {
+    printf 'REQUIRE_RELEASE_SIGNATURE needs EXPECTED_TEAM_ID.\n' >&2
+    exit 1
+  }
+  while IFS= read -r -d '' item; do
+    file "$item" | grep -q 'Mach-O' || continue
+    [[ "$(lipo -archs "$item")" == "arm64" ]] || {
+      printf 'Mach-O must be arm64: %s (%s)\n' "$item" "$(lipo -archs "$item")" >&2
+      exit 1
+    }
+    info=$(codesign --display --verbose=4 "$item" 2>&1 || true)
+    grep -q '^Authority=Developer ID Application' <<<"$info" \
+      && grep -q "^TeamIdentifier=$EXPECTED_TEAM_ID$" <<<"$info" \
+      && grep -Eq 'flags=0x[0-9a-f]+\(.*runtime.*\)' <<<"$info" \
+      && grep -q '^Timestamp=' <<<"$info" || {
+      printf 'Not a release signature (Developer ID of %s, runtime, timestamp): %s\n' "$EXPECTED_TEAM_ID" "$item" >&2
+      exit 1
+    }
+  done < <(find "$APP_PATH/Contents" -type f -print0)
+  bundle_info=$(codesign --display --verbose=4 "$APP_PATH" 2>&1 || true)
+  grep -q '^Authority=Developer ID Application' <<<"$bundle_info" \
+    && grep -q "^TeamIdentifier=$EXPECTED_TEAM_ID$" <<<"$bundle_info" \
+    && grep -Eq 'flags=0x[0-9a-f]+\(.*runtime.*\)' <<<"$bundle_info" \
+    && grep -q '^Timestamp=' <<<"$bundle_info" || {
+    printf 'The app bundle itself is not release-signed.\n' >&2
+    exit 1
+  }
+  if [[ -d "$APP_PATH/Contents/PlugIns" ]]; then
+    GROUP="$EXPECTED_TEAM_ID.group.com.symaira.cockpit"
+    codesign --display --entitlements - "$APP_PATH" 2>&1 | grep -q "$GROUP" || {
+      printf 'The app lacks the app group entitlement %s\n' "$GROUP" >&2
+      exit 1
+    }
+    codesign --display --entitlements - "$APP_PATH/Contents/PlugIns/SymCockpitFinderSync.appex" 2>&1 | grep -q "$GROUP" || {
+      printf 'The FinderSync extension lacks the app group entitlement %s\n' "$GROUP" >&2
+      exit 1
+    }
+  fi
+  printf 'Release signature check passed: all Mach-O parts are Developer ID, runtime, timestamped (team %s).\n' "$EXPECTED_TEAM_ID"
+fi
+
 SIGNATURE_INFO=$(codesign --display --verbose=2 "$APP_PATH" 2>&1 || true)
 if grep -q '^Signature=adhoc$' <<<"$SIGNATURE_INFO"; then
   printf '%s\n' 'Bundle smoke check: ad-hoc unsigned build (expected outside release).'

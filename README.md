@@ -33,19 +33,27 @@ pulls the local machine facts into **one binary** with **one output format**:
 - **Built for agents.** Cockpit runs as an MCP server over stdio on demand —
   the capabilities you have on the shell become tools for your AI assistant.
 - **Native and fast.** Swift 6, straight against IOKit, Accessibility and
-  ScreenCaptureKit. One universal binary, no runtime, no dependencies.
+  ScreenCaptureKit. One binary for Apple Silicon, no runtime, no dependencies.
 
 ## Install
 
-```bash
-brew install danieljustus/tap/symcockpit
-```
+Apple Silicon only (`arm64`): Intel Macs are not supported. Pick one of the two
+Homebrew packages; they install the same `symcockpit` command, so install only
+one of them.
 
-Or grab the universal binary (`arm64` + `x86_64`) from
-[Releases](https://github.com/danieljustus/symaira-cockpit/releases) and drop it
-into `/usr/local/bin`.
+| You want | Install | You get |
+| :--- | :--- | :--- |
+| The app and the command line | `brew install --cask danieljustus/tap/symcockpit` | `Symaira Cockpit.app` (menu bar, window, Finder and Quick Look extensions) in `/Applications`, and `symcockpit` linked from inside the app bundle |
+| The command line only | `brew install danieljustus/tap/symcockpit` | the `symcockpit` command (CLI and MCP server), no app |
 
-> The CLI binary is neither signed nor notarized. Installed via Homebrew,
+Or download from [Releases](https://github.com/danieljustus/symaira-cockpit/releases):
+
+- `Symaira-Cockpit-<version>-macos.dmg` (also as `.zip`): the signed, notarized app.
+- `symcockpit_<version>_darwin_arm64.tar.gz` plus `checksums.txt`: the command
+  line alone, for `/usr/local/bin`.
+
+> The app and its DMG are signed with a Developer ID and notarized. The CLI
+> tarball is neither signed nor notarized. Installed via the Homebrew formula,
 > Gatekeeper's quarantine does not apply; after a manual download you need to
 > clear it once (`xattr -d com.apple.quarantine ./symcockpit`).
 
@@ -411,7 +419,7 @@ symcockpit version --json
 
 ## Requirements
 
-- macOS 26 or newer, Apple Silicon or Intel
+- macOS 26 or newer on Apple Silicon (Intel is not supported)
 - Fan and charge-limit control: access to the Apple SMC — not every model and
   not every macOS build permits it, and `symcockpit sensors` will tell you
 
@@ -426,6 +434,7 @@ make build      # Debug build of the tuning package and history
 make test       # Test suite
 make build-app  # The GUI bundle (build/app/Symaira Cockpit.app)
 make rust-build # The CLI and MCP server (target/debug/symcockpit)
+cargo build --release --locked -p symcockpit   # release build of the CLI
 ```
 
 The repository holds two toolchains. The CLI and the MCP server are the Rust

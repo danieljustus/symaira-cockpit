@@ -10,7 +10,9 @@ set -euo pipefail
 #
 # Env:
 #   CONFIGURATION  debug | release (default: release)
-#   UNIVERSAL      1 to build arm64 + x86_64 (default: 1)
+#   (arm64 only: Intel is not a supported platform, architecture D16. The Swift
+#   product is built for the host, which must be Apple Silicon, and every
+#   Mach-O in the bundle is checked to be arm64.)
 #   OUTPUT_DIR     where the .app lands (default: build/app)
 #   SWIFT_SCRATCH_PATH optional isolated SwiftPM build directory
 #   EXPECTED_TEAM_ID  Apple team identifier (10 upper-case alphanumerics) baked
@@ -18,6 +20,10 @@ set -euo pipefail
 #                  pair with (issue #405). Release builds derive it from the
 #                  Developer ID certificate. Without it the helper is inert.
 #   REQUIRE_EMBEDDED_TEAM_ID  true to fail when EXPECTED_TEAM_ID is unset
+#   CODE_SIGN_IDENTITY  signing identity, "-" (ad hoc) by default
+#   CODE_SIGN_TIMESTAMP "--timestamp" for a release build (Apple's secure timestamp,
+#                  which notarization requires); "--timestamp=none" by default
+#   STRIP_APP      1 to strip the Swift executable before signing (release)
 #   CARGO          cargo command (default: dev-external cargo when installed, else cargo)
 #   RUST_TARGET    cargo --target for the Rust binaries (default: the host; the
 #                  bundle's agent and helper must come out arm64 either way)
@@ -32,7 +38,8 @@ set -euo pipefail
 #                               built with SYMCOCKPIT_EMBEDDED_TEAM_ID = EXPECTED_TEAM_ID
 
 CONFIGURATION="${CONFIGURATION:-release}"
-UNIVERSAL="${UNIVERSAL:-1}"
+TIMESTAMP="${CODE_SIGN_TIMESTAMP:---timestamp=none}"
+STRIP_APP="${STRIP_APP:-0}"
 OUTPUT_DIR="${OUTPUT_DIR:-build/app}"
 REQUIRE_COMPILED_ICON="${REQUIRE_COMPILED_ICON:-false}"
 EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-}"
@@ -108,15 +115,20 @@ BUILD_ARGS=(--product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:
 if [[ -n "${SWIFT_SCRATCH_PATH:-}" ]]; then
   BUILD_ARGS+=(--scratch-path "$SWIFT_SCRATCH_PATH")
 fi
-if [[ "$UNIVERSAL" == "1" ]]; then
-  BUILD_ARGS+=(--arch arm64 --arch x86_64)
-fi
+[[ "$(uname -m)" == "arm64" ]] || {
+  printf 'Symaira Cockpit is arm64 only; build on Apple Silicon (host is %s).\n' "$(uname -m)" >&2
+  exit 1
+}
 
 swift build "${BUILD_ARGS[@]}"
 BIN_PATH="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/$PRODUCT"
 
 [[ -x "$BIN_PATH" ]] || {
   printf 'Expected product was not produced: %s\n' "$BIN_PATH" >&2
+  exit 1
+}
+[[ "$(lipo -archs "$BIN_PATH")" == "arm64" ]] || {
+  printf 'The app executable must be arm64: %s (%s)\n' "$BIN_PATH" "$(lipo -archs "$BIN_PATH")" >&2
   exit 1
 }
 
@@ -157,6 +169,10 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_PATH/Contents/MacOS/$PRODUCT"
+# The symbol table is more than half the bytes; the signature below makes them final.
+if [[ "$STRIP_APP" == "1" ]]; then
+  strip "$APP_PATH/Contents/MacOS/$PRODUCT"
+fi
 # The agent the app starts as its child (path from the app's own executable
 # directory), and the CLI binary the cask links.
 cp "$AGENT_BIN_PATH" "$APP_PATH/Contents/MacOS/symcockpit"
@@ -247,7 +263,7 @@ IDENTITY="${CODE_SIGN_IDENTITY:--}"
 # here with the same identity. They must exist before the app seal below. SKIP_EXTENSIONS=1
 # leaves them out (e.g. for a GUI-only iteration).
 if [[ "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
-  CODE_SIGN_IDENTITY="$IDENTITY" EXPECTED_TEAM_ID="$EXPECTED_TEAM_ID" COCKPIT_VERSION="$COCKPIT_VERSION" \
+  CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_TIMESTAMP="$TIMESTAMP" EXPECTED_TEAM_ID="$EXPECTED_TEAM_ID" COCKPIT_VERSION="$COCKPIT_VERSION" \
     "$REPO_ROOT/scripts/build-extensions.sh" "$APP_PATH"
 fi
 
@@ -257,7 +273,7 @@ fi
 # when it is itself Developer-ID signed, so an ad-hoc or self-signed helper
 # here is inert; likewise the agent serves only a Developer-ID signed parent.
 # Hardened Runtime on both for a real identity, as the notarization needs.
-NESTED_SIGN_ARGS=(--force --sign "$IDENTITY" --timestamp=none)
+NESTED_SIGN_ARGS=(--force --sign "$IDENTITY" "$TIMESTAMP")
 if [[ "$IDENTITY" != "-" ]]; then
   NESTED_SIGN_ARGS+=(--options runtime)
 fi
@@ -272,7 +288,11 @@ if [[ -n "$EXPECTED_TEAM_ID" && "${SKIP_EXTENSIONS:-0}" != "1" ]]; then
   plutil -insert 'com\.apple\.security\.application-groups' -json "[\"$APP_GROUP\"]" "$APP_ENTITLEMENTS"
   APP_SIGN_ARGS=(--entitlements "$APP_ENTITLEMENTS")
 fi
-codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none ${APP_SIGN_ARGS[@]+"${APP_SIGN_ARGS[@]}"} "$APP_PATH"
+# The bundle itself is sealed last, over everything nested above, with Hardened Runtime for a
+# real identity (a notarization requirement) and its own entitlements: the app group only.
+BUNDLE_SIGN_ARGS=(--force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$TIMESTAMP")
+[[ "$IDENTITY" == "-" ]] || BUNDLE_SIGN_ARGS+=(--options runtime)
+codesign "${BUNDLE_SIGN_ARGS[@]}" ${APP_SIGN_ARGS[@]+"${APP_SIGN_ARGS[@]}"} "$APP_PATH"
 [[ -z "${APP_ENTITLEMENTS:-}" ]] || rm -f "$APP_ENTITLEMENTS"
 
 if [[ "$IDENTITY" == "-" ]]; then
