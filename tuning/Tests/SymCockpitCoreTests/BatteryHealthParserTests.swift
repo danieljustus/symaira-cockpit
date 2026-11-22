@@ -200,41 +200,6 @@ final class BatteryHealthParserTests: XCTestCase {
         XCTAssertEqual(counter.value, 2)
     }
 
-    // MARK: - System metrics pass-through
-
-    func testSystemMetricsReportPassesPowerThrough() {
-        let snapshot = SystemMetricsSnapshot(
-            timestamp: 1,
-            cpu: .init(total: [10, 10, 10, 70], perCore: [[10, 10, 10, 70]]),
-            memory: .init(usedBytes: 1, freeBytes: 2, wiredBytes: 3, compressedBytes: 4, pressure: nil),
-            disk: .init(capacityBytes: 100, usedBytes: 40, freeBytes: 60),
-            network: [.init(name: "en0", bytesIn: 1, bytesOut: 1)],
-            power: PowerReport(volts: 20.0, amps: 0.5, watts: 10.0)
-        )
-        let service = SystemMetricsService(source: FakeSystemMetricsSource(snapshots: [snapshot]))
-        let report = service.read()
-        XCTAssertEqual(report.power?.volts, 20.0)
-        XCTAssertEqual(report.power?.amps, 0.5)
-        XCTAssertEqual(report.power?.watts, 10.0)
-    }
-
-    func testSystemMetricsReportOmitsPowerFromJSONWhenAbsent() throws {
-        let snapshot = SystemMetricsSnapshot(
-            timestamp: 1,
-            cpu: .init(total: [10, 10, 10, 70], perCore: [[10, 10, 10, 70]]),
-            memory: .init(usedBytes: 1, freeBytes: 2, wiredBytes: 3, compressedBytes: 4, pressure: nil),
-            disk: .init(capacityBytes: 100, usedBytes: 40, freeBytes: 60),
-            network: [.init(name: "en0", bytesIn: 1, bytesOut: 1)]
-        )
-        let service = SystemMetricsService(source: FakeSystemMetricsSource(snapshots: [snapshot]))
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let json = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: encoder.encode(service.read())) as? [String: Any]
-        )
-        XCTAssertNil(json["power"])
-    }
-
     // MARK: - Helper
 
     private final class Counter: @unchecked Sendable {

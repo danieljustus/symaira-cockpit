@@ -194,7 +194,7 @@ public struct FanHelperGovernorStatus: Sendable, Equatable {
     public static let idle = FanHelperGovernorStatus(isGoverning: false)
 }
 
-/// What ``TuneController`` needs from a fan helper. The concrete client (XPC,
+/// What a caller needs from a fan helper. The concrete client (XPC,
 /// `SMAppService`) lives in `SymCockpitHelperKit`; the CLI and MCP server never
 /// receive one, so only the GUI can ever take this path.
 public protocol FanHelperControlling: Sendable {

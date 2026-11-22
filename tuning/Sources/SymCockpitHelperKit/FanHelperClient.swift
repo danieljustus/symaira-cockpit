@@ -3,7 +3,7 @@ import SymCockpitCore
 
 /// App-side controller of the optional fan helper (issue #405).
 ///
-/// Implements ``FanHelperControlling`` for `TuneController` and offers the
+/// Implements ``FanHelperControlling`` and offers the
 /// registration management the preferences UI needs. Creating one is free of
 /// side effects: nothing is registered, no connection is opened and no
 /// credential is read until the user opts in and a fan change asks for it.

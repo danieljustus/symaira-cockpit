@@ -387,29 +387,6 @@ final class TuneConfigTests: XCTestCase {
         XCTAssertEqual(config, TuneConfig())
     }
 
-    // MARK: TuneController uses config
-
-    func testTuneControllerStoresConfig() {
-        let custom = TuneConfig(extendedBrightnessMax: 1.4)
-        let controller = TuneController(config: custom)
-        XCTAssertEqual(controller.config.extendedBrightnessMax, 1.4)
-    }
-
-    func testTuneControllerUsesConfigInWriteStub() {
-        let custom = TuneConfig(
-            extendedBrightnessMin: 1.2,
-            extendedBrightnessMax: 1.4
-        )
-        let controller = TuneController(config: custom)
-        XCTAssertEqual(controller.config.extendedBrightnessMin, 1.2)
-        XCTAssertEqual(controller.config.extendedBrightnessMax, 1.4)
-    }
-
-    func testTuneControllerDefaultConfig() {
-        let controller = TuneController()
-        XCTAssertEqual(controller.config, TuneConfig())
-    }
-
     // MARK: - Inverted range validation
 
     func testInvertedRangeFallsBackToDefaults() {
