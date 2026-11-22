@@ -65,8 +65,7 @@ final class CockpitGUIContractTests: XCTestCase {
                        "selection must use the adaptive selected role, not fixed gold")
     }
 
-    /// The window is a shell with one page per destination; the pages hold no logic of
-    /// their own and the six placeholders take the agent session and nothing else.
+    /// The window is a shell with one agent-backed page per destination.
     func testWorkspaceHasEveryDestinationAndNoControllerDependency() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -90,14 +89,13 @@ final class CockpitGUIContractTests: XCTestCase {
         XCTAssertTrue(shell.contains("topography: navigation.selection == .overview ? topography : nil"),
                       "the topography belongs to the overview only")
         XCTAssertTrue(shell.contains("AgentDiagnosisCard("), "the diagnosis replaces the page while the agent is down")
-        // The placeholders: one file per page, the session and nothing else, "Not available yet".
         for name in ["Storage", "AudioMIDI", "BluetoothInput", "Processes", "Clipboard", "Finder"] {
             let page = try source("\(name)Page.swift")
-            XCTAssertTrue(page.contains("public struct \(name)Page: View"), name)
-            XCTAssertTrue(page.contains("public init(session: AgentSession)"), name)
-            XCTAssertEqual(page.components(separatedBy: "private let ").count - 1, 1, "\(name) holds only the session")
-            XCTAssertTrue(page.contains("SymairaEmptyState("), name)
-            XCTAssertTrue(page.contains("\"Not available yet\""), name)
+            XCTAssertTrue(page.contains("struct \(name)Page: View"), name)
+            XCTAssertTrue(page.contains("SymairaPage("), name)
+            XCTAssertFalse(page.contains("\"Not available yet\""), name)
+            XCTAssertFalse(page.contains("TuneController"), name)
+            XCTAssertFalse(page.contains("Process("), name)
         }
         // The window gains no new dependency on the hardware controller.
         for name in ["CockpitWorkspaceView.swift", "CockpitPages.swift", "CockpitDestination.swift", "OverviewPage.swift",

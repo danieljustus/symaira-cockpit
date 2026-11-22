@@ -38,13 +38,18 @@
 ### Changed
 - Cockpit 2, wave 2D-3 part 1: the window is a workspace with a sidebar of eleven
   destinations (Overview, Display, Power & Fans, Storage, Audio & MIDI, Bluetooth & Input,
-  Processes, Clipboard, Finder, AI Usage, History) instead of one scrolling panel. Overview
-  (status, sensors, health), Display (brightness, Beyond Normal, warmth, keep awake, profiles),
-  Power & Fans (battery, fan profile and Cool target, charge limit), AI Usage and History are
-  real pages; the other six say "Not available yet" until part 2. While the agent cannot serve,
-  the page shows why with a restart button. Risky changes (fans, charge limit) use one shared
+  Processes, Clipboard, Finder, AI Usage, History) instead of one scrolling panel. While the
+  agent cannot serve, the page shows why with a restart button. Risky changes use one shared
   plan confirmation that lists what will happen, how long the plan is valid and, afterwards,
   what happened to every entry. ⌘1 to ⌘9 switch pages.
+- Storage and Processes add drive health and history, folder analysis and speed tests,
+  plus reviewed plans for cleanup, duplicate removal, app removal and process termination.
+- Audio & MIDI adds device routing, volume and mute, the app mixer, and reviewed format and
+  aggregate-device changes. Bluetooth & Input adds paired-device status, explicit BLE scans,
+  characteristic reads and planned writes, BLE log export, Finder cut and a haptic test.
+- Clipboard adds an opt-in encrypted local history with exclusions, pause, copy and deletion.
+  It is not exposed through MCP. Finder explains the extensions, their job location and
+  how to enable them in System Settings.
 
 ### Internal
 - Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.

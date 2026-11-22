@@ -203,7 +203,7 @@ $ symcockpit brightness set 0.5
 
 ## The GUI
 
-Your Mac's display, power and cooling controls in one window.
+Your Mac's hardware controls and system maintenance in one window.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/workspace-preview-dark.png">
@@ -229,14 +229,11 @@ make run-app                         # …and launches it
 
 Symaira Cockpit lives in the menu bar, with a live readout and a compact
 control panel one click away. Open the window from the panel or the status
-item's context menu to go straight to the controls. A collapsible sidebar
-jumps to Overview, Display, Power & cooling, Activity, or Menu bar & HUD
-inside one mounted panel; it does not switch modules or discard draft values.
-Narrow windows use an icon rail, while wide windows place the power and
-cooling cards side by side. Both surfaces use the same model and cards, and
-closing the window leaves the menu bar running.
+item's context menu. Its sidebar switches between hardware controls, system
+maintenance, AI Usage and History. The panel and window share one local
+agent; closing the window leaves the menu bar running.
 
-The **Storage Volumes** card under **Activity** lists mounted internal disks,
+The **Storage Volumes** card under **Storage** lists mounted internal disks,
 external SSDs/HDDs, USB drives, memory cards and network/virtual volumes. Each
 row shows its name, mount path, type, read-only state and total, used and
 available capacity. Connecting, removing or renaming a mounted volume refreshes
@@ -401,8 +398,10 @@ Cockpit asks only for what it needs:
 | Sensors, battery, metrics, brightness | nothing |
 | Fans, charge limit | `sudo` (SMC write) |
 
-Every write action is recorded in local history and restored safely on normal
-exit.
+Risky actions such as cleanup, ending a process, or writing to a Bluetooth
+device first produce a plan. Review it before applying it. Restoring tuning
+settings is not an undo for maintenance actions. Clipboard history is off by
+default, encrypted locally when enabled, and never exposed through MCP.
 
 ## Output contract
 

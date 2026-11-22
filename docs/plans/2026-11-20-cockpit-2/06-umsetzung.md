@@ -17,8 +17,8 @@
 | Abnahme 2026-11-21 | Integrationsstand `main` 0d4633d | ✅ fmt, clippy sauber; Rust 851 Tests grün (21 ignoriert, live); Orakel 70/70 voll und nativ; Swift `make test`, Root-`swift test` (123 Tests, 4 übersprungen), AgentClient 11 Tests; `make build-app` und `make smoke-app` mit beiden Erweiterungen | Logs `~/.hermes/cache/scratch/int2-*.log` |
 | 2D-1 | Letzte Weiterleitungen an Swift nativ: `fan profile\|target` setzen (Swift-Datei und History-Zeile, Agent: Plan, Argument `profile` bzw. `celsius`, `null` löscht), `status --watch` (NDJSON, SIGINT/SIGPIPE sauber), `ai-usage serve` (TcpListener, Antworten byteweise wie Swift gegen das echte v0.12.2-Binary geprüft), Updateprüfung bei `version` (curl-Kindprozess, Cache-Datei wie corekit), Nicht-UTF-8-Argumente (U+FFFD wie Swift). `legacy.rs`, `forward`, `through_legacy` und `App.legacy` sind entfernt: kein CLI-Befehl und kein MCP-Tool startet im Produktionsbinary noch Swift (`tests/no_swift.rs`: Köder an allen drei Fundorten, jeder v0.12-Befehl und alle 26 Tools) | ✅ 2026-11-21 lokal auf `c2/w2d-cli` (Basis `c2/int-2` 734832c), noch nicht integriert | |
 | 2D-2 | App auf den Agenten | ✅ in `c2/int-2` | |
-| 2D-3 | Bedienoberflächen der neuen Bereiche, danach Swift-Kern entfernen | ⏳ als Nächstes | |
-| 7 | Release-Vorbereitung (arm64, Signatur, Cask mit CLI-Link, Formula nur CLI) | offen | |
+| 2D-3 | Bedienoberflächen der neuen Bereiche und Entfernung des alten Swift-Kerns | ✅ lokal integriert; Gesamtprüfung auf dem Release-Kandidaten und Live-Abnahme separat | `eeeb47a`, `bb03405`, `3566242`, Swift-Kern `c488785` |
+| 7 | Release-Vorbereitung (arm64, Signatur, Cask mit CLI-Link, Formula nur CLI) | Pipeline lokal integriert; Veröffentlichung erst nach Abnahme und Freigabe | `c617a4c` |
 
 ## Gesammelte menschliche Abnahmen (am Ende)
 
