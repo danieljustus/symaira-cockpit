@@ -179,10 +179,20 @@ public final class AgentSession: @unchecked Sendable {
         container: (String) -> URL? = { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     ) -> [String] {
         var arguments = ["agent", "--stdio"]
-        if let appGroup, !appGroup.isEmpty, let base = container(appGroup) {
-            arguments += ["--finder-jobs-dir", base.appendingPathComponent("jobs", isDirectory: true).path]
+        if let jobs = finderJobsDirectory(appGroup: appGroup, container: container) {
+            arguments += ["--finder-jobs-dir", jobs.path]
         }
         return arguments
+    }
+
+    /// Where the FinderSync extension writes its job files, or `nil` when this build names no
+    /// app group (or macOS resolves no container for it).
+    public static func finderJobsDirectory(
+        appGroup: String?,
+        container: (String) -> URL? = { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
+    ) -> URL? {
+        guard let appGroup, !appGroup.isEmpty, let base = container(appGroup) else { return nil }
+        return base.appendingPathComponent("jobs", isDirectory: true)
     }
 
     deinit { client.stop() }
@@ -414,6 +424,21 @@ public final class AgentSession: @unchecked Sendable {
     /// The agent's plan report as it came; `confirmReport` is the readable form.
     func confirmRaw(planID: String) async throws -> AgentJSON {
         try await client.confirm(planID: planID)
+    }
+
+    /// Whether the agent serves the protocol method (a host method such as `clipboard.list`).
+    public func offers(method: String) -> Bool {
+        hello?.methods.contains(method) ?? false
+    }
+
+    /// Calls an agent method that is not a register command (`clipboard.*`, `services`). Same
+    /// outcome type as `perform`; such a method never needs a confirmation.
+    public func invoke(_ method: String, params: [String: AgentJSON] = [:]) async -> ActionOutcome {
+        do {
+            return .done(try await client.invoke(method, params: params))
+        } catch {
+            return Self.failed(error)
+        }
     }
 
     /// The one argument a register command takes (its `input_schema`), or `nil`

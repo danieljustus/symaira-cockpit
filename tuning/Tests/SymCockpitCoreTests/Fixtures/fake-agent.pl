@@ -24,6 +24,10 @@
 #   brightness.set / warmth.set / dim.set / awake change what the next read returns
 #   profile.save / profile.delete change what `profile.list` returns (reads come from the fixtures: history, profile.list)
 #   battery-limit.set / battery-limit.clear are risky plans; `confirm` answers one result per item
+#   Host methods (like the real app agent): services, clipboard.list/read/copy/delete/settings/configure,
+#     and the register commands clipboard.status/pause/resume/clear. The fake history is stateful and
+#     seeded from the fixture `__clipboard` ({settings, items:[{id,created_at,kind,size,source,text}]});
+#     `__finder_jobs` is what `services` reports for the Finder jobs ({state:"off"} when absent).
 use strict; use warnings; use JSON::PP;
 $| = 1;
 my $scenario = shift @ARGV // 'ok';
@@ -41,10 +45,28 @@ if ($ENV{FAKE_AGENT_FIXTURES}) {
     open(my $fh, '<', $ENV{FAKE_AGENT_FIXTURES}) or die "fixtures: $!";
     local $/; $data = $json->decode(<$fh>); close $fh;
 }
-my @topics = qw(metrics status brightness.get awake.status fan.status processes);
+my @topics = qw(metrics status brightness.get awake.status fan.status processes clipboard.status);
 my %risky = ('fan.profile' => 'profile', 'fan.target' => 'target', 'battery-limit.set' => 'percent', 'battery-limit.clear' => 'none');
 my @reversible = qw(brightness.set warmth.set dim.set extbright.set awake profile.load profile.save profile.delete);
 my @reads = (@topics, 'ai-usage', 'history', 'profile.list');
+my @host_methods = qw(services clipboard.list clipboard.read clipboard.copy clipboard.delete clipboard.settings clipboard.configure);
+
+# The hosted clipboard history, kept in memory.
+my $clip = $data->{'__clipboard'} // {};
+$clip->{settings} //= { enabled => JSON::PP::false, paused => JSON::PP::false,
+    excluded_apps => ['com.1password.1password'], max_items => 500, max_age_secs => 2592000, max_item_bytes => 5242880 };
+$clip->{items} //= [];
+sub clip_status {
+    my $s = $clip->{settings};
+    my $on = $s->{enabled} && !$s->{paused};
+    $data->{'clipboard.status'} = { enabled => $s->{enabled}, paused => $s->{paused},
+        capturing => $on ? JSON::PP::true : JSON::PP::false, items => scalar(@{ $clip->{items} }),
+        excluded_apps => scalar(@{ $s->{excluded_apps} }), max_items => $s->{max_items},
+        max_age_days => int($s->{max_age_secs} / 86400) };
+}
+clip_status();
+sub clip_find { my ($cid) = @_; my ($item) = grep { $_->{id} eq ($cid // '') } @{ $clip->{items} }; return $item; }
+
 my %subs; my $next_sub = 1; my %plans; my $next_plan = 1;
 
 sub send_frame { print $json->encode($_[0]), "\n"; }
@@ -62,7 +84,8 @@ sub event {
 my $hello = {
     protocol_version => 1, server_version => "9.9.9-fake",
     capabilities => {
-        methods => [qw(hello call confirm subscribe unsubscribe set_visibility ping)],
+        methods => [qw(hello call confirm subscribe unsubscribe set_visibility ping),
+                    ($ENV{FAKE_AGENT_NO_HOST} ? () : @host_methods)],
         topics => [@topics], max_subscriptions => 32, min_interval_ms => 100,
         max_interval_ms => 3600000, default_interval_visible_ms => 1000,
         default_interval_hidden_ms => 10000 },
@@ -122,6 +145,16 @@ while (my $line = <STDIN>) {
             push @kept, { name => $args->{name}, brightness => $data->{'brightness.get'}{brightness}, createdAt => 785000000.5, updatedAt => 785000100 } if $c eq 'profile.save';
             $data->{'profile.list'}{profiles} = \@kept;
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
+        } elsif ($c =~ /^clipboard\.(pause|resume)$/) {
+            $clip->{settings}{paused} = $1 eq 'pause' ? JSON::PP::true : JSON::PP::false;
+            clip_status();
+            reply($id, { status => "ok", command => $c, risk => "human_only",
+                output => { paused => $clip->{settings}{paused}, enabled => $clip->{settings}{enabled} } });
+        } elsif ($c eq 'clipboard.clear') {
+            my $n = scalar @{ $clip->{items} };
+            $clip->{items} = [];
+            clip_status();
+            reply($id, { status => "ok", command => $c, risk => "human_only", output => { cleared => $n } });
         } elsif (grep { $_ eq $c } @reversible) {
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
         } elsif (exists $data->{$c}) {
@@ -172,6 +205,48 @@ while (my $line = <STDIN>) {
         reply($id, { visible => $p->{visible}, active => scalar(keys %subs) });
     } elsif ($method eq 'ping') {
         reply($id, {});
+    } elsif (!$ENV{FAKE_AGENT_NO_HOST} && grep { $_ eq $method } @host_methods) {
+        if ($method eq 'services') {
+            reply($id, { clipboard => { state => $clip->{settings}{enabled} && !$clip->{settings}{paused} ? "capturing" : "off",
+                                        last_error => $clip->{last_error} },
+                         finder_jobs => $data->{'__finder_jobs'} // { state => "off" } });
+        } elsif ($method eq 'clipboard.settings') {
+            reply($id, $clip->{settings});
+        } elsif ($method eq 'clipboard.list') {
+            my @items = map { { id => $_->{id}, created_at => $_->{created_at}, kind => $_->{kind}, size => $_->{size} } } @{ $clip->{items} };
+            splice(@items, $p->{limit}) if defined $p->{limit} && $p->{limit} < @items;
+            reply($id, { count => scalar(@items), items => \@items });
+        } elsif ($method eq 'clipboard.configure') {
+            my @bad = grep { !/^(enabled|paused|excluded_apps|max_items|max_age_secs|max_item_bytes)$/ } keys %$p;
+            if (@bad) {
+                fail($id, { code => -32000, message => "usage error: clipboard settings: unknown key '$bad[0]'",
+                            data => { exit_code => 2, class => "usage" } });
+            } else {
+                $clip->{settings}{$_} = $p->{$_} for keys %$p;
+                clip_status();
+                reply($id, { %{ $clip->{settings} }, state => $clip->{settings}{enabled} && !$clip->{settings}{paused} ? "capturing" : "idle",
+                             last_error => $clip->{last_error} });
+            }
+        } else {
+            my $item = clip_find($p->{id});
+            if (!$item && $method eq 'clipboard.delete') {
+                reply($id, { id => $p->{id}, deleted => JSON::PP::false });
+            } elsif (!$item) {
+                fail($id, { code => -32000, message => "clipboard item " . ($p->{id} // '') . " is gone or can no longer be opened",
+                            data => { exit_code => 1, class => "error" } });
+            } elsif ($method eq 'clipboard.read') {
+                reply($id, { id => $item->{id}, created_at => $item->{created_at}, kind => $item->{kind}, size => $item->{size},
+                             source => $item->{source},
+                             ($item->{kind} eq 'image' ? (png_base64 => $item->{png_base64}) : (text => $item->{text})) });
+            } elsif ($method eq 'clipboard.copy') {
+                $clip->{pasteboard} = $item->{id};
+                reply($id, { id => $item->{id}, copied => JSON::PP::true });
+            } else {
+                $clip->{items} = [ grep { $_->{id} ne $item->{id} } @{ $clip->{items} } ];
+                clip_status();
+                reply($id, { id => $item->{id}, deleted => JSON::PP::true });
+            }
+        }
     } else {
         fail($id, { code => -32601, message => "Method not found: $method" });
     }

@@ -99,6 +99,9 @@ public struct AgentHello: Equatable, Sendable {
     public let commands: [AgentCommandInfo]
     /// Commands `subscribe` accepts.
     public let topics: [String]
+    /// Protocol methods this agent serves (`capabilities.methods`), host methods such as
+    /// `clipboard.list` included when the agent hosts services.
+    public let methods: [String]
     public let minIntervalMs: Int
     public let maxIntervalMs: Int
     public let defaultVisibleMs: Int
@@ -126,6 +129,7 @@ public struct AgentHello: Equatable, Sendable {
             return AgentCommandInfo(name: name, risk: risk, inputSchema: entry["input_schema"] ?? .null)
         }
         self.topics = topics.compactMap(\.stringValue)
+        self.methods = (capabilities["methods"]?.arrayValue ?? []).compactMap(\.stringValue)
         self.minIntervalMs = minInterval
         self.maxIntervalMs = maxInterval
         self.defaultVisibleMs = visible
@@ -404,6 +408,11 @@ public final class AgentClient: @unchecked Sendable {
             "confirm", params: .object(["plan_id": .string(planID)]),
             timeout: configuration.requestTimeout
         )
+    }
+
+    /// An agent method that is not a register command (`HOST_METHODS`: `clipboard.*`, `services`).
+    public func invoke(_ method: String, params: [String: AgentJSON] = [:]) async throws -> AgentJSON {
+        try await request(method, params: .object(params), timeout: configuration.requestTimeout)
     }
 
     /// Starts sampling `command`; events arrive through `onEvent`. Intervals
