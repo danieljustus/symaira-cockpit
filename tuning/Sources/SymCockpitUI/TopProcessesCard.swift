@@ -14,14 +14,13 @@ struct TopProcessesCard: View {
 
     /// Remembered across launches: whoever opens this once usually wants it.
     @AppStorage("com.symaira.tune.processesExpanded") private var isExpanded = false
-    @State private var selectedPID: Int32?
 
     var body: some View {
         VStack(spacing: SymairaSpacing.small) {
             header
 
             if isExpanded {
-                content
+                ProcessList(model: model)
             }
         }
         .cardStyle()
@@ -60,23 +59,42 @@ struct TopProcessesCard: View {
         .help(isExpanded ? "Hide the process list" : "Show the busiest processes")
     }
 
-    // MARK: - Content
+}
 
-    private var content: some View {
+/// Shared ranking and row interaction for the popover and Processes page.
+@MainActor
+struct ProcessList: View {
+    let model: ProcessesViewModel
+    var termination: ProcessKillModel?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+            rankings
+                .disabled(termination?.confirmation != nil)
+            if let termination {
+                terminationControls(termination)
+            }
+        }
+    }
+
+    private var rankings: some View {
         VStack(spacing: SymairaSpacing.xSmall) {
             SymairaSegmentedControl(
                 "Sort processes by", selection: sortBinding,
                 options: ProcessSortKey.allCases.map { ($0, $0.displayName) }
             )
 
-            if model.report.processes.isEmpty {
+            if let problem = model.problem {
+                SymairaNotice(message: problem, tone: .warning)
+                Button("Try Again") { model.refreshNow() }
+                    .symairaButtonStyle(.secondary)
+            } else if !model.hasSample || model.report.sortedBy != model.sortedBy {
+                SymairaLoadingState("Sampling processes…")
+            } else if model.report.processes.isEmpty {
                 if model.sortedBy == .gpu {
                     gpuEmptyState
                 } else {
-                    Text(model.problem ?? (model.isWarmingUp ? "Sampling…" : "No readable processes."))
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTokens.ink3)
-                        .padding(.vertical, SymairaSpacing.small)
+                    MutedNote("No readable processes.")
                 }
             } else {
                 ForEach(model.report.processes) { process in
@@ -84,13 +102,55 @@ struct TopProcessesCard: View {
                         process: process,
                         sortedBy: model.report.sortedBy,
                         fraction: fraction(for: process),
-                        isSelected: selectedPID == process.pid,
+                        isSelected: model.selectedPID == process.pid,
+                        protection: termination?.protection(for: process.pid),
                         onTap: { toggleSelection(process.pid) }
                     )
                 }
             }
 
+            if termination != nil, model.hasSample, model.problem == nil,
+               model.report.sortedBy == model.sortedBy, model.report.unreadableProcessCount > 0 {
+                MutedNote("\(model.report.unreadableProcessCount) processes were unreadable to the agent.")
+            }
             footer
+        }
+    }
+
+    @ViewBuilder
+    private func terminationControls(_ termination: ProcessKillModel) -> some View {
+        SymairaFormDivider()
+        if let confirmation = termination.confirmation {
+            PlanConfirmationView(
+                model: confirmation, summary: "Sends SIGTERM if the process still matches the identity in this plan.",
+                confirmTitle: "End Process", onClose: { termination.close() }
+            )
+        } else if !termination.isAvailable {
+            SymairaNotice(message: "This agent does not offer process termination.", tone: .warning)
+        } else {
+            MutedNote("The agent protects its own process, system PIDs below \(termination.minimumPID), and processes owned by other users.")
+            if model.hasSample, model.problem == nil, model.report.sortedBy == model.sortedBy,
+               let process = model.report.processes.first(where: { $0.pid == model.selectedPID }),
+               termination.protection(for: process.pid) == nil {
+                let refusal = termination.refusal(for: process.pid, name: process.name)
+                if let refusal {
+                    SymairaNotice(title: "Process Unavailable", message: refusal, tone: .warning)
+                }
+                Button(refusal == nil ? "Review End Process Plan…" : "Check Again") {
+                    Task { await termination.request(pid: process.pid, name: process.name) }
+                }
+                .symairaButtonStyle(.primary)
+                .disabled(termination.requesting != nil)
+                .accessibilityLabel(refusal == nil
+                    ? "Review plan to end \(process.name), PID \(process.pid)"
+                    : "Check PID \(process.pid) again")
+            }
+            if let pid = termination.requesting {
+                SymairaLoadingState("Preparing termination plan for PID \(pid)…")
+            }
+            if let failure = termination.failure {
+                SymairaNotice(message: failure, tone: .warning)
+            }
         }
     }
 
@@ -106,7 +166,9 @@ struct TopProcessesCard: View {
                 .symairaText(.caption)
                 .foregroundStyle(SymairaTokens.ink3)
                 .multilineTextAlignment(.center)
-            if !model.isLoadingGPUUsage {
+            if termination != nil {
+                MutedNote("Per-process GPU data depends on the hardware counters and the agent’s privileges.")
+            } else if !model.isLoadingGPUUsage {
                 Button("Load GPU Usage…") {
                     model.loadGPUUsageWithElevation()
                 }
@@ -121,27 +183,29 @@ struct TopProcessesCard: View {
 
     private var footer: some View {
         HStack {
-            if model.isWarmingUp, model.report.sortedBy == .cpu {
+            if model.isWarmingUp, model.hasSample, model.report.sortedBy == .cpu, !model.report.processes.isEmpty {
                 // Honest about the one thing that cannot be instant: CPU is a
                 // rate, so it needs a second sample.
                 Text("measuring CPU…")
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.ink3)
-            } else {
+            } else if model.hasSample, model.problem == nil, model.report.sortedBy == model.sortedBy {
                 Text("\(model.report.sampledProcessCount) processes")
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.ink3)
             }
             Spacer()
-            Button {
-                NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
-            } label: {
-                Text("Activity Monitor")
-                    .symairaText(.caption)
-                    .foregroundStyle(SymairaTokens.ink2)
+            if termination == nil {
+                Button {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
+                } label: {
+                    Text("Activity Monitor")
+                        .symairaText(.caption)
+                        .foregroundStyle(SymairaTokens.ink2)
+                }
+                .buttonStyle(.plain)
+                .help("Open Activity Monitor for the full picture")
             }
-            .buttonStyle(.plain)
-            .help("Open Activity Monitor for the full picture")
         }
         .padding(.top, SymairaSpacing.xSmall)
     }
@@ -153,7 +217,7 @@ struct TopProcessesCard: View {
     }
 
     private func toggleSelection(_ pid: Int32) {
-        selectedPID = selectedPID == pid ? nil : pid
+        model.selectedPID = model.selectedPID == pid ? nil : pid
     }
 
     /// Bar length relative to the busiest process in the list, so the ranking
@@ -183,6 +247,7 @@ private struct ProcessRow: View {
     let sortedBy: ProcessSortKey
     let fraction: Double
     let isSelected: Bool
+    let protection: String?
     let onTap: () -> Void
 
     var body: some View {
@@ -205,6 +270,9 @@ private struct ProcessRow: View {
                     .accessibilityLabel("Relative usage for \(process.name)")
                     .accessibilityValue(valueText)
 
+                if let protection {
+                    MutedNote(protection)
+                }
                 if isSelected {
                     Text(detailText)
                         .symairaText(.caption)

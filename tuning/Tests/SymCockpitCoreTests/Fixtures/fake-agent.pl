@@ -8,6 +8,9 @@
 #
 # Environment (set by the test):
 #   FAKE_AGENT_FIXTURES  JSON file: { "<command>": <output>, ... } for calls and samples
+#                        Optional __command_info extends hello with register entries.
+#                        Optional __errors maps scenario name and command to a JSON-RPC error.
+#                        Optional __plan_reports maps area plan IDs to plan.confirm outputs.
 #   FAKE_AGENT_LOG       the arguments after the scenario ({argv}), then every request, one JSON line each {method, params}
 #   FAKE_AGENT_MARKER    path used by `crash_once`
 #
@@ -67,6 +70,9 @@ sub clip_status {
 clip_status();
 sub clip_find { my ($cid) = @_; my ($item) = grep { $_->{id} eq ($cid // '') } @{ $clip->{items} }; return $item; }
 
+my @extra_commands = @{ $data->{__command_info} // [] };
+my %extra_risk = map { $_->{name} => $_->{risk} } @extra_commands;
+my $errors = $data->{__errors}{$scenario} // {};
 my %subs; my $next_sub = 1; my %plans; my $next_plan = 1;
 
 sub send_frame { print $json->encode($_[0]), "\n"; }
@@ -94,6 +100,7 @@ my $hello = {
         (map { { name => $_, risk => "reversible", input_schema => { type => "object" } } } @reversible),
         (map { { name => $_, risk => "risky", input_schema => { type => "object",
             properties => { $risky{$_} => { type => "string" } } } } } sort keys %risky),
+        @extra_commands,
         { name => "fan.set", risk => "risky", input_schema => { type => "object" } } ] };
 
 while (my $line = <STDIN>) {
@@ -111,7 +118,16 @@ while (my $line = <STDIN>) {
         reply($id, $hello);
     } elsif ($method eq 'call') {
         my ($c, $args) = ($p->{command}, $p->{params} // {});
-        if ($c eq 'die') {
+        if (exists $errors->{$c}) {
+            fail($id, $errors->{$c});
+        } elsif ($c eq 'plan.confirm' && exists $data->{__plan_reports}) {
+            my $report = $data->{__plan_reports}{$args->{plan_id} // ''};
+            if ($report) {
+                reply($id, { status => "ok", command => $c, risk => "risky", output => $report });
+            } else {
+                fail($id, { code => -32000, message => "unknown plan", data => { exit_code => 2, class => "usage" } });
+            }
+        } elsif ($c eq 'die') {
             if ($scenario eq 'crash_once' && $ENV{FAKE_AGENT_MARKER} && !-e $ENV{FAKE_AGENT_MARKER}) {
                 open(my $marker, '>', $ENV{FAKE_AGENT_MARKER}) or die "marker: $!";
                 close $marker;
@@ -158,7 +174,7 @@ while (my $line = <STDIN>) {
         } elsif (grep { $_ eq $c } @reversible) {
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
         } elsif (exists $data->{$c}) {
-            reply($id, { status => "ok", command => $c, risk => "read", output => $data->{$c} });
+            reply($id, { status => "ok", command => $c, risk => $extra_risk{$c} // "read", output => $data->{$c} });
         } else {
             fail($id, { code => -32602, message => "unknown command $c" });
         }

@@ -15,6 +15,8 @@ final class ProcessesViewModel {
     // MARK: - Published state
 
     private(set) var report: ProcessUsageReport = .empty
+    private(set) var hasSample = false
+    var selectedPID: Int32?
     /// `true` until the first sample with CPU rates arrives.
     private(set) var isWarmingUp = true
     /// `true` while an explicit, elevated GPU fetch is in flight (waiting on
@@ -41,14 +43,16 @@ final class ProcessesViewModel {
     /// Sampling cadence while visible. One sample is two sweeps one second
     /// apart inside the agent, so this keeps the agent from being busy all the time.
     private static let interval = 3000
-    private static let owner = "processes"
+    private let owner: String
 
     private var token: UUID?
     private var isVisible = false
     private var lastSequence = 0
+    private var subscriptionID: UUID?
 
-    init(session: AgentSession) {
+    init(session: AgentSession, owner: String = "processes") {
         self.session = session
+        self.owner = owner
     }
 
     // MARK: - Lifecycle
@@ -64,9 +68,10 @@ final class ProcessesViewModel {
             // Drop the last sample: it goes stale the moment sampling stops, and a
             // stale reading shown without a timestamp is worse than none.
             report = .empty
+            hasSample = false
             isWarmingUp = true
         }
-        session.setVisible(visible, owner: Self.owner)
+        session.setVisible(visible, owner: owner)
     }
 
     /// Ask for the current ranking right now (after a sort change).
@@ -77,19 +82,26 @@ final class ProcessesViewModel {
     }
 
     private func subscribe() {
+        hasSample = false
         isWarmingUp = true
         problem = nil
         lastSequence = 0
+        let id = UUID()
+        subscriptionID = id
         token = session.subscribe(
             "processes",
             params: ["sort_by": .string(sortedBy.rawValue), "limit": .number(Double(limit))],
             visibleMs: Self.interval
         ) { [weak self] event in
-            Task { @MainActor in self?.receive(event) }
+            Task { @MainActor in
+                guard let self, self.subscriptionID == id else { return }
+                self.receive(event)
+            }
         }
     }
 
     private func unsubscribe() {
+        subscriptionID = nil
         if let token { session.unsubscribe(token) }
         token = nil
     }
@@ -106,6 +118,7 @@ final class ProcessesViewModel {
                 return
             }
             problem = nil
+            hasSample = true
             // The IORegistry GPU source can be empty without root: an already
             // showing GPU report is left alone rather than clobbered by it.
             if fresh.sortedBy == .gpu, fresh.processes.isEmpty, report.sortedBy == .gpu, !report.processes.isEmpty {
@@ -153,6 +166,7 @@ final class ProcessesViewModel {
             }.value
 
             isLoadingGPUUsage = false
+            hasSample = true
             report = outcome
         }
     }

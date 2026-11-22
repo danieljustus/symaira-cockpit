@@ -84,7 +84,11 @@ public struct PlanReport: Equatable, Sendable {
     /// One word for the whole plan: some entries can be done while others were not.
     public var headline: String {
         if isConfirmed { return "Applied" }
-        return items.contains { $0.outcome == .confirmed } ? "Partly applied" : "Not applied"
+        if items.contains(where: { $0.outcome == .confirmed }) { return "Partly applied" }
+        if status == .unconfirmed || items.contains(where: { $0.outcome == .unconfirmed }) {
+            return "Outcome not verified"
+        }
+        return "Not applied"
     }
 
     /// Why it was not applied, in the agent's words; for a plan with results but no message, a count.
@@ -112,9 +116,9 @@ public struct PlanReport: Equatable, Sendable {
         self.exitClass = json["error"]?["data"]?["class"]?.stringValue
     }
 
-    init(planID: String, failed message: String, exitClass: String?) {
+    init(planID: String, failed message: String, exitClass: String?, status: PlanOutcome = .failed) {
         self.planID = planID
-        self.status = .failed
+        self.status = status
         self.items = []
         self.output = nil
         self.failureMessage = message
@@ -123,10 +127,27 @@ public struct PlanReport: Equatable, Sendable {
 }
 
 extension AgentSession {
+    /// Seconds a slow command (scan, speed test, many files to move) may take before the app gives up waiting.
+    public static let longRunning: TimeInterval = 900
+
     /// Executes a plan the user approved and returns the report with one result per
     /// item. A rejection by the agent (unknown, expired or already used plan) or a
     /// broken transport is a `.failed` report with its message, never a thrown error.
     public func confirmReport(_ plan: AgentPlan) async -> PlanReport {
+        if plan.confirmsThroughPlanCommand {
+            // The plan was the area command's own answer: `plan.confirm` runs it and answers with the report.
+            switch await perform("plan.confirm", params: ["plan_id": .string(plan.id)], timeout: Self.longRunning) {
+            case .done(let output): return PlanReport(planID: plan.id, json: output)
+            case .failed(let message, let exitClass):
+                // The agent may still be executing a plan whose reply never arrived.
+                return PlanReport(
+                    planID: plan.id, failed: message, exitClass: exitClass,
+                    status: exitClass == nil ? .unconfirmed : .failed
+                )
+            case .needsConfirmation:
+                return PlanReport(planID: plan.id, failed: "The agent asked for another confirmation; nothing more was done.", exitClass: nil)
+            }
+        }
         do {
             return PlanReport(planID: plan.id, json: try await confirmRaw(planID: plan.id))
         } catch let remote as AgentRemoteError {

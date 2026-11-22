@@ -60,6 +60,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     })
     private lazy var historyModel = HistoryModel(session: session)
     private lazy var agentStatus = CockpitAgentStatus(session: session)
+    private lazy var storagePage = StoragePageModel(session: session)
     private var preferencesWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -766,7 +767,8 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         version: String, openPreferences: @escaping () -> Void, navigation: CockpitNavigation
     ) -> AnyView {
         let context = CockpitPageContext(
-            session: session, model: model, config: config, aiUsageModel: aiUsageModel,
+            session: session, navigation: navigation, storage: storagePage, model: model,
+            config: config, aiUsageModel: aiUsageModel,
             preferencesManager: preferencesManager, profiles: profilesModel, history: historyModel,
             openPreferences: openPreferences,
             brightnessKeyPreferences: isBrightnessKeyHandlingOffered ? brightnessKeyPreferences : nil,
@@ -788,8 +790,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     /// Switch the shared model to the interactive cadence while an embedded
     /// panel is on screen (the popover does this on open/close itself).
     public func setEmbeddedPanelVisible(_ visible: Bool) {
-        // The window's pages ask for what they need: the AI usage page marks itself
-        // visible, and the placeholder pages need nothing from the agent.
         model.setDetailVisible(visible)
     }
 }
