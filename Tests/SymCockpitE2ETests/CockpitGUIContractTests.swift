@@ -2,7 +2,7 @@ import XCTest
 
 /// Product-boundary guard; live window checks cover sizing and interaction.
 final class CockpitGUIContractTests: XCTestCase {
-    func testWindowOpensSharedTuningPanelWithoutModuleNavigation() throws {
+    func testWindowOpensTheSharedWorkspaceWithoutModuleNavigation() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -18,8 +18,8 @@ final class CockpitGUIContractTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(window.contains("statusBar.tunePanel(chrome: .embedded)"),
-                      "the window must open the existing tuning panel directly")
+        XCTAssertTrue(window.contains("statusBar.cockpitWorkspace("),
+                      "the window must open the workspace the status bar controller builds from the shared models")
         for retired in ["OverviewView", "CockpitSection", "TuneSectionView",
                         "com.symaira.cockpit.section", "refreshCurrentSection",
                         "cockpitFocusSectionFilter", "Tune Preferences"] {
@@ -65,47 +65,51 @@ final class CockpitGUIContractTests: XCTestCase {
                        "selection must use the adaptive selected role, not fixed gold")
     }
 
-    /// One mounted panel is essential: navigating must not discard draft controls.
-    func testWorkspaceNavigationKeepsSharedPanelAndEveryDestination() throws {
+    /// The window is a shell with one page per destination; the pages hold no logic of
+    /// their own and the six placeholders take the agent session and nothing else.
+    func testWorkspaceHasEveryDestinationAndNoControllerDependency() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let ui = root.appendingPathComponent("tuning/Sources/SymCockpitUI")
-        let shell = try String(contentsOf: ui.appendingPathComponent("CockpitWorkspaceView.swift"), encoding: .utf8)
-        let panel = try String(contentsOf: ui.appendingPathComponent("MainStatusView.swift"), encoding: .utf8)
+        func source(_ name: String) throws -> String {
+            try String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)
+        }
+        let shell = try source("CockpitWorkspaceView.swift")
         let window = try String(
             contentsOf: root.appendingPathComponent("Sources/SymCockpitApp/CockpitRootView.swift"), encoding: .utf8
         )
-        XCTAssertTrue(window.contains("CockpitWorkspaceView("))
-        XCTAssertEqual(window.components(separatedBy: "statusBar.tunePanel(").count - 1, 1)
-        XCTAssertTrue(shell.contains("ScrollViewReader"))
-        XCTAssertTrue(shell.contains("scroll.scrollTo(anchor, anchor: .top)"))
-        XCTAssertTrue(shell.contains("accessibilityReduceMotion"))
+        XCTAssertEqual(window.components(separatedBy: "statusBar.cockpitWorkspace(").count - 1, 1)
         XCTAssertTrue(shell.contains("SymairaWorkspace("))
-        XCTAssertTrue(shell.contains("sidebar: $sidebarLayout, topography: topography"))
-        XCTAssertTrue(shell.contains("topoProtected(hill: hill)"))
+        XCTAssertTrue(shell.contains("SymairaNavigationButton("))
         XCTAssertTrue(shell.contains("SymairaSidebarToggle(sidebar: $sidebarLayout)"))
         XCTAssertTrue(shell.contains("SymairaSettingsMenu(selection: $appearance.selection, openSettings: openPreferences)"))
         XCTAssertFalse(shell.contains("Text(\"Preferences\")"), "Do not duplicate settings in the sidebar")
         XCTAssertFalse(shell.contains("clipShape(contentPanel)"), "panel rules belong in AppKit")
-        XCTAssertTrue(shell.contains(".focused($focusedAnchor, equals: anchor)"))
-        let cards = try String(contentsOf: ui.appendingPathComponent("StatusCards.swift"), encoding: .utf8)
+        XCTAssertTrue(shell.contains("topography: navigation.selection == .overview ? topography : nil"),
+                      "the topography belongs to the overview only")
+        XCTAssertTrue(shell.contains("AgentDiagnosisCard("), "the diagnosis replaces the page while the agent is down")
+        // The placeholders: one file per page, the session and nothing else, "Not available yet".
+        for name in ["Storage", "AudioMIDI", "BluetoothInput", "Processes", "Clipboard", "Finder"] {
+            let page = try source("\(name)Page.swift")
+            XCTAssertTrue(page.contains("public struct \(name)Page: View"), name)
+            XCTAssertTrue(page.contains("public init(session: AgentSession)"), name)
+            XCTAssertEqual(page.components(separatedBy: "private let ").count - 1, 1, "\(name) holds only the session")
+            XCTAssertTrue(page.contains("SymairaEmptyState("), name)
+            XCTAssertTrue(page.contains("\"Not available yet\""), name)
+        }
+        // The window gains no new dependency on the hardware controller.
+        for name in ["CockpitWorkspaceView.swift", "CockpitPages.swift", "CockpitDestination.swift", "OverviewPage.swift",
+                     "DisplayPage.swift", "PowerFansPage.swift", "AIUsagePage.swift", "HistoryPage.swift",
+                     "PlanConfirmationView.swift", "ChargeLimitCard.swift", "ProfilesCard.swift"] {
+            let page = try source(name)
+            XCTAssertFalse(page.contains("TuneController"), name)
+            XCTAssertFalse(page.contains("Process("), name)
+        }
+        XCTAssertFalse(shell.contains(".task"))
+        let cards = try source("StatusCards.swift")
         XCTAssertTrue(cards.contains(".cockpitProtected(hill: true)"))
         XCTAssertTrue(cards.contains("colorSchemeContrast"))
-        XCTAssertTrue(panel.contains(".cockpitProtected()"))
-        // Width budgets and compact restoration are exercised by the native sizing test.
-        XCTAssertTrue(shell.contains("SymairaSidebarState()"))
-        XCTAssertTrue(shell.contains(".accessibilityLabel(\"Jump to "))
-        for anchor in ["overview", "display", "power", "activity", "readout"] {
-            XCTAssertEqual(panel.components(separatedBy: ".id(TuneWorkspaceAnchor.\(anchor))").count - 1, 1)
-        }
-        for component in ["DisplayControlsCard(", "KeepAwakeSection(", "FanControlCard(",
-                          "MenuBarVisibilityCard(", "TopProcessesCard("] {
-            XCTAssertEqual(panel.components(separatedBy: component).count - 1, 1, component)
-        }
-        XCTAssertFalse(shell.contains("TuneController"))
-        XCTAssertFalse(shell.contains("Process("))
-        XCTAssertFalse(shell.contains(".task"))
     }
 }

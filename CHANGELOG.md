@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+- Cockpit 2, wave 2D-3 part 1: the window is a workspace with a sidebar of eleven
+  destinations (Overview, Display, Power & Fans, Storage, Audio & MIDI, Bluetooth & Input,
+  Processes, Clipboard, Finder, AI Usage, History) instead of one scrolling panel. Overview
+  (status, sensors, health), Display (brightness, Beyond Normal, warmth, keep awake, profiles),
+  Power & Fans (battery, fan profile and Cool target, charge limit), AI Usage and History are
+  real pages; the other six say "Not available yet" until part 2. While the agent cannot serve,
+  the page shows why with a restart button. Risky changes (fans, charge limit) use one shared
+  plan confirmation that lists what will happen, how long the plan is valid and, afterwards,
+  what happened to every entry. ⌘1 to ⌘9 switch pages.
+
 ### Internal
 - Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
   `fan profile|target <value>` write the Swift file (`~/.symtune/fan-profile.json`) and the

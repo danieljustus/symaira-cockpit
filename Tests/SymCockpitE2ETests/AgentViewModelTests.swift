@@ -192,9 +192,13 @@ final class AgentViewModelTests: XCTestCase {
 
         await model.requestFanProfile(.comfort)
         await model.confirmPendingFanChange()
-        XCTAssertNil(model.pendingFanChange)
+        // The result stays on screen until the user says Done; the controls are free again.
+        XCTAssertEqual(model.pendingFanChange?.confirmation.report?.status, .confirmed)
+        XCTAssertEqual(model.pendingFanChange?.isOpen, false)
         XCTAssertNil(model.fanFailure)
         await waitFor("the confirmed profile") { model.fanProfile == .comfort }
+        model.dismissPendingFanChange()
+        XCTAssertNil(model.pendingFanChange)
 
         // The Cool target goes the same way, and "off" is the clearing value of the register.
         await model.requestFanCoolTarget(70)
@@ -206,6 +210,44 @@ final class AgentViewModelTests: XCTestCase {
         await waitFor("the cleared target") { model.fanCoolTarget == nil }
         let confirms = requests("confirm").count
         XCTAssertEqual(confirms, 3)
+    }
+
+    func testAChargeLimitIsPlannedFirstAndNamedOnlyAfterTheUserConfirms() async {
+        let session = makeSession()
+        let model = makeModel(session)
+        defer { model.stop(); session.stop() }
+        model.start()
+        await session.start()
+
+        await model.requestChargeLimit(80)
+        XCTAssertEqual(model.pendingChargeChange?.summary, "Stop charging at 80 %.")
+        XCTAssertEqual(model.pendingChargeChange?.plan.command, "battery-limit.set")
+        XCTAssertEqual(requests("confirm").count, 0, "nothing is sent before the user confirms")
+        XCTAssertNil(model.chargeLimitThisSession, "the app does not claim a limit it did not apply")
+
+        await model.pendingChargeChange?.confirmation.confirm()
+        XCTAssertEqual(model.chargeLimitThisSession, .some(80))
+        XCTAssertNil(model.chargeFailure)
+        model.dismissPendingChargeChange()
+
+        await model.requestChargeLimit(nil)
+        XCTAssertEqual(model.pendingChargeChange?.plan.command, "battery-limit.clear")
+        await model.pendingChargeChange?.confirmation.confirm()
+        XCTAssertEqual(model.chargeLimitThisSession, .some(nil))
+        XCTAssertEqual(requests("confirm").count, 2)
+    }
+
+    func testADeniedChargeLimitShowsTheReasonAndNoLimit() async {
+        let session = makeSession("confirm_denied")
+        let model = makeModel(session)
+        defer { model.stop(); session.stop() }
+        model.start()
+        await session.start()
+        await model.requestChargeLimit(70)
+        await model.pendingChargeChange?.confirmation.confirm()
+        XCTAssertNil(model.pendingChargeChange)
+        XCTAssertNil(model.chargeLimitThisSession)
+        XCTAssertTrue(model.chargeFailure?.contains("fan helper is not approved") ?? false)
     }
 
     func testADeniedFanChangePointsToTheHelper() async {
