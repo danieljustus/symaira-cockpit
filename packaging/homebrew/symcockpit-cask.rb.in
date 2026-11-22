@@ -1,0 +1,40 @@
+# frozen_string_literal: true
+
+cask "symcockpit" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/Symaira-Cockpit-#{version}-macos.dmg"
+  name "Symaira Cockpit"
+  desc "This machine: thermals, power, display and system tuning"
+  homepage "https://github.com/danieljustus/symaira-cockpit"
+
+  livecheck do
+    url "https://github.com/danieljustus/symaira-cockpit/releases/latest"
+    strategy :header_match
+    regex(/Symaira-Cockpit-(\d+(?:\.\d+)*)-macos\.dmg/i)
+  end
+
+  # The cask is the app and the command line: it links the `symcockpit` that
+  # sits inside the app bundle. The formula installs the command line alone;
+  # Homebrew cannot declare that conflict (a cask's `conflicts_with` accepts
+  # only `cask:`), so installing both fails at the link step. Apple Silicon
+  # only: Intel is not a supported platform.
+  depends_on arch: :arm64
+  depends_on macos: :tahoe
+
+  app "Symaira Cockpit.app"
+  binary "#{appdir}/Symaira Cockpit.app/Contents/MacOS/symcockpit"
+
+  zap trash: [
+    "~/.cache/symtune",
+    "~/.config/symtune",
+    "~/.local/share/symtune",
+    "~/.symtune",
+    "~/Library/Caches/com.symaira.cockpit",
+    "~/Library/Group Containers/*.group.com.symaira.cockpit",
+    "~/Library/Preferences/com.symaira.cockpit.plist",
+    "~/Library/Preferences/com.symaira.symtune.plist",
+    "~/Library/WebKit/com.symaira.cockpit",
+  ]
+end
