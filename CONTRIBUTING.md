@@ -22,13 +22,13 @@ ScreenCaptureKit APIs.
 ## Repository layout
 
 ```
-Sources/symcockpit/       # unified dispatcher and version reporting
+crates/                   # Rust workspace: the symcockpit CLI, MCP server and app agent
 Sources/SymCockpitApp/    # SwiftUI/AppKit menu-bar and cockpit window
-Tests/                    # dispatcher and GUI integration tests
+Tests/                    # GUI integration tests
 tuning/                  # thermals, power, display, and UI package
   Sources/SymCockpitCore/    # hardware and configuration logic
   Sources/SymCockpitUI/      # shared menu-bar panel
-  Sources/SymCockpitCLI/     # Tune command library
+  Sources/SymCockpitHelperKit/ # privileged fan helper client and contract
 history/                  # shared library: canonical history, replay codec,
                           # secret redaction, bounded subprocess runner
 ```

@@ -425,13 +425,13 @@ cd symaira-cockpit
 make build      # Debug build of the tuning package and history
 make test       # Test suite
 make build-app  # The GUI bundle (build/app/Symaira Cockpit.app)
-swift build -c release --arch arm64 --arch x86_64
+make rust-build # The CLI and MCP server (target/debug/symcockpit)
 ```
 
-The repository is an SPM workspace: `Sources/symcockpit/` is the dispatcher,
-`Sources/SymCockpitApp/` the GUI,
-and [`tuning/`](tuning/) are
-a standalone package with its own test suite. Contributor details live in
+The repository holds two toolchains. The CLI and the MCP server are the Rust
+binary (`crates/symcockpit`, `make rust-build`). The macOS GUI is an SPM
+workspace: `Sources/SymCockpitApp/` is the app and [`tuning/`](tuning/) a
+standalone package with its own test suite. Contributor details live in
 [AGENTS.md](AGENTS.md).
 
 > The app targets and the tests need the Xcode toolchain:

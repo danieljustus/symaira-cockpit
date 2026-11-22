@@ -6,9 +6,8 @@ public enum ProcessSortKey: String, Codable, Sendable, CaseIterable {
     case memory
     /// Per-process GPU time. Unlike ``cpu``/``memory``, this cannot be read
     /// via libproc — it comes from the IORegistry's `AppUsage` counters
-    /// (unprivileged, ``IORegistryGPUProcessSource``) and, only when those are
-    /// not exposed, from `powermetrics`, which needs root
-    /// (``PowermetricsGPUProcessSource``). See ``ProcessUsageService``.
+    /// (unprivileged) and, only when those are not exposed, from `powermetrics`,
+    /// which needs root. The Rust agent samples both; the Swift sources are gone.
     case gpu
 
     public var displayName: String {
@@ -210,9 +209,8 @@ public enum ProcessUsageRanking: Sendable {
         case .memory:
             ranked = usages.sorted { $0.memoryBytes > $1.memoryBytes }
         case .gpu:
-            // Unreachable via `ProcessUsageService.report`, which routes
-            // `.gpu` to the GPU process source instead — libproc
-            // sweeps never populate `gpuPercent`. Handled here anyway so the
+            // Unreachable in practice: libproc sweeps never populate
+            // `gpuPercent`, GPU rows come from the GPU process source. Handled here anyway so the
             // switch stays exhaustive and behaves sanely if ever called
             // directly with `.gpu`.
             ranked = usages.sorted {

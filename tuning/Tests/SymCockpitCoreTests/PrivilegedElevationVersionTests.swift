@@ -293,26 +293,4 @@ final class PrivilegedElevationVersionTests: XCTestCase {
         XCTAssertTrue(untrusted.detail.contains("daniel"))
         XCTAssertTrue(recorder.calls.isEmpty, "an untrusted binary is never run, not even to read its version")
     }
-
-    func testDoctorCapabilityReportsTheInjectedStatus() {
-        let status = PrivilegedElevation.PrivilegedExecutableStatus(
-            state: .stale, path: path, foundVersion: "0.6.1", expectedVersion: "0.10.0",
-            detail: "Root-owned copy \(path) is 0.6.1, but this release is 0.10.0")
-        let controller = TuneController(
-            config: TuneConfig(),
-            displayWrite: MockDisplayWriteService(),
-            smcService: SMCService(connection: FakeSMCConnection(isOpen: false)),
-            batterySource: FakeBatterySource(result: .unavailable),
-            privilegedExecutableStatus: { status }
-        )
-        let report = controller.capabilities()
-        let capability = report.capabilities.first { $0.id == "fan.privilegedExecutable" }
-        XCTAssertNotNil(capability)
-        XCTAssertEqual(capability?.available, false)
-        XCTAssertEqual(capability?.tier, "core")
-        XCTAssertTrue(capability?.detail.contains("[stale]") ?? false)
-        XCTAssertTrue(capability?.detail.contains("0.6.1") ?? false)
-        XCTAssertTrue(report.recommendations.contains { $0.contains("0.6.1") },
-                      "a stale copy is also a recommendation")
-    }
 }

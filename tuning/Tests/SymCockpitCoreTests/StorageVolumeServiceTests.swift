@@ -52,36 +52,6 @@ final class StorageVolumeServiceTests: XCTestCase {
         }
     }
 
-    func testSnapshotChangesAndLegacyJSON() throws {
-        let boot = StorageVolumeReport(name: "Macintosh HD", mountPath: "/", isInternal: true, isLocal: true)
-        let external = StorageVolumeReport(name: "USB", mountPath: "/Volumes/USB", isInternal: false, isLocal: true)
-        let renamed = StorageVolumeReport(name: "Backup", mountPath: "/Volumes/Backup", isInternal: false, isLocal: true)
-        let snapshots = [[boot], [boot, external], [boot, renamed], [boot]].map { volumes in
-            SystemMetricsSnapshot(cpu: .init(total: [], perCore: []), memory: .empty,
-                                  disk: .init(capacityBytes: 100, usedBytes: 40, freeBytes: 60), network: [], volumes: volumes)
-        }
-        let service = SystemMetricsService(source: FakeSystemMetricsSource(snapshots: snapshots))
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        for snapshot in snapshots {
-            let report = service.read()
-            XCTAssertEqual(report.volumes, snapshot.volumes, "Plug, rename and unplug replace the shared snapshot")
-            XCTAssertEqual(report.disk?.capacityBytes, 100, "The legacy disk field must stay boot-only")
-            let data = try encoder.encode(report)
-            XCTAssertEqual(try decoder.decode(SystemMetricsReport.self, from: data), report)
-            var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            let rows = try XCTUnwrap(legacy.removeValue(forKey: "volumes") as? [[String: Any]])
-            XCTAssertEqual(rows.first?["mount_path"] as? String, "/")
-            let legacyReport = try decoder.decode(SystemMetricsReport.self, from: JSONSerialization.data(withJSONObject: legacy))
-            XCTAssertEqual(legacyReport.volumes, [])
-            XCTAssertEqual(legacyReport.disk, report.disk)
-        }
-        XCTAssertEqual(StorageVolumeReport(name: "NAS", mountPath: "/Volumes/NAS", isLocal: false).kind, "Network / virtual volume")
-        XCTAssertEqual(MetricFormatting.storageBytes(1_000_000_000), ByteCountFormatter.string(fromByteCount: 1_000_000_000, countStyle: .decimal))
-    }
-
     func testStableSelectionIdentityAndLegacyVolumeJSON() throws {
         let original = StorageVolumeReport(name: "Backup", mountPath: "/Volumes/Backup", uuid: "demo-volume-A")
         let renamed = StorageVolumeReport(name: "Archive", mountPath: "/Volumes/Archive 1", uuid: "demo-volume-A")

@@ -136,7 +136,7 @@ jobs:
       - name: Test
         run: swift test
 
-  # The dispatcher package at the repo root.
+  # The GUI package at the repo root (app, fan helper, GUI tests).
   root:
     name: root
     needs: changes
@@ -162,8 +162,7 @@ jobs:
         run: swift build
 
       - name: Test
-        # The dispatcher package (root) carries the E2E suites that spawn the
-        # built `symcockpit` binary — `swift test` there runs them.
+        # The root package carries the GUI contract and render suites.
         run: swift test
 
       - name: Release app build
@@ -177,7 +176,7 @@ jobs:
           from pathlib import Path
 
           diagnostic = re.compile(
-              r"(?:BrightnessHUDPanel|MenuBarVisibilityCard|TuneViewModel|ProcessUsageService)"
+              r"(?:BrightnessHUDPanel|MenuBarVisibilityCard|TuneViewModel)"
               r"\.swift:\d+(?::\d+)?:\s*(?:warning|error):"
           )
           reported = [line for line in Path(sys.argv[1]).read_text().splitlines() if diagnostic.search(line)]

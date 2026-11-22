@@ -219,38 +219,6 @@ final class SystemPowerTests: XCTestCase {
         XCTAssertNil(source.readSnapshot().power)
     }
 
-    // MARK: - Capability text
-
-    func testCapabilityDetailSeparatesTotalFromAdapter() {
-        let detail = TuneController.powerDrawDetail(PowerReport(
-            volts: 20, amps: 0.5, watts: 10, adapterSource: .smcPDTR,
-            systemWatts: 23.5, systemSource: .smcPSTR
-        ))
-        XCTAssertTrue(detail.contains("total system power"))
-        XCTAssertTrue(detail.contains("PSTR"))
-        XCTAssertTrue(detail.contains("adapter DC-in input only"))
-        XCTAssertTrue(detail.contains("not the Mac's consumption"))
-    }
-
-    func testCapabilityDetailNamesBatteryFallbackAndPD0R() {
-        let detail = TuneController.powerDrawDetail(PowerReport(
-            watts: 40, adapterSource: .smcPD0R,
-            systemWatts: 19.2, systemSource: .batterySystemLoad
-        ))
-        XCTAssertTrue(detail.contains("PowerTelemetryData.SystemLoad"))
-        XCTAssertTrue(detail.contains("PD0R"))
-    }
-
-    func testCapabilityDetailWhenNothingIsExposed() {
-        let detail = TuneController.powerDrawDetail(nil)
-        XCTAssertTrue(detail.contains("No power readings"))
-    }
-
-    func testCapabilityDetailFlagsMissingTotal() {
-        let detail = TuneController.powerDrawDetail(PowerReport(watts: 10, adapterSource: .smcPDTR))
-        XCTAssertTrue(detail.contains("total system power (system_watts) unavailable"))
-    }
-
     // MARK: - Helper
 
     private static func json(_ power: PowerReport) throws -> [String: Any] {

@@ -47,12 +47,13 @@ By participating in this project you agree to abide by the
 5. **Try the CLI**:
 
    ```bash
-   swift run -q symtune doctor
-   swift run -q symtune sensors
+   make rust-build   # in the repo root
+   target/debug/symcockpit doctor
+   target/debug/symcockpit sensors
    ```
 
 The Makefile exposes the same workflow: `make build`, `make test`,
-`make lint`, `make run`, `make doctor`, `make serve`.
+`make lint`.
 
 ## Code Style
 

@@ -1,10 +1,9 @@
 #!/bin/bash
 # Line/region coverage for the library targets, via SwiftPM + llvm-cov.
 #
-# Scope note: SymCockpitCLITests depends on the SymCockpitCLI library, so the test
-# bundles measure SymCockpitCLI alongside SymCockpitCore and SymCockpitMCP. The thin
-# Sources/symtune/* compatibility entry point and SymCockpitMenuBarApp/SymCockpitUI are not
-# linked into these package-local bundles. Absent files are not measured,
+# Scope note: the test bundles measure SymCockpitCore and SymCockpitHelperKit.
+# SymCockpitMenuBarApp and SymCockpitUI are not linked into these package-local
+# bundles. Absent files are not measured,
 # uncovered lines. Root integration and release-baseline reports include a
 # wider production-code scope; compare percentages only at equal scope.
 #
@@ -62,7 +61,7 @@ if [ -n "$JSON_OUT" ]; then
 fi
 
 echo
-echo "==> coverage (test-linked product code, including SymCockpitCLI; no executable/UI entry points)"
+echo "==> coverage (test-linked product code; no executable/UI entry points)"
 if [ "$#" -gt 0 ]; then
   xcrun llvm-cov report "${objects[@]}" -instr-profile "$PROFILE" \
     -ignore-filename-regex="$IGNORE" "$@"
