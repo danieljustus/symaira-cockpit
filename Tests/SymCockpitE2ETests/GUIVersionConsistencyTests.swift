@@ -1,6 +1,6 @@
 import XCTest
 
-/// The CLI, GUI, release guard and assembled bundle all use the shared
+/// The GUI, release guard and assembled bundle all use the shared
 /// cockpit release source. Family package versions remain independent.
 final class GUIVersionConsistencyTests: XCTestCase {
     /// `<repo>/`, derived from this file's location.
@@ -41,10 +41,8 @@ final class GUIVersionConsistencyTests: XCTestCase {
                        "the embedded component identity must match its latest dated baseline")
     }
 
-    func testSharedSourceFeedsDispatcherAndGUI() throws {
+    func testSharedSourceFeedsGUI() throws {
         let shared = try read("Sources/SymCockpitVersion/CockpitVersion.swift")
-        let dispatcher = try read("Sources/symcockpit/main.swift")
-        let updateChecker = try read("Sources/symcockpit/CockpitUpdateChecker.swift")
         let app = try read("Sources/SymCockpitApp/CockpitVersion.swift")
 
         let sharedVersion = try firstMatch(
@@ -58,9 +56,6 @@ final class GUIVersionConsistencyTests: XCTestCase {
             1,
             "the shared source must contain exactly one cockpit version declaration"
         )
-        XCTAssertTrue(dispatcher.contains("import SymCockpitVersion"))
-        XCTAssertTrue(updateChecker.contains("import SymCockpitVersion"))
-        XCTAssertFalse(dispatcher.contains("static let current = \""))
         XCTAssertTrue(app.contains("import SymCockpitVersion"))
         XCTAssertTrue(app.contains("typealias CockpitAppVersion = CockpitVersion"))
         XCTAssertFalse(app.contains("static let current = \""))

@@ -1,8 +1,9 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// symcockpit — the unified entrypoint for the cockpit tool family.
-// Dispatches to the tuning CLI library via a local path dependency.
+// symcockpit — the macOS GUI package. The CLI and MCP server are the Rust
+// binary (crates/symcockpit); this package holds the app, the fan helper and
+// the GUI tests on top of the local tuning package.
 let package = Package(
     name: "symcockpit",
     platforms: [
@@ -12,7 +13,6 @@ let package = Package(
         .macOS(.v26),
     ],
     products: [
-        .executable(name: "symcockpit", targets: ["symcockpit"]),
         // The GUI: one menu-bar item plus a tune-only cockpit window.
         .executable(name: "SymCockpitApp", targets: ["SymCockpitApp"]),
         // The optional privileged fan helper (issue #405), embedded in the app
@@ -25,14 +25,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "SymCockpitVersion"),
-        .executableTarget(
-            name: "symcockpit",
-            dependencies: [
-                "SymCockpitVersion",
-                .product(name: "SymCockpitCLI", package: "tuning"),
-                .product(name: "SymairaUpdateCheck", package: "symaira-corekit"),
-            ]
-        ),
         .executableTarget(
             name: "SymCockpitApp",
             dependencies: [
