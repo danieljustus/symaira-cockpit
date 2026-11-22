@@ -32,7 +32,9 @@
   `CockpitVersion.swift` (the GUI; the Info.plist files take it from there at build time).
   `scripts/check-version.sh` verifies they agree (CI `changes` job), equal the tag, the
   built binary's `version --json` and an assembled bundle (release workflow). CI gained an
-  `app-bundle` job that assembles and smoke-checks the app ad hoc on arm64.
+  `app-bundle` job that assembles and smoke-checks the app ad hoc on arm64. A bump drill
+  (0.12.3, `cargo test --locked`: 962 tests) found one test that pinned the version
+  (`swift_bytes`); it now follows the build.
 
 ### Internal
 - Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
