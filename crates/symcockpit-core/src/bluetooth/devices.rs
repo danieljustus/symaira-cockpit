@@ -70,6 +70,20 @@ pub struct PairedDevice {
 /// Port: where the list of paired devices comes from.
 pub trait PairedDevices {
     fn paired(&self) -> Result<Vec<PairedDevice>, Error>;
+
+    /// The process's BLE permission, without creating a central or starting a scan.
+    fn ble_authorization(&self) -> Option<BleAuthorization> {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BleAuthorization {
+    NotDetermined,
+    Restricted,
+    Denied,
+    Allowed,
 }
 
 /// Parses `system_profiler SPBluetoothDataType -json`.

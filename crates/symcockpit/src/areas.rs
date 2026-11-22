@@ -711,7 +711,13 @@ fn bluetooth(ports: &Ports, ctx: &Context, req: &Request) -> Result<Output, Erro
         && !services_only
         && let Some(session) = crate::host::ble()
     {
-        return session.run(req.command, &args).map(Output::Json);
+        let mut value = session.run(req.command, &args)?;
+        if req.command == "ble.session"
+            && let Some(authorization) = ports.paired.ble_authorization()
+        {
+            value["authorization"] = json!(authorization);
+        }
+        return Ok(Output::Json(value));
     }
     let mut log = BleLog::new(1000);
     let seconds =

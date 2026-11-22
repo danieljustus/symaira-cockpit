@@ -45,7 +45,17 @@ my @topics = qw(metrics status brightness.get awake.status fan.status processes)
 my %risky = ('fan.profile' => 'profile', 'fan.target' => 'target', 'battery-limit.set' => 'percent', 'battery-limit.clear' => 'none');
 my @reversible = qw(brightness.set warmth.set dim.set extbright.set awake profile.load profile.save profile.delete);
 my @reads = (@topics, 'ai-usage', 'history', 'profile.list');
-my %subs; my $next_sub = 1; my %plans; my $next_plan = 1;
+my @human_only;
+my %area_kinds;
+if (my $devices = delete $data->{'__device_page_test'}) {
+    push @topics, @{ $devices->{topics} };
+    push @reads, @{ $devices->{topics} }, @{ $devices->{reads} };
+    push @reversible, @{ $devices->{reversible} };
+    @human_only = @{ $devices->{human_only} };
+    @reads = grep { my $command = $_; !grep { $_ eq $command } @human_only } @reads;
+    %area_kinds = %{ $devices->{plans} };
+}
+my %subs; my $next_sub = 1; my %plans; my %area_plans; my $next_plan = 1;
 
 sub send_frame { print $json->encode($_[0]), "\n"; }
 sub reply { send_frame({ jsonrpc => "2.0", id => $_[0], result => $_[1] }); }
@@ -68,9 +78,12 @@ my $hello = {
         default_interval_hidden_ms => 10000 },
     commands => [
         (map { { name => $_, risk => "read", input_schema => { type => "object" } } } @reads),
+        (map { { name => $_, risk => "human_only", input_schema => { type => "object" } } } @human_only),
         (map { { name => $_, risk => "reversible", input_schema => { type => "object" } } } @reversible),
         (map { { name => $_, risk => "risky", input_schema => { type => "object",
             properties => { $risky{$_} => { type => "string" } } } } } sort keys %risky),
+        (map { { name => $_, risk => "risky", input_schema => { type => "object" } } }
+            sort(keys %area_kinds), (keys %area_kinds ? "plan.confirm" : ())),
         { name => "fan.set", risk => "risky", input_schema => { type => "object" } } ] };
 
 while (my $line = <STDIN>) {
@@ -101,6 +114,23 @@ while (my $line = <STDIN>) {
         } elsif ($c eq 'fail.permission') {
             fail($id, { code => -32000, message => "permission error: access was not granted",
                         data => { exit_code => 3, class => "permission" } });
+        } elsif (exists $area_kinds{$c}) {
+            my $plan_id = "pl_" . $next_plan++;
+            my $kind = $area_kinds{$c};
+            my $item = { action => $kind, target => $args->{uid} // $args->{device_id} // $args->{name}, params => $args };
+            $area_plans{$plan_id} = $item;
+            reply($id, { status => "ok", command => $c, risk => "risky",
+                output => { id => $plan_id, state => "pending", expires_in_s => 300, kind => $kind, items => [$item] } });
+        } elsif ($c eq 'plan.confirm' && keys %area_kinds) {
+            my $plan_id = $args->{plan_id} // '';
+            my $item = delete $area_plans{$plan_id};
+            if (!$item) {
+                fail($id, { code => -32602, message => "unknown or expired area plan" });
+                next;
+            }
+            reply($id, { status => "ok", command => $c, risk => "risky",
+                output => { plan_id => $plan_id, status => "confirmed", counts => { confirmed => 1 },
+                    results => [{ index => 0, action => $item->{action}, target => $item->{target}, outcome => "confirmed" }] } });
         } elsif (exists $risky{$c}) {
             my $plan_id = "pl_" . $next_plan++;
             $plans{$plan_id} = { command => $c, params => $args };
@@ -122,10 +152,19 @@ while (my $line = <STDIN>) {
             push @kept, { name => $args->{name}, brightness => $data->{'brightness.get'}{brightness}, createdAt => 785000000.5, updatedAt => 785000100 } if $c eq 'profile.save';
             $data->{'profile.list'}{profiles} = \@kept;
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
+        } elsif ($c eq 'input.finder-cut' && exists $data->{'input.status'}) {
+            my $enabled = $args->{state} eq 'on' ? JSON::PP::true : JSON::PP::false;
+            $data->{'input.status'}{finder_cut}{enabled} = $enabled;
+            reply($id, { status => "ok", command => $c, risk => "human_only", output => { finder_cut => { enabled => $enabled } } });
         } elsif (grep { $_ eq $c } @reversible) {
+            if (exists $data->{$c}) {
+                reply($id, { status => "ok", command => $c, risk => "reversible", output => $data->{$c} });
+                next;
+            }
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
         } elsif (exists $data->{$c}) {
-            reply($id, { status => "ok", command => $c, risk => "read", output => $data->{$c} });
+            my $risk = (grep { $_ eq $c } @human_only) ? "human_only" : "read";
+            reply($id, { status => "ok", command => $c, risk => $risk, output => $data->{$c} });
         } else {
             fail($id, { code => -32602, message => "unknown command $c" });
         }

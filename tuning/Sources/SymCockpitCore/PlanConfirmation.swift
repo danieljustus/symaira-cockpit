@@ -128,7 +128,12 @@ extension AgentSession {
     /// broken transport is a `.failed` report with its message, never a thrown error.
     public func confirmReport(_ plan: AgentPlan) async -> PlanReport {
         do {
-            return PlanReport(planID: plan.id, json: try await confirmRaw(planID: plan.id))
+            let json = if plan.usesAreaConfirmation {
+                try await confirmAreaRaw(planID: plan.id)
+            } else {
+                try await confirmRaw(planID: plan.id)
+            }
+            return PlanReport(planID: plan.id, json: json)
         } catch let remote as AgentRemoteError {
             return PlanReport(planID: plan.id, failed: remote.message, exitClass: remote.exitClass)
         } catch {

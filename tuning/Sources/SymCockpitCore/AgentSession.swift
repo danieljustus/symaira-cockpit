@@ -87,10 +87,16 @@ public struct AgentPlan: Equatable, Sendable {
     /// When the plan stops being confirmable, by this app's clock: the moment the
     /// answer arrived plus `expiresInSeconds`.
     public let expiresAt: Date?
+    /// Native area plans are stored by the register's plan engine.
+    let usesAreaConfirmation: Bool
 
-    init(command: String, planID: String, plan: AgentJSON, received: Date = Date()) {
+    init(
+        command: String, planID: String, plan: AgentJSON, received: Date = Date(),
+        usesAreaConfirmation: Bool = false
+    ) {
         self.id = planID
         self.command = command
+        self.usesAreaConfirmation = usesAreaConfirmation
         self.expiresInSeconds = plan["expires_in_s"]?.intValue
         self.expiresAt = expiresInSeconds.map { received.addingTimeInterval(TimeInterval($0)) }
         self.items = (plan["items"]?.arrayValue ?? []).map {
@@ -389,7 +395,14 @@ public final class AgentSession: @unchecked Sendable {
     public func perform(_ command: String, params: [String: AgentJSON] = [:]) async -> ActionOutcome {
         do {
             switch try await client.call(command, params: params) {
-            case .ok(_, _, let output):
+            case .ok(let name, let risk, let output):
+                if risk == "risky", output["state"]?.stringValue == "pending",
+                   let planID = output["id"]?.stringValue, !planID.isEmpty,
+                   output["items"]?.arrayValue != nil {
+                    return .needsConfirmation(AgentPlan(
+                        command: name, planID: planID, plan: output, usesAreaConfirmation: true
+                    ))
+                }
                 return .done(output)
             case .confirmationRequired(let name, let planID, let plan):
                 return .needsConfirmation(AgentPlan(command: name, planID: planID, plan: plan))
@@ -414,6 +427,14 @@ public final class AgentSession: @unchecked Sendable {
     /// The agent's plan report as it came; `confirmReport` is the readable form.
     func confirmRaw(planID: String) async throws -> AgentJSON {
         try await client.confirm(planID: planID)
+    }
+
+    func confirmAreaRaw(planID: String) async throws -> AgentJSON {
+        let result = try await client.call("plan.confirm", params: ["plan_id": .string(planID)])
+        guard case .ok(_, _, let output) = result else {
+            throw AgentFailure.protocolViolation("plan.confirm did not return a report")
+        }
+        return output
     }
 
     /// The one argument a register command takes (its `input_schema`), or `nil`

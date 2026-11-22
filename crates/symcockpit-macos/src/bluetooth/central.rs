@@ -36,7 +36,8 @@ use objc2_foundation::{
 };
 use symcockpit_contract::Error;
 use symcockpit_core::bluetooth::{
-    Advertisement, BleCentral, BleLink, Characteristic, Notification, Service, WriteAck,
+    Advertisement, BleAuthorization, BleCentral, BleLink, Characteristic, Notification, Service,
+    WriteAck,
 };
 
 const STATE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -291,15 +292,14 @@ impl CoreBluetoothCentral {
     /// Creates the manager and waits until the radio state is known. This is
     /// the call that raises the Bluetooth permission dialog on first use.
     pub fn new() -> Result<Self, Error> {
-        // SAFETY: class getter, no side effects.
-        match unsafe { CBManager::authorization_class() } {
-            CBManagerAuthorization::Denied | CBManagerAuthorization::Restricted => {
-                return Err(Error::Permission(
-                    "Bluetooth access is denied for this process (System Settings > Privacy & Security > Bluetooth)"
-                        .into(),
-                ));
-            }
-            _ => {}
+        if matches!(
+            authorization(),
+            Some(BleAuthorization::Denied | BleAuthorization::Restricted)
+        ) {
+            return Err(Error::Permission(
+                "Bluetooth access is denied for this process (System Settings > Privacy & Security > Bluetooth)"
+                    .into(),
+            ));
         }
         let (tx, rx) = channel();
         let shared = Arc::new(Shared {
@@ -371,6 +371,17 @@ impl CoreBluetoothCentral {
         known
             .firstObject()
             .ok_or_else(|| Error::Failed("unknown device: scan first, or check the id".into()))
+    }
+}
+
+pub(super) fn authorization() -> Option<BleAuthorization> {
+    // SAFETY: class getter. No manager is instantiated, so this cannot request permission.
+    match unsafe { CBManager::authorization_class() } {
+        CBManagerAuthorization::NotDetermined => Some(BleAuthorization::NotDetermined),
+        CBManagerAuthorization::Restricted => Some(BleAuthorization::Restricted),
+        CBManagerAuthorization::Denied => Some(BleAuthorization::Denied),
+        CBManagerAuthorization::AllowedAlways => Some(BleAuthorization::Allowed),
+        _ => None,
     }
 }
 

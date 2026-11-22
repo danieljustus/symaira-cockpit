@@ -16,6 +16,7 @@ struct PlanConfirmationView: View {
     var summary: String?
     /// The verb on the button that applies it, e.g. "Apply Fan Profile".
     var confirmTitle = "Apply Changes"
+    var applyingTitle = "Applying… you may be asked for your administrator password…"
     /// Dismisses the review (Cancel) or the result (Done).
     let onClose: () -> Void
 
@@ -59,7 +60,7 @@ struct PlanConfirmationView: View {
                 VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                     expiry(at: context.date)
                     if isRunning {
-                        SymairaLoadingState("Applying… you may be asked for your administrator password…")
+                        SymairaLoadingState(applyingTitle)
                     } else {
                         HStack(spacing: SymairaSpacing.small) {
                             Button("Cancel", role: .cancel, action: onClose)

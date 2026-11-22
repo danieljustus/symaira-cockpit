@@ -17,7 +17,9 @@ pub use commands::{
     ble_export_json, ble_read_json, ble_scan_json, ble_services_json, ble_subscribe_json,
     ble_write_json, bt_devices_json, plan_ble_write_json,
 };
-pub use devices::{Battery, Level, PairedDevice, PairedDevices, parse_system_profiler};
+pub use devices::{
+    Battery, BleAuthorization, Level, PairedDevice, PairedDevices, parse_system_profiler,
+};
 pub use log::{BleLog, ExportFormat, LogEntry, LogKind, export_csv, export_json};
 pub use write::{
     AckState, BLE_WRITE_KIND, BlePlanAction, BleWriteAction, LinkWriteAction, StageRecord,

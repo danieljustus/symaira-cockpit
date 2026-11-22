@@ -38,5 +38,9 @@
     <string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Symaira Cockpit automates other applications on your behalf.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Symaira Cockpit uses Bluetooth to scan for nearby devices and access the devices you select.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Symaira Cockpit uses system audio capture to adjust the volume of the apps you select.</string>
 </dict>
 </plist>
