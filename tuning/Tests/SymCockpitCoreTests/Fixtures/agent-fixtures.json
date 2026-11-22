@@ -31,6 +31,30 @@
   "governor_running": false,
   "profile": "system"
  },
+ "history": [
+  {
+   "action": "brightness.set",
+   "applied_value": 0.5,
+   "clamped_value": 0.5,
+   "requested_value": 0.5,
+   "result": "success",
+   "timestamp": 785000000.0
+  },
+  {
+   "action": "fan.profile",
+   "error_reason": "permission error: the fan helper is not approved",
+   "result": "failure",
+   "timestamp": 785000100.0
+  },
+  {
+   "action": "warmth.set",
+   "applied_value": 0.2,
+   "clamped_value": 0.2,
+   "requested_value": 0.2,
+   "result": "success",
+   "timestamp": 785000200.0
+  }
+ ],
  "metrics": {
   "cpu": {
    "per_core_utilization": [
@@ -134,6 +158,25 @@
   "sampled_process_count": 967,
   "sorted_by": "cpu",
   "unreadable_process_count": 262
+ },
+ "profile.list": {
+  "profiles": [
+   {
+    "brightness": 0.4,
+    "createdAt": 785000000.5,
+    "dim": 1.0,
+    "name": "reading",
+    "updatedAt": 785000100.0,
+    "version": "0.12.2",
+    "warmth": 0.6
+   },
+   {
+    "brightness": 0.9,
+    "createdAt": 785000000.5,
+    "name": "day",
+    "updatedAt": 785000100.0
+   }
+  ]
  },
  "status": {
   "active_overrides": {},
