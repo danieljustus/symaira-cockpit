@@ -22,6 +22,7 @@ public struct ClipboardPage: View {
                 title: "Not available yet",
                 message: "Clipboard is not part of this window yet."
             )
+            .frame(maxWidth: .infinity, minHeight: SymairaPageLayout.stateHeight)
             .accessibilityIdentifier("page-not-available")
         }
     }

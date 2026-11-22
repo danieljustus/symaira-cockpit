@@ -81,6 +81,20 @@ public struct PlanReport: Equatable, Sendable {
 
     public var isConfirmed: Bool { status == .confirmed }
 
+    /// One word for the whole plan: some entries can be done while others were not.
+    public var headline: String {
+        if isConfirmed { return "Applied" }
+        return items.contains { $0.outcome == .confirmed } ? "Partly applied" : "Not applied"
+    }
+
+    /// Why it was not applied, in the agent's words; for a plan with results but no message, a count.
+    public var explanation: String {
+        if let failureMessage { return failureMessage }
+        if items.isEmpty { return "The agent reported “\(status.rawValue)”." }
+        let done = items.filter { $0.outcome == .confirmed }.count
+        return "\(done) of \(items.count) entries applied."
+    }
+
     init(planID: String, json: AgentJSON) {
         self.planID = planID
         self.status = PlanOutcome(json["status"]?.stringValue)

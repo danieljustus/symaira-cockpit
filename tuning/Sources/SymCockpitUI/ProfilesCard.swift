@@ -21,6 +21,7 @@ struct ProfilesCard: View {
             saveRow
             feedback
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .disabled(!isAgentReady)
         .cardStyle()
         .task { await model.load() }

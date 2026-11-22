@@ -22,6 +22,7 @@ public struct ProcessesPage: View {
                 title: "Not available yet",
                 message: "Processes is not part of this window yet."
             )
+            .frame(maxWidth: .infinity, minHeight: SymairaPageLayout.stateHeight)
             .accessibilityIdentifier("page-not-available")
         }
     }

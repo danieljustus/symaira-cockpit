@@ -22,6 +22,7 @@ public struct FinderPage: View {
                 title: "Not available yet",
                 message: "Finder is not part of this window yet."
             )
+            .frame(maxWidth: .infinity, minHeight: SymairaPageLayout.stateHeight)
             .accessibilityIdentifier("page-not-available")
         }
     }

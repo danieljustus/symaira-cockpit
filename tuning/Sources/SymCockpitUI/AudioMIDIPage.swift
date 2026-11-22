@@ -22,6 +22,7 @@ public struct AudioMIDIPage: View {
                 title: "Not available yet",
                 message: "Audio & MIDI is not part of this window yet."
             )
+            .frame(maxWidth: .infinity, minHeight: SymairaPageLayout.stateHeight)
             .accessibilityIdentifier("page-not-available")
         }
     }

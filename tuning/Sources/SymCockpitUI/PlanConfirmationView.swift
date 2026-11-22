@@ -54,16 +54,22 @@ struct PlanConfirmationView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             entries
-            expiry
-            if isRunning {
-                SymairaLoadingState("Applying… you may be asked for your administrator password…")
-            } else {
-                HStack(spacing: SymairaSpacing.small) {
-                    Button("Cancel", role: .cancel, action: onClose)
-                        .symairaButtonStyle(.secondary)
-                        .keyboardShortcut(.cancelAction)
-                    Button(confirmTitle) { Task { await model.confirm() } }
-                        .symairaButtonStyle(.primary)
+            // One clock for the countdown and the button: an expired plan cannot be confirmed.
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                    expiry(at: context.date)
+                    if isRunning {
+                        SymairaLoadingState("Applying… you may be asked for your administrator password…")
+                    } else {
+                        HStack(spacing: SymairaSpacing.small) {
+                            Button("Cancel", role: .cancel, action: onClose)
+                                .symairaButtonStyle(.secondary)
+                                .keyboardShortcut(.cancelAction)
+                            Button(confirmTitle) { Task { await model.confirm() } }
+                                .symairaButtonStyle(.primary)
+                                .disabled(model.isExpired(at: context.date))
+                        }
+                    }
                 }
             }
         }
@@ -78,7 +84,7 @@ struct PlanConfirmationView: View {
                         .symairaText(.caption, respectsForeground: false)
                         .foregroundStyle(SymairaTokens.ink)
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        .truncationMode(.head)
                         .help(item.target)
                     Spacer(minLength: SymairaSpacing.small)
                     if let size = item.sizeBytes {
@@ -105,23 +111,22 @@ struct PlanConfirmationView: View {
         .accessibilityLabel("Entries of the plan")
     }
 
-    /// Counts down once a second; no timer runs while the plan is not on screen.
-    private var expiry: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            if let seconds = model.secondsRemaining(at: context.date) {
-                if seconds == 0 {
-                    SymairaStatusLabel("Expired. Request the change again.", tone: .warning)
-                } else {
-                    Text("Nothing has changed yet. Valid for \(Self.clock(seconds)).")
-                        .symairaText(.caption)
-                        .foregroundStyle(SymairaTokens.ink3)
-                        .monospacedDigit()
-                }
+    /// Counts down; no timer runs while the plan is not on screen.
+    @ViewBuilder
+    private func expiry(at date: Date) -> some View {
+        if let seconds = model.secondsRemaining(at: date) {
+            if seconds == 0 {
+                SymairaStatusLabel("Expired. Nothing was changed. Request the change again.", tone: .warning)
             } else {
-                Text("Nothing has changed yet.")
+                Text("Nothing has changed yet. Valid for \(Self.clock(seconds)).")
                     .symairaText(.caption)
                     .foregroundStyle(SymairaTokens.ink3)
+                    .monospacedDigit()
             }
+        } else {
+            Text("Nothing has changed yet.")
+                .symairaText(.caption)
+                .foregroundStyle(SymairaTokens.ink3)
         }
     }
 
@@ -132,11 +137,7 @@ struct PlanConfirmationView: View {
         if report.isConfirmed {
             SymairaNotice(title: "Applied", message: summary ?? model.plan.command, tone: .positive)
         } else {
-            SymairaNotice(
-                title: "Not applied",
-                message: report.failureMessage ?? "The agent reported “\(report.status.rawValue)”.",
-                tone: .critical
-            )
+            SymairaNotice(title: report.headline, message: report.explanation, tone: .critical)
         }
         if !report.items.isEmpty {
             VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
@@ -146,7 +147,7 @@ struct PlanConfirmationView: View {
                             .symairaText(.caption, respectsForeground: false)
                             .foregroundStyle(SymairaTokens.ink)
                             .lineLimit(1)
-                            .truncationMode(.middle)
+                            .truncationMode(.head)
                             .help([item.target, item.detail].compactMap { $0 }.joined(separator: "\n"))
                         Spacer(minLength: SymairaSpacing.small)
                         SymairaStatusLabel(item.outcome.label, tone: Self.tone(item.outcome))

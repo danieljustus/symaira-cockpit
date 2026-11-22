@@ -22,6 +22,7 @@ public struct BluetoothInputPage: View {
                 title: "Not available yet",
                 message: "Bluetooth & Input is not part of this window yet."
             )
+            .frame(maxWidth: .infinity, minHeight: SymairaPageLayout.stateHeight)
             .accessibilityIdentifier("page-not-available")
         }
     }

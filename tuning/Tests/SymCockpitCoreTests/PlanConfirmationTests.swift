@@ -128,6 +128,25 @@ final class PlanConfirmationTests: XCTestCase {
                        ["Done", "Skipped, changed since planning", "Failed"])
     }
 
+    func testTheReportHasAHeadlineAndAnExplanation() async throws {
+        let mixedSession = await started("confirm_mixed")
+        let mixed = PlanConfirmationModel(plan: try await plan(mixedSession), session: mixedSession)
+        let mixedReport = await mixed.confirm()
+        XCTAssertEqual(mixedReport?.headline, "Partly applied")
+        XCTAssertEqual(mixedReport?.explanation, "1 of 3 entries applied.")
+
+        let deniedSession = await started("confirm_denied")
+        let denied = PlanConfirmationModel(plan: try await plan(deniedSession), session: deniedSession)
+        let deniedReport = await denied.confirm()
+        XCTAssertEqual(deniedReport?.headline, "Not applied")
+        XCTAssertTrue(deniedReport?.explanation.contains("fan helper is not approved") ?? false)
+
+        let okSession = await started()
+        let ok = PlanConfirmationModel(plan: try await plan(okSession), session: okSession)
+        let okReport = await ok.confirm()
+        XCTAssertEqual(okReport?.headline, "Applied")
+    }
+
     func testADeniedPlanReportsTheReasonAndItsClass() async throws {
         let session = await started("confirm_denied")
         let model = PlanConfirmationModel(plan: try await plan(session), session: session)

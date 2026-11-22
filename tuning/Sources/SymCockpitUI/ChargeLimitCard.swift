@@ -20,6 +20,7 @@ struct ChargeLimitCard: View {
                 .foregroundStyle(SymairaTokens.ink2)
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 

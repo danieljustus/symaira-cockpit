@@ -53,17 +53,19 @@ struct HistoryPage: View {
     private func table(_ entries: [HistoryEntry]) -> some View {
         Table(entries.sorted(using: sortOrder), sortOrder: $sortOrder) {
             TableColumn("Time", value: \.date) { entry in
-                Text(entry.date, format: .dateTime.year().month().day().hour().minute().second())
+                Text(entry.date, format: .dateTime.day().month(.abbreviated).hour().minute().second())
                     .monospacedDigit()
+                    .lineLimit(1)
             }
+            .width(min: 140, ideal: 160)
             TableColumn("Action", value: \.action) { entry in
                 Text(entry.action)
             }
             TableColumn("Value") { entry in
                 Text(Self.value(entry))
                     .monospacedDigit()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .width(min: 60, ideal: 80)
             TableColumn("Result", value: \.result) { entry in
                 SymairaStatusLabel(
                     entry.isSuccess ? "Applied" : "Failed", tone: entry.isSuccess ? .positive : .critical
