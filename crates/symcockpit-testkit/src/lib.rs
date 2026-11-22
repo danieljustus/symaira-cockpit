@@ -19,3 +19,4 @@ pub mod storage_clean;
 pub mod storage_health;
 pub mod symbrain;
 pub mod tune_write;
+pub mod wake;

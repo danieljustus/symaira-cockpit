@@ -152,10 +152,30 @@ public final class AgentSession: @unchecked Sendable {
     }
 
     /// The session for an app bundle: the agent is `symcockpit` next to the
-    /// app's own executable (`Contents/MacOS`).
+    /// app's own executable (`Contents/MacOS`), told where the Finder jobs are.
     public static func bundled(bundle: Bundle = .main) -> AgentSession {
         let directory = bundle.executableURL?.deletingLastPathComponent() ?? bundle.bundleURL
-        return AgentSession(configuration: .init(executable: directory.appendingPathComponent("symcockpit")))
+        let group = bundle.object(forInfoDictionaryKey: "SymCockpitAppGroup") as? String
+        return AgentSession(configuration: .init(
+            executable: directory.appendingPathComponent("symcockpit"),
+            arguments: agentArguments(appGroup: group)
+        ))
+    }
+
+    /// `agent --stdio`, plus `--finder-jobs-dir <app group container>/jobs` when the bundle
+    /// names an app group (`SymCockpitAppGroup`, the key the FinderSync extension reads, written
+    /// by build-app.sh only for a team-signed build) and macOS resolves its container. Without
+    /// either the agent simply watches no job directory: not an error. The directory is not
+    /// created here; the extension creates it with its first job.
+    static func agentArguments(
+        appGroup: String?,
+        container: (String) -> URL? = { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
+    ) -> [String] {
+        var arguments = ["agent", "--stdio"]
+        if let appGroup, !appGroup.isEmpty, let base = container(appGroup) {
+            arguments += ["--finder-jobs-dir", base.appendingPathComponent("jobs", isDirectory: true).path]
+        }
+        return arguments
     }
 
     deinit { client.stop() }

@@ -18,7 +18,8 @@ use std::cell::RefCell;
 use std::io::{self, BufRead, Read};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Once, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -32,6 +33,7 @@ use symcockpit_core::power::{KeepAwakeSession, KeepAwakeStatus};
 use symcockpit_core::tune_write::{
     HistorySink, Limits, LogEvent, TuneWriter, WriterPorts, restore_from_record,
 };
+use symcockpit_core::wake::WakeSource;
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::display_write::{
     CoreGraphicsGamma, LiveBrightnessSink, LiveDim, LiveEdr, LivePowerAssertions, process_alive,
@@ -184,6 +186,14 @@ pub fn install(writer: TuneWriter) {
 
 fn existing() -> Option<Rc<TuneWriter>> {
     WRITER.with(|w| w.borrow().clone())
+}
+
+/// After a system wake: re-applies the display overrides the system dropped (gamma table,
+/// extended-brightness layer). Nothing is written while this process holds none.
+pub fn reassert() {
+    if let Some(writer) = existing() {
+        writer.reassert();
+    }
 }
 
 /// Restore-on-exit: puts back everything this process overrode and drops the
@@ -478,36 +488,76 @@ fn keep_awake(ctx: &Context, arguments: &Map<String, Value>) -> Result<Value, Er
 
 // --------------------------------------------------------------- serve input
 
+/// What the reader thread and the wake source hand to the loop.
+enum Msg {
+    Data(Vec<u8>),
+    /// A wake was queued in `wake_pending`; this only gets the loop out of its wait.
+    Nudge,
+    Eof,
+}
+
 /// Stdin for `serve` that keeps the main run loop turning while a dim window or
 /// the extended-brightness layer is up (they are only composited while it
 /// runs). A reader thread owns the blocking `read`; `fill_buf` waits for its
 /// chunks in short slices, pumping in between, so every tool call still runs
 /// on the main thread. Without overlays it simply blocks.
-pub struct PumpedStdin {
-    chunks: Receiver<Vec<u8>>,
+///
+/// A system wake ([`PumpedStdin::watch_wake`]) ends the wait too: the source's thread only sets
+/// a flag and nudges, and the handler runs here, on the main thread, between two reads.
+pub struct PumpedStdin<'a> {
+    chunks: Receiver<Msg>,
+    tx: SyncSender<Msg>,
     buffer: Vec<u8>,
     position: usize,
+    eof: bool,
+    wake_pending: Arc<AtomicBool>,
+    on_wake: Option<Box<dyn Fn() + 'a>>,
+    wake_guard: Option<Box<dyn Send>>,
 }
 
-impl PumpedStdin {
+impl<'a> PumpedStdin<'a> {
     pub fn spawn() -> Self {
-        // Bounded: a client flooding stdin waits, as with a plain blocking read.
-        let (tx, rx) = mpsc::sync_channel(16);
+        let this = Self::over_channel();
+        let tx = this.tx.clone();
         std::thread::spawn(move || {
             let mut stdin = io::stdin().lock();
             let mut chunk = vec![0_u8; 64 * 1024];
-            // EOF or an error ends the stream: the sender is dropped.
+            // EOF or an error ends the stream.
             while let Ok(n) = stdin.read(&mut chunk) {
-                if n == 0 || tx.send(chunk[..n].to_vec()).is_err() {
+                if n == 0 || tx.send(Msg::Data(chunk[..n].to_vec())).is_err() {
                     break;
                 }
             }
+            let _ = tx.send(Msg::Eof);
         });
+        this
+    }
+
+    fn over_channel() -> Self {
+        // Bounded: a client flooding stdin waits, as with a plain blocking read.
+        let (tx, rx) = mpsc::sync_channel(16);
         Self {
             chunks: rx,
+            tx,
             buffer: Vec::new(),
             position: 0,
+            eof: false,
+            wake_pending: Arc::new(AtomicBool::new(false)),
+            on_wake: None,
+            wake_guard: None,
         }
+    }
+
+    /// Runs `on_wake` (main thread, between reads) after every wake `source` reports, until
+    /// this value is dropped.
+    pub fn watch_wake(&mut self, source: &dyn WakeSource, on_wake: impl Fn() + 'a) {
+        let (pending, tx) = (Arc::clone(&self.wake_pending), self.tx.clone());
+        self.wake_guard = crate::wake::watch(source, move || {
+            pending.store(true, Ordering::SeqCst);
+            // A full queue means the loop is busy and checks the flag when it is next free.
+            let _ = tx.try_send(Msg::Nudge);
+        });
+        self.on_wake = Some(Box::new(on_wake));
     }
 
     fn wants_run_loop() -> bool {
@@ -515,7 +565,7 @@ impl PumpedStdin {
     }
 }
 
-impl Read for PumpedStdin {
+impl Read for PumpedStdin<'_> {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         let available = self.fill_buf()?;
         let n = available.len().min(out.len());
@@ -525,9 +575,9 @@ impl Read for PumpedStdin {
     }
 }
 
-impl BufRead for PumpedStdin {
+impl BufRead for PumpedStdin<'_> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        while self.position >= self.buffer.len() {
+        while self.position >= self.buffer.len() && !self.eof {
             let overlay = Self::wants_run_loop();
             let slice = if overlay {
                 Duration::from_millis(20)
@@ -535,16 +585,21 @@ impl BufRead for PumpedStdin {
                 Duration::from_secs(3600)
             };
             match self.chunks.recv_timeout(slice) {
-                Ok(chunk) => {
+                Ok(Msg::Data(chunk)) => {
                     self.buffer = chunk;
                     self.position = 0;
                 }
-                Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => {
+                Ok(Msg::Nudge) | Err(RecvTimeoutError::Timeout) => {}
+                Ok(Msg::Eof) | Err(RecvTimeoutError::Disconnected) => {
                     self.buffer.clear();
                     self.position = 0;
-                    break;
+                    self.eof = true;
                 }
+            }
+            if self.wake_pending.swap(false, Ordering::SeqCst)
+                && let Some(on_wake) = &self.on_wake
+            {
+                on_wake();
             }
             if let Some(w) = existing() {
                 w.pump(Instant::now());
@@ -569,6 +624,46 @@ mod tests {
     fn the_profile_version_is_the_swift_tune_component_version() {
         let swift = include_str!("../../../tuning/Sources/SymCockpitCore/Version.swift");
         assert!(swift.contains(&format!("current = \"{PROFILE_VERSION}\"")));
+    }
+
+    #[test]
+    fn a_wake_runs_the_handler_between_reads_and_the_stream_still_ends_at_eof() {
+        use std::cell::Cell;
+        let wakes = Cell::new(0);
+        let source = symcockpit_testkit::wake::FakeWake::default();
+        let mut input = PumpedStdin::over_channel();
+        let tx = input.tx.clone();
+        input.watch_wake(&source, || wakes.set(wakes.get() + 1));
+        // The wake arrives first, then a line, then the client closes stdin.
+        source.fire();
+        tx.send(Msg::Data(b"one\n".to_vec())).unwrap();
+        tx.send(Msg::Eof).unwrap();
+        let mut line = String::new();
+        input.read_line(&mut line).unwrap();
+        assert_eq!(line, "one\n");
+        assert_eq!(wakes.get(), 1);
+        line.clear();
+        input.read_line(&mut line).unwrap();
+        assert_eq!(line, "");
+        // Nothing woke it again.
+        assert_eq!(wakes.get(), 1);
+    }
+
+    #[test]
+    fn a_wake_that_finds_the_queue_full_is_not_lost() {
+        use std::cell::Cell;
+        let wakes = Cell::new(0);
+        let source = symcockpit_testkit::wake::FakeWake::default();
+        let mut input = PumpedStdin::over_channel();
+        let tx = input.tx.clone();
+        for _ in 0..16 {
+            tx.send(Msg::Data(b"x\n".to_vec())).unwrap();
+        }
+        input.watch_wake(&source, || wakes.set(wakes.get() + 1));
+        source.fire(); // the nudge does not fit; the flag is what counts
+        let mut line = String::new();
+        input.read_line(&mut line).unwrap();
+        assert_eq!(wakes.get(), 1);
     }
 
     #[test]

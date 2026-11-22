@@ -35,4 +35,5 @@ pub mod storage;
 pub mod system;
 pub mod tune_write;
 pub mod update_check;
+pub mod wake;
 pub mod write_commands;

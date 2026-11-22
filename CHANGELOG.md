@@ -14,6 +14,14 @@
   `symcockpit-legacy` and the `libexec` lookup are gone; a test plants a tripwire in all three
   places and runs every v0.12 command and MCP tool. Known difference: the texts of transport
   errors in a failed update check are Foundation's wording chosen from curl's exit status.
+- Cockpit 2, wave 2D-2b: after the system wakes from sleep the Rust agent and
+  `symcockpit serve` put back the display overrides they hold (warmth gamma table,
+  extended brightness) and, on Apple Silicon, a charge limit they applied themselves
+  (`IORegisterForSystemPower` on its own thread; the v0.12 monitor compared against
+  a wrong message constant and never fired). The app passes
+  `--finder-jobs-dir <app group container>/jobs` to its agent when the bundle names
+  its app group (`SymCockpitAppGroup`, set by `build-app.sh` for team-signed
+  builds). Real wake behaviour needs hardware (`docs/app-acceptance.md`).
 - Cockpit 2, wave 2D-2: the app (menu bar, HUD, window) reads every value and
   runs every action through one app-wide agent session (`AgentSession`:
   `symcockpit agent --stdio` from the bundle, started at launch, stdin closed at

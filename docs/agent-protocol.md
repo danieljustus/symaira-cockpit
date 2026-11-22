@@ -120,9 +120,23 @@ the BLE session. The agent hosts them (`host/`); a one-shot `symcockpit …` and
   `ble.export` (`format: "csv"` after RFC 4180, or `"json"` with the raw bytes) reads
   that log. Filters change the display only, never what is logged.
 - **Finder jobs.** The FinderSync extension writes `jobs/<uuid>.json` into the app
-  group container; the app passes that directory as `--finder-jobs-dir`. The agent
-  runs each valid job once (60 s expiry, duplicates refused) and writes
-  `<uuid>.result.json`. Without the argument no job directory is watched.
+  group container; the app passes that directory as `--finder-jobs-dir`
+  (`AgentSession.bundled()`: the group named by the bundle's `SymCockpitAppGroup`
+  key, the one the extension reads, `<container>/jobs`). The key is empty, and the
+  argument left out, in a build without a team id; the extension creates the
+  directory with its first job. The agent runs each valid job once (60 s expiry,
+  duplicates refused) and writes `<uuid>.result.json`. Without the argument no job
+  directory is watched.
+- **Wake.** After the system wakes from sleep the agent (and `symcockpit serve`)
+  puts back what macOS drops: the display overrides it holds (gamma table of a
+  warmth shift, the extended-brightness layer) and, on Apple Silicon, a charge
+  limit it applied itself (the SMC inhibit bit is volatile: inhibit again at or
+  above the target, release only once the battery is 5 % below it). It listens
+  through `IORegisterForSystemPower` on a thread of its own, which only queues an
+  event; the writers stay on the main thread. Nothing is written while no override
+  is held, and the registration is not made in a debug binary started with
+  `SYMCOCKPIT_TEST_NO_HARDWARE`. A limit set by a one-shot command or a previous
+  agent run is not remembered across processes (as in v0.12).
 - **Settings take effect at once.** After every `call` the host re-reads the
   settings the command may have changed (`clipboard.pause`, `input.finder-cut`, …).
 - **Run loop.** While a tap is installed the main thread spins its CFRunLoop between
@@ -330,7 +344,6 @@ Runtime acceptance of the app on the agent: `docs/app-acceptance.md`.
 - Setting a fan profile or a Cool target: the register describes `fan.profile`
   and `fan.target` without an argument (wave 2D-1). The app takes the argument
   name from `hello` (`input_schema`) and says so when there is none.
-- The app does not pass `--finder-jobs-dir` to the agent yet.
 - The privileged helper's XPC is not a protocol method.
 - The hosted services were built against fakes; the real pasteboard, Keychain,
   CGEvent tap, Process Taps and CoreBluetooth were not exercised (needs hardware

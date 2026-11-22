@@ -143,16 +143,7 @@ pub fn read_battery(
         _ => None,
     };
 
-    // A percentage straight from the hardware wins over the mAh pair: on Apple
-    // Silicon 5466/5701 ≈ 96 % for a battery macOS calls 100 % charged.
-    let percent = props.charge_percent.map(|p| p.clamp(0, 100)).or_else(|| {
-        match (props.raw_max_capacity, props.raw_current_capacity) {
-            (Some(max), Some(current)) if max > 0 => {
-                Some(rounded_percent(current, max).clamp(0, 100))
-            }
-            _ => None,
-        }
-    });
+    let percent = charge_percent(&props);
 
     let apple_health = apple.map(|provider| provider.read_apple_health());
     let charge_limit_supported = charge_limit.is_supported();
@@ -180,6 +171,19 @@ pub fn read_battery(
         charge_limit_supported,
         notes,
     }
+}
+
+/// The state of charge. A percentage straight from the hardware wins over the mAh pair: on
+/// Apple Silicon 5466/5701 ≈ 96 % for a battery macOS calls 100 % charged.
+pub fn charge_percent(props: &BatteryProperties) -> Option<i64> {
+    props.charge_percent.map(|p| p.clamp(0, 100)).or_else(|| {
+        match (props.raw_max_capacity, props.raw_current_capacity) {
+            (Some(max), Some(current)) if max > 0 => {
+                Some(rounded_percent(current, max).clamp(0, 100))
+            }
+            _ => None,
+        }
+    })
 }
 
 /// `Int((Double(a) / Double(b) * 100).rounded())`; `f64::round` rounds half

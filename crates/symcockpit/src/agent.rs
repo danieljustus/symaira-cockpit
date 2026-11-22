@@ -125,6 +125,23 @@ fn parent_check_skipped(_env: &BTreeMap<String, String>) -> bool {
 /// Runs one register command; the production implementation is the MCP path.
 pub trait Dispatch {
     fn run(&self, spec: &'static CommandSpec, params: &Map<String, Value>) -> Result<Value, Error>;
+    /// The system woke from sleep: put back what it dropped (main thread).
+    fn after_wake(&self) {}
+}
+
+/// The production dispatch: the MCP path, plus the wake handler that needs its context.
+struct WakingDispatch<'a> {
+    server: &'a mcp::Server<'a>,
+    ctx: &'a Context<'a>,
+}
+
+impl Dispatch for WakingDispatch<'_> {
+    fn run(&self, spec: &'static CommandSpec, params: &Map<String, Value>) -> Result<Value, Error> {
+        self.server.run_spec(spec, params)
+    }
+    fn after_wake(&self) {
+        crate::wake::after_wake(self.ctx);
+    }
 }
 
 impl Dispatch for mcp::Server<'_> {
@@ -322,6 +339,11 @@ impl<'a> Session<'a> {
     pub fn with_host(mut self, host: &'a dyn AgentHost) -> Self {
         self.host = Some(host);
         self
+    }
+
+    /// The system woke from sleep.
+    pub fn wake(&self) {
+        self.dispatch.after_wake();
     }
 
     pub fn subscription_count(&self) -> usize {
@@ -628,6 +650,8 @@ pub enum Input {
     TooLong,
     Eof,
     Terminate,
+    /// The system woke from sleep (sent by the wake source's thread).
+    Wake,
 }
 
 const MAX_LINE: usize = 4 * 1024 * 1024;
@@ -705,6 +729,10 @@ pub fn run_loop_with(
         let frames = match wait_input(inputs, timeout, host) {
             Ok(Input::Line(line)) if line.trim().is_empty() => continue,
             Ok(Input::Line(line)) => session.handle_line(line.trim()),
+            Ok(Input::Wake) => {
+                session.wake();
+                Vec::new()
+            }
             Err(RecvTimeoutError::Timeout) => {
                 if let Some(host) = host {
                     host.tick();
@@ -850,9 +878,21 @@ pub fn main(app: &App, args: &[String]) -> u8 {
             waker.wake();
         }
     });
-    let mut session = Session::new(&server, &mono, &SystemClock).with_host(&host);
+    let dispatch = WakingDispatch {
+        server: &server,
+        ctx: &ctx,
+    };
+    let mut session = Session::new(&dispatch, &mono, &SystemClock).with_host(&host);
     let (tx, rx) = mpsc::channel();
     spawn_stdin_reader(tx.clone(), Arc::clone(&wake));
+    // Held display overrides and a charge limit are put back after a sleep.
+    let _wake_guard = crate::wake::live_source().and_then(|source| {
+        let (tx, wake) = (tx.clone(), Arc::clone(&wake));
+        crate::wake::watch(&source, move || {
+            let _ = tx.send(Input::Wake);
+            wake();
+        })
+    });
     spawn_signal_watcher(tx, wake);
     let code = run_loop_with(
         &mut session,
@@ -1269,6 +1309,57 @@ mod tests {
         assert_eq!(event(&frames[0])["ended"], true);
         assert_eq!(s.subscription_count(), 0);
         assert_eq!(s.next_due_ms(), None);
+    }
+
+    #[test]
+    fn a_wake_from_the_source_runs_the_dispatch_handler_once_and_sends_nothing() {
+        struct Waking {
+            fake: Fake,
+            wakes: Cell<u32>,
+        }
+        impl Monotonic for Waking {
+            fn now_ms(&self) -> u64 {
+                self.fake.now_ms()
+            }
+            fn sleep(&self, _: Duration) {}
+        }
+        impl Dispatch for Waking {
+            fn run(
+                &self,
+                spec: &'static CommandSpec,
+                params: &Map<String, Value>,
+            ) -> Result<Value, Error> {
+                self.fake.run(spec, params)
+            }
+            fn after_wake(&self) {
+                self.wakes.set(self.wakes.get() + 1);
+            }
+        }
+        let waking = Waking {
+            fake: Fake::new(),
+            wakes: Cell::new(0),
+        };
+        let clock = FixedClock(Cell::new(0));
+        let mut s = Session::new(&waking, &waking, &clock);
+        let (tx, rx) = mpsc::channel();
+        let source = symcockpit_testkit::wake::FakeWake::default();
+        let _guard = crate::wake::watch(&source, {
+            let tx = tx.clone();
+            move || {
+                let _ = tx.send(Input::Wake);
+            }
+        })
+        .expect("the fake source registers");
+        assert!(source.watching());
+        tx.send(Input::Line(rpc("hello", 1, json!({"protocol_version": 1}))))
+            .unwrap();
+        source.fire();
+        tx.send(Input::Eof).unwrap();
+        let mut out = Vec::new();
+        assert_eq!(run_loop(&mut s, &waking, &rx, &mut out), exit::OK);
+        assert_eq!(waking.wakes.get(), 1);
+        // Only the answer to `hello`: a wake is not a frame.
+        assert_eq!(String::from_utf8(out).unwrap().lines().count(), 1);
     }
 
     #[test]

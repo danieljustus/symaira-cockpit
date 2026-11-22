@@ -19,9 +19,11 @@ automated, and none of it has been run yet.
     exists the card says "This Cockpit agent cannot change this fan setting
     yet." and changes nothing. With the argument the change comes back as a
     plan, the card shows it, and only "Confirm" applies it.
-  - **No wake re-assert.** After sleep the app no longer re-applies display
-    overrides (boost, warmth) or the charge limit; the agent has no command for
-    it. Check after waking the Mac: is the boost gone?
+  - **Wake re-assert is new and unproven on hardware.** After sleep the agent
+    re-applies the display overrides (boost, warmth) and a charge limit it applied
+    itself (`docs/agent-protocol.md`, "Wake"). Check after waking the Mac: is the
+    boost still on, is the warmth still there, does `pmset -g batt` still say the
+    battery is not charging at the limit?
   - **AI usage:** the agent's `ai-usage` asks every catalog provider (the app
     keeps only the enabled ones), and the consent-based recorded-history readers
     and the snapshot cache are not available through the agent.
