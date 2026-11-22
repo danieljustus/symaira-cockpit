@@ -12,13 +12,18 @@
 #   FAKE_AGENT_MARKER    path used by `crash_once`
 #
 # Scenarios: ok | version (hello refused, -32010) | refuse (stderr + exit 3) |
-#   crash_once (exits 7 on `call die` the first time, serves normally after a restart)
+#   crash_once (exits 7 on `call die` the first time, serves normally after a restart) |
+#   confirm_denied (every `confirm` fails: permission) |
+#   confirm_mixed (every `confirm` reports three items: confirmed, skipped_changed, failed) |
+#   confirm_expired (every `confirm` is refused as an expired plan, a JSON-RPC error)
 #
 # Behaviour beyond the protocol, for deterministic tests:
 #   call __tick           every subscription gets its next event (the real agent is timed)
 #   call fail.permission  fails like a command refused for a missing permission
 #   fan.profile / fan.target are risky: a plan first, `confirm` applies it to fan.status
 #   brightness.set / warmth.set / dim.set / awake change what the next read returns
+#   profile.save / profile.delete change what `profile.list` returns (reads come from the fixtures: history, profile.list)
+#   battery-limit.set / battery-limit.clear are risky plans; `confirm` answers one result per item
 use strict; use warnings; use JSON::PP;
 $| = 1;
 my $scenario = shift @ARGV // 'ok';
@@ -37,8 +42,9 @@ if ($ENV{FAKE_AGENT_FIXTURES}) {
     local $/; $data = $json->decode(<$fh>); close $fh;
 }
 my @topics = qw(metrics status brightness.get awake.status fan.status processes);
-my %risky = ('fan.profile' => 'profile', 'fan.target' => 'target');
-my @reversible = qw(brightness.set warmth.set dim.set extbright.set awake);
+my %risky = ('fan.profile' => 'profile', 'fan.target' => 'target', 'battery-limit.set' => 'percent', 'battery-limit.clear' => 'none');
+my @reversible = qw(brightness.set warmth.set dim.set extbright.set awake profile.load profile.save profile.delete);
+my @reads = (@topics, 'ai-usage', 'history', 'profile.list');
 my %subs; my $next_sub = 1; my %plans; my $next_plan = 1;
 
 sub send_frame { print $json->encode($_[0]), "\n"; }
@@ -61,7 +67,7 @@ my $hello = {
         max_interval_ms => 3600000, default_interval_visible_ms => 1000,
         default_interval_hidden_ms => 10000 },
     commands => [
-        (map { { name => $_, risk => "read", input_schema => { type => "object" } } } (@topics, 'ai-usage')),
+        (map { { name => $_, risk => "read", input_schema => { type => "object" } } } @reads),
         (map { { name => $_, risk => "reversible", input_schema => { type => "object" } } } @reversible),
         (map { { name => $_, risk => "risky", input_schema => { type => "object",
             properties => { $risky{$_} => { type => "string" } } } } } sort keys %risky),
@@ -111,6 +117,11 @@ while (my $line = <STDIN>) {
             $data->{'awake.status'}{active} = $args->{enabled};
             $data->{'awake.status'}{prevent_display_sleep} = $args->{prevent_display_sleep} // JSON::PP::false;
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
+        } elsif ($c eq 'profile.save' || $c eq 'profile.delete') {
+            my @kept = grep { $_->{name} ne $args->{name} } @{ $data->{'profile.list'}{profiles} // [] };
+            push @kept, { name => $args->{name}, brightness => $data->{'brightness.get'}{brightness}, createdAt => 785000000.5, updatedAt => 785000100 } if $c eq 'profile.save';
+            $data->{'profile.list'}{profiles} = \@kept;
+            reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
         } elsif (grep { $_ eq $c } @reversible) {
             reply($id, { status => "ok", command => $c, risk => "reversible", output => { applied => JSON::PP::true } });
         } elsif (exists $data->{$c}) {
@@ -122,6 +133,16 @@ while (my $line = <STDIN>) {
         my $plan = delete $plans{ $p->{plan_id} // '' };
         if (!$plan) {
             fail($id, { code => -32602, message => "unknown or expired plan" });
+        } elsif ($scenario eq 'confirm_expired') {
+            fail($id, { code => -32000, message => "usage error: plan $p->{plan_id} expired; create a new plan",
+                        data => { exit_code => 2, class => "usage" } });
+        } elsif ($scenario eq 'confirm_mixed') {
+            reply($id, { plan_id => $p->{plan_id}, status => "failed",
+                counts => { confirmed => 1, skipped_changed => 1, failed => 1 },
+                results => [
+                    { index => 0, action => "command", target => "/Users/example/Library/Caches/a", outcome => "confirmed" },
+                    { index => 1, action => "command", target => "/Users/example/Library/Caches/b", outcome => "skipped_changed", detail => "the item changed after planning" },
+                    { index => 2, action => "command", target => "/Users/example/Library/Caches/c", outcome => "failed", detail => "permission denied" } ] });
         } elsif ($scenario eq 'confirm_denied') {
             reply($id, { plan_id => $p->{plan_id}, status => "failed",
                 error => { code => -32000, message => "permission error: the fan helper is not approved",
@@ -131,7 +152,9 @@ while (my $line = <STDIN>) {
             $data->{'fan.status'}{profile} = $args->{profile} if $c eq 'fan.profile';
             $data->{'fan.status'}{cool_target_celsius} = defined $args->{target} && $args->{target} ne 'off' ? $args->{target} + 0 : undef
                 if $c eq 'fan.target';
-            reply($id, { plan_id => $p->{plan_id}, status => "confirmed", output => { applied => JSON::PP::true } });
+            reply($id, { plan_id => $p->{plan_id}, status => "confirmed", counts => { confirmed => 1 },
+                results => [ { index => 0, action => "command", target => $c, outcome => "confirmed" } ],
+                output => { applied => JSON::PP::true } });
         }
     } elsif ($method eq 'subscribe') {
         unless (grep { $_ eq ($p->{command} // '') } @topics) {

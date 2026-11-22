@@ -211,20 +211,10 @@ struct FanControlCard: View {
     /// being applied, so the control follows the click instead of snapping back.
     @State private var requestedProfile: FanProfile?
 
-    /// See ``MainStatusView/hasFans`` for why an unsupported SMC read (not
-    /// just a missing sensors report) must also be treated as "unknown," not
-    /// "no fans" — this duplicate exists because ``MainStatusView`` decides
-    /// whether to show this card at all, while this one decides what to draw
-    /// inside it, and both need the same answer or the card would render
-    /// only to immediately show "Not available on this Mac".
-    private var hasFans: Bool {
-        guard let sensors = model.sensors else { return true }
-        guard sensors.smcSupported else { return true }
-        return !sensors.fans.isEmpty
-    }
+    private var hasFans: Bool { model.hasFans }
 
     private var selectedProfile: FanProfile {
-        model.pendingFanChange != nil || model.fanBusy ? requestedProfile ?? model.fanProfile : model.fanProfile
+        model.pendingFanChange?.isOpen == true || model.fanBusy ? requestedProfile ?? model.fanProfile : model.fanProfile
     }
 
     var body: some View {
@@ -244,7 +234,7 @@ struct FanControlCard: View {
 
                 FanProfileSliderRow(
                     profile: selectedProfile,
-                    isEnabled: model.isAgentReady && !model.fanBusy && model.pendingFanChange == nil
+                    isEnabled: model.isAgentReady && !model.fanBusy && !(model.pendingFanChange?.isOpen ?? false)
                 ) { profile in
                     requestedProfile = profile
                     Task { await model.requestFanProfile(profile) }
@@ -300,24 +290,12 @@ struct FanControlCard: View {
     }
 
     /// The agent only planned the change (fans are a risky command). Nothing
-    /// happens until the user says so here.
+    /// happens until the user says so in the shared plan confirmation.
     private func confirmation(_ pending: TuneViewModel.PendingChange) -> some View {
-        VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
-            Text(pending.summary)
-                .symairaText(.caption)
-                .foregroundStyle(SymairaTokens.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("Nothing has changed yet. Confirm to apply it\(pending.plan.expiresInSeconds.map { " within \($0) seconds" } ?? "").")
-                .symairaText(.caption)
-                .foregroundStyle(SymairaTokens.ink3)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: SymairaSpacing.small) {
-                Button("Cancel") { model.cancelPendingFanChange() }
-                    .symairaButtonStyle(.secondary)
-                Button("Confirm") { Task { await model.confirmPendingFanChange() } }
-                    .symairaButtonStyle(.primary)
-            }
-        }
+        PlanConfirmationView(
+            model: pending.confirmation, summary: pending.summary,
+            confirmTitle: "Apply Fan Setting", onClose: { model.dismissPendingFanChange() }
+        )
         .accessibilityIdentifier("fan-plan-confirmation")
     }
 

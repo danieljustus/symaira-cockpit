@@ -75,6 +75,8 @@ public struct AgentPlan: Equatable, Sendable {
         public let command: String
         public let target: String
         public let params: AgentJSON
+        /// What the item touches, in bytes, when the plan says (`bytes` or `size`).
+        public let sizeBytes: Int?
     }
 
     public let id: String
@@ -82,16 +84,21 @@ public struct AgentPlan: Equatable, Sendable {
     public let items: [Item]
     /// Seconds the plan stays valid after it was recorded.
     public let expiresInSeconds: Int?
+    /// When the plan stops being confirmable, by this app's clock: the moment the
+    /// answer arrived plus `expiresInSeconds`.
+    public let expiresAt: Date?
 
-    init(command: String, planID: String, plan: AgentJSON) {
+    init(command: String, planID: String, plan: AgentJSON, received: Date = Date()) {
         self.id = planID
         self.command = command
         self.expiresInSeconds = plan["expires_in_s"]?.intValue
+        self.expiresAt = expiresInSeconds.map { received.addingTimeInterval(TimeInterval($0)) }
         self.items = (plan["items"]?.arrayValue ?? []).map {
             Item(
                 command: $0["command"]?.stringValue ?? command,
                 target: $0["target"]?.stringValue ?? command,
-                params: $0["params"] ?? .null
+                params: $0["params"] ?? .null,
+                sizeBytes: ($0["bytes"] ?? $0["size"] ?? $0["params"]?["bytes"])?.intValue
             )
         }
     }
@@ -394,17 +401,19 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Executes a plan the user approved in the app.
     public func confirm(_ plan: AgentPlan) async -> ActionOutcome {
-        do {
-            let report = try await client.confirm(planID: plan.id)
-            guard report["status"]?.stringValue == "confirmed" else {
-                let message = report["error"]?["message"]?.stringValue
-                    ?? "\(plan.command) was not applied (\(report["status"]?.stringValue ?? "unknown"))."
-                return .failed(message: message, exitClass: report["error"]?["data"]?["class"]?.stringValue)
-            }
-            return .done(report["output"] ?? .null)
-        } catch {
-            return Self.failed(error)
+        let report = await confirmReport(plan)
+        guard report.isConfirmed else {
+            return .failed(
+                message: report.failureMessage ?? "\(plan.command) was not applied (\(report.status.rawValue)).",
+                exitClass: report.exitClass
+            )
         }
+        return .done(report.output ?? .null)
+    }
+
+    /// The agent's plan report as it came; `confirmReport` is the readable form.
+    func confirmRaw(planID: String) async throws -> AgentJSON {
+        try await client.confirm(planID: planID)
     }
 
     /// The one argument a register command takes (its `input_schema`), or `nil`

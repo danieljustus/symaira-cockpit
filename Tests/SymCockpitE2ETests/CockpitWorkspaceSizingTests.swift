@@ -10,7 +10,7 @@ final class CockpitWorkspaceSizingTests: XCTestCase {
         _ = NSApplication.shared
         let root = CockpitWorkspaceView(
             version: "test", openPreferences: {}, appearance: CockpitAppearancePreferences(defaults: nil),
-            content: {
+            page: { _ in
                 TuneSliderRow(title: "Test", icon: .lightMode, value: 0.43, range: 0...1, onCommit: { _ in })
             })
         let window = NSWindow(contentViewController: NSHostingController(rootView: root))

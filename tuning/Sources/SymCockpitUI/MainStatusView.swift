@@ -3,7 +3,7 @@ import SymCockpitCore
 import SymairaTheme
 import SymairaUpdateCheck
 
-/// The status popover.
+/// The status popover: the compact panel that hangs off the menu bar.
 ///
 /// This view is deliberately thin: it only assembles cards and hands each one
 /// the slice of model state it needs. All heavy lifting — hardware polling,
@@ -20,19 +20,16 @@ import SymairaUpdateCheck
 /// ## Layout
 /// Two groups with a label each — controls the user acts on, then read-only
 /// insight — so the panel scans as two short lists rather than one long stack.
-/// Where the panel is being rendered.
+/// The cockpit window does not embed this view: its pages (`Cockpit*Page`) compose
+/// the same cards, so nothing is built twice and the popover stays the compact panel.
+/// What the cards are drawn for.
 ///
-/// The popover is a 320pt window hanging off the menu bar; the cockpit is a
-/// resizable window with its own title and scrolling. The cards are the
-/// same in both — what differs is the chrome around them, and a panel that
-/// carries its popover chrome into a window reads as an embedded popover
-/// rather than as part of the window.
+/// The popover is a 320pt window hanging off the menu bar; the cockpit window shows
+/// the same cards at page width. The cards read this to size their padding and rows.
 public enum TunePanelChrome: Sendable {
     /// Fixed-width column with the app header and the preferences footer.
     case popover
-    /// Fills its container; the host window supplies title and scrolling.
-    /// Adds menu-bar/HUD customization, which the popover leaves
-    /// to the Preferences window for want of vertical space.
+    /// Page width inside the cockpit window.
     case embedded
 }
 
@@ -66,240 +63,115 @@ struct MainStatusView: View {
     /// positions the window so the overflow (header first) falls off-screen.
     let maxHeight: CGFloat
 
-    /// Popover or embedded — see ``TunePanelChrome``.
-    var chrome: TunePanelChrome = .popover
-
-    /// Where the readout appears, surfaced next to the menu-bar switches in
-    /// the embedded chrome. Nil in a host that offers no choice because it has
-    /// no notch HUD (issues #224, #251).
-    var readoutPreferences: ReadoutSurfacePreferences? = nil
-    /// Where the HUD is parked; paired with ``readoutPreferences`` and `nil` in
-    /// the same hosts that offer no HUD.
-    var hudDockPreferences: HUDDockPreferences? = nil
-    /// What the HUD shows, and how far it has to be open before it does.
-    /// `nil` in the same hosts as the two above.
-    var hudItemPreferences: HUDItemPreferences? = nil
-
     /// Who answers the brightness keys, and the tap behind the choice. Nil in
     /// a host that does not offer the takeover (issue #250).
     var brightnessKeyPreferences: BrightnessKeyPreferences? = nil
     var brightnessKeyController: BrightnessKeyController? = nil
 
-    @State private var usesColumns = false
-
     var body: some View {
-        switch chrome {
-        case .popover:
-            ScrollView(.vertical) {
-                cards
-            }
-            .frame(width: 320)
-            .frame(maxHeight: maxHeight)
-            .background(SymairaTokens.canvas)
-        case .embedded:
-            // No scroll view and no background: the cockpit window owns both,
-            // and nesting a second scroll view inside its own would trap the
-            // wheel over half the page.
+        ScrollView(.vertical) {
             cards
-                .onGeometryChange(for: Bool.self) { geometry in
-                    // Leave room for the larger AppKit controls and card padding.
-                    geometry.size.width >= 760
-                } action: { usesColumns = $0 }
         }
+        .frame(width: 320)
+        .frame(maxHeight: maxHeight)
+        .background(SymairaTokens.canvas)
     }
 
     private var cards: some View {
         VStack(spacing: SymairaSpacing.medium) {
-            if chrome == .popover {
-                StatusHeaderView(title: panelTitle, version: panelVersion)
-                if let onOpenCockpit {
-                    openCockpitRow(onOpenCockpit)
-                }
+            StatusHeaderView(title: panelTitle, version: panelVersion)
+            if let onOpenCockpit {
+                openCockpitRow(onOpenCockpit)
             }
             // Why nothing is measured, when the agent is not running: a diagnosis, never a stale value.
             if let diagnosis = model.diagnosis {
                 AgentDiagnosisCard(diagnosis: diagnosis, restart: { model.restartAgent() })
             }
-            // The window title bar and sidebar already say what this page is;
-            // a second "This Mac" heading here only repeated them.
-            LiveSummaryStrip(model: model, isExpanded: chrome == .embedded)
-                .id(TuneWorkspaceAnchor.overview)
-                .workspaceSection(.overview)
-            if chrome == .embedded && shows(.systemStatus) {
-                SystemStatusSection(model: model)
-            }
+            LiveSummaryStrip(model: model)
 
             // Never hidden: an available update is the one thing the user has
             // not opted out of seeing.
             UpdateNotificationView(updateChecker: updateChecker)
 
-            VStack(spacing: chrome == .embedded ? SymairaSpacing.section : SymairaSpacing.medium) {
-                if showsAnyControl || chrome == .embedded {
+            VStack(spacing: SymairaSpacing.medium) {
+                if showsAnyControl {
                     controlCards
                 }
-                if showsAnySystem || chrome == .embedded {
+                if showsAnySystem {
                     systemCards
-                }
-                if chrome == .embedded {
-                    readoutCards
                 }
             }
 
-            if chrome == .popover {
-                StatusFooterView(openPreferences: openPreferences)
-            }
+            StatusFooterView(openPreferences: openPreferences)
         }
-        .padding(chrome == .popover ? SymairaSpacing.medium : 0)
-        .frame(maxWidth: chrome == .popover ? 320 : .infinity)
+        .padding(SymairaSpacing.medium)
+        .frame(maxWidth: 320)
         // Follows the system appearance; every colour is an adaptive Liquid
         // Topography role (design pilot revision 08).
         .tint(SymairaTokens.selected)
-        .environment(\.tunePanelChrome, chrome)
-    }
-
-    /// AnyLayout preserves each card's state when resizing between columns
-    /// and a stack; changing view branches would reset duration and drag state.
-    /// Two columns at window width turn the page into a dashboard instead of
-    /// one long popover column.
-    private var pairedLayout: AnyLayout {
-        if chrome == .embedded && usesColumns {
-            return AnyLayout(HStackLayout(alignment: .top, spacing: SymairaSpacing.large))
-        }
-        return AnyLayout(VStackLayout(spacing: SymairaSpacing.medium))
+        .environment(\.tunePanelChrome, .popover)
     }
 
     private var controlCards: some View {
-        VStack(spacing: chrome == .embedded ? SymairaSpacing.section : SymairaSpacing.medium) {
+        VStack(spacing: SymairaSpacing.medium) {
             VStack(spacing: SymairaSpacing.medium) {
-                GroupLabel(chrome == .embedded ? "Display" : "CONTROLS")
-                pairedLayout {
-                    if shows(.displayControls) {
-                        DisplayControlsCard(
-                            model: model,
-                            config: config,
-                            brightnessKeys: brightnessKeyPreferences,
-                            brightnessKeyController: brightnessKeyController
-                        )
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    if chrome == .embedded && shows(.displays) {
-                        DisplaysSection(model: model)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                }
-                if chrome == .embedded && !shows(.displayControls) && !shows(.displays) {
-                    hiddenCardsNote("Display cards are hidden in Preferences.")
+                GroupLabel("CONTROLS")
+                if shows(.displayControls) {
+                    DisplayControlsCard(
+                        model: model,
+                        config: config,
+                        brightnessKeys: brightnessKeyPreferences,
+                        brightnessKeyController: brightnessKeyController
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .id(TuneWorkspaceAnchor.display)
-            .workspaceSection(.display)
 
             VStack(spacing: SymairaSpacing.medium) {
-                if chrome == .embedded {
-                    GroupLabel("Power & cooling")
+                if shows(.keepAwake) {
+                    KeepAwakeSection(model: model)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                pairedLayout {
-                    if shows(.keepAwake) {
-                        KeepAwakeSection(model: model)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    if shows(.fanControl, hardwareAvailable: hasFans) {
-                        FanControlCard(
-                            model: model,
-                            preferencesManager: preferencesManager,
-                            openPreferences: openPreferences
-                        )
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                }
-                if chrome == .embedded && !shows(.keepAwake) && !shows(.fanControl, hardwareAvailable: hasFans) {
-                    hiddenCardsNote("Power controls are hidden or unavailable. Choose cards in Preferences.")
+                if shows(.fanControl, hardwareAvailable: hasFans) {
+                    FanControlCard(
+                        model: model,
+                        preferencesManager: preferencesManager,
+                        openPreferences: openPreferences
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .id(TuneWorkspaceAnchor.power)
-            .workspaceSection(.power)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var systemCards: some View {
         VStack(spacing: SymairaSpacing.medium) {
-            GroupLabel(chrome == .embedded ? "Activity" : "SYSTEM")
-            if chrome == .popover && shows(.systemStatus) {
+            GroupLabel("SYSTEM")
+            if shows(.systemStatus) {
                 SystemStatusSection(model: model)
             }
-            pairedLayout {
-                if shows(.topProcesses) {
-                    TopProcessesCard(model: processesModel)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                if shows(.storageVolumes) {
-                    StorageVolumesSection(model: model, preferences: preferencesManager)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
+            if shows(.topProcesses) {
+                TopProcessesCard(model: processesModel)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            pairedLayout {
-                if !aiUsageModel.providers.isEmpty {
-                    AIUsageCardView(model: aiUsageModel)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                if shows(.metricsHistory) {
-                    MetricsHistorySection(model: model)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
+            if shows(.storageVolumes) {
+                StorageVolumesSection(model: model, preferences: preferencesManager)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            if chrome == .popover && shows(.displays) {
+            if !aiUsageModel.providers.isEmpty {
+                AIUsageCardView(model: aiUsageModel)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            if shows(.metricsHistory) {
+                MetricsHistorySection(model: model)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            if shows(.displays) {
                 DisplaysSection(model: model)
-            }
-            if chrome == .embedded && !shows(.topProcesses) && !shows(.storageVolumes)
-                && !shows(.metricsHistory) && aiUsageModel.providers.isEmpty {
-                hiddenCardsNote("Activity cards are hidden in Preferences.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .id(TuneWorkspaceAnchor.activity)
-        .workspaceSection(.activity)
-    }
-
-    private var readoutCards: some View {
-        VStack(spacing: SymairaSpacing.medium) {
-            GroupLabel("Menu bar & HUD")
-            // The HUD editor has three control columns and needs a full row.
-            VStack(spacing: SymairaSpacing.large) {
-                MenuBarVisibilityCard(
-                    preferences: preferencesManager,
-                    aiUsage: aiUsageModel.preferences,
-                    model: model,
-                    hasEnabledAIProviders: !aiUsageModel.rows.isEmpty,
-                    readout: readoutPreferences,
-                    hudDock: hudDockPreferences
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                if let readoutPreferences, let hudDockPreferences, let hudItemPreferences {
-                    HUDContentSection(
-                        readout: readoutPreferences,
-                        dock: hudDockPreferences,
-                        items: hudItemPreferences,
-                        preferences: preferencesManager
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-            }
-        }
-        .id(TuneWorkspaceAnchor.readout)
-        .workspaceSection(.readout)
-    }
-
-    private func hiddenCardsNote(_ text: String) -> some View {
-        HStack {
-            Text(text)
-                .symairaText(.callout, respectsForeground: false)
-                .foregroundStyle(SymairaTokens.ink2)
-            Spacer()
-            Button("Preferences…", action: openPreferences)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .cardStyle()
     }
 
     // MARK: - Card visibility
@@ -355,17 +227,13 @@ struct MainStatusView: View {
     /// "no fans" would hide the one card that could otherwise recover via
     /// escalation. Only a genuinely successful read reporting zero fans
     /// hides the card.
-    private var hasFans: Bool {
-        guard let sensors = model.sensors else { return true }
-        guard sensors.smcSupported else { return true }
-        return !sensors.fans.isEmpty
-    }
+    private var hasFans: Bool { model.hasFans }
 }
 
 // MARK: - Group label
 
 /// A quiet divider-with-a-name between the two halves of the panel.
-private struct GroupLabel: View {
+struct GroupLabel: View {
     let title: String
     @Environment(\.tunePanelChrome) private var chrome
 
@@ -390,7 +258,7 @@ private struct GroupLabel: View {
 // One polled property per section, so a tick invalidates only what changed.
 
 /// Battery + thermal readout.
-private struct SystemStatusSection: View {
+struct SystemStatusSection: View {
     let model: TuneViewModel
 
     var body: some View {
@@ -400,7 +268,7 @@ private struct SystemStatusSection: View {
 }
 
 /// Sparkline history for the enabled metrics.
-private struct MetricsHistorySection: View {
+struct MetricsHistorySection: View {
     let model: TuneViewModel
 
     var body: some View {
@@ -410,7 +278,7 @@ private struct MetricsHistorySection: View {
 }
 
 /// Attached displays and their EDR headroom.
-private struct DisplaysSection: View {
+struct DisplaysSection: View {
     let model: TuneViewModel
 
     var body: some View {
@@ -420,7 +288,7 @@ private struct DisplaysSection: View {
 }
 
 /// Observes only the volume list, not every CPU/network metrics tick.
-private struct StorageVolumesSection: View {
+struct StorageVolumesSection: View {
     let model: TuneViewModel
     @ObservedObject var preferences: PreferencesManager
 
@@ -434,7 +302,7 @@ private struct StorageVolumesSection: View {
 }
 
 /// Keep-awake card plus the duration/display-sleep choices it owns.
-private struct KeepAwakeSection: View {
+struct KeepAwakeSection: View {
     let model: TuneViewModel
 
     /// Duration presets: indefinite + 15m, 30m, 1h, 2h, 4h, 8h
@@ -504,7 +372,7 @@ private struct KeepAwakeSection: View {
 /// the card would keep rendering the surface, dock and placement it was built
 /// with rather than the ones the user is changing in front of it.
 @MainActor
-private struct HUDContentSection: View {
+struct HUDContentSection: View {
     @ObservedObject var readout: ReadoutSurfacePreferences
     @ObservedObject var dock: HUDDockPreferences
     @ObservedObject var items: HUDItemPreferences

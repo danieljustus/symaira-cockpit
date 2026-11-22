@@ -28,73 +28,21 @@ public struct CockpitDesignPreview: View {
     public var body: some View {
         CockpitWorkspaceView(
             version: TuneVersion.current, openPreferences: openPreviewPreferences, appearance: appearance
-        ) {
-            VStack(alignment: .leading, spacing: SymairaSpacing.large) {
-                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-                    Text("This Mac")
-                        .symairaText(.title, respectsForeground: false)
-                        .foregroundStyle(SymairaTokens.ink)
-                        .cockpitProtected()
+        ) { destination in
+            SymairaPage(title: destination.title, subtitle: destination.subtitle, maxWidth: CockpitLayout.pageWidth) {
+                VStack(alignment: .leading, spacing: SymairaSpacing.large) {
                     Label("PREVIEW · Beispieldaten · Keine Hardwarezugriffe", symairaIcon: .visible, iconSize: 14)
                         .symairaText(.caption, respectsForeground: false)
                         .foregroundStyle(SymairaTokens.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .cockpitProtected()
+                    content(for: destination)
+                    Text("Komponentenvorschau, nicht das vollständige Cockpit-Fenster. Regler und Schalter wirken nur hier.")
+                        .symairaText(.caption, respectsForeground: false)
+                        .foregroundStyle(SymairaTokens.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .cockpitProtected()
                 }
-                .id(TuneWorkspaceAnchor.overview)
-                .workspaceSection(.overview)
-
-                SystemStatusCard(
-                    battery: showsReadings ? Self.battery : nil,
-                    sensors: showsReadings ? Self.sensors : nil
-                )
-
-                VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
-                    sectionLabel("Display")
-                    displayControls
-                    DisplaysCard(displays: showsReadings ? Self.displays : [])
-                }
-                .id(TuneWorkspaceAnchor.display)
-                .workspaceSection(.display)
-
-                VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
-                    sectionLabel("Power & cooling")
-                    VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-                        FanProfileSliderRow(profile: fanProfile, onCommit: selectPreviewFanProfile)
-                        Text(fanProfile.summary)
-                            .symairaText(.caption, respectsForeground: false)
-                            .foregroundStyle(SymairaTokens.ink2)
-                        Text("PREVIEW · Profile selection only · No fan writes")
-                            .symairaText(.caption, respectsForeground: false)
-                            .foregroundStyle(SymairaTokens.ink)
-                    }
-                    .cardStyle()
-                    KeepAwakeCard(
-                        active: keepAwake,
-                        preventDisplaySleep: $preventDisplaySleep,
-                        durationIndex: $durationIndex,
-                        remaining: nil,
-                        isInteractive: true,
-                        presets: [("Indefinite", nil), ("15 min", 900), ("1 hour", 3600)],
-                        onToggle: { keepAwake.toggle() }
-                    )
-                }
-                .id(TuneWorkspaceAnchor.power)
-                .workspaceSection(.power)
-
-                VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
-                    sectionLabel("Activity")
-                    StorageVolumesCard(volumes: showsReadings ? Self.volumes : nil)
-                }
-                .id(TuneWorkspaceAnchor.activity)
-                .workspaceSection(.activity)
-                previewOnlySection("Menu bar & HUD", anchor: .readout)
-
-                Text("Komponentenvorschau, nicht das vollständige Cockpit-Fenster. Regler und Schalter wirken nur hier.")
-                    .symairaText(.caption, respectsForeground: false)
-                    .foregroundStyle(SymairaTokens.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .cockpitProtected()
             }
         }
         .alert("Design preview", isPresented: $showsPreviewPreferences) {
@@ -104,32 +52,55 @@ public struct CockpitDesignPreview: View {
         }
     }
 
+    @ViewBuilder
+    private func content(for destination: CockpitDestination) -> some View {
+        switch destination {
+        case .overview:
+            SystemStatusCard(
+                battery: showsReadings ? Self.battery : nil,
+                sensors: showsReadings ? Self.sensors : nil
+            )
+            SensorsCard(sensors: showsReadings ? Self.sensors : nil)
+        case .display:
+            displayControls
+            KeepAwakeCard(
+                active: keepAwake,
+                preventDisplaySleep: $preventDisplaySleep,
+                durationIndex: $durationIndex,
+                remaining: nil,
+                isInteractive: true,
+                presets: [("Indefinite", nil), ("15 min", 900), ("1 hour", 3600)],
+                onToggle: { keepAwake.toggle() }
+            )
+            DisplaysCard(displays: showsReadings ? Self.displays : [])
+        case .powerFans:
+            BatteryCard(battery: showsReadings ? Self.battery : nil)
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                FanProfileSliderRow(profile: fanProfile, onCommit: selectPreviewFanProfile)
+                Text(fanProfile.summary)
+                    .symairaText(.caption, respectsForeground: false)
+                    .foregroundStyle(SymairaTokens.ink2)
+                Text("PREVIEW · Profile selection only · No fan writes")
+                    .symairaText(.caption, respectsForeground: false)
+                    .foregroundStyle(SymairaTokens.ink)
+            }
+            .cardStyle()
+        case .storage:
+            StorageVolumesCard(volumes: showsReadings ? Self.volumes : nil)
+        default:
+            Text("Available in the running app. No live model is started by this preview.")
+                .symairaText(.callout, respectsForeground: false)
+                .foregroundStyle(SymairaTokens.ink2)
+                .cockpitProtected()
+        }
+    }
+
     private func openPreviewPreferences() {
         showsPreviewPreferences = true
     }
 
     private func selectPreviewFanProfile(_ profile: FanProfile) {
         fanProfile = profile
-    }
-
-    private func previewOnlySection(_ title: String, anchor: TuneWorkspaceAnchor) -> some View {
-        VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-            sectionLabel(title)
-            Text("Available in the running app. No live model is started by this preview.")
-                .symairaText(.callout, respectsForeground: false)
-                .foregroundStyle(SymairaTokens.ink2)
-                .cockpitProtected()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .id(anchor)
-        .workspaceSection(anchor)
-    }
-
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title)
-            .symairaText(.heading, respectsForeground: false)
-            .foregroundStyle(SymairaTokens.ink)
-            .cockpitProtected()
     }
 
     /// Reuse the production slider rows, but commit only to preview-local state.

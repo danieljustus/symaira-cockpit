@@ -24,7 +24,7 @@ final class CockpitNativeInteractionTests: XCTestCase {
         app.setActivationPolicy(.regular)
         let appearance = CockpitAppearancePreferences(defaults: nil)
         let state = SliderState()
-        let root = CockpitWorkspaceView(version: "test", openPreferences: {}, appearance: appearance, content: {
+        let root = CockpitWorkspaceView(version: "test", openPreferences: {}, appearance: appearance, page: { _ in
             SliderContent(state: state)
         })
         // An in-process test has no assistive client to enable SwiftUI's AX tree.
