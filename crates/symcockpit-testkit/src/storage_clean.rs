@@ -113,7 +113,10 @@ impl FakeRemover {
     }
 
     fn act(&self, what: &str, path: &Path) -> Result<(), String> {
-        if !path.starts_with(&self.sandbox) {
+        // Canonical plan paths (duplicates) may name the sandbox through its
+        // real path, e.g. /private/var for a temp dir under /var.
+        let real = fs::canonicalize(&self.sandbox).unwrap_or_else(|_| self.sandbox.clone());
+        if !path.starts_with(&self.sandbox) && !path.starts_with(&real) {
             return Err("fake remover refuses paths outside the sandbox".to_owned());
         }
         self.calls
@@ -295,13 +298,18 @@ mod tests {
     }
 
     fn targets(w: &World, plan: &Value) -> Vec<String> {
+        // Duplicate plans carry canonical paths; the temp dir may sit behind a
+        // symlink (/var -> /private/var on macOS runners).
+        let real = fs::canonicalize(w.dir.path()).unwrap();
         let mut t: Vec<String> = plan["items"]
             .as_array()
             .unwrap()
             .iter()
             .map(|i| {
-                Path::new(i["target"].as_str().unwrap())
+                let target = Path::new(i["target"].as_str().unwrap());
+                target
                     .strip_prefix(w.dir.path())
+                    .or_else(|_| target.strip_prefix(&real))
                     .unwrap()
                     .to_string_lossy()
                     .into_owned()
