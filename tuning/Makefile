@@ -1,6 +1,6 @@
-BINARY := symtune
-
-.PHONY: build build-app smoke-app release test coverage lint run doctor serve clean
+# The CLI and MCP server are the Rust `symcockpit` binary (make rust-build at the
+# repo root); this package holds the Swift GUI libraries only.
+.PHONY: build build-app smoke-app release test coverage lint clean
 
 build:
 	swift build
@@ -17,23 +17,14 @@ release:
 test:
 	swift test
 
-# Coverage for the library targets. The symtune executable is not instrumented
-# (its tests spawn the binary), so its lines are absent from the report — see
-# scripts/coverage.sh for the full scope note.
+# Coverage for the library targets. The UI and app entry points are not linked
+# into the package-local test bundles, so their lines are absent from the
+# report — see scripts/coverage.sh for the full scope note.
 coverage:
 	./scripts/coverage.sh
 
 lint:
 	@command -v swiftlint >/dev/null 2>&1 && swiftlint --quiet || echo "swiftlint not installed; skipping"
-
-run: build
-	swift run -q $(BINARY) doctor
-
-doctor: build
-	swift run -q $(BINARY) doctor
-
-serve: build
-	swift run -q $(BINARY) serve
 
 clean:
 	swift package clean

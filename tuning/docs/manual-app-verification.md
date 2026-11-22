@@ -42,11 +42,11 @@ Verify:
 - a slider icon appears in the menu bar and no Dock icon appears;
 - opening the icon shows the popover;
 - brightness, dimming, and warmth controls change the display through
-  `TuneController`;
+  the Rust agent;
 - battery, thermal, fan, and display information refreshes while the popover
   remains open;
 - `Quit` terminates the app and all temporary display overrides are restored;
-- `symtune doctor` and the MCP server continue to report the same capabilities
+- `symcockpit doctor` and the MCP server continue to report the same capabilities
   as the app surface.
 
 On machines without the required hardware, the UI must report unavailable or

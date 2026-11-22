@@ -1,5 +1,11 @@
 # Tune/SymTune naming inventory
 
+> Update 2026-11-22 (Cockpit 2, wave 2D-3): the Swift dispatcher
+> (`Sources/symcockpit`), `SymCockpitCLI`, `SymCockpitMCP`, the `symtune`
+> executable and `TuneController` are removed. Rows below that cite those
+> paths describe the state at review time; the CLI and MCP identities now live
+> in `crates/symcockpit`.
+
 Status: reviewed inventory required by PB-2026-09-09 §4 before any internal
 renaming. Each identifier has a verdict: **grandfathered** (never rename, or
 only via its own tested migration with rollback) or **migratable** (safe to

@@ -2,7 +2,7 @@
 
 Which symtune features work on which Mac. Capabilities vary by processor
 generation (Apple Silicon vs Intel), chassis design (fanless vs active cooling),
-and display hardware (standard vs XDR/EDR). Run `symtune doctor` to see exactly
+and display hardware (standard vs XDR/EDR). Run `symcockpit doctor` to see exactly
 what's available on your machine.
 
 ## Feature Support Matrix
@@ -33,7 +33,7 @@ what's available on your machine.
 - **v0.1**. Available now.
 - **v0.2**. Planned for the next release cycle (app target needed for display
   overrides).
-- **unsupported**. `symtune doctor` reports the capability as `available:
+- **unsupported**. `symcockpit doctor` reports the capability as `available:
   false` with the reason. The CLI and MCP hand them as honest errors, not
   crashes.
 
@@ -65,7 +65,7 @@ intersection of the generation's candidate row and the keys the host actually
 exposes through index-based enumeration (the `#KEY` count probe plus a
 per-index key lookup). Absent keys are omitted — never reported as zero or
 unknown. On macOS builds where the raw AppleSMC user client is restricted,
-enumeration is unavailable; `symtune sensors` then falls back to the
+enumeration is unavailable; `symcockpit sensors` then falls back to the
 candidate row and says so in `notes` instead of assuming enumeration worked.
 
 #### Apple Silicon per-generation candidate keys

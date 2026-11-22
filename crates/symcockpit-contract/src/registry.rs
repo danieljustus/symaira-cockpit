@@ -547,29 +547,6 @@ mod tests {
     }
 
     #[test]
-    fn mcp_names_match_the_swift_sources() {
-        // Guards the constant above against drift while the Swift core lives;
-        // delete with it when the Swift sources are retired.
-        let tools = include_str!("../../../tuning/Sources/SymCockpitMCP/TuneTools.swift");
-        let writes = include_str!("../../../tuning/Sources/SymCockpitCore/WriteCommand.swift");
-        let quoted = |line: &str, prefix: &str| {
-            line.trim()
-                .strip_prefix(prefix)
-                .and_then(|r| r.split('"').next())
-                .map(str::to_owned)
-        };
-        let mut from_swift: Vec<String> = tools
-            .lines()
-            .filter_map(|l| quoted(l, "let name = \""))
-            .collect();
-        from_swift.extend(writes.lines().filter_map(|l| quoted(l, "mcpName: \"")));
-        let mut want: Vec<String> = V012_MCP_TOOLS.iter().map(|s| (*s).to_owned()).collect();
-        from_swift.sort();
-        want.sort();
-        assert_eq!(from_swift, want);
-    }
-
-    #[test]
     fn risks_follow_the_plan() {
         let risk = |n: &str| commands().iter().find(|c| c.name == n).unwrap().risk;
         for n in ["sensors", "status", "history", "fan.status"] {

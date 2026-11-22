@@ -958,9 +958,9 @@ mod tests {
     }
 
     #[test]
-    fn missing_charge_limit_key_text_is_the_swift_text() {
-        let src = include_str!("../../../tuning/Sources/SymCockpitCore/TuneController.swift");
-        // Swift joins three string literals; compare the text without quoting/continuations.
+    fn missing_charge_limit_key_text_is_the_v012_text() {
+        // The text of the retired Swift controller (three joined literals), compared
+        // without quoting/continuations.
         let flat: String = MISSING_CHARGE_LIMIT_KEY_DETAIL
             .split_whitespace()
             .collect::<Vec<_>>()
@@ -970,7 +970,6 @@ mod tests {
             "so `sudo` cannot help. Firmware shipped with macOS 27 removed these keys; ",
             "use System Settings > Battery > Charge Limit instead.",
         ] {
-            assert!(src.contains(part.trim_end()), "{part}");
             assert!(flat.contains(part.trim_end()), "{part}");
         }
     }

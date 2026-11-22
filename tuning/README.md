@@ -46,12 +46,13 @@ built from source; it is not part of the released tarball.
 
 ```bash
 git clone https://github.com/danieljustus/symaira-cockpit && cd symaira-cockpit
-swift build -c release
-.build/release/symcockpit tune doctor
+make rust-build        # the CLI and MCP server (Rust, in the repo root)
+target/debug/symcockpit doctor
+make build-app         # the GUI bundle
 ```
 
-To build just this package standalone, `cd tune && swift build` produces the
-package-local `symtune` executable.
+The Swift package in this directory builds the GUI libraries only; it has no
+CLI executable.
 
 ## Standalone menu-bar app
 
@@ -66,7 +67,7 @@ make smoke-app
 ```
 
 The release DMG contains `Symaira Cockpit.app` and the CLI binary. The app uses the
-same `TuneController` and `SafetyPolicy` as the CLI and MCP surfaces. See
+same safety limits as the CLI and MCP surfaces (the Rust agent enforces them). See
 [`docs/manual-app-verification.md`](docs/manual-app-verification.md) for the
 real-host control and restore-on-exit checklist.
 
@@ -117,45 +118,45 @@ consistency. The rest (`status`, `history`, `processes`, `ai-usage`) print a
 human-readable table by default and switch to JSON when `--json` is given.
 
 ```text
-symtune doctor                        # capabilities, host info, recommendations (JSON)
-symtune status                        # current override/session status
-symtune history                       # recent applied changes
-symtune sensors                       # thermal pressure + temps/fan RPM via AppleSMC (JSON)
-symtune battery                       # charge %, cycles, capacity, health, condition (JSON)
-symtune displays                      # displays + EDR headroom / extended-brightness capability (JSON)
-symtune permissions                   # permission & SMC write status (JSON)
-symtune metrics                      # system metrics: CPU, memory, disk, network, GPU (JSON)
-symtune processes [--sort cpu|memory] [--limit N]
+symcockpit doctor                        # capabilities, host info, recommendations (JSON)
+symcockpit status                        # current override/session status
+symcockpit history                       # recent applied changes
+symcockpit sensors                       # thermal pressure + temps/fan RPM via AppleSMC (JSON)
+symcockpit battery                       # charge %, cycles, capacity, health, condition (JSON)
+symcockpit displays                      # displays + EDR headroom / extended-brightness capability (JSON)
+symcockpit permissions                   # permission & SMC write status (JSON)
+symcockpit metrics                      # system metrics: CPU, memory, disk, network, GPU (JSON)
+symcockpit processes [--sort cpu|memory] [--limit N]
                                      # processes using the most CPU / memory
-symtune ai-usage                     # AI subscription/token usage per provider (read-only)
-symtune awake [--display] [--seconds N]   # prevent idle sleep (like caffeinate)
-symtune brightness get                # read built-in display brightness (0.0–1.0)
-symtune brightness set <0.0-1.0>      # built-in display brightness
-symtune extbright set <1.0-1.6>       # extended brightness (EDR trigger + gamma boost)
-symtune dim set <0.15-1.0>            # software dim overlay
-symtune dim reset                     # remove all dim overlays
-symtune warmth set <0.0-1.0>          # color temperature warmth (gamma)
-symtune warmth reset                  # reset warmth to neutral
-symtune fan set <0.0-1.0>             # fan speed fraction (requires sudo)
-symtune fan auto                      # return fans to firmware automatic control
-symtune fan profile [system|comfort|performance]   # three-position control (Standard/Cool/Max)
-symtune fan target [<50-85>|off]      # Cool: max average CPU/GPU cluster °C (only adds cooling)
-symtune fan status                    # profile, cool_target_celsius, average_cluster_celsius (JSON)
-symtune battery-limit set <50-100>    # hold charge at target percent (requires sudo)
-symtune battery-limit clear           # re-enable charging (requires sudo)
-symtune restore                       # restore all overrides to defaults
-symtune profile save <name>           # save current settings as a profile
-symtune profile load <name>           # apply a saved profile
-symtune profile list                  # list saved profiles
-symtune profile delete <name>         # delete a saved profile
-symtune serve                         # run the MCP server over stdio
-symtune version [--check-for-updates] # print version (optionally check GitHub releases)
+symcockpit ai-usage                     # AI subscription/token usage per provider (read-only)
+symcockpit awake [--display] [--seconds N]   # prevent idle sleep (like caffeinate)
+symcockpit brightness get                # read built-in display brightness (0.0–1.0)
+symcockpit brightness set <0.0-1.0>      # built-in display brightness
+symcockpit extbright set <1.0-1.6>       # extended brightness (EDR trigger + gamma boost)
+symcockpit dim set <0.15-1.0>            # software dim overlay
+symcockpit dim reset                     # remove all dim overlays
+symcockpit warmth set <0.0-1.0>          # color temperature warmth (gamma)
+symcockpit warmth reset                  # reset warmth to neutral
+symcockpit fan set <0.0-1.0>             # fan speed fraction (requires sudo)
+symcockpit fan auto                      # return fans to firmware automatic control
+symcockpit fan profile [system|comfort|performance]   # three-position control (Standard/Cool/Max)
+symcockpit fan target [<50-85>|off]      # Cool: max average CPU/GPU cluster °C (only adds cooling)
+symcockpit fan status                    # profile, cool_target_celsius, average_cluster_celsius (JSON)
+symcockpit battery-limit set <50-100>    # hold charge at target percent (requires sudo)
+symcockpit battery-limit clear           # re-enable charging (requires sudo)
+symcockpit restore                       # restore all overrides to defaults
+symcockpit profile save <name>           # save current settings as a profile
+symcockpit profile load <name>           # apply a saved profile
+symcockpit profile list                  # list saved profiles
+symcockpit profile delete <name>         # delete a saved profile
+symcockpit serve                         # run the MCP server over stdio
+symcockpit version [--check-for-updates] # print version (optionally check GitHub releases)
 ```
 
 Example:
 
 ```bash
-$ symtune battery
+$ symcockpit battery
 {
   "current_capacity_percent": 82,
   "cycle_count": 93,
@@ -165,8 +166,8 @@ $ symtune battery
   ...
 }
 
-$ sudo symtune fan set 0.5
-$ sudo symtune battery-limit set 80
+$ sudo symcockpit fan set 0.5
+$ sudo symcockpit battery-limit set 80
 ```
 
 > **Why `health_percent` and Apple's "Maximum Capacity" differ.** `health_percent`
@@ -183,14 +184,14 @@ $ sudo symtune battery-limit set 80
 
 ## MCP integration
 
-Register `symtune serve` with any MCP-capable agent host (Claude Desktop, Cursor,
+Register `symcockpit serve` with any MCP-capable agent host (Claude Desktop, Cursor,
 OpenCode, …). Example fragment:
 
 ```json
 {
   "mcpServers": {
     "symtune": {
-      "command": "/absolute/path/to/symtune",
+      "command": "/absolute/path/to/symcockpit",
       "args": ["serve"]
     }
   }
@@ -213,7 +214,7 @@ access. To restrict a host to observation only, opt in to read-only mode with
 either the environment variable or the config-file equivalent:
 
 ```bash
-SYMTUNE_MCP_MODE=read-only symtune serve
+SYMTUNE_MCP_MODE=read-only symcockpit serve
 ```
 
 ```toml
@@ -226,7 +227,7 @@ Read-only mode filters every write tool out of the `tools/list` registry
 before the host ever sees them — an agent literally cannot discover or call
 `set_brightness`, `set_fan`, `set_charge_limit`, etc. Read tools (`get_battery`,
 `get_sensors`, `list_displays`, …) stay available. `"full"` is the default; you
-must opt in to `"read-only"` explicitly. Run `symtune permissions` to confirm
+must opt in to `"read-only"` explicitly. Run `symcockpit permissions` to confirm
 which mode is active — it reports `mcp_mode` and a human-readable note
 (`"MCP server mode is read-only (write tools hidden from tools/list)."`).
 

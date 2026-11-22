@@ -2,58 +2,44 @@
 
 ## Overview
 
-`symtune` is a local macOS tuning tool for humans and AI agents. It exposes the
-Mac's thermal/power/display state as JSON over a CLI and as MCP tools, and
-(incrementally) lets callers adjust brightness, fans, and battery charging.
-
-Design split (mirrors the rest of the Symaira family):
+Cockpit is a local macOS tuning tool for humans and AI agents. The CLI, the
+MCP server and the app agent (`symcockpit agent --stdio`) are the Rust binary
+in `crates/symcockpit`; it reads the Mac's thermal/power/display state and
+performs bounded actions. This Swift package holds the GUI side only:
 
 ```
-symtune (executable)  →  SymCockpitMCP  →  SymCockpitCore
+SymCockpitMenuBarApp  →  SymCockpitUI  →  SymCockpitCore (AgentSession/AgentClient)
+                                       →  SymCockpitHelperKit
 ```
 
 - The agent/user decides *what* to do.
-- `symtune` reads deterministic environment state and performs bounded actions.
+- The Rust binary reads deterministic environment state and performs bounded actions.
 - The transport for agents is local MCP over stdio.
+
+The former Swift `TuneController`, `SymCockpitMCP`, `SymCockpitCLI` and
+`symtune` executable were removed in Cockpit 2 wave 2D-3; their behavior is
+pinned by the frozen v0.12 oracle (`oracle/`).
 
 ## Components
 
 ### `SymCockpitCore`
 
-The only target with logic or IOKit access.
+The only target with IOKit access on the Swift side: the `AgentClient` /
+`AgentSession` link to the Rust agent, models and formatting for the panel,
+the SMC fan-helper pieces (`SMCService`, `FanControlService`, `FanGovernor`,
+`SMCWritePolicy`, `SafetyPolicy`), sensors, battery, storage, AI-usage
+presentation, HUD layout and the privileged-elevation resolver.
 
-- `TuneController` — facade. CLI and MCP talk to this and nothing else. Holds the
-  services, applies `SafetyPolicy`, and owns restore-on-exit bookkeeping.
-- `SensorService` — thermal pressure (`ProcessInfo.thermalState`) and, when
-  available, detailed temps/fan RPM via `SMCService`.
-- `SMCService` — AppleSMC IOKit bridge for sensor reads (die temps, fan RPM;
-  unprivileged) and SMC writes (fan speed, charge limiting; requires root).
-  `FanControlService` and `ChargeLimitService` implement the two write paths
-  behind `SMCWritePolicy` validation, with `SMCRestoreTracker` restoring the
-  original SMC values on exit.
-- `BatteryService` — reads `AppleSmartBattery` from the IORegistry (unprivileged;
-  Intel + Apple Silicon notebooks).
-- `DisplayService` — enumerates `NSScreen`s, reports EDR headroom (the signal
-  that drives extended/>100% brightness), gets/sets built-in display brightness,
-  applies gamma-based color temperature warmth, and resets gamma to neutral.
-- `PowerService` — IOKit power assertions (keep-awake), the `caffeinate` analog.
-- `SafetyPolicy` — clamping ranges and the thermal-protection guarantee.
-- `Models` / `Errors` / `ExitCode` / `Config` / `Version` — DTOs and conventions.
+### `SymCockpitHelperKit`
 
-### `SymCockpitMCP`
+XPC contract, signing requirements and heartbeat watchdog of the optional
+privileged fan helper.
 
-- Thin facade (`TuneMCPServer`) over the shared `SymairaMCP` module from
-  `symaira-corekit`: registers the `tools/list` and `tools/call` handlers on
-  `MCPServer.withMethodHandler(_:)`, served over `MCPStdioTransport`
-  (newline-delimited JSON-RPC, per the MCP spec's stdio framing).
-- `initialize`, `tools/list`, `tools/call`, `ping` are owned by `SymairaMCP`.
-- One place for tool schemas + argument validation (`TuneToolRegistry`),
-  including JSON Schema `minimum`/`maximum` safety bounds.
+### `SymCockpitUI`
 
-### `symtune` (CLI)
-
-- Argument routing, JSON emission (`.convertToSnakeCase`, pretty), `serve` wiring,
-  and the blocking `awake` loop.
+The menu-bar panel, HUD and preferences, shared by `SymCockpitMenuBarApp` and
+the cockpit GUI (`Sources/SymCockpitApp`). It never constructs a controller;
+data comes from agent events and actions are agent commands.
 
 ## Capability tiers
 

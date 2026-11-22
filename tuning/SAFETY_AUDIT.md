@@ -1,5 +1,12 @@
 # symtune Safety Model
 
+> Update 2026-11-22 (Cockpit 2, wave 2D-3): the Swift `TuneController`,
+> `SymCockpitMCP` and `symtune` executable cited below were removed; the CLI,
+> the MCP server and the write paths now run in the Rust binary
+> (`crates/symcockpit`). The Swift file links in this document describe the
+> audited state and no longer resolve. Re-audit against the Rust sources before
+> relying on a statement here.
+
 This document describes the safety boundaries of the public `symtune` core as it
 exists today. It is an implementation-grounded trust document, not a thermal
 safety certification, a guarantee for every Mac model, or a promise about future
