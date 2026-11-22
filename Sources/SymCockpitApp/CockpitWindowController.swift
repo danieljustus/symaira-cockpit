@@ -14,11 +14,19 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let statusBar: StatusBarController
     private let openPreferences: () -> Void
+    /// The page the window shows; the main menu's Navigate items set it.
+    let navigation = CockpitNavigation()
 
     init(statusBar: StatusBarController, openPreferences: @escaping () -> Void) {
         self.statusBar = statusBar
         self.openPreferences = openPreferences
         super.init()
+    }
+
+    /// Brings the window forward on `destination`.
+    func show(_ destination: CockpitDestination) {
+        navigation.selection = destination
+        show()
     }
 
     func show() {
@@ -29,7 +37,8 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
 
         let root = CockpitRootView(
             statusBar: statusBar,
-            openPreferences: openPreferences
+            openPreferences: openPreferences,
+            navigation: navigation
         )
         let hosting = NSHostingController(rootView: root)
 
@@ -39,7 +48,8 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.setContentSize(NSSize(width: 1080, height: 760))
-        window.contentMinSize = NSSize(width: 620, height: 520)
+        // Default sidebar plus the content reserve, the minimum of the shared shell.
+        window.contentMinSize = NSSize(width: 840, height: 560)
         // Closing the window must not deallocate it out from under the
         // delegate; `show()` reuses the same instance.
         window.isReleasedWhenClosed = false

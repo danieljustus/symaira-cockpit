@@ -88,6 +88,22 @@ final class TuneViewModel {
     var fanFailure: FanFailure?
     var fanBusy = false
 
+    /// The same for the charge limit. The agent has no read for the limit that is
+    /// in force, so `chargeLimitThisSession` is only what this app confirmed since it
+    /// started: `nil` unknown, `.some(nil)` removed, `.some(80)` set to 80 %.
+    var pendingChargeChange: PendingChange?
+    var chargeFailure: String?
+    var chargeBusy = false
+    var chargeLimitThisSession: Int??
+
+    /// The health score and its advice from the agent's `status`.
+    struct Health: Equatable {
+        let score: Int
+        let message: String
+        let recommendations: [String]
+    }
+    private(set) var health: Health?
+
     /// Called whenever ``statusItemText`` changes, so the status item is only
     /// re-laid-out when its content actually differs.
     var onStatusItemTextChanged: (([StatusItemSegment]) -> Void)?
@@ -254,6 +270,9 @@ final class TuneViewModel {
                 if scheduled { endPrimingIfDone(report) }
             case "status":
                 let report = try AgentDecoding.decode(StatusReport.self, from: json)
+                set(\.health, Health(
+                    score: report.healthScore, message: report.healthScoreMsg, recommendations: report.recommendations
+                ))
                 set(\.sensors, report.sensors)
                 set(\.battery, report.battery)
                 set(\.displays, report.displays.displays)
@@ -291,6 +310,11 @@ final class TuneViewModel {
     private func clearReadings() {
         metrics = nil
         storageVolumes = nil
+        health = nil
+        // An agent that went away knows none of its old plans, and no limit it applied.
+        pendingFanChange = nil
+        pendingChargeChange = nil
+        chargeLimitThisSession = nil
         sensors = nil
         battery = nil
         displays = []
@@ -314,6 +338,15 @@ final class TuneViewModel {
     }
 
     // MARK: - Derived state
+
+    /// Whether this Mac reports any fan. `nil` sensors means "not read yet", and an
+    /// unsupported SMC connection means "unknown, not measured": both count as
+    /// present, so the fan controls do not vanish just because the read that would
+    /// confirm them is itself blocked. Only a successful read of zero fans says no.
+    var hasFans: Bool {
+        guard let sensors, sensors.smcSupported else { return true }
+        return !sensors.fans.isEmpty
+    }
 
     /// What "Brighter" is really doing when the display grants less than asked.
     var extendedBrightnessNote: String? {

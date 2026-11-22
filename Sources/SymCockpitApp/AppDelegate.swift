@@ -161,6 +161,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
+    @objc private func navigate(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let destination = CockpitDestination(rawValue: raw) else { return }
+        windowController?.show(destination)
+    }
+
+    @MainActor
     @objc private func openPreferences() {
         statusBarController?.openPreferences()
     }
@@ -202,6 +208,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
+
+        let navigateItem = NSMenuItem()
+        mainMenu.addItem(navigateItem)
+        let navigateMenu = NSMenu(title: "Navigate")
+        navigateItem.submenu = navigateMenu
+        // ⌘1 to ⌘9 for the first nine destinations, like the shared shell's Navigate menu.
+        for destination in CockpitDestination.allCases {
+            let item = NSMenuItem(
+                title: destination.title, action: #selector(navigate(_:)),
+                keyEquivalent: destination.shortcutDigit.map(String.init) ?? ""
+            )
+            item.target = self
+            item.representedObject = destination.rawValue
+            navigateMenu.addItem(item)
+        }
 
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)

@@ -54,6 +54,12 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     }()
     private let model: TuneViewModel
     private let processesModel: ProcessesViewModel
+    /// The window's pages that read through the agent and own no hardware.
+    private lazy var profilesModel = ProfilesModel(session: session, didChangeDisplay: { [weak self] in
+        self?.model.refreshNow()
+    })
+    private lazy var historyModel = HistoryModel(session: session)
+    private lazy var agentStatus = CockpitAgentStatus(session: session)
     private var preferencesWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -536,10 +542,7 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
 
     private var popoverHosting: NSHostingController<MainStatusView>?
 
-    private func makeStatusView(
-        maxHeight: CGFloat,
-        chrome: TunePanelChrome = .popover
-    ) -> MainStatusView {
+    private func makeStatusView(maxHeight: CGFloat) -> MainStatusView {
         MainStatusView(
             model: model,
             config: config,
@@ -553,10 +556,6 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
             panelTitle: panelTitle,
             panelVersion: updateVersionProvider(),
             maxHeight: maxHeight,
-            chrome: chrome,
-            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
-            hudDockPreferences: isNotchHUDOffered ? hudDockPreferences : nil,
-            hudItemPreferences: isNotchHUDOffered ? hudItemPreferences : nil,
             brightnessKeyPreferences: isBrightnessKeyHandlingOffered
                 ? brightnessKeyPreferences
                 : nil,
@@ -757,25 +756,40 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // MARK: - Embedding
 
-    /// The very same cards the popover shows, dressed for another window.
+    /// The content of the cockpit window: the workspace shell with one page per
+    /// destination, built from the same view models and cards the popover uses, so the
+    /// two cannot disagree and nothing is polled twice.
     ///
-    /// `SymCockpitApp` uses this as its main content, so the cockpit window
-    /// and the menu-bar popover render identical cards off one shared
-    /// ``TuneViewModel`` — no second polling pipeline, no divergent UI. The
-    /// ``TunePanelChrome/embedded`` chrome drops the popover's fixed width,
-    /// header and footer; the host window supplies the title and preferences.
-    public func tunePanel(
-        chrome: TunePanelChrome = .embedded,
-        maxHeight: CGFloat = 900
+    /// `SymCockpitApp` hosts this; `navigation` is owned by the host so its main menu
+    /// can switch pages.
+    public func cockpitWorkspace(
+        version: String, openPreferences: @escaping () -> Void, navigation: CockpitNavigation
     ) -> AnyView {
-        AnyView(makeStatusView(maxHeight: maxHeight, chrome: chrome))
+        let context = CockpitPageContext(
+            session: session, model: model, config: config, aiUsageModel: aiUsageModel,
+            preferencesManager: preferencesManager, profiles: profilesModel, history: historyModel,
+            openPreferences: openPreferences,
+            brightnessKeyPreferences: isBrightnessKeyHandlingOffered ? brightnessKeyPreferences : nil,
+            brightnessKeyController: isBrightnessKeyHandlingOffered ? brightnessKeyController : nil,
+            readoutPreferences: isNotchHUDOffered ? readoutPreferences : nil,
+            hudDockPreferences: isNotchHUDOffered ? hudDockPreferences : nil,
+            hudItemPreferences: isNotchHUDOffered ? hudItemPreferences : nil
+        )
+        return AnyView(
+            CockpitWorkspaceView(
+                version: version, openPreferences: openPreferences,
+                appearance: appearancePreferences, navigation: navigation, agent: agentStatus
+            ) { destination in
+                CockpitPageHost(context: context, destination: destination)
+            }
+        )
     }
 
     /// Switch the shared model to the interactive cadence while an embedded
     /// panel is on screen (the popover does this on open/close itself).
     public func setEmbeddedPanelVisible(_ visible: Bool) {
+        // The window's pages ask for what they need: the AI usage page marks itself
+        // visible, and the placeholder pages need nothing from the agent.
         model.setDetailVisible(visible)
-        aiUsageModel.isVisible = visible
-        processesModel.setVisible(visible)
     }
 }

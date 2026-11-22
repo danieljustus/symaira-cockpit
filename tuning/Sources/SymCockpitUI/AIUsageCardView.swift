@@ -37,7 +37,7 @@ struct AIUsageCardView: View {
                         resetProvider = nil
                         confirmingReset = true
                     }
-                } label: { SymairaIconView(.more, size: 16) }
+                } label: { Image(symairaIcon: .more, size: 16) }
                 .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("AI usage actions")
             }
             if customizing {
