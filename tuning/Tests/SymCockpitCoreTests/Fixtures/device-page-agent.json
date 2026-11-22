@@ -1,0 +1,126 @@
+{
+  "__device_page_test": {
+    "topics": ["audio.devices", "audio.mixer.status", "midi.devices", "ble.session", "input.status"],
+    "reads": ["audio.format.get", "bt.devices", "ble.scan", "ble.services", "ble.read", "ble.log", "ble.export"],
+    "reversible": ["audio.app-volume.set", "audio.default.set", "audio.volume.set", "audio.mute.set", "ble.disconnect"],
+    "human_only": ["input.status", "input.finder-cut", "input.haptics.test"],
+    "plans": { "audio.format.set": "audio.format.set", "audio.aggregate.create": "audio.aggregate.create", "ble.write": "ble_write" }
+  },
+  "audio.devices": {
+    "generation": 2,
+    "default_input_uid": null,
+    "default_output_uid": "speakers",
+    "devices": [
+      {
+        "uid": "speakers",
+        "name": "Fixture Speakers",
+        "manufacturer": "Fixture",
+        "transport": "builtin",
+        "kind": "physical",
+        "online": true,
+        "object_id": 21,
+        "epoch": 1,
+        "default_input": false,
+        "default_output": true,
+        "input": { "channels": 0, "volume": null, "muted": null, "volume_settable": false, "mute_settable": false, "format": null },
+        "output": { "channels": 2, "volume": 0.5, "muted": false, "volume_settable": true, "mute_settable": true, "format": { "rate": 48000, "bits": 24, "channels": 2 } },
+        "sample_rate": 48000,
+        "sample_rates": [{ "min": 44100, "max": 48000 }],
+        "members": []
+      },
+      {
+        "uid": "headset",
+        "name": "Fixture Headset",
+        "manufacturer": null,
+        "transport": "usb",
+        "kind": "physical",
+        "online": true,
+        "object_id": 22,
+        "epoch": 1,
+        "default_input": false,
+        "default_output": false,
+        "input": { "channels": 1, "volume": null, "muted": null, "volume_settable": false, "mute_settable": false, "format": null },
+        "output": { "channels": 2, "volume": null, "muted": null, "volume_settable": false, "mute_settable": false, "format": null },
+        "sample_rate": 48000,
+        "sample_rates": [{ "min": 48000, "max": 48000 }],
+        "members": []
+      }
+    ]
+  },
+  "audio.format.get": {
+    "uid": "speakers",
+    "sample_rate": 48000,
+    "sample_rates": [{ "min": 44100, "max": 48000 }],
+    "input": { "format": null, "formats": [] },
+    "output": {
+      "format": { "rate": 48000, "bits": 24, "channels": 2 },
+      "formats": [{ "rate": 44100, "bits": 16, "channels": 2 }, { "rate": 48000, "bits": 24, "channels": 2 }]
+    }
+  },
+  "audio.default.set": { "outcome": "confirmed" },
+  "audio.volume.set": { "outcome": "confirmed" },
+  "audio.mute.set": { "outcome": "confirmed" },
+  "audio.mixer.status": {
+    "supported": true,
+    "mixer_running": true,
+    "managed": [],
+    "audio_processes": [{ "pid": 42, "bundle_id": "example.player", "running_output": true }]
+  },
+  "audio.app-volume.set": {
+    "app": "example.player",
+    "apps": [{ "pid": 42, "volume": 0.35, "muted": false, "state": "failed", "detail": "Process tap did not start." }]
+  },
+  "midi.devices": {
+    "generation": 1,
+    "devices": [
+      {
+        "unique_id": 101, "name": "Fixture Controller", "manufacturer": null, "model": null, "offline": false, "present": true,
+        "entities": [
+          { "unique_id": 102, "name": "Port", "sources": [{ "unique_id": 103, "name": "Keys", "offline": false, "present": true }], "destinations": [] }
+        ]
+      }
+    ],
+    "standalone_sources": [],
+    "standalone_destinations": [{ "unique_id": 201, "name": "Virtual destination", "offline": false, "present": true }]
+  },
+  "bt.devices": {
+    "count": 1,
+    "devices": [
+      {
+        "name": "Fixture Buds", "connected": true, "kind": "headphones",
+        "battery": {
+          "main": { "state": "unknown", "percent": null },
+          "left": { "state": "known", "percent": 60 },
+          "right": { "state": "known", "percent": 55 },
+          "case": { "state": "known", "percent": 40 }
+        }
+      }
+    ]
+  },
+  "ble.session": { "connections": [], "subscriptions": [], "log_entries": 0, "log_seq": 0, "authorization": "not_determined" },
+  "ble.scan": {
+    "timeout_ms": 5000, "total_seen": 2, "shown": 1,
+    "devices": [{ "id": "id-a", "name": "Fixture Sensor", "rssi": -60, "service_uuids": ["180F"], "connectable": true }]
+  },
+  "ble.services": {
+    "device_id": "id-a",
+    "services": [{ "uuid": "180F", "characteristics": [{ "uuid": "2A19", "properties": ["read", "write"] }] }]
+  },
+  "ble.read": { "device_id": "id-a", "service": "180F", "characteristic": "2A19", "length": 1, "value_hex": "01" },
+  "ble.log": {
+    "seq": 3, "count": 1,
+    "entries": [
+      { "seq": 3, "t_ms": 1795219200000, "kind": "read", "device_id": "id-a", "service": "180F", "characteristic": "2A19", "bytes": [1], "value_hex": "01", "detail": "" }
+    ]
+  },
+  "ble.export": { "format": "csv", "count": 1, "content": "fixture,csv\r\n" },
+  "input.status": {
+    "finder_cut": { "enabled": false, "event_tap_access": "granted", "secure_input_active": false },
+    "haptics": { "enabled": true, "state": { "level": "no_device", "detail": null } },
+    "sound": { "enabled": true, "material": "light" }
+  },
+  "input.haptics.test": {
+    "material": "light", "haptic": { "status": "no_device", "detail": null },
+    "sound": { "status": "ok", "detail": null }, "degraded": true
+  }
+}

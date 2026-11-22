@@ -9,7 +9,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use symcockpit_contract::Error;
-use symcockpit_core::bluetooth::{PairedDevice, PairedDevices, parse_system_profiler};
+use symcockpit_core::bluetooth::{
+    BleAuthorization, PairedDevice, PairedDevices, parse_system_profiler,
+};
 
 const SYSTEM_PROFILER: &str = "/usr/sbin/system_profiler";
 const TIMEOUT: Duration = Duration::from_secs(20);
@@ -25,6 +27,10 @@ impl PairedDevices for SystemProfiler {
         let root = serde_json::from_slice(&out)
             .map_err(|e| Error::Failed(format!("system_profiler output is not JSON: {e}")))?;
         parse_system_profiler(&root)
+    }
+
+    fn ble_authorization(&self) -> Option<BleAuthorization> {
+        super::central::authorization()
     }
 }
 

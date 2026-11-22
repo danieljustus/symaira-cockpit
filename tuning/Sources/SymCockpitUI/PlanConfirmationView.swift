@@ -16,6 +16,7 @@ struct PlanConfirmationView: View {
     var summary: String?
     /// The verb on the button that applies it, e.g. "Apply Fan Profile".
     var confirmTitle = "Apply Changes"
+    var applyingTitle: String?
     /// Dismisses the review (Cancel) or the result (Done).
     let onClose: () -> Void
 
@@ -58,9 +59,9 @@ struct PlanConfirmationView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                     if isRunning {
-                        SymairaLoadingState(model.plan.confirmsThroughPlanCommand
+                        SymairaLoadingState(applyingTitle ?? (model.plan.confirmsThroughPlanCommand
                             ? "Applying the plan… This can take several minutes."
-                            : "Applying… you may be asked for your administrator password…")
+                            : "Applying… you may be asked for your administrator password…"))
                     } else {
                         expiry(at: context.date)
                         HStack(spacing: SymairaSpacing.small) {

@@ -24,7 +24,10 @@ use symcockpit::mcp::Server;
 use symcockpit_contract::agent_proto::HOST_METHODS;
 use symcockpit_core::audio::AudioService;
 use symcockpit_core::audio::mixer::TapHal;
-use symcockpit_core::bluetooth::{Advertisement, BleCentral, Characteristic, Service};
+use symcockpit_core::bluetooth::{
+    Advertisement, BleAuthorization, BleCentral, Characteristic, PairedDevice, PairedDevices,
+    Service,
+};
 use symcockpit_core::clipboard::random_key;
 use symcockpit_core::clock::SystemMonotonic;
 use symcockpit_core::finder::{Action, FinderPlatform, Inbox, Job, new_job_id};
@@ -35,9 +38,7 @@ use symcockpit_db::{plans::SqlitePlanStore, smart_history::SmartHistoryStore};
 use symcockpit_macos::input::JsonFileSettings;
 use symcockpit_store::Config;
 use symcockpit_testkit::audio::{FakeAudioHal, FakeTapHal, input_device, output_device, process};
-use symcockpit_testkit::bluetooth::{
-    FakeCentral, FakeDevice, FakePaired, SyncCentral, WriteBehavior,
-};
+use symcockpit_testkit::bluetooth::{FakeCentral, FakeDevice, SyncCentral, WriteBehavior};
 use symcockpit_testkit::clipboard::{FakeExclusion, FakeKeys, SharedPasteboard};
 use symcockpit_testkit::input::{FakeHaptic, FakeProbe, FakeSound, FakeTapHost, SharedFeedback};
 use symcockpit_testkit::kill::{FakeProcesses, identity};
@@ -48,6 +49,18 @@ use symcockpit_testkit::storage_health::{FakeNvme, FakeSpeedHost, FakeTree};
 
 const SVC: &str = "180F";
 const CHR: &str = "2A19";
+
+struct PassiveBluetooth(Option<BleAuthorization>);
+
+impl PairedDevices for PassiveBluetooth {
+    fn paired(&self) -> Result<Vec<PairedDevice>, symcockpit_contract::Error> {
+        Ok(vec![])
+    }
+
+    fn ble_authorization(&self) -> Option<BleAuthorization> {
+        self.0
+    }
+}
 
 #[derive(Clone, Default)]
 struct Recorder(Arc<Mutex<Vec<String>>>);
@@ -109,6 +122,10 @@ fn ads() -> Vec<Advertisement> {
 }
 
 fn world() -> World {
+    world_with_ble_authorization(None)
+}
+
+fn world_with_ble_authorization(authorization: Option<BleAuthorization>) -> World {
     let tmp = tempfile::tempdir().unwrap();
     let mut app = app(tmp.path());
     let home = tmp.path().to_path_buf();
@@ -155,7 +172,7 @@ fn world() -> World {
         processes: Rc::new(FakeProcesses::new(identity(321, "Hog", 77))),
         sleep: Box::new(|_| {}),
         audio: Box::new(move || Ok(kit.clone())),
-        paired: Rc::new(FakePaired(vec![])),
+        paired: Rc::new(PassiveBluetooth(authorization)),
         central: Box::new(move || Ok(Box::new(Shared(one_shot_central.clone())))),
         input: InputKit {
             settings: Box::new(|path| Box::new(JsonFileSettings::new(path))),
@@ -493,6 +510,17 @@ fn ending_the_agent_releases_every_app_even_when_the_output_changed_meanwhile() 
 }
 
 // ------------------------------------------------------------------------- BLE
+
+#[test]
+fn ble_session_reports_authorization_without_starting_a_scan_or_connection() {
+    let w = world_with_ble_authorization(Some(BleAuthorization::NotDetermined));
+    w.session(true, |rpc| {
+        let session = rpc.call("ble.session", json!({}));
+        assert_eq!(session["authorization"], "not_determined");
+        assert_eq!(session["connections"], json!([]));
+        assert_eq!(w.central.counters(), (0, 0, 0));
+    });
+}
 
 #[test]
 fn the_ble_session_lives_in_the_agent_and_exports_its_log() {
