@@ -41,6 +41,11 @@ jobs:
       - name: Check symaira-corekit pins match project.yml
         run: bash scripts/check-corekit-pins.sh
 
+      - name: Check every version declaration agrees (Cargo.toml is the source)
+        # Cargo workspace version, the pins between crates, Cargo.lock and
+        # CockpitVersion.swift; the release workflow also compares the tag.
+        run: ./scripts/check-version.sh
+
       - name: Detect affected jobs
         id: detect
         env:
@@ -212,6 +217,34 @@ jobs:
           cargo test --locked
           # The debug-only parent-check switch of `symcockpit agent` is not in release.
           cargo test --release --locked -p symcockpit --test agent_release
+
+  # Assemble the app the way the release does (scripts/build-app.sh: Swift app,
+  # Rust agent and helper, Quick Look and FinderSync extensions) but ad hoc and
+  # arm64 only, so a break in the bundle shows before a tag. Not signed with a
+  # Developer ID and not notarized: that is the release workflow's job.
+  app-bundle:
+    name: app bundle (ad hoc, arm64)
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.outputs.root != 'false' ||
+      needs.changes.outputs.rust != 'false' || needs.changes.outputs.icon != 'false') }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.4.1'
+      - name: Make the Metal toolchain usable
+        run: bash scripts/ci-metal-toolchain.sh
+      - name: Resolve the pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Assemble and smoke the app bundle
+        run: |
+          set -euo pipefail
+          REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
+          ./scripts/smoke-app.sh "build/app/Symaira Cockpit.app"
+          ./scripts/check-version.sh --app "build/app/Symaira Cockpit.app"
 
   # Compile the shipped .icon with the release Xcode before a tag can reach
   # the GUI release path. The regular Swift matrix does not exercise actool.

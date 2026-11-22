@@ -46,6 +46,25 @@ Expected: `valid on disk`, `satisfies its Designated Requirement`, and
 `Identifier=com.symaira.cockpit.symcockpit`, `TeamIdentifier=M4744F3TAA`, and the
 helper `Identifier=com.symaira.symtune-helper`.
 
+The release workflow builds the same way, with a secure timestamp and the stricter gate:
+
+```bash
+CODE_SIGN_TIMESTAMP=--timestamp STRIP_APP=1 REQUIRE_EMBEDDED_TEAM_ID=true \
+EXPECTED_TEAM_ID=M4744F3TAA CODE_SIGN_IDENTITY="Developer ID Application: Daniel Justus (M4744F3TAA)" \
+OUTPUT_DIR=build/app-release-check ./scripts/build-app.sh
+EXPECTED_TEAM_ID=M4744F3TAA REQUIRE_RELEASE_SIGNATURE=true ./scripts/smoke-app.sh "build/app-release-check/Symaira Cockpit.app"
+./scripts/check-version.sh --app "build/app-release-check/Symaira Cockpit.app"
+codesign -dvv --entitlements - "…/Contents/PlugIns/SymCockpitFinderSync.appex"   # sandbox + app group
+spctl --assess --type execute --verbose=4 "build/app-release-check/Symaira Cockpit.app"
+```
+
+`REQUIRE_RELEASE_SIGNATURE=true` fails unless every Mach-O is arm64, signed by the Developer ID
+of the team, with Hardened Runtime and a timestamp, and the app and the FinderSync extension
+carry the app group. `spctl` rejects the bundle before notarization (`rejected`, source
+`Unnotarized Developer ID`): that is expected here; only the notarized, stapled app from the
+release workflow is accepted. Nothing re-signs the bundle after `build-app.sh`: a blanket
+re-sign would drop the extensions' entitlements.
+
 ## 2. The agent refuses a parent that is not the app (safe, no app)
 
 ```bash

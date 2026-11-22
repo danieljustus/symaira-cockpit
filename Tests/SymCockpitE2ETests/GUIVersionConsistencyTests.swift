@@ -77,10 +77,13 @@ final class GUIVersionConsistencyTests: XCTestCase {
         )
         XCTAssertTrue(buildScript.contains("Sources/SymCockpitVersion/CockpitVersion.swift"))
         XCTAssertTrue(buildScript.contains("$(COCKPIT_VERSION)"))
+        // The tag is compared with every declaration (Cargo.toml is the source,
+        // CockpitVersion.swift is one of them) by the shared check script.
         XCTAssertTrue(
-            releaseWorkflow.contains("Sources/SymCockpitVersion/CockpitVersion.swift"),
-            "release verification must read the shared source"
+            releaseWorkflow.contains("scripts/check-version.sh"),
+            "release verification must run the version check"
         )
+        XCTAssertTrue(try read("scripts/check-version.sh").contains("CockpitVersion.swift"))
         XCTAssertFalse(releaseWorkflow.contains("Sources/symcockpit/main.swift"))
     }
 
@@ -92,13 +95,17 @@ final class GUIVersionConsistencyTests: XCTestCase {
                 "update the Homebrew requirements when the deployment target changes"
             )
         }
-        let workflow = try read(".github/workflows/release.yml")
-        XCTAssertEqual(
-            workflow.components(separatedBy: "depends_on macos: :tahoe").count - 1,
-            2,
-            "both the formula and cask must require macOS 26 Tahoe"
-        )
-        XCTAssertFalse(workflow.contains("depends_on macos: :sonoma"))
+        // The Ruby files are templates (packaging/homebrew), not workflow heredocs.
+        for template in ["packaging/homebrew/symcockpit.rb.in", "packaging/homebrew/symcockpit-cask.rb.in"] {
+            let ruby = try read(template)
+            XCTAssertEqual(
+                ruby.components(separatedBy: "depends_on macos: :tahoe").count - 1,
+                1,
+                "\(template) must require macOS 26 Tahoe"
+            )
+            XCTAssertTrue(ruby.contains("depends_on arch: :arm64"), "\(template): Apple Silicon only (D16)")
+            XCTAssertFalse(ruby.contains("depends_on macos: :sonoma"))
+        }
     }
 
     func testApprovedAppIconIsBundledAndGuarded() throws {

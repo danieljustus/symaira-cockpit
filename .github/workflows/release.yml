@@ -14,14 +14,20 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Cockpit 2 packaging (architecture 5.4, D16): arm64 only. The shipped command
+# line is the Rust `symcockpit` (crates/symcockpit); the app bundle embeds that
+# same binary as its agent and CLI, plus the privileged helper and the Quick
+# Look / FinderSync extensions. One version source: Cargo.toml
+# `[workspace.package] version` (scripts/set-version.sh writes it, and
+# scripts/check-version.sh proves every other declaration equals it and the tag).
+
 jobs:
   release:
-    name: Build and publish
+    name: Build and publish the CLI
     permissions:
       contents: write # gh release create
-    # macOS-only by construction: the cockpit families drive AppKit, IOKit,
-    # Accessibility and ScreenCaptureKit. macos-latest rather than a pinned
-    # runner because tuning targets Swift 6.4, matching the CI workflow.
+    # macOS-only by construction: the cockpit drives AppKit, IOKit,
+    # Accessibility and ScreenCaptureKit. macos-latest is Apple Silicon.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -30,81 +36,69 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify the tag matches CockpitVersion
+      - name: Verify the tag matches every version declaration
         # A tag that disagrees with the compiled-in version would ship a
         # binary that misreports itself, and Homebrew's `test do` block would
         # fail after the release is already public.
-        run: |
-          declared=$(sed -n 's/^[[:space:]]*public static let current = "\([^"]*\)".*/\1/p' Sources/SymCockpitVersion/CockpitVersion.swift)
-          if [ "$declared" != "${{ steps.version.outputs.version }}" ]; then
-            echo "tag ${{ steps.version.outputs.version }} != CockpitVersion.current $declared" >&2
-            exit 1
-          fi
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/check-version.sh "$VERSION"
 
-      - name: Make the Metal toolchain usable
-        # Release builds compile the shared AppKit topography shader
-        # (SymairaTopo.metal). On hosted runners the Xcode Metal shims that
-        # Swift Build calls fail even though the component is installed;
-        # the script routes them to the real tools.
-        run: bash scripts/ci-metal-toolchain.sh
-
-      - name: Test every package
-        run: make test
-
-      - name: Test the dispatcher package
-        run: swift test
-
-      - name: Build universal binary
-        run: swift build -c release --arch arm64 --arch x86_64
-
-      - name: Strip release binary
-        # swift build keeps the full symbol table: 112k symbols, more than
-        # half the shipped bytes (8.2 MB -> 3.5 MB per arch, measured on
-        # v0.6.x). Strip it, then re-apply the ad-hoc signature that arm64
-        # Mach-O needs to exec at all, and smoke-test the result.
+      - name: Resolve the pinned Rust toolchain
+        # Same pin as ci.yml: rust-toolchain.toml. Fail when the toolchain in
+        # use is not the pinned channel.
         run: |
           set -euo pipefail
-          binary="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/symcockpit"
-          strip "$binary"
-          codesign --force --sign - "$binary"
-          "$binary" version
-          ls -lh "$binary"
+          rustup show active-toolchain
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          rustc --version | grep -q "^rustc $want " || {
+            echo "::error::rustc is not the pinned $want: $(rustc --version)"
+            exit 1
+          }
 
-      - name: Package
+      - name: Test the Rust workspace
+        run: cargo test --locked
+
+      - name: Build the arm64 CLI
+        run: cargo build --release --locked -p symcockpit --target aarch64-apple-darwin
+
+      - name: Package the CLI
+        # Strips, signs ad hoc (the arm64 minimum), checks the binary is arm64
+        # only and reports the tag's version, then writes
+        # symcockpit_<version>_darwin_arm64.tar.gz and checksums.txt.
         id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          version="${{ steps.version.outputs.version }}"
-          archive="symcockpit_${version}_darwin_universal.tar.gz"
-          binary="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/symcockpit"
-          lipo -info "$binary"
-          mkdir -p dist/stage
-          cp "$binary" dist/stage/symcockpit
-          cp LICENSE README.md dist/stage/
-          tar -czf "dist/${archive}" -C dist/stage .
-          ( cd dist && shasum -a 256 "${archive}" > checksums.txt )
-          echo "archive=dist/${archive}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          archive="$(./scripts/package-cli.sh "$VERSION" target/aarch64-apple-darwin/release/symcockpit dist | tail -1)"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          cat dist/checksums.txt
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        # The binary is unsigned and un-notarized: no Developer ID is
-        # available to CI. Homebrew installs it from the tarball, which
-        # Gatekeeper does not quarantine, so the CLI runs without a
-        # right-click-open dance. A signed .app bundle would need the
-        # certificate first.
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        # The CLI tarball is not Developer-ID signed or notarized: Homebrew
+        # installs it without a quarantine attribute, so it runs as it is. The
+        # signed and notarized app (which carries the same binary) follows in
+        # release-macos-app; the tap is bumped only after both exist.
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            "${{ steps.package.outputs.archive }}" \
+            "$ARCHIVE" \
             dist/checksums.txt
 
   # ---------------------------------------------------------------------------
   # GUI release path. Symaira Cockpit.app is assembled by scripts/build-app.sh
-  # straight from the SwiftPM product (no Xcode project on purpose), deep-signed
-  # with the Developer ID certificate, notarized via App Store Connect API key,
+  # straight from the SwiftPM product (no Xcode project on purpose) and signed
+  # there, nested parts first and each with its own identity and entitlements,
+  # with the Developer ID certificate, Hardened Runtime and a secure timestamp.
+  # Nothing re-signs afterwards (a blanket re-sign would drop the extensions'
+  # sandbox entitlements). Then: notarized with an App Store Connect API key,
   # packaged into a branded DMG and uploaded to the same release as the CLI.
-  # Fail-closed: a stable release never ships an unsigned app.
+  # Fail-closed: a stable release never ships an unsigned or un-notarized app.
   # ---------------------------------------------------------------------------
   release-macos-app:
     name: Signed and notarized Symaira Cockpit.app
@@ -140,9 +134,26 @@ jobs:
         # the script routes them to the real tools.
         run: bash scripts/ci-metal-toolchain.sh
 
+      - name: Resolve the pinned Rust toolchain
+        # build-app.sh builds the agent, the helper and the extension library
+        # with cargo; same pin as ci.yml and the CLI job.
+        run: |
+          set -euo pipefail
+          rustup show active-toolchain
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          rustc --version | grep -q "^rustc $want " || {
+            echo "::error::rustc is not the pinned $want: $(rustc --version)"
+            exit 1
+          }
+
       - name: Resolve version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the tag matches every version declaration
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/check-version.sh "$VERSION"
 
       - name: Import Developer ID certificate
         env:
@@ -165,6 +176,7 @@ jobs:
           CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
           echo -n "$CERTIFICATE_P12" | base64 --decode -o "$CERTIFICATE_PATH"
           security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm -f "$CERTIFICATE_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
@@ -189,67 +201,39 @@ jobs:
             echo "EXPECTED_TEAM_ID=$TEAM_ID"
           } >> "$GITHUB_ENV"
 
-      - name: Build universal app bundle
+      - name: Build and sign the arm64 app bundle
+        # build-app.sh builds arm64 only, bakes the team into the agent and the
+        # helper, builds and signs the extensions with their entitlements, and
+        # signs the helper, the agent and the bundle last, all with this one
+        # identity, Hardened Runtime and a secure timestamp.
         env:
           CODE_SIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
           EXPECTED_TEAM_ID: ${{ env.EXPECTED_TEAM_ID }}
+          CODE_SIGN_TIMESTAMP: --timestamp
+          STRIP_APP: '1'
+          REQUIRE_EMBEDDED_TEAM_ID: 'true'
+          REQUIRE_COMPILED_ICON: 'true'
         run: |
           set -euo pipefail
-          REQUIRE_EMBEDDED_TEAM_ID=true REQUIRE_COMPILED_ICON=true ./scripts/build-app.sh
+          ./scripts/build-app.sh
           test -d "build/app/Symaira Cockpit.app"
           REQUIRE_COMPILED_ICON=true ./scripts/verify-app-icon.sh "build/app/Symaira Cockpit.app"
 
-      - name: Verify app reports the release version
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          APP_PATH="build/app/Symaira Cockpit.app"
-          PLIST_VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Contents/Info.plist")
-          echo "CFBundleShortVersionString: $PLIST_VERSION"
-          if [ "$PLIST_VERSION" != "$VERSION" ]; then
-            echo "::error::App bundle version mismatch: expected '$VERSION', got '$PLIST_VERSION'."
-            exit 1
-          fi
-          OUTPUT=$("$APP_PATH/Contents/MacOS/SymCockpitApp" --version)
-          echo "$OUTPUT"
-          if [ "$OUTPUT" != "Symaira Cockpit $VERSION" ]; then
-            echo "::error::App executable version mismatch: expected 'Symaira Cockpit $VERSION', got '$OUTPUT'."
-            exit 1
-          fi
+      - name: Verify the app reports the release version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/check-version.sh "$VERSION" --app "build/app/Symaira Cockpit.app"
 
-      - name: Strip app executable
-        # Same as the CLI: drop the symbol table before the Developer ID
-        # signature below makes the bytes final. Nothing executes the app
-        # between this step and re-signing, so no interim ad-hoc signature
-        # is needed.
-        run: |
-          set -euo pipefail
-          strip "build/app/Symaira Cockpit.app/Contents/MacOS/SymCockpitApp"
-          strip "build/app/Symaira Cockpit.app/Contents/Library/LaunchServices/com.symaira.symtune-helper"
-
-      - name: Sign and verify app bundle
+      - name: Verify the signature of every part
+        # Read-only: nothing is signed here. The seal must hold, and every
+        # Mach-O must carry the release signature of the certificate's team
+        # (smoke-app.sh, REQUIRE_RELEASE_SIGNATURE), with the extensions'
+        # sandbox and the app group entitlements still in place.
         run: |
           set -euo pipefail
           APP_PATH="build/app/Symaira Cockpit.app"
-          # The privileged fan helper is signed first, with hardened runtime and
-          # under its own code-signing identifier: the app's XPC requirement
-          # pins exactly this identifier plus the team of this identity.
-          HELPER_ID="com.symaira.symtune-helper"
-          HELPER_PATH="$APP_PATH/Contents/Library/LaunchServices/$HELPER_ID"
-          test -x "$HELPER_PATH"
-          test -f "$APP_PATH/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
-          codesign --force --sign "$CODESIGN_IDENTITY" --identifier "$HELPER_ID" \
-            --timestamp --options runtime "$HELPER_PATH"
-          while IFS= read -r -d '' item; do
-            if [ "$item" = "$HELPER_PATH" ]; then
-              continue
-            fi
-            if file "$item" | grep -q "Mach-O"; then
-              codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$item"
-            fi
-          done < <(find "$APP_PATH/Contents" -type f -print0)
-          codesign --force --sign "$CODESIGN_IDENTITY" --timestamp --options runtime "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          REQUIRE_RELEASE_SIGNATURE=true ./scripts/smoke-app.sh "$APP_PATH"
 
       - name: Verify the fan helper identity and hardened runtime
         # The helper accepts only the app and the app accepts only the helper,
@@ -259,7 +243,7 @@ jobs:
         # other, a helper without the hardened runtime, or a signature that is
         # weaker than the requirement the code enforces at runtime. The
         # requirement strings come from the helper binary itself, so this step
-        # cannot drift from CodeSigningRequirements.
+        # cannot drift from the code.
         run: |
           set -euo pipefail
           APP_PATH="build/app/Symaira Cockpit.app"
@@ -285,40 +269,28 @@ jobs:
           codesign --verify --strict --verbose=2 -R="$HELPER_REQUIREMENT" "$HELPER_PATH"
           codesign --verify --strict --verbose=2 -R="$APP_REQUIREMENT" "$APP_PATH"
 
-      - name: Notarize and staple app
+      - name: Notarize and staple the app
         env:
           NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
         run: |
           set -euo pipefail
-          for secret in NOTARY_API_KEY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID; do
-            if [ -z "${!secret:-}" ]; then
-              echo "::error::$secret must be configured in the release environment."
-              exit 1
-            fi
-          done
-
-          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          echo -n "$NOTARY_API_KEY" | base64 --decode -o "$API_KEY_PATH"
-
           APP_PATH="build/app/Symaira Cockpit.app"
           SUBMISSION_ARCHIVE="$RUNNER_TEMP/app-notarization.zip"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$SUBMISSION_ARCHIVE"
-          xcrun notarytool submit "$SUBMISSION_ARCHIVE" \
-            -d "$NOTARY_API_KEY_ID" \
-            -i "$NOTARY_API_ISSUER_ID" \
-            -k "$API_KEY_PATH" \
-            --wait
+          ./scripts/notarize.sh "$SUBMISSION_ARCHIVE"
+          rm -f "$SUBMISSION_ARCHIVE"
           xcrun stapler staple "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           spctl --assess --type execute --verbose=4 "$APP_PATH"
 
       - name: Package release assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
           APP_PATH="build/app/Symaira Cockpit.app"
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/Symaira-Cockpit-${VERSION}.zip"
@@ -327,10 +299,11 @@ jobs:
             "dist/Symaira-Cockpit-${VERSION}-macos.dmg" \
             "Symaira Cockpit"
 
-      - name: Sign and verify DMG
+      - name: Sign and verify the DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
           DMG_PATH="dist/Symaira-Cockpit-${VERSION}-macos.dmg"
           if [ -z "${CODESIGN_IDENTITY:-}" ]; then
             echo "::error::CODESIGN_IDENTITY is required before signing the DMG."
@@ -339,33 +312,38 @@ jobs:
           codesign --force --sign "$CODESIGN_IDENTITY" --timestamp "$DMG_PATH"
           codesign --verify --strict --verbose=2 "$DMG_PATH"
 
-      - name: Notarize and staple DMG
+      - name: Notarize and staple the DMG
         env:
           NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          for secret in NOTARY_API_KEY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID; do
-            if [ -z "${!secret:-}" ]; then
-              echo "::error::$secret must be configured in the release environment."
-              exit 1
-            fi
-          done
-
-          VERSION="${{ steps.version.outputs.version }}"
           DMG_PATH="dist/Symaira-Cockpit-${VERSION}-macos.dmg"
-          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          echo -n "$NOTARY_API_KEY" | base64 --decode -o "$API_KEY_PATH"
-          xcrun notarytool submit "$DMG_PATH" \
-            -d "$NOTARY_API_KEY_ID" \
-            -i "$NOTARY_API_ISSUER_ID" \
-            -k "$API_KEY_PATH" \
-            --wait
+          ./scripts/notarize.sh "$DMG_PATH"
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
           codesign --verify --strict --verbose=2 "$DMG_PATH"
           spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
+
+      - name: Verify the app inside the DMG
+        # What a user drags to /Applications: the stapled, release-signed app,
+        # with the command line the cask links.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          DMG_PATH="dist/Symaira-Cockpit-${VERSION}-macos.dmg"
+          MOUNT="$RUNNER_TEMP/dmg-mount"
+          mkdir -p "$MOUNT"
+          hdiutil attach "$DMG_PATH" -readonly -nobrowse -noverify -mountpoint "$MOUNT"
+          trap 'hdiutil detach "$MOUNT" -quiet || true' EXIT
+          APP="$MOUNT/Symaira Cockpit.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          REQUIRE_RELEASE_SIGNATURE=true ./scripts/smoke-app.sh "$APP"
+          ./scripts/check-version.sh "$VERSION" --app "$APP"
 
       - name: Upload app artifacts to GitHub Release
         env:
@@ -379,9 +357,9 @@ jobs:
       - name: Verify published DMG bytes
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
           ASSET="Symaira-Cockpit-${VERSION}-macos.dmg"
           LOCAL_PATH="dist/${ASSET}"
           DOWNLOAD_DIR="$RUNNER_TEMP/published-release"
@@ -414,9 +392,11 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Homebrew distribution. Updates Formula (CLI tarball) and Cask (GUI DMG) in
-  # danieljustus/homebrew-tap once every artifact exists on the release, so the
-  # tap can never point at a partial release.
+  # Homebrew distribution. Updates Formula (CLI tarball only) and Cask (app and
+  # the CLI inside it) in danieljustus/homebrew-tap once every artifact exists
+  # on the release, so the tap can never point at a partial release. The Ruby
+  # files come from packaging/homebrew/ through scripts/render-homebrew.sh:
+  # no shell heredoc ever touches the `#{version}` interpolation.
   # ---------------------------------------------------------------------------
   bump-homebrew:
     name: Bump Homebrew formula and cask
@@ -428,6 +408,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout the tagged source (templates and scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: src
+          persist-credentials: false
+
       - name: Checkout Homebrew tap
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -443,88 +429,35 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           gh release download "${GITHUB_REF_NAME}" \
             --repo danieljustus/symaira-cockpit \
-            --pattern "symcockpit_${VERSION}_darwin_universal.tar.gz" \
+            --pattern "symcockpit_${VERSION}_darwin_arm64.tar.gz" \
             --pattern "Symaira-Cockpit-${VERSION}-macos.dmg" \
+            --pattern "checksums.txt" \
             --dir artifacts
-          TAR_SHA256=$(shasum -a 256 "artifacts/symcockpit_${VERSION}_darwin_universal.tar.gz" | awk '{print $1}')
+          TAR_SHA256=$(shasum -a 256 "artifacts/symcockpit_${VERSION}_darwin_arm64.tar.gz" | awk '{print $1}')
           DMG_SHA256=$(shasum -a 256 "artifacts/Symaira-Cockpit-${VERSION}-macos.dmg" | awk '{print $1}')
+          # The tarball must be the one the release job checksummed.
+          if ! grep -q "^${TAR_SHA256}  symcockpit_${VERSION}_darwin_arm64.tar.gz$" artifacts/checksums.txt; then
+            echo "::error::The published CLI tarball does not match checksums.txt."
+            exit 1
+          fi
           {
             echo "VERSION=$VERSION"
             echo "TAR_SHA256=$TAR_SHA256"
             echo "DMG_SHA256=$DMG_SHA256"
           } >> "$GITHUB_ENV"
 
-      - name: Write formula
+      - name: Write formula and cask
         run: |
           set -euo pipefail
-          cat > homebrew-tap/Formula/symcockpit.rb <<EOF
-          # typed: false
-          # frozen_string_literal: true
-
-          class Symcockpit < Formula
-            desc "This machine: thermals, power, display and system tuning"
-            homepage "https://github.com/danieljustus/symaira-cockpit"
-            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v${VERSION}/symcockpit_${VERSION}_darwin_universal.tar.gz"
-            sha256 "${TAR_SHA256}"
-            license "Apache-2.0"
-
-            # One universal binary rather than per-arch archives: symcockpit is
-            # macOS-only (AppKit/IOKit/Accessibility/ScreenCaptureKit), so there is no
-            # Linux leg to split on, and \`swift build --arch arm64 --arch x86_64\`
-            # produces a single artifact for both Macs.
-            depends_on macos: :tahoe
-
-            def install
-              bin.install "symcockpit"
-            end
-
-            def caveats
-              <<~EOS
-                symcockpit covers hardware and system tuning. Operate and Scope are
-                optional modules in Symaira Brain; legacy dispatcher commands are removed.
-                The menu bar app
-                is distributed separately: brew install --cask danieljustus/tap/symcockpit
-              EOS
-            end
-
-            test do
-              assert_match "symcockpit #{version}", shell_output("#{bin}/symcockpit version")
-            end
-          end
-          EOF
-
-      - name: Write cask
-        run: |
-          set -euo pipefail
-          mkdir -p homebrew-tap/Casks
-          cat > homebrew-tap/Casks/symcockpit.rb <<EOF
-          # frozen_string_literal: true
-
-          cask "symcockpit" do
-            version "${VERSION}"
-            sha256 "${DMG_SHA256}"
-
-            url "https://github.com/danieljustus/symaira-cockpit/releases/download/v#{version}/Symaira-Cockpit-#{version}-macos.dmg"
-            name "Symaira Cockpit"
-            desc "This machine: thermals, power, display and system tuning"
-            homepage "https://github.com/danieljustus/symaira-cockpit"
-
-            livecheck do
-              url "https://github.com/danieljustus/symaira-cockpit/releases/latest"
-              strategy :header_match
-              regex(/Symaira-Cockpit-(\d+(?:\.\d+)*)-macos\.dmg/i)
-            end
-
-            depends_on macos: :tahoe
-
-            app "Symaira Cockpit.app"
-
-            zap trash: [
-              "~/Library/Caches/com.symaira.cockpit",
-              "~/Library/WebKit/com.symaira.cockpit",
-            ]
-          end
-          EOF
+          mkdir -p homebrew-tap/Formula homebrew-tap/Casks
+          ./src/scripts/render-homebrew.sh formula "$VERSION" "$TAR_SHA256" > homebrew-tap/Formula/symcockpit.rb
+          ./src/scripts/render-homebrew.sh cask "$VERSION" "$DMG_SHA256" > homebrew-tap/Casks/symcockpit.rb
+          ruby -c homebrew-tap/Formula/symcockpit.rb
+          ruby -c homebrew-tap/Casks/symcockpit.rb
+          # The interpolation must have survived: a heredoc once wrote it away.
+          grep -q 'releases/download/v#{version}/Symaira-Cockpit-#{version}-macos.dmg' homebrew-tap/Casks/symcockpit.rb
+          grep -q "symcockpit_${VERSION}_darwin_arm64.tar.gz" homebrew-tap/Formula/symcockpit.rb
+          grep -q "version \"${VERSION}\"" homebrew-tap/Casks/symcockpit.rb
 
       - name: Publish formula and cask through a pull request
         env:
@@ -547,7 +480,7 @@ jobs:
           pr=$(gh pr create --repo danieljustus/homebrew-tap \
             --base main --head "$branch" \
             --title "Bump symcockpit to v${VERSION}" \
-            --body "Update CLI and GUI from the published Cockpit v${VERSION} assets and their exact SHA-256 checksums.")
+            --body "Update the CLI formula (arm64 tarball) and the app cask (DMG, links the bundled CLI) from the published Cockpit v${VERSION} assets and their exact SHA-256 checksums.")
           gh pr merge "$pr" --repo danieljustus/homebrew-tap \
             --squash --auto --match-head-commit "$head"
           # Tap CI can queue for a long time under runner contention; v0.9.0
