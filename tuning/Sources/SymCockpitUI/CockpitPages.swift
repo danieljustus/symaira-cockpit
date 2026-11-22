@@ -32,6 +32,8 @@ struct PairedCards<Content: View>: View {
 @MainActor
 struct CockpitPageContext {
     let session: AgentSession
+    let navigation: CockpitNavigation
+    let storage: StoragePageModel
     let model: TuneViewModel
     let config: TuneConfig
     let aiUsageModel: AIUsageViewModel
@@ -46,8 +48,7 @@ struct CockpitPageContext {
     var hudItemPreferences: HUDItemPreferences?
 }
 
-/// The page for a destination. The six areas whose pages are still placeholders get
-/// only the agent session.
+/// The page for a destination.
 @MainActor
 struct CockpitPageHost: View {
     let context: CockpitPageContext
@@ -58,10 +59,12 @@ struct CockpitPageHost: View {
         case .overview: OverviewPage(context: context)
         case .display: DisplayPage(context: context)
         case .powerFans: PowerFansPage(context: context)
-        case .storage: StoragePage(session: context.session)
+        case .storage:
+            StoragePage(model: context.storage, metrics: context.model, isWindowVisible: context.navigation.isWindowVisible)
         case .audioMIDI: AudioMIDIPage(session: context.session)
         case .bluetoothInput: BluetoothInputPage(session: context.session)
-        case .processes: ProcessesPage(session: context.session)
+        case .processes:
+            ProcessesPage(session: context.session, isWindowVisible: context.navigation.isWindowVisible)
         case .clipboard: ClipboardPage(session: context.session)
         case .finder: FinderPage(session: context.session)
         case .aiUsage: AIUsagePage(context: context)

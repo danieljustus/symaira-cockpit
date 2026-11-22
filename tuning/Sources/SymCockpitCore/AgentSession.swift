@@ -87,10 +87,20 @@ public struct AgentPlan: Equatable, Sendable {
     /// When the plan stops being confirmable, by this app's clock: the moment the
     /// answer arrived plus `expiresInSeconds`.
     public let expiresAt: Date?
+    /// The plan of an area command (`storage.clean`, `processes.kill`, ...): the agent recorded it
+    /// as the command's own answer and applies it through the `plan.confirm` command, not `confirm`.
+    public let confirmsThroughPlanCommand: Bool
+    /// The whole plan as the agent sent it, for what the area adds (categories, the app, exclusions).
+    public let details: AgentJSON
 
-    init(command: String, planID: String, plan: AgentJSON, received: Date = Date()) {
+    init(
+        command: String, planID: String, plan: AgentJSON, received: Date = Date(),
+        confirmsThroughPlanCommand: Bool = false
+    ) {
         self.id = planID
         self.command = command
+        self.confirmsThroughPlanCommand = confirmsThroughPlanCommand
+        self.details = plan
         self.expiresInSeconds = plan["expires_in_s"]?.intValue
         self.expiresAt = expiresInSeconds.map { received.addingTimeInterval(TimeInterval($0)) }
         self.items = (plan["items"]?.arrayValue ?? []).map {
@@ -188,6 +198,7 @@ public final class AgentSession: @unchecked Sendable {
     deinit { client.stop() }
 
     public var state: AgentState { client.state }
+    var processID: Int32? { client.processID }
 
     /// The hello answer while the agent is ready.
     public var hello: AgentHello? {
@@ -386,9 +397,12 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Runs `command`. Reversible commands run at once; a risky one returns
     /// `.needsConfirmation` and nothing has happened yet.
-    public func perform(_ command: String, params: [String: AgentJSON] = [:]) async -> ActionOutcome {
+    /// `timeout` replaces the request timeout for a command that is slow by nature.
+    public func perform(
+        _ command: String, params: [String: AgentJSON] = [:], timeout: TimeInterval? = nil
+    ) async -> ActionOutcome {
         do {
-            switch try await client.call(command, params: params) {
+            switch try await client.call(command, params: params, timeout: timeout) {
             case .ok(_, _, let output):
                 return .done(output)
             case .confirmationRequired(let name, let planID, let plan):
@@ -396,6 +410,33 @@ public final class AgentSession: @unchecked Sendable {
             }
         } catch {
             return Self.failed(error)
+        }
+    }
+
+    /// Asks an area command to record its plan (`storage.clean`, `storage.duplicates.remove`,
+    /// `apps.uninstall`, `processes.kill`). Nothing has happened yet: the plan comes back as
+    /// `.needsConfirmation` and `confirmReport` applies it after the user said so.
+    public func plan(
+        _ command: String, params: [String: AgentJSON] = [:], timeout: TimeInterval? = nil
+    ) async -> ActionOutcome {
+        if let hello, !hello.commands.contains(where: { $0.name == command }) {
+            return .failed(message: "The Cockpit agent does not offer \(command).", exitClass: "unsupported")
+        }
+        switch await perform(command, params: params, timeout: timeout) {
+        case .done(let output):
+            guard let id = output["id"]?.stringValue, !id.isEmpty,
+                  output["state"]?.stringValue == "pending",
+                  output["items"]?.arrayValue != nil else {
+                return .failed(message: "The agent's answer to \(command) holds no plan.", exitClass: nil)
+            }
+            if let hello, !hello.commands.contains(where: { $0.name == "plan.confirm" }) {
+                return .failed(message: "The Cockpit agent cannot apply this plan.", exitClass: "unsupported")
+            }
+            return .needsConfirmation(AgentPlan(
+                command: command, planID: id, plan: output, confirmsThroughPlanCommand: true
+            ))
+        case let other:
+            return other
         }
     }
 
@@ -430,6 +471,17 @@ public final class AgentSession: @unchecked Sendable {
               properties.count == 1, properties.values.first?["type"]?.stringValue == "string"
         else { return .null }
         return .string("off")
+    }
+
+    /// The lowest value the register allows for an integer argument (`processes.kill` takes no
+    /// pid below 2), or `nil` when it names none.
+    public func minimum(of argument: String, in command: String) -> Int? {
+        schemaProperties(of: command)?[argument]?["minimum"]?.intValue
+    }
+
+    /// The values the register allows for an array argument whose items are an enum.
+    public func choices(of argument: String, in command: String) -> [String] {
+        schemaProperties(of: command)?[argument]?["items"]?["enum"]?.arrayValue?.compactMap(\.stringValue) ?? []
     }
 
     private func schemaProperties(of command: String) -> AgentJSON? {

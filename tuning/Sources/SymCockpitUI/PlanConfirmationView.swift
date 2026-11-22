@@ -57,10 +57,12 @@ struct PlanConfirmationView: View {
             // One clock for the countdown and the button: an expired plan cannot be confirmed.
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(alignment: .leading, spacing: SymairaSpacing.small) {
-                    expiry(at: context.date)
                     if isRunning {
-                        SymairaLoadingState("Applying… you may be asked for your administrator password…")
+                        SymairaLoadingState(model.plan.confirmsThroughPlanCommand
+                            ? "Applying the plan… This can take several minutes."
+                            : "Applying… you may be asked for your administrator password…")
                     } else {
+                        expiry(at: context.date)
                         HStack(spacing: SymairaSpacing.small) {
                             Button("Cancel", role: .cancel, action: onClose)
                                 .symairaButtonStyle(.secondary)

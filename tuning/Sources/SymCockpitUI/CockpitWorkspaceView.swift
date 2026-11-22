@@ -25,6 +25,7 @@ extension View {
 @Observable
 public final class CockpitNavigation {
     public var selection: CockpitDestination
+    public var isWindowVisible = false
 
     public init(selection: CockpitDestination = .overview) {
         self.selection = selection

@@ -300,6 +300,10 @@ public final class AgentClient: @unchecked Sendable {
         return currentState
     }
 
+    var processID: Int32? {
+        lock.withLock { process?.processIdentifier }
+    }
+
     // MARK: Lifecycle
 
     /// Launches the agent and completes the handshake. Returns the agent's
@@ -369,11 +373,15 @@ public final class AgentClient: @unchecked Sendable {
 
     /// Runs a register command. A `risky` one returns `.confirmationRequired`;
     /// show the plan to the user and call `confirm(planID:)` on approval.
-    public func call(_ command: String, params: [String: AgentJSON] = [:]) async throws -> AgentCallResult {
+    /// `timeout` replaces the configured request timeout for a command that is slow by nature
+    /// (a scan of a folder, a speed test).
+    public func call(
+        _ command: String, params: [String: AgentJSON] = [:], timeout: TimeInterval? = nil
+    ) async throws -> AgentCallResult {
         let result = try await request(
             "call",
             params: .object(["command": .string(command), "params": .object(params)]),
-            timeout: configuration.requestTimeout
+            timeout: timeout ?? configuration.requestTimeout
         )
         guard let status = result["status"]?.stringValue,
               let name = result["command"]?.stringValue

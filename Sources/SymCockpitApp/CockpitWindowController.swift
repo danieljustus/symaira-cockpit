@@ -66,10 +66,20 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         // The Tune panel in the window shares the menu bar's model; tell it a
         // panel is on screen so it polls at the interactive cadence.
+        navigation.isWindowVisible = true
         statusBar.setEmbeddedPanelVisible(true)
     }
 
+    func windowDidMiniaturize(_ notification: Notification) {
+        navigation.isWindowVisible = false
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        navigation.isWindowVisible = true
+    }
+
     func windowWillClose(_ notification: Notification) {
+        navigation.isWindowVisible = false
         statusBar.setEmbeddedPanelVisible(false)
         // Back to a menu-bar-only app. Deferred, because dropping the policy
         // inside the close notification races the window teardown and can
