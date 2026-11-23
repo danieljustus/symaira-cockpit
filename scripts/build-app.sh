@@ -109,10 +109,12 @@ if [[ -n "$EXPECTED_TEAM_ID" ]]; then
   }
 fi
 
-# Swift Build, named explicitly: it is the default only from Xcode 27 on, and the
-# native build system of Xcode 26 (CI and release runners) writes flat resource
-# bundles without a compiled default.metallib. The resource gate below rejects both.
-BUILD_ARGS=(--build-system swiftbuild --product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:-2}")
+# Swift Build and arm64, both named explicitly: Swift Build is the default only from
+# Xcode 27 on (the native build system of Xcode 26, used on CI and release runners,
+# writes flat resource bundles without a compiled default.metallib), and Xcode 26's
+# Swift Build makes a universal binary for release builds unless told the arch.
+# The resource and arch gates below reject each case.
+BUILD_ARGS=(--build-system swiftbuild --arch arm64 --product "$PRODUCT" -c "$CONFIGURATION" --jobs "${SWIFT_BUILD_JOBS:-2}")
 if [[ -n "${SWIFT_SCRATCH_PATH:-}" ]]; then
   BUILD_ARGS+=(--scratch-path "$SWIFT_SCRATCH_PATH")
 fi
