@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.13.0] (2026-11-23)
+
+### Fixed
+- `symcockpit serve` reports its real version in `serverInfo.version` (it said 0.10.0 in
+  v0.12.2); the version now comes from the binary itself (#422).
+- The wake monitor fires after sleep: the v0.12 monitor compared against a wrong IOKit
+  message constant, so display overrides and charge limits were never put back (#423).
+- The Swift tests no longer write fake events into the real
+  `~/.local/share/symtune/history.ndjson` (#424). Entries written by earlier test runs stay
+  in that file until you remove them.
+
 ### Packaging
 - Rust rebuild, wave 7: the release pipeline ships the Rust binary and is Apple Silicon only
   (architecture D16; Intel is not supported). `release.yml` builds
