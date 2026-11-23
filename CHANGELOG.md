@@ -52,6 +52,13 @@
   how to enable them in System Settings.
 
 ### Internal
+- The retired Swift fan helper is gone (#421): the `SymCockpitFanHelper` target,
+  `FanControlService`, `FanGovernor`, the helper-side `SymCockpitHelperKit` files and their
+  tests. They were still built but no longer shipped; the app bundles the Rust
+  `symcockpit-helper`, whose launchd plist now lives in `crates/symcockpit-helper/`. This also
+  removes the dead x86_64 path that addressed the 3-byte key `FS!` as key 0.
+- `make oracle` and `make oracle-native` keep `BIN` paths with spaces intact (#425).
+- The Rust toolchain pin moves to 1.98.1, which fixes a vtable miscompilation in 1.98.0 (#426).
 - Rust rebuild, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
   `fan profile|target <value>` write the Swift file (`~/.symtune/fan-profile.json`) and the
   history line themselves (the app agent plans them as risky commands; `fan.target` takes

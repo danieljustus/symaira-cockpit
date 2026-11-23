@@ -9,38 +9,6 @@ import XCTest
 /// `swift test`, which must never happen from an automated test run.
 final class PrivilegedElevationTests: XCTestCase {
 
-    // MARK: - isWorthEscalating
-
-    func testEscalatesOnFanModeWriteRejected() {
-        XCTAssertTrue(PrivilegedElevation.isWorthEscalating(FanControlError.fanModeWriteRejected(0)))
-    }
-
-    func testEscalatesOnTargetRPMWriteFailed() {
-        XCTAssertTrue(PrivilegedElevation.isWorthEscalating(FanControlError.targetRPMWriteFailed(0)))
-    }
-
-    func testDoesNotEscalateWhenNoFansAreDetected() {
-        XCTAssertFalse(PrivilegedElevation.isWorthEscalating(FanControlError.noFansDetected))
-    }
-
-    func testDoesNotEscalateOnUnsupportedPlatform() {
-        XCTAssertFalse(PrivilegedElevation.isWorthEscalating(FanControlError.unsupportedPlatform))
-    }
-
-    /// The regression case: a machine where even the read-only SMC probe
-    /// fails unprivileged throws a plain `TuneError.permission(...)` before
-    /// any `FanControlError` exists — this must still be treated as worth
-    /// one privileged retry, or escalation would silently never fire on
-    /// exactly the machines that need it.
-    func testEscalatesOnGenericPermissionErrorFromAnUnavailableSMCProbe() {
-        XCTAssertTrue(PrivilegedElevation.isWorthEscalating(TuneError.permission("SMC not available — fan control requires a real Mac")))
-    }
-
-    func testEscalatesOnSMCWritePolicyValidationErrors() {
-        XCTAssertTrue(PrivilegedElevation.isWorthEscalating(SMCWritePolicy.ValidationError.noSMCConnection))
-        XCTAssertTrue(PrivilegedElevation.isWorthEscalating(SMCWritePolicy.ValidationError.thermalEmergency(95)))
-    }
-
     // MARK: - shellFormat
 
     func testShellFormatIsLocaleIndependent() {

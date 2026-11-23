@@ -141,7 +141,7 @@ jobs:
       - name: Test
         run: swift test
 
-  # The GUI package at the repo root (app, fan helper, GUI tests).
+  # The GUI package at the repo root (app and GUI tests).
   root:
     name: root
     needs: changes

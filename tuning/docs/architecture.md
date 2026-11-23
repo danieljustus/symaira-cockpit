@@ -26,14 +26,15 @@ pinned by the frozen v0.12 oracle (`oracle/`).
 
 The only target with IOKit access on the Swift side: the `AgentClient` /
 `AgentSession` link to the Rust agent, models and formatting for the panel,
-the SMC fan-helper pieces (`SMCService`, `FanControlService`, `FanGovernor`,
-`SMCWritePolicy`, `SafetyPolicy`), sensors, battery, storage, AI-usage
+the remaining Swift SMC reads (`SMCService`, `SMCWritePolicy`, `SafetyPolicy`;
+fan writes and the governor are Rust, `crates/symcockpit-core`), sensors, battery, storage, AI-usage
 presentation, HUD layout and the privileged-elevation resolver.
 
 ### `SymCockpitHelperKit`
 
-XPC contract, signing requirements and heartbeat watchdog of the optional
-privileged fan helper.
+App side of the optional privileged fan helper: `SMAppService` registration,
+signing requirements and the XPC client. The helper itself is the Rust
+`symcockpit-helper` (`crates/symcockpit-helper`).
 
 ### `SymCockpitUI`
 

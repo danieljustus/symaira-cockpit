@@ -48,14 +48,17 @@ rust-test-agent-release:
 	$(CARGO) test --release --locked -p symcockpit --test agent_release
 
 ## oracle: Compare a binary with the frozen v0.12 oracle: make oracle BIN=<path to symcockpit>
+# BIN is resolved in the shell, not with $(abspath), which splits paths containing spaces (#425).
 oracle:
 	@test -n "$(BIN)" || { echo "usage: make oracle BIN=<path to symcockpit>" >&2; exit 2; }
-	SYMCOCKPIT_ORACLE_BIN="$(abspath $(BIN))" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
+	@bin='$(BIN)'; case "$$bin" in /*) ;; *) bin="$(CURDIR)/$$bin" ;; esac; \
+	SYMCOCKPIT_ORACLE_BIN="$$bin" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
 
 ## oracle-native: Like `oracle`, but without any Swift binary: only read commands are checked and forwarded cases are reported as skipped
 oracle-native:
 	@test -n "$(BIN)" || { echo "usage: make oracle-native BIN=<path to symcockpit>" >&2; exit 2; }
-	SYMCOCKPIT_ORACLE_NATIVE=1 SYMCOCKPIT_ORACLE_BIN="$(abspath $(BIN))" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
+	@bin='$(BIN)'; case "$$bin" in /*) ;; *) bin="$(CURDIR)/$$bin" ;; esac; \
+	SYMCOCKPIT_ORACLE_NATIVE=1 SYMCOCKPIT_ORACLE_BIN="$$bin" $(CARGO) test --locked -p symcockpit-oracle --test live -- --ignored --nocapture
 
 ## build-app: Assemble the GUI bundle (build/app/Symaira Cockpit.app)
 build-app:

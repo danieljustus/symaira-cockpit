@@ -413,32 +413,6 @@ public enum PrivilegedElevation: Sendable {
     /// processes that could never actually write.
     public static var isRunningAsRoot: Bool { geteuid() == 0 }
 
-    /// Whether a failed unprivileged SMC operation is worth retrying through
-    /// elevation, as opposed to a hardware/platform mismatch a password
-    /// prompt cannot fix. Deliberately wide: on at least one real machine,
-    /// even `SMCService.isAvailable`'s read-only probe fails when
-    /// unprivileged (every key, including ones that certainly exist, comes
-    /// back "not found" rather than a clean permission error), so the
-    /// resulting error can be a plain `TuneError.permission(...)` rather than
-    /// a typed `FanControlError` — excluding anything but the two narrow
-    /// `FanControlError` cases would silently never escalate on exactly the
-    /// machines that need it. `SMCWritePolicy` safety checks (thermal
-    /// emergency, AC power) re-evaluate fresh inside the elevated process, so
-    /// widening this cannot bypass them.
-    static func isWorthEscalating(_ error: Error) -> Bool {
-        switch error {
-        case let error as FanControlError:
-            switch error {
-            case .fanModeWriteRejected, .targetRPMWriteFailed, .restoreWriteFailed:
-                return true
-            case .noFansDetected, .unsupportedPlatform:
-                return false
-            }
-        default:
-            return true
-        }
-    }
-
     /// Formats a value for a shell argument in a fixed, locale-independent
     /// way — `String(format:)` without an explicit locale uses the user's
     /// current locale, which would emit `0,5000` instead of `0.5000` on a

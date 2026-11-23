@@ -88,8 +88,8 @@ and equivalent keys on Apple Silicon.
   extensively.
 - **Apple Silicon**: The fan control keys are different. While the concept
   (manual override with a firmware floor) is the same, the exact key names and
-  the way minimum speeds are enforced diverged. `FanControlService` abstracts
-  both behind a single interface.
+  the way minimum speeds are enforced diverged. The Rust fan write path
+  (`crates/symcockpit-core/src/fan.rs`) supports Apple Silicon only (D16).
 
 The optional Cool target (a maximum *average* CPU/GPU cluster temperature,
 50–85 °C) averages only cluster rows that read back plausibly: Apple Silicon

@@ -6,6 +6,12 @@
 > (`crates/symcockpit`). The Swift file links in this document describe the
 > audited state and no longer resolve. Re-audit against the Rust sources before
 > relying on a statement here.
+>
+> Update 2026-11-23 (#421): the Swift fan helper (`SymCockpitFanHelper`),
+> `FanControlService`, `FanGovernor` and the helper-side `SymCockpitHelperKit`
+> files were removed as well. Fan writes, the governor and the privileged
+> helper are `crates/symcockpit-core/src/fan.rs`, `helper_engine.rs` and
+> `crates/symcockpit-helper`; their tests port the Swift ones named below.
 
 This document describes the safety boundaries of the public `symtune` core as it
 exists today. It is an implementation-grounded trust document, not a thermal

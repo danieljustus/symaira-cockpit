@@ -18,67 +18,7 @@ final class FanProfileTests: XCTestCase {
         XCTAssertEqual(FanProfile.at(step: 3), .system)
     }
 
-    /// The default position writes nothing at all — that is what makes it the
-    /// Mac's own behavior rather than a reproduction of it.
-    func testSystemProfileHasNoCurve() {
-        XCTAssertNil(FanProfile.system.curve)
-        XCTAssertNotNil(FanProfile.comfort.curve)
-        XCTAssertNotNil(FanProfile.performance.curve)
-    }
-
     // MARK: - Curve shape
-
-    /// Both governed positions must start earlier and climb faster than the
-    /// one to their left, at every temperature — that is the whole promise of
-    /// moving the control right.
-    func testEachStepRightIsAtLeastAsAggressiveAtEveryTemperature() throws {
-        let comfort = try XCTUnwrap(FanProfile.comfort.curve)
-        let performance = try XCTUnwrap(FanProfile.performance.curve)
-
-        for celsius in stride(from: 30.0, through: 100.0, by: 1.0) {
-            XCTAssertGreaterThanOrEqual(
-                performance.fraction(at: celsius),
-                comfort.fraction(at: celsius),
-                "performance must not be quieter than comfort at \(celsius)°C"
-            )
-        }
-    }
-
-    func testPerformanceStartsRampingEarlierThanComfort() throws {
-        let comfort = try XCTUnwrap(FanProfile.comfort.curve)
-        let performance = try XCTUnwrap(FanProfile.performance.curve)
-        // At 50 °C — a warm-idle M4 — comfort is barely off its floor while
-        // performance is already well into its ramp.
-        XCTAssertGreaterThan(performance.fraction(at: 50), comfort.fraction(at: 50))
-    }
-
-    /// Neither position is a fixed speed: an idle Mac stays near the floor
-    /// even on "Max", and only a genuinely hot die reaches full speed. This is
-    /// the explicit requirement that the aggressive settings stay
-    /// temperature-dependent rather than pinning the fans at 100%.
-    func testGovernedProfilesStayTemperatureDependent() throws {
-        for profile in [FanProfile.comfort, .performance] {
-            let curve = try XCTUnwrap(profile.curve)
-            XCTAssertLessThan(
-                curve.fraction(at: 35),
-                0.6,
-                "\(profile.rawValue) must stay quiet on an idle Mac"
-            )
-            XCTAssertEqual(
-                curve.fraction(at: 95),
-                1.0,
-                accuracy: 0.001,
-                "\(profile.rawValue) must reach full speed on a hot die"
-            )
-            // Monotonic: hotter never means slower.
-            var previous = 0.0
-            for celsius in stride(from: 20.0, through: 110.0, by: 1.0) {
-                let value = curve.fraction(at: celsius)
-                XCTAssertGreaterThanOrEqual(value, previous)
-                previous = value
-            }
-        }
-    }
 
     // MARK: - Governing temperature
 
@@ -92,37 +32,6 @@ final class FanProfileTests: XCTestCase {
             fans: [],
             notes: []
         )
-    }
-
-    /// The curve follows the CPU/GPU die, not whatever sensor happens to be
-    /// hottest. An enclosure or battery sensor lags the die by tens of degrees
-    /// and would make the governor spin up long after the chip needed it.
-    func testGoverningTemperatureUsesDieSensors() {
-        let value = FanProfile.governingTemperature(in: report([
-            ("TCMz", 88.0),   // CPU die hotspot
-            ("TRDX", 61.0),   // GPU die hotspot
-            ("TW0P", 51.0),   // Wi-Fi module — not a die sensor
-        ]))
-        XCTAssertEqual(value ?? 0, 88.0, accuracy: 0.001)
-    }
-
-    func testGoverningTemperatureTakesHottestOfCPUAndGPU() {
-        let value = FanProfile.governingTemperature(in: report([
-            ("TCMz", 55.0),
-            ("TRDX", 92.0),   // GPU is the hot one this time
-        ]))
-        XCTAssertEqual(value ?? 0, 92.0, accuracy: 0.001)
-    }
-
-    /// An unfamiliar Mac still gets governed — from a coarser sensor rather
-    /// than not at all.
-    func testGoverningTemperatureFallsBackToHottestReading() {
-        let value = FanProfile.governingTemperature(in: report([("ZZZZ", 71.0)]))
-        XCTAssertEqual(value ?? 0, 71.0, accuracy: 0.001)
-    }
-
-    func testGoverningTemperatureIsNilWithoutReadings() {
-        XCTAssertNil(FanProfile.governingTemperature(in: report([])))
     }
 
     // MARK: - Persisted selection

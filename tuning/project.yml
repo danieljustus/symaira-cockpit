@@ -36,8 +36,8 @@ targets:
           - "-framework"
           - "IOKit"
 
-  # Shared pieces of the optional privileged fan helper (issue #405); the
-  # helper executable itself is a root-package SPM target.
+  # App side of the optional privileged fan helper (issue #405); the helper
+  # executable itself is the Rust crate crates/symcockpit-helper.
   SymCockpitHelperKit:
     type: library.static
     platform: macOS

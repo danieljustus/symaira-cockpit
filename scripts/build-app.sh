@@ -49,9 +49,9 @@ BUNDLE_ID="com.symaira.cockpit"
 PRODUCT="SymCockpitApp"
 # Optional privileged fan helper (issue #405): registered by the app through
 # SMAppService.daemon. The identifier is the grandfathered helper identity; the
-# launchd plist still lives next to the retired Swift helper until it is removed.
+# launchd plist lives next to the Rust helper crate.
 HELPER_ID="com.symaira.symtune-helper"
-HELPER_PLIST_SOURCE="Sources/SymCockpitFanHelper/$HELPER_ID.plist"
+HELPER_PLIST_SOURCE="crates/symcockpit-helper/$HELPER_ID.plist"
 AGENT_ID="com.symaira.cockpit.symcockpit"
 
 cd "$(dirname "$0")/.."
