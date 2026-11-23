@@ -1,4 +1,4 @@
-# Idee: Symaira Cockpit 2 (Rust-Neuaufbau)
+# Idee: Symaira Cockpit (Rust-Neuaufbau)
 
 > Status: freigegeben (2026-11-20, Daniel) · Aufgenommen: 2026-11-20 · Modus: standard
 

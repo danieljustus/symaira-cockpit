@@ -88,7 +88,7 @@ grep -q "^Identifier=$HELPER_ID$" <<<"$HELPER_SIGNATURE" || {
   exit 1
 }
 
-# The Rust binaries (Cockpit 2): the agent the app starts (and the CLI the cask
+# The Rust binaries: the agent the app starts (and the CLI the cask
 # links) next to the app executable, and the helper above. Both must be arm64
 # and validly signed. The agent is run once for `version`, which reads nothing
 # from the Mac; the helper is never run (it would serve XPC).

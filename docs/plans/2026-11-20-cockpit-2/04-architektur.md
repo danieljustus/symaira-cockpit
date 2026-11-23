@@ -1,4 +1,4 @@
-# Architektur: Symaira Cockpit 2 v0.1
+# Architektur: Symaira Cockpit (Rust-Neuaufbau) v0.1
 
 > Status: freigegeben (2026-11-20, Daniel; G4 alle drei Blöcke, G5) · Basis: [02-produktbrief.md](02-produktbrief.md), [03-loesungsoptionen.md](03-loesungsoptionen.md) (Option A, D14)
 

@@ -1,10 +1,10 @@
-# Produktbrief: Symaira Cockpit 2 v0.1
+# Produktbrief: Symaira Cockpit (Rust-Neuaufbau) v0.1
 
 > Status: freigegeben (2026-11-20, Daniel; Umfang G1/G2, Architektur G4/G5) · Basis: [01-recherche.md](01-recherche.md) · Entscheidungen: [entscheidungen.md](entscheidungen.md)
 
 ## Ergebnis zuerst
 
-Symaira Cockpit 2 wird der **Maschinenraum des Macs**: ein Rust-Kern mit einer CLI (`symcockpit`), einem MCP-Server und einer schlanken SwiftUI-App für Menüleiste, HUD und Fenster. Es ersetzt 13 der 16 geprüften Werkzeuge ganz oder teilweise in sieben Fachbereichen: Monitor, Tuning, Speicher, Audio und MIDI, Bluetooth, Eingabe, Finder einschließlich Zwischenablageverlauf (D02, D13). PDF-Kompression wandert nach Desktop (D03); Automator und Cyberduck werden vorerst nicht nachgebaut (D04, D05). Trackpad-Haptik über die private Schnittstelle ist ab Start erlaubt (D09). Das MVP ist die Rust-Parität des heutigen Cockpits plus Monitor (Stufen 1 und 2 in [05-validierung-und-roadmap](05-validierung-und-roadmap.md)); Speicher folgt als erster neuer Bereich.
+Symaira Cockpit wird mit dem Rust-Neuaufbau der **Maschinenraum des Macs**: ein Rust-Kern mit einer CLI (`symcockpit`), einem MCP-Server und einer schlanken SwiftUI-App für Menüleiste, HUD und Fenster. Es ersetzt 13 der 16 geprüften Werkzeuge ganz oder teilweise in sieben Fachbereichen: Monitor, Tuning, Speicher, Audio und MIDI, Bluetooth, Eingabe, Finder einschließlich Zwischenablageverlauf (D02, D13). PDF-Kompression wandert nach Desktop (D03); Automator und Cyberduck werden vorerst nicht nachgebaut (D04, D05). Trackpad-Haptik über die private Schnittstelle ist ab Start erlaubt (D09). Das MVP ist die Rust-Parität des heutigen Cockpits plus Monitor (Stufen 1 und 2 in [05-validierung-und-roadmap](05-validierung-und-roadmap.md)); Speicher folgt als erster neuer Bereich.
 
 ## 1. Problem und Kosten des Nichtstuns
 

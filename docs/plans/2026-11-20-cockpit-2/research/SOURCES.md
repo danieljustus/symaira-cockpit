@@ -1,4 +1,4 @@
-# Quellen: Symaira Cockpit 2
+# Quellen: Symaira Cockpit (Rust-Neuaufbau)
 
 Abruf aller Quellen: 2026-11-20. Typ: B Beobachtung, I Inferenz.
 

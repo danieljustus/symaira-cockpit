@@ -1,4 +1,4 @@
-# Entscheidungslog: Symaira Cockpit 2
+# Entscheidungslog: Symaira Cockpit (Rust-Neuaufbau)
 
 | ID | Entscheidung | Status | Datum | Begründung und Quelle |
 |---|---|---|---|---|

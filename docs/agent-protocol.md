@@ -1,7 +1,7 @@
 # Cockpit app-agent protocol
 
 `symcockpit agent --stdio` is the child process of `Symaira Cockpit.app`
-(Cockpit 2, architecture §5.1/§8). The app owns no logic: it asks the agent,
+(Rust rebuild, architecture §5.1/§8). The app owns no logic: it asks the agent,
 and the agent answers from the same command register and handlers as the CLI
 (`symcockpit …`) and the MCP server (`symcockpit serve`). Nothing the window
 shows can contradict the CLI (R06).

@@ -17,7 +17,7 @@ SymCockpitMenuBarApp  →  SymCockpitUI  →  SymCockpitCore (AgentSession/Agent
 - The transport for agents is local MCP over stdio.
 
 The former Swift `TuneController`, `SymCockpitMCP`, `SymCockpitCLI` and
-`symtune` executable were removed in Cockpit 2 wave 2D-3; their behavior is
+`symtune` executable were removed in wave 2D-3 of the Rust rebuild; their behavior is
 pinned by the frozen v0.12 oracle (`oracle/`).
 
 ## Components

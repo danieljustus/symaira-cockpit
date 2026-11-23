@@ -1,4 +1,4 @@
-# Lösungsoptionen: Symaira Cockpit 2
+# Lösungsoptionen: Symaira Cockpit (Rust-Neuaufbau)
 
 > Status: freigegeben (2026-11-20, Daniel; G3: Option A, D14) · Basis: [02-produktbrief.md](02-produktbrief.md), [entscheidungen.md](entscheidungen.md)
 

@@ -1,6 +1,6 @@
 # Tune/SymTune naming inventory
 
-> Update 2026-11-22 (Cockpit 2, wave 2D-3): the Swift dispatcher
+> Update 2026-11-22 (Rust rebuild, wave 2D-3): the Swift dispatcher
 > (`Sources/symcockpit`), `SymCockpitCLI`, `SymCockpitMCP`, the `symtune`
 > executable and `TuneController` are removed. Rows below that cite those
 > paths describe the state at review time; the CLI and MCP identities now live

@@ -1,6 +1,6 @@
 # Oracle: Cockpit v0.12 (Swift)
 
-Cockpit 2 is a Rust rewrite that replaces the Swift core step by step (ADR 0003,
+The Rust rebuild of Symaira Cockpit that replaces the Swift core step by step (ADR 0003,
 `docs/adr/0003-strangler-migration-mit-orakel.md`). The released Swift binary is
 the **oracle**: this directory holds what it printed, recorded reproducibly, so
 the Rust port can be compared against it without needing the Swift build.
@@ -129,7 +129,7 @@ process or interface name) must not be recorded as properties; v0.12 has none
 (every such collection is an array of objects). If one appears, record it as a
 generic map and extend the format deliberately.
 
-## Newer tools (Cockpit 2)
+## Newer tools (Rust rebuild)
 
 The oracle freezes v0.12; it does not grow. The areas added since (storage,
 audio, Bluetooth, ...) show up in `tools/list` as extra tools. They are

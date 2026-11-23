@@ -1,4 +1,4 @@
-# Validierung und Roadmap: Symaira Cockpit 2
+# Validierung und Roadmap: Symaira Cockpit (Rust-Neuaufbau)
 
 > Status: freigegeben (2026-11-20, Daniel; G5: „Architektur freigeben, als Nächstes Spikes S1 bis S6“) · Basis: [04-architektur.md](04-architektur.md)
 
@@ -18,7 +18,7 @@ Alle Spikes laufen in Wegwerf-Code außerhalb des Produkts (Ablage nach `Dev/Ver
 | S4 | Funktioniert der Mixer aus Rust ohne dauerhafte Stille? | Process Tap auf eine Test-App, 50 % Lautstärke, Ausgabegerät während des Taps wechseln, Tap entfernen | Ton kehrt nach Entfernen zurück, kein Tap bleibt aktiv | Absturz oder bleibende Stille: Mixer in eine spätere Stufe | K7 |
 | S5 | Liest der Rust-SMC-Port dieselben Werte wie Swift? | Alle in v0.12 genutzten SMC-Schlüssel parallel lesen; Lüftermodus nur in opt-in Hardware-Abnahme mit Restore | 100 % gleiche Schlüssel und Typen, Werte innerhalb des Messrauschens | Ungeklärte Abweichung: Swift-SMC bleibt bis zur Klärung | K2 |
 | S6 | Lassen sich Quick-Look- und FinderSync-Erweiterung mit Rust-Bibliothek ohne Xcode-Projekt bauen und signieren? | Skript baut beide `.appex`, bettet `libsymcockpit_ffi.a` ein, signiert, `pluginkit -m` zeigt sie | Vorschau eines ZIP und eines Ordners erscheint; Finder-Menü erscheint | Skript scheitert: XcodeGen-Projekt nur für die Erweiterungen | K5 |
-| S8 | Wie setzt Cockpit 2 die Ladegrenze auf Firmware ohne SMC-Ladeschlüssel? (Befund aus S5) | Lesend: `pmset -g battlimit`, `CHIE` lesen, Vorhandensein der Ladegrenzen-Schnittstelle von macOS prüfen. Schreibend nur in opt-in Abnahme mit Daniel: Grenze 80 % setzen, ablesen, aufheben | Grenze greift ohne SMC-Schreibzugriff, Aufheben stellt den Ausgangszustand her | Keine nutzbare Schnittstelle: Ladegrenze als `unsupported` melden, nur Anzeige | K11 |
+| S8 | Wie setzt Cockpit die Ladegrenze auf Firmware ohne SMC-Ladeschlüssel? (Befund aus S5) | Lesend: `pmset -g battlimit`, `CHIE` lesen, Vorhandensein der Ladegrenzen-Schnittstelle von macOS prüfen. Schreibend nur in opt-in Abnahme mit Daniel: Grenze 80 % setzen, ablesen, aufheben | Grenze greift ohne SMC-Schreibzugriff, Aufheben stellt den Ausgangszustand her | Keine nutzbare Schnittstelle: Ladegrenze als `unsupported` melden, nur Anzeige | K11 |
 | S7 | Reicht eine Rust-Pipeline für PDF-Kompression? (Desktop, D03) | Von Daniel freigegebener Testkorpus aus Scans, Fotos und Text-PDFs gegen PDF Squeezer Standardprofil | Median-Reduktion mindestens 80 % derjenigen von PDF Squeezer bei visuell gleichwertiger Qualität | Deutlich schlechter: zweite Technik gezielt prüfen, nicht pauschal mehrere Engines | Desktop |
 
 ### Ergebnisse

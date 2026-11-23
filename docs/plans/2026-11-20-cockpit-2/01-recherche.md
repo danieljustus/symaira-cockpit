@@ -1,4 +1,4 @@
-# Recherche: Symaira Cockpit 2
+# Recherche: Symaira Cockpit (Rust-Neuaufbau)
 
 > Status: freigegeben (2026-11-20, Daniel; G1: weiter mit angepasstem Umfang) · Abruf: 2026-11-20 · Quellen: [research/SOURCES.md](research/SOURCES.md) · Kandidaten: [research/candidates.json](research/candidates.json) (58 Einträge: 16 RE-Analysen, 4 Symaira, 38 Open Source)
 

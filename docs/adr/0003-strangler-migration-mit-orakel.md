@@ -1,6 +1,6 @@
 # ADR 0003: Strangler-Migration mit Swift v0.12 als Orakel
 
-- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Cockpit 2](../plans/2026-11-20-cockpit-2/README.md))
+- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Rust-Neuaufbau](../plans/2026-11-20-cockpit-2/README.md))
 - Bezug: R05, Q09, Z5; Risiko K2
 
 ## Kontext

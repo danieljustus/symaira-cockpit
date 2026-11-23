@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Packaging
-- Cockpit 2, wave 7: the release pipeline ships the Rust binary and is Apple Silicon only
+- Rust rebuild, wave 7: the release pipeline ships the Rust binary and is Apple Silicon only
   (architecture D16; Intel is not supported). `release.yml` builds
   `cargo build --release --locked -p symcockpit --target aarch64-apple-darwin` on the pinned
   toolchain and publishes `symcockpit_<version>_darwin_arm64.tar.gz` plus `checksums.txt`
@@ -36,7 +36,7 @@
   (0.12.3, `cargo test --locked`: 962 tests) found one test that pinned the version
   (`swift_bytes`); it now follows the build.
 ### Changed
-- Cockpit 2, wave 2D-3 part 1: the window is a workspace with a sidebar of eleven
+- Rust rebuild, wave 2D-3 part 1: the window is a workspace with a sidebar of eleven
   destinations (Overview, Display, Power & Fans, Storage, Audio & MIDI, Bluetooth & Input,
   Processes, Clipboard, Finder, AI Usage, History) instead of one scrolling panel. While the
   agent cannot serve, the page shows why with a restart button. Risky changes use one shared
@@ -52,7 +52,7 @@
   how to enable them in System Settings.
 
 ### Internal
-- Cockpit 2, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
+- Rust rebuild, wave 2D-1: the Rust `symcockpit` no longer starts the Swift core for anything.
   `fan profile|target <value>` write the Swift file (`~/.symtune/fan-profile.json`) and the
   history line themselves (the app agent plans them as risky commands; `fan.target` takes
   `celsius`, `null` or `off` clears it); `status --watch` prints NDJSON until SIGINT, SIGTERM or
@@ -63,7 +63,7 @@
   `symcockpit-legacy` and the `libexec` lookup are gone; a test plants a tripwire in all three
   places and runs every v0.12 command and MCP tool. Known difference: the texts of transport
   errors in a failed update check are Foundation's wording chosen from curl's exit status.
-- Cockpit 2, wave 2D-2b: after the system wakes from sleep the Rust agent and
+- Rust rebuild, wave 2D-2b: after the system wakes from sleep the Rust agent and
   `symcockpit serve` put back the display overrides they hold (warmth gamma table,
   extended brightness) and, on Apple Silicon, a charge limit they applied themselves
   (`IORegisterForSystemPower` on its own thread; the v0.12 monitor compared against
@@ -71,7 +71,7 @@
   `--finder-jobs-dir <app group container>/jobs` to its agent when the bundle names
   its app group (`SymCockpitAppGroup`, set by `build-app.sh` for team-signed
   builds). Real wake behaviour needs hardware (`docs/app-acceptance.md`).
-- Cockpit 2, wave 2D-2: the app (menu bar, HUD, window) reads every value and
+- Rust rebuild, wave 2D-2: the app (menu bar, HUD, window) reads every value and
   runs every action through one app-wide agent session (`AgentSession`:
   `symcockpit agent --stdio` from the bundle, started at launch, stdin closed at
   quit). Views subscribe only while they are on screen; a failed, missing or
@@ -81,7 +81,7 @@
   embeds the Rust `symcockpit` (agent and CLI) and `symcockpit-helper` (replaces
   the Swift helper under the same identity) with the team id baked in. Runbook for
   the runtime acceptance: `docs/app-acceptance.md`.
-- Cockpit 2, wave 6 (R70-R73): `symcockpit-ffi` staticlib lists folders and ZIP, TAR and 7z
+- Rust rebuild, wave 6 (R70-R73): `symcockpit-ffi` staticlib lists folders and ZIP, TAR and 7z
   archives with limits and never unpacks; Quick Look and FinderSync extensions are built by
   `scripts/build-extensions.sh` and embedded in the app (not registered or enabled; see
   `docs/extensions.md`); Finder context actions travel as job files with schema, expiry and an
@@ -89,13 +89,13 @@
   (`symcockpit-core::clipboard`, `symcockpit-db::clipboard`) with `clipboard
   status|pause|resume|clear` specs and no MCP or CLI read path. The CLI commands are not wired
   into `symcockpit` yet.
-- Cockpit 2, wave 1: the Rust `symcockpit` answers every read command and read
+- Rust rebuild, wave 1: the Rust `symcockpit` answers every read command and read
   MCP tool natively (`sensors`, `fan status|profile|target`, `battery`,
   `awake status`, `displays`, `brightness get`, `metrics`, `processes`, `top`,
   `status`, `doctor`, `permissions`, plus `--help` of the write families). Only
   state-changing commands are still handed to the Swift core. The oracle passes
   70/70 with and without a Swift binary (`make oracle`, `make oracle-native`).
-- Cockpit 2, wave 2C: `symcockpit agent --stdio`, the app's child process
+- Rust rebuild, wave 2C: `symcockpit agent --stdio`, the app's child process
   (JSON-RPC 2.0 as NDJSON: `hello` with protocol version, `call` through the
   MCP dispatch path with plan/confirm for risky commands, `subscribe` with
   visible/hidden intervals, measurement only while subscribed). It starts only
@@ -103,7 +103,7 @@
   debug builds only). Protocol: `docs/agent-protocol.md`; Swift client
   `AgentClient` in SymCockpitCore. The app does not use it yet.
 
-- Cockpit 2, integration 2: the areas storage (`storage health|speedtest|space|clean|duplicates`,
+- Rust rebuild, integration 2: the areas storage (`storage health|speedtest|space|clean|duplicates`,
   `apps uninstall`, `plan show|confirm`), audio and MIDI (`audio …`, `midi devices`),
   Bluetooth (`bt devices`, `ble scan|read|subscribe|write`), input (`input …`, CLI only) and
   ending a process (`processes kill <pid>`) are wired natively into the CLI and `serve`

@@ -1,10 +1,10 @@
-# Symaira Cockpit 2: Rust-Neuaufbau als Maschinenraum des Macs
+# Symaira Cockpit: Rust-Neuaufbau als Maschinenraum des Macs
 
 > Spur: A (bestehendes Produkt, Vertragsänderung nötig) · Modus: standard · Stand: 2026-11-20 · **Architektur freigegeben (2026-11-20, Daniel)**
 
 ## Ergebnis zuerst
 
-Cockpit 2 ersetzt 13 der 16 geprüften Werkzeuge ganz oder teilweise durch einen Rust-Kern mit CLI, MCP-Server und schlanker SwiftUI-App. PDF Squeezer gehört nach Desktop, wo bereits eine Rust-PDF-Engine existiert. Automator und Cyberduck passen nicht und werden nicht nachgebaut. Voraussetzung ist Revision 9 des Produktvertrags, weil Cockpit heute auf Thermik, Strom, Display, Sensoren und HUD begrenzt ist.
+Der Rust-Neuaufbau ersetzt 13 der 16 geprüften Werkzeuge ganz oder teilweise durch einen Rust-Kern mit CLI, MCP-Server und schlanker SwiftUI-App. PDF Squeezer gehört nach Desktop, wo bereits eine Rust-PDF-Engine existiert. Automator und Cyberduck passen nicht und werden nicht nachgebaut. Voraussetzung ist Revision 9 des Produktvertrags, weil Cockpit heute auf Thermik, Strom, Display, Sensoren und HUD begrenzt ist.
 
 ## Status
 

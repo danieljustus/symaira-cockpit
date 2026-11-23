@@ -1,6 +1,6 @@
 import Foundation
 
-// Client of the Cockpit 2 app agent (`symcockpit agent --stdio`, wire format in
+// Client of the Cockpit app agent (`symcockpit agent --stdio`, wire format in
 // docs/agent-protocol.md). It lives in SymCockpitCore because the GUI owns no
 // logic (AGENTS.md): the window reads this class and the agent's answers, and
 // both the menu-bar popover and the cockpit window can embed it. It is

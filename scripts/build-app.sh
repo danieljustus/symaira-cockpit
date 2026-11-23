@@ -28,7 +28,7 @@ set -euo pipefail
 #   RUST_TARGET    cargo --target for the Rust binaries (default: the host; the
 #                  bundle's agent and helper must come out arm64 either way)
 #
-# Besides the Swift app, the bundle carries two Rust binaries (Cockpit 2):
+# Besides the Swift app, the bundle carries two Rust binaries:
 #   Contents/MacOS/symcockpit   the app agent (`symcockpit agent --stdio`) and the
 #                               CLI the cask links later; built with
 #                               SYMCOCKPIT_TEAM_ID = EXPECTED_TEAM_ID, the team the

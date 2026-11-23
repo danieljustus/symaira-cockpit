@@ -14,7 +14,7 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# Cockpit 2 packaging (architecture 5.4, D16): arm64 only. The shipped command
+# Packaging (architecture 5.4, D16): arm64 only. The shipped command
 # line is the Rust `symcockpit` (crates/symcockpit); the app bundle embeds that
 # same binary as its agent and CLI, plus the privileged helper and the Quick
 # Look / FinderSync extensions. One version source: Cargo.toml

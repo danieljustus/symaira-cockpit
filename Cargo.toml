@@ -1,4 +1,4 @@
-# Cockpit 2 Rust workspace (ADR 0001/0003): grows next to the Swift packages
+# Rust workspace of Symaira Cockpit (ADR 0001/0003): grows next to the Swift packages
 # (Package.swift, tuning/, history/) until the Swift core is retired.
 [workspace]
 members = [

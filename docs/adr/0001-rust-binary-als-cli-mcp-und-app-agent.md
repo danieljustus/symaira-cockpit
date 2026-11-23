@@ -1,6 +1,6 @@
 # ADR 0001: Ein Rust-Binary ist CLI, MCP-Server und App-Agent
 
-- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Cockpit 2](../plans/2026-11-20-cockpit-2/README.md))
+- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Rust-Neuaufbau](../plans/2026-11-20-cockpit-2/README.md))
 - Bezug: R01, R02, R04, R06, Q02, Q04, Q07; Risiko K1
 
 ## Kontext

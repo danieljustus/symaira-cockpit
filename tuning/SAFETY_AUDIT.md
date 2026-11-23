@@ -1,6 +1,6 @@
 # symtune Safety Model
 
-> Update 2026-11-22 (Cockpit 2, wave 2D-3): the Swift `TuneController`,
+> Update 2026-11-22 (Rust rebuild, wave 2D-3): the Swift `TuneController`,
 > `SymCockpitMCP` and `symtune` executable cited below were removed; the CLI,
 > the MCP server and the write paths now run in the Rust binary
 > (`crates/symcockpit`). The Swift file links in this document describe the

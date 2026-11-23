@@ -194,7 +194,7 @@ jobs:
       - name: Native app icon and DMG smoke
         run: ./scripts/test-app-icon.sh
 
-  # Cockpit 2 Rust workspace (Cargo.toml at the root; ADR 0003). The toolchain
+  # Rust workspace (Cargo.toml at the root; ADR 0003). The toolchain
   # comes from rust-toolchain.toml. The static name keeps the required check
   # reported when the job is skipped.
   rust:

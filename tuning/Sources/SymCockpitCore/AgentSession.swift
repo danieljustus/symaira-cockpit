@@ -1,6 +1,6 @@
 import Foundation
 
-// The app-wide session with the Cockpit 2 agent (`symcockpit agent --stdio`,
+// The app-wide session with the Cockpit agent (`symcockpit agent --stdio`,
 // docs/agent-protocol.md). One process per app run: started at launch, ended
 // by closing its stdin at quit. Every view model of the app reads through this
 // class and acts through it; none of them owns a hardware controller.

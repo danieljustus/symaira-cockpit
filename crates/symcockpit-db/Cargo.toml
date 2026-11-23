@@ -1,6 +1,6 @@
 [package]
 name = "symcockpit-db"
-description = "cockpit.sqlite: the one SQLite file of Cockpit 2 (SMART history, plans)."
+description = "cockpit.sqlite: the one SQLite file of Symaira Cockpit (SMART history, plans)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,6 +1,6 @@
 # ADR 0002: Produktumfang von Cockpit und Vertragsrevision 9
 
-- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Cockpit 2](../plans/2026-11-20-cockpit-2/README.md))
+- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Rust-Neuaufbau](../plans/2026-11-20-cockpit-2/README.md))
 - Bezug: alle Bereichsanforderungen R10 bis R73
 
 ## Kontext

@@ -1,4 +1,4 @@
-//! `cockpit.sqlite`: the one SQLite file of Cockpit 2 (architecture section 7).
+//! `cockpit.sqlite`: the one SQLite file of Symaira Cockpit (architecture section 7).
 //!
 //! Opened through CoreKit's `symaira-core-sqlite` (0700 parent, WAL, busy
 //! timeout, name-keyed `schema_migrations`), so each module owns its own

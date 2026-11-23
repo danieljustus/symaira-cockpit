@@ -1,6 +1,6 @@
 # ADR 0004: `unsafe` nur in Plattform-Crates; undokumentierte und private Schnittstellen mit Fähigkeitserkennung
 
-- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Cockpit 2](../plans/2026-11-20-cockpit-2/README.md))
+- Status: angenommen (2026-11-20, Daniel, Gate G4/G5 der Planung [Rust-Neuaufbau](../plans/2026-11-20-cockpit-2/README.md))
 - Bezug: R10 bis R14, R20, R30, R44, R61, Q06; Risiko K3
 
 ## Kontext

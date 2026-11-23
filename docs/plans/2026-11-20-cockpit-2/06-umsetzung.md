@@ -1,4 +1,4 @@
-# Umsetzung: Symaira Cockpit 2
+# Umsetzung: Symaira Cockpit (Rust-Neuaufbau)
 
 > Auftrag Daniel 2026-11-20: „bau du bitte alles fertig“. Arbeitsweise: lokal integrieren und prüfen, Unteragenten je Arbeitspaket in eigenen Worktrees unter `Symaira_Dev/Worktrees/symaira-cockpit/`, Push erst am Ende eines Laufs. Menschliche Abnahmen (Freigabedialoge, sudo, Hardware-Matrix, 30-Tage-Nutzung, Release) werden gesammelt und am Ende in einer Sitzung erledigt.
 
