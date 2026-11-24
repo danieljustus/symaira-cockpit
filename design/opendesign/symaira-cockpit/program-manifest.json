@@ -1,0 +1,44 @@
+{
+  "project": "symaira-cockpit",
+  "repository": "symaira-cockpit",
+  "role": "macOS app · CLI/MCP · Tune/Operate/Scope",
+  "entry": "symaira-cockpit-complete-program.html",
+  "journeys": [
+    {
+      "id": "C1",
+      "title": "Cockpit-Überblick",
+      "steps": 5,
+      "states": 5
+    },
+    {
+      "id": "C2",
+      "title": "Tune lesen",
+      "steps": 5,
+      "states": 5
+    },
+    {
+      "id": "C3",
+      "title": "Tune ändern",
+      "steps": 6,
+      "states": 6
+    },
+    {
+      "id": "C4",
+      "title": "Scope inventarisieren",
+      "steps": 5,
+      "states": 6
+    },
+    {
+      "id": "C5",
+      "title": "Operate-Bereitschaft",
+      "steps": 6,
+      "states": 6
+    },
+    {
+      "id": "C6",
+      "title": "History, Replay und Release",
+      "steps": 6,
+      "states": 6
+    }
+  ]
+}
