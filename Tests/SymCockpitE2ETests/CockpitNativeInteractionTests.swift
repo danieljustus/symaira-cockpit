@@ -124,6 +124,16 @@ final class CockpitNativeInteractionTests: XCTestCase {
     private func press(_ label: String, in window: NSWindow) throws {
         let selector = NSSelectorFromString("accessibilityPerformPress")
         let nodes = elements(window)
+        // CoreKit 0.27 uses a native segmented control for appearance choices.
+        // Its AX segments are radio buttons whose AXPress returns false, so
+        // drive the backing NSSegmentedControl the same way CoreKit's tests do.
+        if let control = nodes.compactMap({ $0 as? NSSegmentedControl }).first(where: { candidate in
+            (0..<candidate.segmentCount).contains(where: { index in candidate.label(forSegment: index) == label })
+        }), let index = (0..<control.segmentCount).first(where: { control.label(forSegment: $0) == label }) {
+            control.setSelected(true, forSegment: index)
+            XCTAssertTrue(control.sendAction(control.action, to: control.target), "segment action failed: \(label)")
+            return
+        }
         let button = try XCTUnwrap(nodes.first {
             text($0, "accessibilityLabel") == label
                 && text($0, "accessibilityRole") == NSAccessibility.Role.button.rawValue

@@ -96,7 +96,7 @@ final class CockpitWorkspaceSizingTests: XCTestCase {
                 }
                 XCTAssertEqual(images[0].width, images[1].width, "Start/End width must match")
                 XCTAssertEqual(images[0].height, images[1].height, "Start/End height must match")
-                XCTAssertEqual(images[0].height, 80, "40-point action target in both states")
+                XCTAssertEqual(images[0].height, 72, "36-point page action target in both states")
                 // Away from the text and rounded corners: the surface still changes color.
                 let pixels = try images.map { image -> [UInt8] in
                     var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)

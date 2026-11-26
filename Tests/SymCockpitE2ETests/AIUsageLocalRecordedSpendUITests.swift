@@ -148,8 +148,22 @@ final class AIUsageLocalRecordedSpendUITests: XCTestCase {
             return String(describing: value)
         }
         func press(_ label: String) throws {
-            let node = try XCTUnwrap(nodes().first { attribute($0, "accessibilityLabel") == label })
             let selector = NSSelectorFromString("accessibilityPerformPress")
+            // CoreKit 0.27 renders SymairaSegmentedControl as a native
+            // NSSegmentedControl. Its AX segments are radio buttons whose
+            // AXPress returns false, so drive the backing control instead.
+            let allNodes = nodes()
+            if let control = allNodes.compactMap({ $0 as? NSSegmentedControl }).first(where: { candidate in
+                (0..<candidate.segmentCount).contains(where: { index in candidate.label(forSegment: index) == label })
+            }) {
+                let index = (0..<control.segmentCount).first { control.label(forSegment: $0) == label }!
+                control.setSelected(true, forSegment: index)
+                XCTAssertTrue(control.sendAction(control.action, to: control.target), "segment action failed: \(label)")
+                return
+            }
+            let node = try XCTUnwrap(allNodes.first {
+                attribute($0, "accessibilityLabel") == label && $0.responds(to: selector)
+            })
             XCTAssertTrue(node.responds(to: selector))
             typealias Action = @convention(c) (AnyObject, Selector) -> Bool
             let action = unsafeBitCast(node.method(for: selector), to: Action.self)
