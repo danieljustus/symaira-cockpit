@@ -366,7 +366,8 @@ struct MenuBarVisibilityCard: View {
         set: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> some View {
         Toggle("", isOn: Binding(get: { isOn }, set: { newValue in set(newValue) }))
-            .toggleStyle(.symairaSwitch)
+            .toggleStyle(.switch)
+            .tint(SymairaTokens.selected)
             .labelsHidden()
             .accessibilityLabel(accessibilityLabel)
             .frame(width: 64)
