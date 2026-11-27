@@ -1085,7 +1085,7 @@ version = "0.13.0"
 dependencies = [
  "aes-gcm",
  "csv",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "plist",
  "regex",
  "serde",
