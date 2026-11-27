@@ -35,7 +35,7 @@ symcockpit-contract = { path = "crates/symcockpit-contract", version = "=0.13.0"
 # `families`/`update` fields. Add the pin with the first crate that fits.
 regex = "=1.13.1"
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
 tempfile = "=3.23.0"
 
 [workspace.lints.rust]
