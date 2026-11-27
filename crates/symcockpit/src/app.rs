@@ -229,6 +229,15 @@ pub trait FanControl {
     /// `Err` with the reason when neither a helper nor a usable root-owned
     /// copy can change the fans on this Mac.
     fn check_elevation(&self, ctx: &Context) -> Result<(), Error>;
+
+    /// Start/retarget or stop the privileged helper governor after a fan
+    /// selection was stored. `system` stops it; either governed profile starts
+    /// or retargets it with its bound Cool target.
+    fn route_selection(
+        &self,
+        ctx: &Context,
+        selection: symcockpit_core::sensors::FanSelection,
+    ) -> Result<(), Error>;
 }
 
 /// Ports to the platform. `hardware` and `overrides` stay `None` until the

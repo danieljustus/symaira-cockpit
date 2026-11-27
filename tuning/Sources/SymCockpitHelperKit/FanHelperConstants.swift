@@ -19,6 +19,10 @@ public enum FanHelperConstants {
     /// Bundle identifier (and code-signing identifier) of `Symaira Cockpit.app`.
     public static let appIdentifier = "com.symaira.cockpit"
 
+    /// Code-signing identifier of the bundled `symcockpit` agent/CLI. The
+    /// helper accepts it as a client just like the app itself.
+    public static let agentIdentifier = "com.symaira.cockpit.symcockpit"
+
     /// Path of the helper executable relative to the app bundle. This is also
     /// the `BundleProgram` value in the launchd plist.
     public static let helperBundleProgram =

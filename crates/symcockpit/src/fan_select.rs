@@ -90,6 +90,12 @@ pub fn run_json(
     write_private_atomic(&file, encode(&selection).as_bytes(), is_root)
         .map_err(|e| Error::Failed(e.to_string()))?;
 
+    // The stored selection must actually be enforced: start/retarget the
+    // helper governor for a governed profile, stop it for `system`.
+    let routed = fan_control
+        .map(|port| port.route_selection(ctx, selection))
+        .unwrap_or(Ok(()));
+
     // `system` over a stale manual override is not a hand-back: clear the SMC
     // through the same elevated write path `fan auto` uses. A failure here is
     // a failed profile switch, with the reason in the same history line.
@@ -99,8 +105,9 @@ pub fn run_json(
         }
         _ => Ok(()),
     };
-    record(&handback);
-    handback?;
+    let outcome = routed.and(handback);
+    record(&outcome);
+    outcome?;
     let request = Request {
         command: "fan.status",
         json: true,

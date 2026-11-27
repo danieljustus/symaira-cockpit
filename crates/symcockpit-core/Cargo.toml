@@ -21,11 +21,11 @@ regex.workspace = true
 # powermetrics' plist output (root-only GPU fallback)
 plist = "=1.10.4"
 # Plan digests and duplicate hashing (RustCrypto, MIT OR Apache-2.0).
-sha2 = "=0.10.9"
+sha2 = "=0.11.2"
 # Clipboard history encryption (RustCrypto, Apache-2.0 OR MIT). AES-256-GCM only.
 aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 # Plan ids and clipboard nonces/keys; no other randomness is needed.
-getrandom = "=0.3.4"
+getrandom = "=0.4.3"
 
 [dev-dependencies]
 symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.0" }

@@ -95,13 +95,24 @@ pub fn run(ctx: &Context, command: &Command) -> Result<Output, Error> {
     }
 
     if route(&env, command) == Route::Helper
-        && let (Some(action), Ok(client)) = (helper_action(command), HelperClient::connect())
+        && let Some(action) = helper_action(command)
     {
-        // A transport error (not installed, not approved) falls through: the direct write decides.
-        if let Ok(reply) = client.request(&symcockpit_helper_proto::Request::new(action)) {
-            let result = reply_to_result(reply);
-            log_outcome(&env, command, &result);
-            return result.map(|()| applied());
+        match HelperClient::connect() {
+            Ok(client) => {
+                if let Ok(reply) = client.request(&symcockpit_helper_proto::Request::new(action)) {
+                    let result = reply_to_result(reply);
+                    log_outcome(&env, command, &result);
+                    return result.map(|()| applied());
+                }
+                eprintln!("symtune: privileged helper did not answer; trying the direct write");
+            }
+            // A missing, unapproved or wrongly signed helper is not invisible:
+            // the reason is logged before the direct (possibly refused) write.
+            Err(reason) => {
+                eprintln!(
+                    "symtune: privileged helper unavailable: {reason}; trying the direct write"
+                );
+            }
         }
     }
     execute(&env, command).map(|()| applied())

@@ -4,7 +4,8 @@
 //! Swift references: FanHelperEngine, HeartbeatWatchdog, FanStaleOverrideRecovery,
 //! FanHelperIdleMonitor (tuning/Sources/SymCockpitHelperKit) and their tests.
 
-use symcockpit_core::helper_engine::{Engine, StopReason, idle_should_exit};
+use symcockpit_core::helper_engine::{Engine, StopReason, idle_should_exit, selection_action};
+use symcockpit_core::sensors::{FanProfile, FanSelection};
 use symcockpit_helper_proto::{Action, ErrorKind, GovernorProfile, Reply, Request};
 use symcockpit_store::smc_restore;
 use symcockpit_testkit::smc_write::{FakeClock, FakePorts, FakeSmcRw, battery_on_ac};
@@ -83,6 +84,47 @@ fn kind(reply: &Reply) -> ErrorKind {
         Reply::Error { kind, .. } => *kind,
         other => panic!("expected an error, got {other:?}"),
     }
+}
+
+// -- selection routing -------------------------------------------------------
+
+#[test]
+fn a_selection_routes_to_the_helper_governor_it_needs() {
+    // `system` stops the helper governor; either governed profile starts or
+    // retargets it, carrying only a bounded Cool target for Cool.
+    assert_eq!(
+        selection_action(FanSelection::SYSTEM),
+        Some(Action::GovernorStop)
+    );
+    assert_eq!(
+        selection_action(FanSelection::new(FanProfile::Comfort, Some(62.5))),
+        Some(Action::GovernorStart {
+            profile: GovernorProfile::Comfort,
+            cool_target_celsius: Some(62.5),
+        })
+    );
+    assert_eq!(
+        selection_action(FanSelection::new(FanProfile::Performance, Some(62.5))),
+        Some(Action::GovernorStart {
+            profile: GovernorProfile::Performance,
+            cool_target_celsius: None,
+        })
+    );
+    // A target change on Cool retargets the same governor with the new value.
+    assert_eq!(
+        selection_action(FanSelection::new(FanProfile::Comfort, Some(70.0))),
+        Some(Action::GovernorStart {
+            profile: GovernorProfile::Comfort,
+            cool_target_celsius: Some(70.0),
+        })
+    );
+    assert_eq!(
+        selection_action(FanSelection::new(FanProfile::Comfort, Some(999.0))),
+        Some(Action::GovernorStart {
+            profile: GovernorProfile::Comfort,
+            cool_target_celsius: Some(85.0),
+        })
+    );
 }
 
 // -- governor lifecycle ------------------------------------------------------------

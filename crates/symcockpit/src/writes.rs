@@ -152,7 +152,7 @@ pub fn parse_profile(subcommand: &str, rest: &[String]) -> Result<WriteOp, Error
 /// `awake [--display] [--seconds N] [--for D] [--until HH:MM]` and `awake off`
 /// (`awake status` is a read and never gets here).
 pub fn parse_awake(rest: &[String]) -> Result<WriteOp, Error> {
-    let now = jiff::Zoned::now();
+    let now = jiff::ZonedDateTime::now();
     let now_unix = now.timestamp().as_millisecond() as f64 / 1000.0;
     let today_at = |hour: u32, minute: u32| {
         let at = now

@@ -6,7 +6,7 @@
 //! a literal. The helper accepts only the app, the app accepts only the
 //! helper. Peers carrying a hardened-runtime escape entitlement are refused.
 
-use crate::{APP_IDENTIFIER, HELPER_IDENTIFIER};
+use crate::{AGENT_IDENTIFIER, APP_IDENTIFIER, HELPER_IDENTIFIER};
 
 /// Entitlements that defeat the hardened runtime.
 pub const FORBIDDEN_ENTITLEMENTS: [&str; 4] = [
@@ -26,17 +26,19 @@ pub fn is_valid_team_identifier(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || b.is_ascii_uppercase())
 }
 
-/// What the helper requires of its client.
+/// What the helper requires of its client: the app itself or the bundled
+/// agent/CLI (which carries its own signing identifier inside the app).
 pub fn app_requirement(team_id: &str) -> Option<String> {
-    requirement(APP_IDENTIFIER, team_id)
+    let clients = format!("(identifier \"{APP_IDENTIFIER}\" or identifier \"{AGENT_IDENTIFIER}\")");
+    requirement(&clients, team_id)
 }
 
 /// What the client requires of the helper.
 pub fn helper_requirement(team_id: &str) -> Option<String> {
-    requirement(HELPER_IDENTIFIER, team_id)
+    requirement(&format!("identifier \"{HELPER_IDENTIFIER}\""), team_id)
 }
 
-fn requirement(identifier: &str, team_id: &str) -> Option<String> {
+fn requirement(identifier_clause: &str, team_id: &str) -> Option<String> {
     if !is_valid_team_identifier(team_id) {
         return None;
     }
@@ -46,7 +48,7 @@ fn requirement(identifier: &str, team_id: &str) -> Option<String> {
         .collect::<Vec<_>>()
         .join(" and ");
     Some(format!(
-        "anchor apple generic and identifier \"{identifier}\" \
+        "anchor apple generic and {identifier_clause} \
          and certificate leaf[field.1.2.840.113635.100.6.1.13] exists \
          and certificate 1[field.1.2.840.113635.100.6.2.6] exists \
          and certificate leaf[subject.OU] = \"{team_id}\" and {denied}"
@@ -127,7 +129,7 @@ mod tests {
 
     #[test]
     fn requirement_text_matches_swift() {
-        let want = "anchor apple generic and identifier \"com.symaira.cockpit\" \
+        let want = "anchor apple generic and (identifier \"com.symaira.cockpit\" or identifier \"com.symaira.cockpit.symcockpit\") \
 and certificate leaf[field.1.2.840.113635.100.6.1.13] exists \
 and certificate 1[field.1.2.840.113635.100.6.2.6] exists \
 and certificate leaf[subject.OU] = \"ABCDE12345\" \
@@ -138,8 +140,32 @@ and !entitlement[\"com.apple.security.cs.allow-jit\"] exists";
         assert_eq!(app_requirement(TEAM).unwrap(), want);
         assert_eq!(
             helper_requirement(TEAM).unwrap(),
-            want.replace("com.symaira.cockpit", "com.symaira.symtune-helper")
+            want.replace(
+                "(identifier \"com.symaira.cockpit\" or identifier \"com.symaira.cockpit.symcockpit\")",
+                "identifier \"com.symaira.symtune-helper\""
+            )
         );
+    }
+
+    #[test]
+    fn the_bundled_agent_identity_is_accepted_by_both_roles() {
+        let app = app_requirement(TEAM).unwrap();
+        assert!(app.contains("identifier \"com.symaira.cockpit\""));
+        assert!(app.contains("identifier \"com.symaira.cockpit.symcockpit\""));
+        for entitlement in FORBIDDEN_ENTITLEMENTS {
+            assert!(app.contains(&format!("!entitlement[\"{entitlement}\"] exists")));
+        }
+        for role in [Role::HelperAcceptingClient, Role::ClientAcceptingHelper] {
+            let decision = decide(role, Some(TEAM), Some(TEAM)).unwrap();
+            let peer = if role == Role::HelperAcceptingClient {
+                decision.peer
+            } else {
+                decision.own
+            };
+            assert!(peer.contains("identifier \"com.symaira.cockpit.symcockpit\""));
+        }
+        // Nothing here widens the peer to an unsigned or ad-hoc identity.
+        assert!(app.starts_with("anchor apple generic"));
     }
 
     #[test]

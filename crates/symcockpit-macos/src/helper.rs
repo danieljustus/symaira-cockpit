@@ -84,6 +84,24 @@ impl HelperClient {
     }
 }
 
+/// Whether a helper status reply says the governor is actually running.
+/// Kept separate from XPC so the interpretation is testable without a helper.
+pub fn reports_governor_running(reply: &Reply) -> bool {
+    matches!(reply, Reply::Status { state, .. } if state == "governing")
+}
+
+/// Ask the helper whether its governor is running. Connection failures are
+/// an ordinary "no helper" answer here, not a write falling back silently.
+pub fn helper_governor_running() -> bool {
+    let Ok(client) = HelperClient::connect() else {
+        return false;
+    };
+    match client.request(&Request::new(symcockpit_helper_proto::Action::Status)) {
+        Ok(reply) => reports_governor_running(&reply),
+        Err(_) => false,
+    }
+}
+
 /// Which UID the process runs as is `system::running_as_root`; this is the
 /// numeric `(uid, gid)` of a named user (`getpwnam`).
 pub fn user_ids(name: &str) -> Option<(u32, u32)> {
@@ -166,5 +184,26 @@ impl HelperPorts for LiveHelperPorts {
 
     fn legacy_governor_running(&self) -> bool {
         self.probe.is_running()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reports_governor_running;
+    use symcockpit_helper_proto::Reply;
+
+    #[test]
+    fn a_helper_is_reported_running_only_while_governing() {
+        assert!(reports_governor_running(&Reply::Status {
+            state: "governing".into(),
+            detail: None,
+        }));
+        for state in ["idle", "failed", "governor", ""] {
+            assert!(!reports_governor_running(&Reply::Status {
+                state: state.into(),
+                detail: None,
+            }));
+        }
+        assert!(!reports_governor_running(&Reply::Ok));
     }
 }

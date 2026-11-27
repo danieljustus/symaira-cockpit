@@ -24,6 +24,9 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub const HELPER_IDENTIFIER: &str = "com.symaira.symtune-helper";
 /// Bundle identifier and code-signing identifier of `Symaira Cockpit.app`.
 pub const APP_IDENTIFIER: &str = "com.symaira.cockpit";
+/// Code-signing identifier of the bundled `symcockpit` agent/CLI inside the
+/// app. It is a client of the same helper as the app itself.
+pub const AGENT_IDENTIFIER: &str = "com.symaira.cockpit.symcockpit";
 
 /// The app pings the helper this often while it governs (§6.2).
 pub const HEARTBEAT_INTERVAL_MS: u64 = 2_000;
