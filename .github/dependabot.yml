@@ -18,9 +18,10 @@ updates:
     groups:
       symaira-corekit:
         patterns: ["danieljustus/symaira-corekit*"]
-  # One PR moves the root and tuning packages together. Dependabot never edits
-  # tuning/project.yml; scripts/check-corekit-pins.sh fails CI until its
-  # exactVersion matches tuning/Package.swift.
+  # Dependabot may move only tuning/Package.swift and never edits
+  # tuning/project.yml. The CoreKit Dependabot workflow raises the root
+  # Package.swift, Package.resolved and project.yml in the same PR;
+  # scripts/check-corekit-pins.sh fails CI on any drift that remains.
   - package-ecosystem: swift
     directories:
       - /

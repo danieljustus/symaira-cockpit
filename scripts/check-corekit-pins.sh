@@ -1,55 +1,24 @@
 #!/usr/bin/env bash
-# Fails when a symaira-corekit pin was bumped in only some of the files that
-# must agree, which is what Dependabot leaves behind:
-# - it bumps Package.swift and the tracked Xcode project (project.pbxproj +
-#   Package.resolved) but never the XcodeGen spec (project.yml), so the next
-#   `xcodegen generate` would silently revert the bump;
-# - for a Cargo `tag = "vX.Y.Z"` pin under [workspace.dependencies] it updates
-#   only Cargo.lock, so `cargo --locked` fails until Cargo.toml names the tag.
+# Fails when the symaira-corekit pins disagree, which is what Dependabot leaves
+# behind: it never edits tuning/project.yml, moves tuning/Package.swift without
+# the root Package.swift that depends on it (#435), moves a Cargo
+# `[workspace.dependencies]` tag only in Cargo.lock, and never moves a `rev` or
+# `branch` pin.
+#
+# CoreKit owns the check: this runs its corekit_pins.py at the commit that
+# .github/workflows/corekit-dependabot.yml pins, so the Dependabot bump of that
+# action moves this check too. Pass --fix to repair drift locally.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-spec_version() { awk '/symaira-corekit/ && /url:/ {f=6; next} f && /exactVersion:/ {gsub(/["\047]/, "", $2); print $2; exit} f {f--}' "$1"; }
-swift_version() { grep -oE 'symaira-corekit(\.git)?"[[:space:]]*,[[:space:]]*exact:[[:space:]]*"[^"]+"' "$1" | grep -oE '"[^"]+"$' | tr -d '"' | head -1 || true; }
-pbxproj_version() { awk '/repositoryURL/ && /symaira-corekit/ {f=5; next} f && /[[:space:]]version = / {gsub(/[;"]/, "", $3); print $3; exit} f {f--}' "$1"; }
-resolved_version() { awk '/"identity"[[:space:]]*:[[:space:]]*"symaira-corekit"/ {f=8; next} f && /"version"/ {gsub(/[",]/, "", $3); print $3; exit} f {f--}' "$1"; }
+sha="$(sed -nE 's#.*symaira-corekit/\.github/actions/dependabot-corekit@([0-9a-f]{40}).*#\1#p' .github/workflows/corekit-dependabot.yml | head -1)"
+if [ -z "$sha" ]; then
+	echo "::error file=.github/workflows/corekit-dependabot.yml::no full-SHA pin of the dependabot-corekit action found" >&2
+	exit 1
+fi
 
-status=0
-checked=0
-while IFS= read -r spec; do
-	want="$(spec_version "$spec")"
-	[ -n "$want" ] || continue
-	dir="$(dirname "$spec")"
-	prefix=""
-	[ "$dir" = "." ] || prefix="$dir/"
-	while IFS= read -r file; do
-		[ -n "$file" ] || continue
-		case "$file" in
-		*/Package.resolved) have="$(resolved_version "$file")" ;;
-		*.pbxproj) have="$(pbxproj_version "$file")" ;;
-		*) have="$(swift_version "$file")" ;;
-		esac
-		[ -n "$have" ] || continue
-		checked=$((checked + 1))
-		if [ "$have" != "$want" ]; then
-			echo "::error file=$spec::$spec pins symaira-corekit $want but $file pins $have; update exactVersion in $spec (and regenerate) so both match"
-			status=1
-		fi
-	done < <(git ls-files -- ":(glob)${prefix}Package.swift" ":(glob)${prefix}*.xcodeproj/project.pbxproj" ":(glob)${prefix}*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
-done < <(git ls-files -- ':(glob)**/project.yml' | while IFS= read -r f; do grep -q 'symaira-corekit' "$f" && echo "$f"; done)
-
-while IFS= read -r manifest; do
-	lock="${manifest%Cargo.toml}Cargo.lock"
-	git ls-files --error-unmatch -- "$lock" >/dev/null 2>&1 || continue
-	want="$(grep -oE 'symaira-corekit"[^}]*tag[[:space:]]*=[[:space:]]*"v[^"]+"' "$manifest" | grep -oE 'v[^"]+"$' | tr -d '"' | sort -u | tr '\n' ' ' || true)"
-	have="$(grep -oE 'symaira-corekit\?tag=v[^#"]+' "$lock" | cut -d= -f2 | sort -u | tr '\n' ' ' || true)"
-	[ -n "$want" ] && [ -n "$have" ] || continue
-	checked=$((checked + 1))
-	if [ "$want" != "$have" ]; then
-		echo "::error file=$manifest::$manifest pins symaira-corekit tag ${want% } but $lock resolves ${have% }; set tag = \"${have% }\" in $manifest (Dependabot updates only the lock for [workspace.dependencies])"
-		status=1
-	fi
-done < <(git ls-files -- ':(glob)**/Cargo.toml' | while IFS= read -r f; do grep -q 'symaira-corekit' "$f" && echo "$f"; done)
-
-[ "$status" -eq 0 ] && echo "symaira-corekit pins consistent ($checked manifest(s) checked)"
-exit "$status"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL --retry 3 -o "$tmp/corekit_pins.py" \
+	"https://raw.githubusercontent.com/danieljustus/symaira-corekit/$sha/.github/actions/dependabot-corekit/corekit_pins.py"
+python3 -I "$tmp/corekit_pins.py" "$@"
