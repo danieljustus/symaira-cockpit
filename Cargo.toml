@@ -26,9 +26,10 @@ publish = false
 
 [workspace.dependencies]
 symcockpit-contract = { path = "crates/symcockpit-contract", version = "=0.13.0" }
-# Shared Symaira foundations are pinned by revision like every Rust consumer:
+# Shared Symaira foundations are pinned by immutable release tag so Dependabot
+# can move them, like every Rust consumer:
 #   { git = "https://github.com/danieljustus/symaira-corekit",
-#     rev = "65d3300cdcf29a8ce28797bbe95ffcbe842696a1", version = "=0.0.0" }
+#     tag = "v0.27.0", version = "=0.0.0" }
 # No CoreKit crate is used yet: symaira-core-exit numbers codes differently
 # (4 = forbidden, Cockpit: 4 = unsupported) and symaira-core-version has no
 # `families`/`update` fields. Add the pin with the first crate that fits.

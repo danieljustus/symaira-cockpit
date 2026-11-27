@@ -1,9 +1,23 @@
 version: 2
 updates:
+  # CoreKit crates get their own daily group; a broader cargo group would win
+  # and drop the Git tag bump, so none is declared here.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      exclude: ["symaira-core-*"]
+    groups:
+      symaira-corekit:
+        patterns: ["symaira-core-*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      symaira-corekit:
+        patterns: ["danieljustus/symaira-corekit*"]
   # One PR moves the root and tuning packages together. Dependabot never edits
   # tuning/project.yml; scripts/check-corekit-pins.sh fails CI until its
   # exactVersion matches tuning/Package.swift.
@@ -12,8 +26,9 @@ updates:
       - /
       - /tuning
     schedule:
-      interval: weekly
+      interval: "daily"
+    cooldown:
+      exclude: ["*symaira-corekit*"]
     groups:
       symaira-corekit:
-        patterns:
-          - "*symaira-corekit*"
+        patterns: ["*symaira-corekit*"]
