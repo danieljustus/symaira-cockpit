@@ -315,10 +315,15 @@ public enum MetricFormatting {
     /// NARROW NO-BREAK SPACE.
     public static let unitGap = "\u{202F}"
 
+    /// Compiled once per process; both are immutable value types.
+    nonisolated(unsafe) private static let sizeToken = #/(\d+(?:\.\d+)?) ?(TB|GB|MB|KB|B)(/s)?/#
+    nonisolated(unsafe) private static let percentToken = #/(\d) ?%/#
+
     public static func compactReadout(_ text: String) -> String {
-        // A size or rate with its unit: `15.2 GB`, `512 MB`, `1.2 MB/s`. Built
-        // here rather than held in a static: `Regex` is not `Sendable`.
-        let sizeToken = #/(\d+(?:\.\d+)?) ?(TB|GB|MB|KB|B)(/s)?/#
+        // A size or rate with its unit: `15.2 GB`, `512 MB`, `1.2 MB/s`.
+        // Compiled once: the parked HUD calls this on every metrics sample,
+        // and rebuilding the regex program there showed up in idle samples.
+        let sizeToken = Self.sizeToken
         return text
             .replacing(sizeToken) { match in
                 compactAmount(match.output.1)
@@ -326,7 +331,7 @@ public enum MetricFormatting {
                     + String(match.output.2)
                     + (match.output.3.map { String($0) } ?? "")
             }
-            .replacing(#/(\d) ?%/#) { match in "\(match.output.1)\(unitGap)%" }
+            .replacing(Self.percentToken) { match in "\(match.output.1)\(unitGap)%" }
     }
 
     private static func compactAmount(_ digits: Substring) -> String {

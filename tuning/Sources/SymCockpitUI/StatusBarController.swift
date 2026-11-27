@@ -567,21 +567,24 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     private func setupPopover() {
-        let hosting = NSHostingController(
-            rootView: makeStatusView(
-                maxHeight: Self.availableContentHeight(for: NSScreen.main)
-            )
-        )
-        popoverHosting = hosting
-        // Without preferredContentSize sizing, the SwiftUI content reports its
-        // height only after the popover is shown (and again on every periodic
-        // refresh), so the popover window gets anchored with a stale frame and
-        // ends up clipped above the menu bar instead of hanging below the icon.
-        hosting.sizingOptions = .preferredContentSize
-        popover.contentViewController = hosting
-        popover.contentSize = hosting.view.fittingSize
+        // No content view controller until the popover is actually shown. A
+        // hidden NSHostingController keeps its SwiftUI graph alive and updates
+        // it on every model tick, which costs CPU with nothing on screen.
         popover.behavior = .transient
         popover.delegate = self
+    }
+
+    private func makePopoverHosting(screen: NSScreen?) -> NSHostingController<MainStatusView> {
+        // Without preferredContentSize sizing, the SwiftUI content reports its
+        // height only after the popover is shown, so the popover window gets
+        // anchored with a stale frame and ends up clipped above the menu bar.
+        let hosting = NSHostingController(
+            rootView: makeStatusView(
+                maxHeight: Self.availableContentHeight(for: screen)
+            )
+        )
+        hosting.sizingOptions = .preferredContentSize
+        return hosting
     }
 
     // MARK: - Actions
@@ -666,9 +669,16 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // The menu bar may have moved to a different-sized display since
         // the last open, so re-derive the height budget before showing.
         let screen = view.window?.screen ?? NSScreen.main
-        popoverHosting?.rootView = makeStatusView(
-            maxHeight: Self.availableContentHeight(for: screen)
-        )
+        let hosting: NSHostingController<MainStatusView>
+        if let existing = popoverHosting {
+            existing.rootView = makeStatusView(maxHeight: Self.availableContentHeight(for: screen))
+            hosting = existing
+        } else {
+            hosting = makePopoverHosting(screen: screen)
+            popoverHosting = hosting
+        }
+        popover.contentViewController = hosting
+        popover.contentSize = hosting.view.fittingSize
         // Show first, then activate: activating an LSUIElement app before
         // the popover is anchored can misplace the popover window.
         popover.show(relativeTo: rect, of: view, preferredEdge: preferredEdge)
@@ -724,6 +734,10 @@ public final class StatusBarController: NSObject, NSPopoverDelegate {
         // The process card's `onDisappear` is not guaranteed for a popover that
         // is torn down; stop sampling explicitly so a closed panel costs nothing.
         processesModel.setVisible(false)
+        // Drop the SwiftUI graph with the panel. Keeping a hidden hosting view
+        // around lets it re-render on every metrics tick while nothing is shown.
+        popover.contentViewController = nil
+        popoverHosting = nil
     }
 
     // MARK: - Sleep/Wake gap markers

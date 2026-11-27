@@ -8,7 +8,7 @@ import SymCockpitCore
 /// narrow shoulder and on an edge dock's peeking sliver, and having written
 /// it twice once is enough.
 @MainActor
-struct HUDCompactItem: View {
+struct HUDCompactItem: View, Equatable {
     let item: HUDItemValue
     /// Squeeze into whatever width the parent offers instead of taking the
     /// natural one, and show ``MetricFormatting/compactReadout(_:)`` rather than
@@ -22,7 +22,6 @@ struct HUDCompactItem: View {
     /// overran it and were clipped at the outer edges. Without it the item
     /// keeps its natural size, which is what the edge docks have always had.
     var fitsWidth = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Lighter and a step smaller than the shared caption: the strip sits next
     /// to the menu bar's own titles, and at caption weight the readouts read
@@ -43,13 +42,14 @@ struct HUDCompactItem: View {
                 .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                // The digits roll rather than cut, which is most of what makes
-                // a live readout read as live.
-                .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : HUDMotion.value, value: text)
         }
-        // `minimumScaleFactor` does nothing under a horizontal `fixedSize()`:
-        // the text is offered its ideal width and never needs to shrink.
+        // No numeric content transition here. The shoulders are always on
+        // screen when the HUD is the readout surface, so every metrics sample
+        // would interpolate two glyph bitmaps through a software blur in a
+        // full-display CGDrawingLayer (issue #418). A glanceable readout can
+        // swap its digits outright; the rolling animation is reserved for the
+        // card the user opened. Equatable above also skips the body entirely
+        // when the formatted value did not change.
         .fixedSize(horizontal: !fitsWidth, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title) \(item.value)")
@@ -65,9 +65,8 @@ struct HUDCompactItem: View {
 /// scaling make sure nothing is cut off. The accessibility label keeps the
 /// full text.
 @MainActor
-struct HUDStackedItem: View {
+struct HUDStackedItem: View, Equatable {
     let item: HUDItemValue
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var text: String { MetricFormatting.compactReadout(item.value) }
 
@@ -81,9 +80,9 @@ struct HUDStackedItem: View {
                 .foregroundStyle(SymairaTheme.foregroundPrimary(for: .dark))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : HUDMotion.value, value: text)
         }
+        // As on the notch shoulders, the peek is an always-present software
+        // surface: no interpolated glyph bitmaps and no blur per sample.
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title) \(item.value)")

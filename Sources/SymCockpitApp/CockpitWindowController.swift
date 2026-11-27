@@ -31,18 +31,17 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if let window {
+            // A closed window keeps its NSHostingController only until here:
+            // re-create it on show rather than leaving a hidden SwiftUI graph
+            // updating on every agent sample.
+            if window.contentViewController == nil {
+                window.contentViewController = makeHostingController()
+            }
             present(window)
             return
         }
 
-        let root = CockpitRootView(
-            statusBar: statusBar,
-            openPreferences: openPreferences,
-            navigation: navigation
-        )
-        let hosting = NSHostingController(rootView: root)
-
-        let window = NSWindow(contentViewController: hosting)
+        let window = NSWindow(contentViewController: makeHostingController())
         window.title = "Symaira Cockpit"
         window.titleVisibility = .visible
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
@@ -58,6 +57,14 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName("SymCockpitMainWindow")
         self.window = window
         present(window)
+    }
+
+    private func makeHostingController() -> NSHostingController<CockpitRootView> {
+        NSHostingController(rootView: CockpitRootView(
+            statusBar: statusBar,
+            openPreferences: openPreferences,
+            navigation: navigation
+        ))
     }
 
     private func present(_ window: NSWindow) {
@@ -81,6 +88,9 @@ final class CockpitWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         navigation.isWindowVisible = false
         statusBar.setEmbeddedPanelVisible(false)
+        // A hidden hosting view stays subscribed to the shared model and keeps
+        // rebuilding the workspace off screen. Release it with the window.
+        window?.contentViewController = nil
         // Back to a menu-bar-only app. Deferred, because dropping the policy
         // inside the close notification races the window teardown and can
         // leave a ghost Dock icon behind.
