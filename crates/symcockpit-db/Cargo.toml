@@ -13,7 +13,7 @@ workspace = true
 
 [dependencies]
 symcockpit-contract.workspace = true
-symcockpit-core = { path = "../symcockpit-core", version = "=0.13.0" }
+symcockpit-core = { path = "../symcockpit-core", version = "=0.13.1" }
 serde_json.workspace = true
 # CoreKit owns the SQLite policy (WAL, busy timeout, 0700 parent) and the
 # per-name migration table, so several modules can share cockpit.sqlite.

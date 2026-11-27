@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [0.13.1] (2026-11-27)
+
+### Fixed
+- Fan commands reach the privileged fan helper again (#430). The helper accepted only the
+  app's signing identifier `com.symaira.cockpit`, while the bundled agent and CLI are signed
+  as `com.symaira.cockpit.symcockpit`, so every connection was refused and writes fell back
+  silently to the unprivileged path. The client requirement now accepts both identifiers
+  (the Developer ID, team and forbidden-entitlement clauses are unchanged), connect failures
+  are logged, and choosing Cool or Max starts or retargets the helper's governor while
+  Standard stops it. `fan status` reports the governor.
+- Stale fan overrides are handed back (#429): a failed apply rolls back the diagnostic unlock
+  and manual mode, choosing Standard over an active override returns the fans to firmware
+  control, and a profile switch without elevation is recorded as failed in the history.
+  `fan status` shows the SMC override and each fan's mode and target.
+- The Clipboard page's Delete All button uses the destructive button style.
+
+### Performance
+- The always-on notch HUD no longer redraws the whole display in software on every metrics
+  sample (#418): its compact and peek readouts drew digits through a numeric text transition
+  that ran a software Gaussian blur. They now draw the digits directly and skip unchanged
+  values; the closed popover and cockpit window release their views. A local build dropped
+  from 6.7 % to about 0.15 % idle CPU on a quiet machine.
+
+### Changed
+- The GUI uses native SwiftUI controls in place of the CoreKit controls deprecated in
+  CoreKit 0.28.0 (grouped forms, progress views, switches, gauges and menus) (#440).
+  VoiceOver names, preferences and agent commands are unchanged.
+
+### Dependencies
+- symaira-corekit 0.28.0; getrandom 0.4, jiff 1.0, sha2 0.11, sevenz-rust2 0.27, regex
+  1.13.2, serde_json 1.0.154, tempfile 3.27, zip 9.8.2.
+
 ## [0.13.0] (2026-11-23)
 
 ### Fixed

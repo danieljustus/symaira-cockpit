@@ -136,9 +136,10 @@ administrator prompt unchanged.
 
 What it will and will not do:
 
-- The helper and the app each accept only the other: both ends of the XPC
-  connection are pinned to the Developer ID team the release build was made
-  for. That team identifier is baked into the build from the signing
+- The helper accepts only the app and the `symcockpit` agent bundled inside it
+  (signing identifiers `com.symaira.cockpit` and `com.symaira.cockpit.symcockpit`),
+  and the app accepts only the helper: both ends of the XPC connection are pinned
+  to the Developer ID team the release build was made for. That team identifier is baked into the build from the signing
   certificate and must equal the team in the binary's own signature; a build
   without it never registers or serves the helper. The helper additionally
   refuses peers that carry a hardened-runtime escape entitlement.

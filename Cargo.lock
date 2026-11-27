@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "jiff",
  "serde",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-contract"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-core"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "aes-gcm",
  "csv",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-db"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "rusqlite",
  "serde_json",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-ffi"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "serde_json",
  "sevenz-rust2",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-helper"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "symcockpit-contract",
  "symcockpit-core",
@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-helper-proto"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-macos"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "block2",
  "core-foundation",
@@ -1093,7 +1093,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-oracle"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "regex",
  "serde",
@@ -1104,7 +1104,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-store"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "regex",
  "serde_json",
@@ -1114,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "symcockpit-testkit"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "serde_json",
  "symcockpit-contract",
