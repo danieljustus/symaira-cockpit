@@ -35,7 +35,7 @@ use symcockpit_core::processes::{
 use symcockpit_core::sensors::{
     PowerReport, RawKey, SmcPort, detect_charge_limit_key_family, fan_status_json,
     read_fan_max_rpm, read_fan_mode, read_fan_target_rpm, read_key_uint, read_system_power,
-    sensors_json,
+    sensors_json, software_override_detected,
 };
 use symcockpit_core::system::{HardwareFacts, HostInfo, PrivilegedExecutable};
 use symcockpit_db::{plans::SqlitePlanStore, smart_history::SmartHistoryStore};
@@ -46,6 +46,7 @@ use symcockpit_macos::coreaudio::{RealAudioHal, RealTapHal, install_signal_handl
 use symcockpit_macos::coremidi::RealMidiHal;
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::fs_stats::{LiveSpeedHost, StdSpaceFs};
+use symcockpit_macos::helper::HelperClient;
 use symcockpit_macos::host::live_metrics_service;
 use symcockpit_macos::input::{AfplaySound, JsonFileSettings, LiveProbe, MultitouchHaptics};
 use symcockpit_macos::nvme::IoKitNvme;
@@ -190,6 +191,53 @@ impl HardwareFacts for LiveHardware {
         HostInfo {
             macos_version: system::operating_system_version(),
             architecture: system::ARCHITECTURE.to_owned(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------- fan control
+
+/// The elevation-dependent half of a fan profile change. Reads the raw SMC
+/// state without rights; hands the fans back and checks the available path
+/// through the same write code the CLI uses (helper first, root copy second),
+/// never through an unprivileged SMC write.
+pub struct LiveFanControl {
+    smc: SharedSmc,
+}
+
+impl crate::app::FanControl for LiveFanControl {
+    fn has_software_override(&self) -> bool {
+        software_override_detected(&self.smc)
+    }
+
+    fn restore_auto(&self, ctx: &crate::app::Context) -> Result<(), Error> {
+        crate::write::run(ctx, &symcockpit_core::write_commands::Command::FanAuto).map(|_| ())
+    }
+
+    fn check_elevation(&self, ctx: &crate::app::Context) -> Result<(), Error> {
+        // A test binary must not inspect (or write through) this Mac's real
+        // helper or root-owned copy; the fake ports decide the outcome.
+        if cfg!(debug_assertions) && std::env::var_os(crate::NO_HARDWARE_ENV).is_some() {
+            return Ok(());
+        }
+        if system::running_as_root() || HelperClient::connect().is_ok() {
+            return Ok(());
+        }
+        let copy = inspect_privileged(
+            &crate::platform::executable_candidates("symcockpit", ctx.env),
+            &|path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+            &file_attributes,
+            &probe_version,
+            &system::user_name,
+            crate::VERSION,
+        );
+        if copy.usable {
+            Ok(())
+        } else {
+            Err(Error::Permission(format!(
+                "fan control has no elevation path: {}",
+                copy.detail
+            )))
         }
     }
 }
@@ -489,7 +537,8 @@ pub fn wire(app: &mut App) {
         smc: smc.clone(),
         env: app.env.clone(),
     }));
-    app.services.overrides = Some(Box::new(LiveOverrides(smc)));
+    app.services.overrides = Some(Box::new(LiveOverrides(smc.clone())));
+    app.services.fan_control = Some(Box::new(LiveFanControl { smc }));
 }
 
 #[cfg(test)]

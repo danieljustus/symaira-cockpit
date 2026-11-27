@@ -48,7 +48,10 @@ fn applied() -> Output {
     Output::Json(json!({ "applied": true }))
 }
 
-fn run(ctx: &Context, command: &Command) -> Result<Output, Error> {
+/// Runs one privileged command against the live SMC/helper and records its
+/// outcome. Public so the fan-profile port can use exactly this write path
+/// when a `system` selection has to clear a stale override.
+pub fn run(ctx: &Context, command: &Command) -> Result<Output, Error> {
     crate::hardware_writes_blocked()?;
     let is_root = running_as_root();
     let smc = LiveSmc::open();

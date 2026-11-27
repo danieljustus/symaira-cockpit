@@ -332,17 +332,28 @@ pub fn preflight_apply(env: &FanEnv, fraction: f64) -> Result<(f64, usize), FanE
 }
 
 /// The writes of [`apply_fan`]: unlock, manual mode, target RPM per fan.
+///
+/// Once `Ftst` is unlocked a partial write must not leave the fans forced:
+/// every failure after that first write hands them back to the firmware before
+/// the original error is returned. The rollback is best effort — a second SMC
+/// refusal must not hide why the apply failed.
 pub fn write_apply(env: &FanEnv, clamped: f64, count: usize) -> Result<(), FanError> {
     // Unlock the diagnostic register so the SMC accepts manual mode writes.
     write(env, "Ftst", 1.0, b"ui8 ");
-    for i in 0..count {
-        switch_fan_to_manual(env, i)?;
-        let target = target_rpm(env, clamped, i)?;
-        if !write(env, &format!("F{i}Tg"), target, b"flt ") {
-            return Err(FanError::TargetWriteFailed(i));
+    let applied = (|| {
+        for i in 0..count {
+            switch_fan_to_manual(env, i)?;
+            let target = target_rpm(env, clamped, i)?;
+            if !write(env, &format!("F{i}Tg"), target, b"flt ") {
+                return Err(FanError::TargetWriteFailed(i));
+            }
         }
+        Ok(())
+    })();
+    if applied.is_err() {
+        let _ = restore_auto(env);
     }
-    Ok(())
+    applied
 }
 
 /// Apply a uniform fraction to all fans: clamp, floor, per-fan firmware
@@ -399,15 +410,7 @@ pub fn restore_auto(env: &FanEnv) -> Result<(), FanError> {
 /// governs nothing (a freshly started helper) can treat `true` as stale; a
 /// false positive only costs a redundant hand-back.
 pub fn has_software_override(env: &FanEnv) -> bool {
-    if !env.smc.is_open() {
-        return false;
-    }
-    let count = fan_count(env.smc);
-    if count == 0 {
-        return false;
-    }
-    read_key_uint(env.smc, "Ftst") == Some(1)
-        || (0..count).any(|i| read_key_uint(env.smc, &format!("F{i}Md")) == Some(1))
+    crate::sensors::software_override_detected(env.smc)
 }
 
 /// Whether every fan still holds what [`apply_fan`] writes for `fraction`:

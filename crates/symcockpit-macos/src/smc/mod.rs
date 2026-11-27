@@ -22,7 +22,9 @@ pub use probe::{FileFanSelection, PgrepGovernorProbe};
 #[cfg(test)]
 mod live_tests {
     use symcockpit_core::sensors::*;
-    use symcockpit_testkit::smc::assert_matches_oracle_shape;
+    use symcockpit_testkit::smc::{
+        assert_matches_oracle_shape, assert_matches_oracle_shape_except,
+    };
 
     use super::*;
 
@@ -39,7 +41,11 @@ mod live_tests {
         // An absent file is the isolated-HOME state the oracle was recorded in.
         let nowhere = FileFanSelection::at("/nonexistent/symcockpit-live-test/fan-profile.json");
         let fan_status = fan_status_json(&nowhere, &PgrepGovernorProbe, &smc, &host).unwrap();
-        assert_matches_oracle_shape("fan-status.shape.json", &fan_status);
+        assert_matches_oracle_shape_except(
+            "fan-status.shape.json",
+            &fan_status,
+            &["software_override", "fans"],
+        );
 
         let power = read_system_power(&smc, || None);
         let charge = detect_charge_limit_key_family(&smc);

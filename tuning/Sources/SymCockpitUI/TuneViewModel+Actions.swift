@@ -61,6 +61,40 @@ extension TuneViewModel {
         await requestFan("fan.target", value: celsius.map(AgentJSON.number), summary: summary)
     }
 
+    /// Hands forced fans back to macOS. `fan.auto` is an agent command and
+    /// risky, so the app only presents its plan and the result — it never
+    /// writes an SMC key itself.
+    func requestFanAuto() async {
+        fanFailure = nil
+        pendingFanChange = nil
+        fanBusy = true
+        defer { fanBusy = false }
+        switch await session.perform("fan.auto") {
+        case .needsConfirmation(let plan):
+            let confirmation = PlanConfirmationModel(plan: plan, session: session)
+            confirmation.onFinished = { [weak self, weak confirmation] report in
+                guard let self, let confirmation, self.pendingFanChange?.confirmation === confirmation else { return }
+                if report.isConfirmed {
+                    self.fanFailure = nil
+                    self.refreshNow()
+                } else {
+                    self.pendingFanChange = nil
+                    self.fanFailure = FanFailure(
+                        message: SecretRedactor.redact(report.failureMessage ?? "The fans were not returned to macOS."),
+                        needsHelper: report.exitClass == "permission"
+                    )
+                }
+            }
+            pendingFanChange = PendingChange(
+                confirmation: confirmation, summary: "Return the fans to macOS control."
+            )
+        case .done:
+            refreshNow()
+        case .failed(let message, let exitClass):
+            fanFailure = FanFailure(message: SecretRedactor.redact(message), needsHelper: exitClass == "permission")
+        }
+    }
+
     /// The user approved the pending plan (the shared view calls `confirm` itself;
     /// this is the same step for callers without the view).
     func confirmPendingFanChange() async {

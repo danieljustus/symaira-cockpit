@@ -260,6 +260,7 @@ pub fn app() -> App {
         services: Services {
             hardware: None,
             overrides: None,
+            fan_control: None,
             usage_runner: Box::new(SymbrainRunner {
                 binary: "symbrain".into(),
             }),

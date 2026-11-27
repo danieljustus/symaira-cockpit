@@ -179,6 +179,24 @@ pub fn assert_matches_oracle_shape(fixture: &str, actual: &Value) -> Vec<String>
     diff.hints
 }
 
+/// Compare a document that gained additive fields against the frozen v0.12
+/// shape. The fixture stays untouched: only the named new top-level keys are
+/// removed before the comparison, and they must be asserted separately.
+pub fn assert_matches_oracle_shape_except(
+    fixture: &str,
+    actual: &Value,
+    added: &[&str],
+) -> Vec<String> {
+    let mut baseline = actual.clone();
+    let object = baseline
+        .as_object_mut()
+        .unwrap_or_else(|| panic!("{fixture}: actual is not an object"));
+    for key in added {
+        assert!(object.remove(*key).is_some(), "{fixture}: no key '{key}'");
+    }
+    assert_matches_oracle_shape(fixture, &baseline)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -278,10 +296,51 @@ mod tests {
             &FakeHost::default(),
         )
         .unwrap();
-        assert_matches_oracle_shape("fan-status.shape.json", &value);
+        assert_matches_oracle_shape_except(
+            "fan-status.shape.json",
+            &value,
+            &["software_override", "fans"],
+        );
         assert_eq!(value["cool_target_celsius"], Value::Null);
         assert_eq!(value["profile"], "system");
         assert_eq!(value["governor_running"], false);
+        assert_eq!(value["software_override"], false);
+        // `F0md` (lowercase) is absent on this fake: firmware mode reads `null`.
+        assert_eq!(value["fans"][0]["mode"], Value::Null);
+        assert_eq!(value["fans"][1]["target_rpm"], 2210.0);
+    }
+
+    #[test]
+    fn fan_status_exposes_a_stale_override_and_each_fans_state() {
+        // The raw SMC state of issue #429, with the profile still on system.
+        let smc = FakeSmc::m4_pro_like()
+            .with_ui8("Ftst", 1)
+            .with_ui8("F0Md", 1)
+            .with_ui8("F1Md", 1)
+            .with_flt("F0Tg", 4951.0)
+            .with_flt("F1Tg", 5347.0);
+        let value = fan_status_json(
+            &FakeFanSelection(FanSelection::SYSTEM),
+            &FakeGovernor(false),
+            &smc,
+            &FakeHost::default(),
+        )
+        .unwrap();
+        assert_eq!(value["software_override"], true);
+        assert_eq!(value["fans"][0]["mode"], 1);
+        assert_eq!(value["fans"][0]["target_rpm"], 4951.0);
+        assert_eq!(value["fans"][1]["mode"], 1);
+        assert_eq!(value["fans"][1]["target_rpm"], 5347.0);
+        // No SMC: nothing readable, nothing to claim.
+        let closed = fan_status_json(
+            &FakeFanSelection(FanSelection::SYSTEM),
+            &FakeGovernor(false),
+            &FakeSmc::closed(),
+            &FakeHost::default(),
+        )
+        .unwrap();
+        assert_eq!(closed["software_override"], false);
+        assert_eq!(closed["fans"], json!([]));
     }
 
     #[test]
@@ -293,7 +352,11 @@ mod tests {
             &FakeHost::default(),
         )
         .unwrap();
-        let hints = assert_matches_oracle_shape("fan-status.shape.json", &value);
+        let hints = assert_matches_oracle_shape_except(
+            "fan-status.shape.json",
+            &value,
+            &["software_override", "fans"],
+        );
         assert_eq!(hints.len(), 1, "{hints:?}"); // null on one side (expected null, got number)
         assert_eq!(value["cool_target_celsius"], 70.0);
         assert_eq!(value["governor_running"], true);

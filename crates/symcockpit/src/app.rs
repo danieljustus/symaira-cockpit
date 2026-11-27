@@ -216,12 +216,28 @@ pub trait ReleaseSource {
     fn latest(&self) -> symcockpit_core::update_check::Fetched;
 }
 
+/// The elevation-dependent half of fan control, absent from test apps. The
+/// profile command writes the selection itself but asks this port whether the
+/// chosen position can actually be enforced, and uses it to hand fans back
+/// when `system` is selected over a stale override.
+pub trait FanControl {
+    /// The raw SMC state, read only: `Ftst` or any fan in manual mode.
+    fn has_software_override(&self) -> bool;
+    /// Return the fans to macOS through the available elevated path. The
+    /// outcome is recorded in history by the implementation.
+    fn restore_auto(&self, ctx: &Context) -> Result<(), Error>;
+    /// `Err` with the reason when neither a helper nor a usable root-owned
+    /// copy can change the fans on this Mac.
+    fn check_elevation(&self, ctx: &Context) -> Result<(), Error>;
+}
+
 /// Ports to the platform. `hardware` and `overrides` stay `None` until the
 /// areas that own them are wired; `doctor`, `permissions` and `status` answer
 /// `unsupported` while they are missing.
 pub struct Services {
     pub hardware: Option<Box<dyn HardwareFacts>>,
     pub overrides: Option<Box<dyn OverridePort>>,
+    pub fan_control: Option<Box<dyn FanControl>>,
     pub usage_runner: Box<dyn UsageRunner>,
     /// Custom SymVault entry path per provider. shortcut: Swift reads these
     /// from `UserDefaults.standard`, which for the CLI is a domain named after

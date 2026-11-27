@@ -168,13 +168,38 @@ fn manual_mode_is_retried_with_backoff_and_then_refused() {
 }
 
 #[test]
-fn a_rejected_target_write_is_reported() {
+fn a_rejected_target_write_is_reported_and_rolls_back_the_unlock() {
     let rig = Rig::new(50.0, 3000.0, 0);
     rig.smc.reject_writes_to("F0Tg");
     assert_eq!(
         apply_fan(&rig.env(), 0.5),
         Err(FanError::TargetWriteFailed(0))
     );
+    assert_eq!(
+        rig.smc.get_ui8("Ftst"),
+        Some(0),
+        "the diagnostic unlock is cleared"
+    );
+    assert_eq!(
+        rig.smc.get_ui8("F0Md"),
+        Some(APPLE_SILICON_AUTO_MODE),
+        "no fan stays in manual mode"
+    );
+    assert!(!has_software_override(&rig.env()));
+}
+
+#[test]
+fn a_missing_target_readback_also_rolls_back_the_unlock() {
+    let rig = Rig::new(50.0, 3000.0, 0);
+    rig.smc.set_ui8("FNum", 2); // fan 1 has no F1Mx: its target cannot be computed
+    rig.smc.set_ui8("F1Md", 1);
+    assert_eq!(
+        apply_fan(&rig.env(), 0.5),
+        Err(FanError::MaxRpmUnavailable(1))
+    );
+    assert_eq!(rig.smc.get_ui8("Ftst"), Some(0));
+    assert_eq!(rig.smc.get_ui8("F0Md"), Some(APPLE_SILICON_AUTO_MODE));
+    assert!(!has_software_override(&rig.env()));
 }
 
 #[test]

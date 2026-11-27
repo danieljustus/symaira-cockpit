@@ -50,8 +50,6 @@ pub fn run_json(
     let current =
         std::fs::read(&file).map_or(FanSelection::SYSTEM, |b| FanSelection::from_json(&b));
     let selection = apply(current, *change);
-    write_private_atomic(&file, encode(&selection).as_bytes(), is_root)
-        .map_err(|e| Error::Failed(e.to_string()))?;
     let (action, requested, clamped) = match change {
         Change::Profile(p) => (format!("fan.profile.{}", p.as_str()), None, None),
         Change::Target(t) => (
@@ -60,21 +58,49 @@ pub fn run_json(
             selection.cool_target_celsius,
         ),
     };
-    let event = HistoryEvent {
-        timestamp: jiff::Timestamp::now()
-            .strftime("%Y-%m-%dT%H:%M:%SZ")
-            .to_string(),
-        action,
-        requested_value: requested,
-        clamped_value: clamped,
-        applied_value: None,
-        result: "success".into(),
-        error_reason: None,
+    let record = |outcome: &Result<(), Error>| {
+        let event = HistoryEvent {
+            timestamp: jiff::Timestamp::now()
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
+                .to_string(),
+            action: action.clone(),
+            requested_value: requested,
+            clamped_value: clamped,
+            applied_value: None,
+            result: if outcome.is_ok() { "success" } else { "failed" }.to_owned(),
+            error_reason: outcome.as_ref().err().map(ToString::to_string),
+        };
+        let owner = ownership_to_restore(ctx.data_dir, is_root, &owner_of_path, None);
+        if let Err(e) = append_history_event(&ctx.data_dir.join("history.ndjson"), &event, owner) {
+            eprintln!("symtune: warning: failed to write history event: {e}");
+        }
     };
-    let owner = ownership_to_restore(ctx.data_dir, is_root, &owner_of_path, None);
-    if let Err(e) = append_history_event(&ctx.data_dir.join("history.ndjson"), &event, owner) {
-        eprintln!("symtune: warning: failed to write history event: {e}");
+
+    // A stored position is only a promise: without a helper or a usable root
+    // copy nothing can enforce it. Fail the switch and say why in history
+    // instead of recording a success that did nothing.
+    let fan_control = ctx.services.fan_control.as_ref();
+    if let Some(port) = fan_control
+        && let Err(e) = port.check_elevation(ctx)
+    {
+        record(&Err(e.clone()));
+        return Err(e);
     }
+
+    write_private_atomic(&file, encode(&selection).as_bytes(), is_root)
+        .map_err(|e| Error::Failed(e.to_string()))?;
+
+    // `system` over a stale manual override is not a hand-back: clear the SMC
+    // through the same elevated write path `fan auto` uses. A failure here is
+    // a failed profile switch, with the reason in the same history line.
+    let handback = match (change, fan_control) {
+        (Change::Profile(FanProfile::System), Some(port)) if port.has_software_override() => {
+            port.restore_auto(ctx)
+        }
+        _ => Ok(()),
+    };
+    record(&handback);
+    handback?;
     let request = Request {
         command: "fan.status",
         json: true,

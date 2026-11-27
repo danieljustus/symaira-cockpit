@@ -249,6 +249,25 @@ struct FanControlCard: View {
                     FanCoolTargetRow(model: model)
                 }
 
+                // The stored profile can say `system` while the SMC still
+                // holds a manual override. The agent reports that state; the
+                // hand-back is its `fan.auto` command, not local logic here.
+                if selectedProfile == .system && model.fanSoftwareOverride {
+                    VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                        SymairaNotice(
+                            message: "The fans are still held by software. macOS is not controlling them.",
+                            tone: .warning
+                        )
+                        Button("Return fans to macOS") {
+                            Task { await model.requestFanAuto() }
+                        }
+                        .buttonStyle(.link)
+                        .symairaText(.caption)
+                        .disabled(!model.isAgentReady || model.fanBusy || model.pendingFanChange != nil)
+                    }
+                    .accessibilityIdentifier("fan-override-warning")
+                }
+
                 if let pending = model.pendingFanChange {
                     confirmation(pending)
                 } else if model.fanBusy {

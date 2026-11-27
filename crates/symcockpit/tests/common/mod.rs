@@ -3,11 +3,12 @@
 
 #![allow(dead_code)] // each test binary uses a different subset
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::Value;
-use symcockpit::app::{App, Handlers, OverridePort, ReleaseSource, Services};
+use symcockpit::app::{App, Context, FanControl, Handlers, OverridePort, ReleaseSource, Services};
 use symcockpit::cli::{Action, Outcome, plan};
 use symcockpit_store::Paths;
 use symcockpit_testkit::symbrain::FakeSymbrain;
@@ -37,6 +38,7 @@ pub fn app(home: &Path) -> App {
         services: Services {
             hardware: None,
             overrides: None,
+            fan_control: Some(Box::new(FakeFanControl::default())),
             usage_runner: Box::new(FakeSymbrain::replying(
                 r#"{"schema_version":1,"providers":[]}"#,
             )),
@@ -101,6 +103,55 @@ pub fn unavailable(app: &App, list: &[&str]) -> bool {
 }
 
 pub struct Overrides(pub Value, pub bool);
+
+/// Counts hand-backs without ever touching an SMC.
+#[derive(Clone, Default)]
+pub struct FanControlCounter(pub std::rc::Rc<Cell<usize>>);
+
+impl FanControlCounter {
+    pub fn count(&self) -> usize {
+        self.0.get()
+    }
+}
+
+pub struct FakeFanControl {
+    pub software_override: bool,
+    pub elevation_error: Option<String>,
+    pub restore_error: Option<String>,
+    pub counter: FanControlCounter,
+}
+
+impl Default for FakeFanControl {
+    fn default() -> Self {
+        Self {
+            software_override: false,
+            elevation_error: None,
+            restore_error: None,
+            counter: FanControlCounter::default(),
+        }
+    }
+}
+
+impl FanControl for FakeFanControl {
+    fn has_software_override(&self) -> bool {
+        self.software_override
+    }
+
+    fn restore_auto(&self, _: &Context) -> Result<(), symcockpit_contract::Error> {
+        self.counter.0.set(self.counter.0.get() + 1);
+        match &self.restore_error {
+            Some(reason) => Err(symcockpit_contract::Error::Failed(reason.clone())),
+            None => Ok(()),
+        }
+    }
+
+    fn check_elevation(&self, _: &Context) -> Result<(), symcockpit_contract::Error> {
+        match &self.elevation_error {
+            Some(reason) => Err(symcockpit_contract::Error::Permission(reason.clone())),
+            None => Ok(()),
+        }
+    }
+}
 
 impl OverridePort for Overrides {
     fn active_overrides(&self) -> Value {

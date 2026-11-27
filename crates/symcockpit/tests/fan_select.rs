@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{app, done, unavailable};
+use common::{FakeFanControl, FanControlCounter, app, done, unavailable};
 use serde_json::{Value, json};
 use symcockpit::app::{App, Context, Output};
 use symcockpit::mcp::Server;
@@ -22,6 +22,8 @@ fn fan_app(home: &std::path::Path) -> App {
             "governor_running": false,
             "cool_target_celsius": selection.cool_target_celsius,
             "average_cluster_celsius": 84.5,
+            "software_override": false,
+            "fans": [],
         })))
     });
     a
@@ -33,7 +35,18 @@ fn file(a: &App) -> String {
 
 fn pretty(profile: &str, target: &str) -> String {
     format!(
-        "{{\n  \"average_cluster_celsius\" : 84.5,\n  \"cool_target_celsius\" : {target},\n  \"governor_running\" : false,\n  \"profile\" : \"{profile}\"\n}}\n"
+        concat!(
+            "{{\n",
+            "  \"average_cluster_celsius\" : 84.5,\n",
+            "  \"cool_target_celsius\" : {target},\n",
+            "  \"fans\" : [\n\n  ],\n",
+            "  \"governor_running\" : false,\n",
+            "  \"profile\" : \"{profile}\",\n",
+            "  \"software_override\" : false\n",
+            "}}\n"
+        ),
+        target = target,
+        profile = profile
     )
 }
 
@@ -110,6 +123,79 @@ fn a_sequence_writes_the_swift_file_and_history_and_prints_the_swift_texts() {
         ]
     );
     assert!(history.iter().all(|r| r.payload["result"] == "success"));
+}
+
+#[test]
+fn selecting_system_with_a_stale_override_hands_the_fans_back() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut a = fan_app(tmp.path());
+    let counter = FanControlCounter::default();
+    a.services.fan_control = Some(Box::new(FakeFanControl {
+        software_override: true,
+        counter: counter.clone(),
+        ..FakeFanControl::default()
+    }));
+    // Store a non-system selection first, so the switch is a real change.
+    done(&a, &["fan", "profile", "comfort"]);
+    let o = done(&a, &["fan", "profile", "system"]);
+    assert_eq!(o.code, 0);
+    assert_eq!(counter.count(), 1, "the SMC is handed back once");
+    assert!(
+        read_history_records(&a.paths.data_dir.join("history.ndjson"), None)
+            .iter()
+            .all(|r| r.payload["result"] == "success")
+    );
+}
+
+#[test]
+fn a_failed_handback_is_a_failed_profile_switch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut a = fan_app(tmp.path());
+    let counter = FanControlCounter::default();
+    a.services.fan_control = Some(Box::new(FakeFanControl {
+        software_override: true,
+        restore_error: Some("SMC rejected F0Md".into()),
+        counter: counter.clone(),
+        ..FakeFanControl::default()
+    }));
+    let o = done(&a, &["fan", "profile", "system"]);
+    assert_eq!(o.code, 1);
+    assert!(o.stderr.contains("SMC rejected F0Md"));
+    assert_eq!(counter.count(), 1);
+    let history = read_history_records(&a.paths.data_dir.join("history.ndjson"), None);
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].action, "fan.profile.system");
+    assert_eq!(history[0].payload["result"], "failed");
+    assert!(
+        history[0].payload["error_reason"]
+            .as_str()
+            .unwrap()
+            .contains("SMC rejected F0Md")
+    );
+}
+
+#[test]
+fn a_switch_without_elevation_is_failed_in_history_with_the_reason() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut a = fan_app(tmp.path());
+    a.services.fan_control = Some(Box::new(FakeFanControl {
+        elevation_error: Some("stale /usr/local/bin/symcockpit 0.11.0; no helper".into()),
+        ..FakeFanControl::default()
+    }));
+    let o = done(&a, &["fan", "profile", "comfort"]);
+    assert_eq!(o.code, 3);
+    assert!(o.stderr.contains("stale /usr/local/bin/symcockpit"));
+    assert_eq!(file(&a), "", "nothing was selected");
+    let history = read_history_records(&a.paths.data_dir.join("history.ndjson"), None);
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].action, "fan.profile.comfort");
+    assert_eq!(history[0].payload["result"], "failed");
+    assert!(
+        history[0].payload["error_reason"]
+            .as_str()
+            .unwrap()
+            .contains("stale /usr/local/bin/symcockpit")
+    );
 }
 
 #[test]

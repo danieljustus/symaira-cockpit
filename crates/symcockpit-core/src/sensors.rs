@@ -614,6 +614,22 @@ pub fn average_cluster_temperature(report: &SensorReport) -> Option<f64> {
     (!used.is_empty()).then(|| used.iter().map(|r| r.celsius).sum::<f64>() / used.len() as f64)
 }
 
+/// Whether the raw SMC state shows a software override: the diagnostic unlock
+/// or a fan in manual mode. Read-only, so `fan status` and the profile switch
+/// can ask without a writer or elevated rights. A false positive only costs a
+/// redundant hand-back; a false negative would hide fans stuck at a fixed speed.
+pub fn software_override_detected(smc: &dyn SmcPort) -> bool {
+    if !smc.is_open() {
+        return false;
+    }
+    let count = read_key_uint(smc, "FNum").unwrap_or(0) as usize;
+    if count == 0 {
+        return false;
+    }
+    read_key_uint(smc, "Ftst") == Some(1)
+        || (0..count).any(|i| read_key_uint(smc, &format!("F{i}Md")) == Some(1))
+}
+
 /// Arguments of `fan status`; `rest` starts with `status`.
 pub fn parse_fan_status_args(rest: &[String]) -> Result<(), Error> {
     match rest.get(1) {
@@ -625,8 +641,11 @@ pub fn parse_fan_status_args(rest: &[String]) -> Result<(), Error> {
 }
 
 /// The `fan status` document: `{profile, governor_running, cool_target_celsius,
-/// average_cluster_celsius}`. The two optionals are explicit `null`s ("no
-/// target" is an answer); the average is rounded to 0.1 °C.
+/// average_cluster_celsius, software_override, fans}`. The two optionals are
+/// explicit `null`s ("no target" is an answer); the average is rounded to 0.1
+/// °C. `software_override` and each fan's `mode`/`target_rpm` come straight
+/// from the SMC, so a manual override is visible even when the stored profile
+/// says `system` and no governor runs.
 pub fn fan_status_json(
     profiles: &dyn FanSelectionSource,
     governor: &dyn GovernorProbe,
@@ -634,20 +653,35 @@ pub fn fan_status_json(
     host: &dyn SensorHost,
 ) -> Result<Value, Error> {
     #[derive(Serialize)]
+    struct FanState {
+        mode: Option<u8>,
+        target_rpm: Option<f64>,
+    }
+    #[derive(Serialize)]
     struct FanProfileResult {
         profile: &'static str,
         governor_running: bool,
         cool_target_celsius: Option<f64>,
         average_cluster_celsius: Option<f64>,
+        software_override: bool,
+        fans: Vec<FanState>,
     }
     let selection = profiles.selection();
     let governor_running = governor.is_running();
     let average = average_cluster_temperature(&read_sensors(smc, host));
+    let fans = (0..read_key_uint(smc, "FNum").unwrap_or(0) as usize)
+        .map(|i| FanState {
+            mode: read_fan_mode(smc, i as u8),
+            target_rpm: read_fan_target_rpm(smc, i as u8),
+        })
+        .collect();
     to_json(&FanProfileResult {
         profile: selection.profile.as_str(),
         governor_running,
         cool_target_celsius: selection.cool_target_celsius,
         average_cluster_celsius: average.map(|a| (a * 10.0).round() / 10.0),
+        software_override: software_override_detected(smc),
+        fans,
     })
 }
 

@@ -43,6 +43,10 @@ final class TuneViewModel {
     /// than showing a position that is not in effect.
     private(set) var fanProfile: FanProfile = .system
     private(set) var fanGovernorRunning = false
+    /// The raw SMC override and per-fan state from `fan.status`: a selected
+    /// `system` profile can still mean fans held at a fixed speed by software.
+    private(set) var fanSoftwareOverride = false
+    private(set) var fanStates: [FanStatus.FanState] = []
     /// The Cool position's optional maximum average CPU/GPU cluster
     /// temperature, as stored.
     private(set) var fanCoolTarget: Double?
@@ -289,6 +293,8 @@ final class TuneViewModel {
                 set(\.fanGovernorRunning, status.governorRunning)
                 set(\.fanCoolTarget, status.coolTargetCelsius)
                 set(\.fanAverageClusterCelsius, status.averageClusterCelsius)
+                if fanSoftwareOverride != status.softwareOverride { fanSoftwareOverride = status.softwareOverride }
+                if fanStates != status.fans { fanStates = status.fans }
             default:
                 return
             }
@@ -322,6 +328,8 @@ final class TuneViewModel {
         keepAwake = .inactive
         fanProfile = .system
         fanGovernorRunning = false
+        fanSoftwareOverride = false
+        fanStates = []
         fanCoolTarget = nil
         fanAverageClusterCelsius = nil
         metricRows = []
