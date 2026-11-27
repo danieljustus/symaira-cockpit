@@ -114,22 +114,12 @@ impl FanControlCounter {
     }
 }
 
+#[derive(Default)]
 pub struct FakeFanControl {
     pub software_override: bool,
     pub elevation_error: Option<String>,
     pub restore_error: Option<String>,
     pub counter: FanControlCounter,
-}
-
-impl Default for FakeFanControl {
-    fn default() -> Self {
-        Self {
-            software_override: false,
-            elevation_error: None,
-            restore_error: None,
-            counter: FanControlCounter::default(),
-        }
-    }
 }
 
 impl FanControl for FakeFanControl {
