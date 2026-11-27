@@ -27,7 +27,20 @@ struct AIUsageCardView: View {
                 Label("AI Usage", symairaIcon: .ai, iconSize: 16).font(SymairaTypography.subheading)
                 Spacer()
                 Button(customizing ? "Done" : "Customize…") { customizing.toggle() }
-                SymairaIconButton("Refresh enabled AI providers", icon: .refresh, size: 16) { model.refreshNow() }
+                Button {
+            model.refreshNow()
+        } label: {
+            Label {
+                Text("Refresh enabled AI providers")
+            } icon: {
+                Image(symairaIcon: .refresh, size: 16)
+            }
+            .labelStyle(.iconOnly)
+        }
+        .symairaButtonStyle(.toolbar)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Refresh enabled AI providers")
+        .help("Refresh enabled AI providers")
                     .keyboardShortcut("r", modifiers: .command)
                 Menu {
                     Button("Undo customization") { preferences.undoManager.undo() }
@@ -306,12 +319,36 @@ struct AIUsageCardView: View {
     private func moveButtons(_ id: String, order: [String], move: @escaping (String, String) -> Void) -> some View {
         let index = order.firstIndex(of: id) ?? 0
         return Group {
-            SymairaIconButton("Move up", icon: .collapse, size: 16) {
-                if index > 0 { move(id, order[index - 1]) }
-            }.disabled(index == 0)
-            SymairaIconButton("Move down", icon: .expand, size: 16) {
-                if index + 1 < order.count { move(order[index + 1], id) }
-            }.disabled(index + 1 >= order.count)
+            Button {
+            if index > 0 { move(id, order[index - 1]) }
+        } label: {
+            Label {
+                Text("Move up")
+            } icon: {
+                Image(symairaIcon: .collapse, size: 16)
+            }
+            .labelStyle(.iconOnly)
+        }
+        .symairaButtonStyle(.toolbar)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Move up")
+        .help("Move up")
+            .disabled(index == 0)
+            Button {
+            if index + 1 < order.count { move(order[index + 1], id) }
+        } label: {
+            Label {
+                Text("Move down")
+            } icon: {
+                Image(symairaIcon: .expand, size: 16)
+            }
+            .labelStyle(.iconOnly)
+        }
+        .symairaButtonStyle(.toolbar)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Move down")
+        .help("Move down")
+            .disabled(index + 1 >= order.count)
         }
     }
 

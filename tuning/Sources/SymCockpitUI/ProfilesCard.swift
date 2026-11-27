@@ -40,7 +40,7 @@ struct ProfilesCard: View {
     private var list: some View {
         switch model.state {
         case .idle, .loading:
-            SymairaLoadingState("Loading profiles…")
+            ProgressView("Loading profiles…")
         case .failed(let message):
             SymairaNotice(message: message, tone: .critical)
             Button("Retry") { Task { await model.load() } }
@@ -68,9 +68,20 @@ struct ProfilesCard: View {
                         Button("Apply") { Task { await model.apply(profile.name) } }
                             .symairaButtonStyle(.secondary)
                             .accessibilityLabel("Apply profile \(profile.name)")
-                        SymairaIconButton("Delete profile \(profile.name)", icon: .delete, size: 16) {
-                            deleting = profile.name
-                        }
+                        Button {
+            deleting = profile.name
+        } label: {
+            Label {
+                Text("Delete profile \(profile.name)")
+            } icon: {
+                Image(symairaIcon: .delete, size: 16)
+            }
+            .labelStyle(.iconOnly)
+        }
+        .symairaButtonStyle(.toolbar)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Delete profile \(profile.name)")
+        .help("Delete profile \(profile.name)")
                     }
                     .contextMenu {
                         Button("Apply Profile") { Task { await model.apply(profile.name) } }

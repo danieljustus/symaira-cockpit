@@ -10,7 +10,8 @@ struct BLEExplorerCard: View {
     @State private var duration = 5
 
     var body: some View {
-        SymairaFormSection("Bluetooth Low Energy") {
+                GroupBox {
+
             if model.offers("ble.scan") {
                 authorization
                 SymairaFormDivider()
@@ -20,6 +21,10 @@ struct BLEExplorerCard: View {
             } else {
                 SymairaFormRow("Scanning Unavailable", description: "This agent does not offer Bluetooth LE scans.")
             }
+                } label: {
+            Text("Bluetooth Low Energy")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
         }
     }
 
@@ -27,7 +32,7 @@ struct BLEExplorerCard: View {
     private var authorization: some View {
         switch model.bleSession {
         case .idle, .loading:
-            SymairaLoadingState("Checking Bluetooth access…")
+            ProgressView("Checking Bluetooth access…")
         case .failed(let message):
             SymairaFormRow("Bluetooth Access Unavailable", description: message) {
                 Button("Retry") { Task { await model.refreshSession() } }.symairaButtonStyle(.secondary)
@@ -83,7 +88,7 @@ struct BLEExplorerCard: View {
         case .idle:
             EmptyView()
         case .scanning(let seconds):
-            SymairaLoadingState("Scanning nearby devices for \(seconds) seconds…")
+            ProgressView("Scanning nearby devices for \(seconds) seconds…")
                 .padding(.vertical, SymairaSpacing.small)
         case .failed(let message):
             SymairaNotice(message: message, tone: .critical)
@@ -148,7 +153,7 @@ struct BLEExplorerCard: View {
         case .idle:
             EmptyView()
         case .loading:
-            SymairaLoadingState("Connecting and discovering services…")
+            ProgressView("Connecting and discovering services…")
         case .failed(let message):
             SymairaNotice(message: message, tone: .critical)
         case .loaded(let gatt):
@@ -206,7 +211,7 @@ private struct BLECharacteristicRow: View {
             if canWrite { Button("Prepare Write") { isEditing = true }.disabled(!allowed) }
         }
         if model.busy == key {
-            SymairaLoadingState("Reading characteristic…")
+            ProgressView("Reading characteristic…")
         }
         if let value = model.readings[key] {
             Text(value.length == 0 ? "Empty Value" : value.valueHex)
@@ -256,15 +261,20 @@ struct BLEActivityCard: View {
     @State private var exportFailure: String?
 
     var body: some View {
-        SymairaFormSection("BLE Activity") {
+                GroupBox {
+
             if !model.offers("ble.log") && !model.offers("ble.export") {
                 SymairaFormRow("Log Unavailable", description: "This agent does not offer BLE session logs.")
             } else {
                 logControls
                 if model.offers("ble.log") { entries }
-                if model.isExporting { SymairaLoadingState("Preparing BLE export…") }
+                if model.isExporting { ProgressView("Preparing BLE export…") }
                 if let exportFailure { SymairaNotice(message: exportFailure, tone: .critical) }
             }
+                } label: {
+            Text("BLE Activity")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
         }
         .fileExporter(
             isPresented: $showsExporter, document: exportedFile,
@@ -302,7 +312,7 @@ struct BLEActivityCard: View {
         case .idle:
             EmptyView()
         case .loading:
-            SymairaLoadingState("Loading BLE activity…")
+            ProgressView("Loading BLE activity…")
         case .failed(let message):
             SymairaNotice(message: message, tone: .critical)
         case .loaded(let log):
@@ -373,13 +383,14 @@ struct CockpitInputCard: View {
         SymairaPageState(state: model.status.devicePageState, loading: "Loading input settings…", retry: {
             Task { await model.refresh() }
         }) { status in
-            SymairaFormSection("Input") {
+                        GroupBox {
+
                 let finder = status.finderCut
                 SymairaFormRow("Finder Cut", description: "Use ⌘X to cut selected files in Finder.") {
                     Toggle("Finder Cut", isOn: Binding(get: { finder.enabled }, set: { enabled in
                         Task { await model.setFinderCut(enabled) }
                     }))
-                    .toggleStyle(.symairaSwitch)
+                    .toggleStyle(.switch).tint(SymairaTokens.selected)
                     .labelsHidden()
                     .disabled(model.isSwitching || (!finder.hasAccess && !finder.enabled))
                 }
@@ -391,7 +402,7 @@ struct CockpitInputCard: View {
                         .symairaButtonStyle(.secondary)
                         .disabled(model.isTesting)
                 }
-                if model.isTesting { SymairaLoadingState("Testing haptics and sound…") }
+                if model.isTesting { ProgressView("Testing haptics and sound…") }
                 if let result = model.testResult {
                     SymairaFormRow("Haptics", description: result.haptic.detail) { channelStatus(result.haptic) }
                     SymairaFormRow("Sound", description: result.sound.detail) { channelStatus(result.sound) }
@@ -399,6 +410,10 @@ struct CockpitInputCard: View {
                 if let failure = model.failure {
                     SymairaNotice(message: failure, tone: .critical)
                 }
+                        } label: {
+                Text("Input")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
             }
         }
     }

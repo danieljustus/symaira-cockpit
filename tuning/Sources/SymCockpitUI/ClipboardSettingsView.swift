@@ -40,7 +40,9 @@ struct ClipboardSettingsView: View {
     // MARK: Sections
 
     private var historySection: some View {
-        SymairaFormSection("Clipboard History") {
+                Form {
+            Section {
+
             SymairaFormRow(
                 "Keep a clipboard history",
                 description: "Off unless you turn it on. Saves text and images you copy so you can copy them back later."
@@ -48,7 +50,7 @@ struct ClipboardSettingsView: View {
                 Toggle(isOn: Binding(
                     get: { settings.enabled }, set: { value in Task { await model.setEnabled(value) } }
                 )) { EmptyView() }
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 .labelsHidden()
                 .disabled(model.isBusy)
                 .accessibilityLabel("Keep a clipboard history")
@@ -58,7 +60,14 @@ struct ClipboardSettingsView: View {
             SymairaFormRow("Capture") {
                 status
             }
+                    } header: {
+                Text("Clipboard History")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+            }
         }
+        .formStyle(.grouped)
+        .symairaControlTier(.workbench)
     }
 
     @ViewBuilder
@@ -75,10 +84,9 @@ struct ClipboardSettingsView: View {
     }
 
     private var privacySection: some View {
-        SymairaFormSection(
-            "What Is Kept",
-            footer: "Pause stops recording and keeps what is saved. Turning the history off stops it too; saved entries stay until you delete them."
-        ) {
+                Form {
+            Section {
+
             SymairaFormRow(
                 "Encrypted, on this Mac",
                 description: "Entries are encrypted with a key kept in your Keychain. Nothing leaves this Mac."
@@ -98,14 +106,24 @@ struct ClipboardSettingsView: View {
                 "Limits",
                 description: "Up to \(settings.maxItems) entries, for \(settings.maxAgeDays) days. Older ones are removed."
             )
+                    } header: {
+                Text("What Is Kept")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+            } footer: {
+                Text("Pause stops recording and keeps what is saved. Turning the history off stops it too; saved entries stay until you delete them.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .formStyle(.grouped)
+        .symairaControlTier(.workbench)
     }
 
     private var exclusionsSection: some View {
-        SymairaFormSection(
-            "Excluded Apps",
-            footer: "Copies from these apps are never stored. Password managers are excluded to begin with."
-        ) {
+                Form {
+            Section {
+
             if settings.excludedApps.isEmpty {
                 SymairaFormRow("No excluded apps", description: "Everything you copy is recorded while the history is on.")
             }
@@ -134,11 +152,24 @@ struct ClipboardSettingsView: View {
                         .disabled(model.isBusy)
                 }
             }
+                    } header: {
+                Text("Excluded Apps")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+            } footer: {
+                Text("Copies from these apps are never stored. Password managers are excluded to begin with.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .formStyle(.grouped)
+        .symairaControlTier(.workbench)
     }
 
     private var deleteSection: some View {
-        SymairaFormSection("Saved Entries") {
+                Form {
+            Section {
+
             SymairaFormRow(
                 "Delete all entries",
                 description: snapshot.items.isEmpty
@@ -149,7 +180,14 @@ struct ClipboardSettingsView: View {
                     .symairaButtonStyle(.destructive)
                     .disabled(model.isBusy || snapshot.items.isEmpty)
             }
+                    } header: {
+                Text("Saved Entries")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+            }
         }
+        .formStyle(.grouped)
+        .symairaControlTier(.workbench)
     }
 
     // MARK: Actions

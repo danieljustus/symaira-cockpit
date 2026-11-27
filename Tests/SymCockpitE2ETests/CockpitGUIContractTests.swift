@@ -83,7 +83,7 @@ final class CockpitGUIContractTests: XCTestCase {
         XCTAssertTrue(shell.contains("SymairaWorkspace("))
         XCTAssertTrue(shell.contains("SymairaNavigationButton("))
         XCTAssertTrue(shell.contains("SymairaSidebarToggle(sidebar: $sidebarLayout)"))
-        XCTAssertTrue(shell.contains("SymairaSettingsMenu(selection: $appearance.selection, openSettings: openPreferences)"))
+        XCTAssertTrue(shell.contains("SymairaSettingsButton(openSettings: openPreferences)"))
         XCTAssertFalse(shell.contains("Text(\"Preferences\")"), "Do not duplicate settings in the sidebar")
         XCTAssertFalse(shell.contains("clipShape(contentPanel)"), "panel rules belong in AppKit")
         XCTAssertTrue(shell.contains("topography: navigation.selection == .overview ? topography : nil"),

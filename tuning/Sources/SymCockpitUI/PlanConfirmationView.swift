@@ -59,7 +59,7 @@ struct PlanConfirmationView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                     if isRunning {
-                        SymairaLoadingState(applyingTitle ?? (model.plan.confirmsThroughPlanCommand
+                        ProgressView(applyingTitle ?? (model.plan.confirmsThroughPlanCommand
                             ? "Applying the plan… This can take several minutes."
                             : "Applying… you may be asked for your administrator password…"))
                     } else {

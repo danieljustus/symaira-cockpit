@@ -61,7 +61,7 @@ struct KeepAwakeCard: View {
             Toggle("Keep display awake", isOn: $preventDisplaySleep)
                 .symairaText(chrome == .embedded ? .callout : .caption, respectsForeground: false)
                 .foregroundStyle(SymairaTokens.ink2)
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 .disabled(!isInteractive)
                 .accessibilityLabel("Keep display awake")
                 .help("The Mac stays awake during the session. Enable this to also prevent display sleep.")

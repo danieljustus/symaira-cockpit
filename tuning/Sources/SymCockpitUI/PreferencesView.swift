@@ -217,7 +217,7 @@ struct PreferencesView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .toggleStyle(.symairaSwitch)
+            .toggleStyle(.switch).tint(SymairaTokens.selected)
             .frame(width: 104)
             .accessibilityLabel("Show calendar week in menu bar")
             .help("Show the current ISO-8601 calendar week in the menu bar")
@@ -290,7 +290,7 @@ struct PreferencesView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .toggleStyle(.symairaSwitch)
+            .toggleStyle(.switch).tint(SymairaTokens.selected)
             .frame(width: 116)
             .accessibilityLabel("Monitor \(metric.displayName)")
 
@@ -312,7 +312,7 @@ struct PreferencesView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .toggleStyle(.symairaSwitch)
+            .toggleStyle(.switch).tint(SymairaTokens.selected)
             .frame(width: 104)
             .accessibilityLabel("Show \(metric.displayName) in menu bar")
             .disabled(!isEnabled)
@@ -374,7 +374,7 @@ struct PreferencesView: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
             }
         }
     }
@@ -526,7 +526,7 @@ struct PreferencesView: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 Spacer()
             }
         }

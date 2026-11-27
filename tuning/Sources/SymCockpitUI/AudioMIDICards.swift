@@ -22,7 +22,8 @@ struct AudioDevicesCard: View {
     }
 
     var body: some View {
-        SymairaFormSection(direction.title) {
+                GroupBox {
+
             if devices.isEmpty {
                 SymairaFormRow("No \(direction.title) Devices", description: "Connect an audio device to see it here.")
             } else {
@@ -43,6 +44,10 @@ struct AudioDevicesCard: View {
                         .id(device.uid)
                 }
             }
+                } label: {
+            Text(direction.title)
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
         }
     }
 }
@@ -93,7 +98,7 @@ private struct AudioDeviceControls: View {
                     Toggle("Mute \(direction.title)", isOn: Binding(get: { muted }, set: { value in
                         Task { await model.setMuted(value, device: device, direction: direction) }
                     }))
-                    .toggleStyle(.symairaSwitch)
+                    .toggleStyle(.switch).tint(SymairaTokens.selected)
                     .labelsHidden()
                     .disabled(model.controlsLocked)
                 }
@@ -214,7 +219,8 @@ struct AudioAggregateCard: View {
     }
 
     var body: some View {
-        SymairaFormSection("Aggregate & Multi-Output Devices") {
+                GroupBox {
+
             let aggregates = list.devices.filter(\.isAggregate)
             if aggregates.isEmpty {
                 SymairaFormRow("No Aggregate Devices", description: "Combine two or more audio devices into one.")
@@ -237,6 +243,10 @@ struct AudioAggregateCard: View {
                         .disabled(model.controlsLocked)
                 }
             }
+                } label: {
+            Text("Aggregate & Multi-Output Devices")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
         }
     }
 
@@ -252,7 +262,7 @@ struct AudioAggregateCard: View {
             }
             SymairaFormDivider()
             SymairaFormRow("Multi-Output", description: "Play the same audio on every member.") {
-                Toggle("Multi-Output", isOn: $multiOutput).toggleStyle(.symairaSwitch).labelsHidden()
+                Toggle("Multi-Output", isOn: $multiOutput).toggleStyle(.switch).tint(SymairaTokens.selected).labelsHidden()
             }
             ForEach(candidates) { device in
                 SymairaFormRow(device.name) {
@@ -260,7 +270,7 @@ struct AudioAggregateCard: View {
                         if enabled { memberUIDs.insert(device.uid) } else { memberUIDs.remove(device.uid) }
                         if !enabled, main == device.uid { main = nil }
                     }))
-                    .toggleStyle(.symairaSwitch)
+                    .toggleStyle(.switch).tint(SymairaTokens.selected)
                     .labelsHidden()
                 }
             }
@@ -301,12 +311,17 @@ struct AudioMixerCard: View {
 
     var body: some View {
         SymairaPageState(state: model.mixer.devicePageState, loading: "Loading app mixer…", retry: retry) { status in
-            SymairaFormSection("App Mixer") {
+                        GroupBox {
+
                 if !status.supported {
                     SymairaFormRow("Mixer Unavailable", description: "This Mac does not offer per-app volume to the agent.")
                 } else {
                     mixerControls(status)
                 }
+                        } label: {
+                Text("App Mixer")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
             }
         }
     }
@@ -368,7 +383,7 @@ struct AudioMixerCard: View {
                 Toggle("Mute \(app.name)", isOn: Binding(get: { app.muted }, set: { muted in
                     Task { await model.setAppVolume(app.volume, muted: muted, app: app) }
                 }))
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 .labelsHidden()
                 .disabled(!enabled || model.controlsLocked)
             }

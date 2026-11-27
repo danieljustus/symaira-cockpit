@@ -60,20 +60,23 @@ struct BatteryCard: View {
             if let battery {
                 if battery.present {
                     HStack(alignment: .top, spacing: SymairaSpacing.xLarge) {
-                        SymairaStatTile(
-                            value: battery.currentCapacityPercent.map { "\($0) %" } ?? "—",
-                            label: "Charge", detail: state(battery), showsCard: false
+                        CockpitStatGauge(
+                            value: battery.currentCapacityPercent.map(Double.init) ?? 0,
+                            label: "Charge", display: battery.currentCapacityPercent.map { "\($0) %" } ?? "—",
+                            detail: state(battery)
                         )
-                        SymairaStatTile(
-                            value: (battery.appleMaximumCapacityPercent ?? battery.healthPercent).map { "\($0) %" } ?? "—",
-                            label: "Maximum Capacity", detail: battery.appleCondition, showsCard: false
+                        CockpitStatGauge(
+                            value: (battery.appleMaximumCapacityPercent ?? battery.healthPercent).map(Double.init) ?? 0,
+                            label: "Maximum Capacity",
+                            display: (battery.appleMaximumCapacityPercent ?? battery.healthPercent).map { "\($0) %" } ?? "—",
+                            detail: battery.appleCondition
                         )
-                        SymairaStatTile(
+                        CockpitStatValue(
                             value: battery.cycleCount.map(String.init) ?? "—",
-                            label: "Cycles", showsCard: false
+                            label: "Cycles"
                         )
                         if let celsius = battery.temperatureCelsius {
-                            SymairaStatTile(value: String(format: "%.0f °C", celsius), label: "Temperature", showsCard: false)
+                            CockpitStatValue(value: String(format: "%.0f °C", celsius), label: "Temperature")
                         }
                     }
                 } else {
@@ -82,7 +85,7 @@ struct BatteryCard: View {
                         .foregroundStyle(SymairaTokens.ink3)
                 }
             } else {
-                SymairaLoadingState("Reading battery…")
+                ProgressView("Reading battery…")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

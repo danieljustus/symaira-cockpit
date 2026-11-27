@@ -38,9 +38,9 @@ public struct AudioMIDIPage: View {
                         SymairaNotice(message: notice, tone: .positive)
                     }
                     if model.isPlanning {
-                        SymairaLoadingState("Preparing audio plan…")
+                        ProgressView("Preparing audio plan…")
                     } else if model.isActing {
-                        SymairaLoadingState("Applying audio setting…")
+                        ProgressView("Applying audio setting…")
                     }
                     if let plan = model.pending {
                         DevicePlanReview(plan: plan, dismiss: model.dismissPending)
@@ -84,7 +84,8 @@ public struct AudioMIDIPage: View {
 
     private var midiCard: some View {
         SymairaPageState(state: model.midi.devicePageState, loading: "Loading MIDI devices…", retry: refresh) { list in
-            SymairaFormSection("MIDI") {
+                        GroupBox {
+
                 if list.isEmpty {
                     SymairaFormRow("No MIDI Devices", description: "Connect a MIDI device to see it here.")
                 }
@@ -97,6 +98,10 @@ public struct AudioMIDIPage: View {
                 ForEach(list.standaloneDestinations, id: \.uniqueId) { endpoint in
                     midiEndpoint(endpoint, direction: "Destination")
                 }
+                        } label: {
+                Text("MIDI")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
             }
         }
     }

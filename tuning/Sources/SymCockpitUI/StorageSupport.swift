@@ -63,7 +63,7 @@ struct SectionStateView<Value: Equatable & Sendable, Idle: View, Loaded: View>: 
         case .idle:
             idle
         case .loading:
-            SymairaLoadingState(loading)
+            ProgressView(loading)
         case .failed(let message):
             VStack(alignment: .leading, spacing: SymairaSpacing.small) {
                 SymairaNotice(message: message, tone: .critical)

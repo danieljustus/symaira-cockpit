@@ -108,53 +108,96 @@ struct AIUsageRecordedHistoryView: View {
 
 struct AIUsageHistoryConsent: View {
     @ObservedObject var preferences: AIUsagePreferences
+
     var body: some View {
-        SymairaFormSection("Local Claude History", footer:
-            "Off by default. Reads local Claude Code session usage only when Claude is enabled. "
-            + "Local-machine data is unattributed, not your account bill. Recorded costs remain separate from frozen API-rate estimates.") {
-            SymairaFormRow("Read Local Session Usage") {
-                Toggle("Read Local Claude Session Usage", isOn: $preferences.claudeHistoryEnabled)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Read local Claude session usage, unattributed")
+        VStack(alignment: .leading, spacing: SymairaSpacing.medium) {
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                Text("Local Claude History")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                CockpitAccessibleSwitch(
+                    title: "Read Local Claude Session Usage",
+                    accessibilityLabel: "Read local Claude session usage, unattributed",
+                    isOn: $preferences.claudeHistoryEnabled
+                )
+                VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                    CockpitAccessibleSwitch(
+                        title: "Claude History Only",
+                        accessibilityLabel: "Claude history only, skip Claude quota credentials and requests",
+                        isOn: $preferences.claudeHistoryOnly
+                )
+                    Text("Only with Claude history enabled: skip Claude quota credentials and requests. Other providers are unchanged. Turning this off restores the existing Claude quota behavior.")
+                        .symairaText(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .symairaCard()
+                Text("Off by default. Reads local Claude Code session usage only when Claude is enabled. " + "Local-machine data is unattributed, not your account bill. Recorded costs remain separate from frozen API-rate estimates.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            SymairaFormRow("Claude History Only", description:
-                "Only with Claude history enabled: skip Claude quota credentials and requests. Other providers are unchanged. Turning this off restores the existing Claude quota behavior.") {
-                Toggle("Claude History Only", isOn: $preferences.claudeHistoryOnly)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Claude history only, skip Claude quota credentials and requests")
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                Text("Local Codex History")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                CockpitAccessibleSwitch(
+                    title: "Read Local Codex Session Usage",
+                    accessibilityLabel: "Read local Codex session usage, unattributed",
+                    isOn: $preferences.codexHistoryEnabled
+                )
+                VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
+                    CockpitAccessibleSwitch(
+                        title: "Codex History Only",
+                        accessibilityLabel: "Codex history only, skip Codex quota credentials and requests",
+                        isOn: $preferences.codexHistoryOnly
+                )
+                    Text("Only with Codex history enabled: skip Codex quota credentials and requests. Other providers are unchanged. Turning this off restores the existing Codex quota behavior.")
+                        .symairaText(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .symairaCard()
+                Text("Off by default. Reads local Codex session usage only when Codex is enabled. " + "Local-machine data is unattributed, not your account bill. Recorded costs remain separate from frozen API-rate estimates.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        SymairaFormSection("Local Codex History", footer:
-            "Off by default. Reads local Codex session usage only when Codex is enabled. "
-            + "Local-machine data is unattributed, not your account bill. Recorded costs remain separate from frozen API-rate estimates.") {
-            SymairaFormRow("Read Local Session Usage") {
-                Toggle("Read Local Codex Session Usage", isOn: $preferences.codexHistoryEnabled)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Read local Codex session usage, unattributed")
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                Text("Local Grok History")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                CockpitAccessibleSwitch(
+                    title: "Read Local Grok Session Usage",
+                    accessibilityLabel: "Read local Grok session usage, unattributed",
+                    isOn: $preferences.grokHistoryEnabled
+                )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .symairaCard()
+                Text("Off by default. Reads local Grok session usage only when Grok is enabled. " + "Local-machine data is unattributed, not your account bill. Recorded amounts only; no estimates.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            SymairaFormRow("Codex History Only", description:
-                "Only with Codex history enabled: skip Codex quota credentials and requests. Other providers are unchanged. Turning this off restores the existing Codex quota behavior.") {
-                Toggle("Codex History Only", isOn: $preferences.codexHistoryOnly)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Codex history only, skip Codex quota credentials and requests")
-            }
-        }
-        SymairaFormSection("Local Grok History", footer:
-            "Off by default. Reads local Grok session usage only when Grok is enabled. "
-            + "Local-machine data is unattributed, not your account bill. Recorded amounts only; no estimates.") {
-            SymairaFormRow("Read Local Session Usage") {
-                Toggle("Read Local Grok Session Usage", isOn: $preferences.grokHistoryEnabled)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Read local Grok session usage, unattributed")
-            }
-        }
-        SymairaFormSection("Local OpenCode History", footer:
-            "Off by default. Reads local OpenCode session usage only when OpenCode is enabled. "
-            + "Local-machine data is unattributed, not your account bill. Recorded amounts only; no estimates.") {
-            SymairaFormRow("Read Local Session Usage") {
-                Toggle("Read Local OpenCode Session Usage", isOn: $preferences.opencodeHistoryEnabled)
-                    .labelsHidden().toggleStyle(.symairaSwitch)
-                    .accessibilityLabel("Read local OpenCode session usage, unattributed")
+            VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                Text("Local OpenCode History")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+                CockpitAccessibleSwitch(
+                    title: "Read Local OpenCode Session Usage",
+                    accessibilityLabel: "Read local OpenCode session usage, unattributed",
+                    isOn: $preferences.opencodeHistoryEnabled
+                )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .symairaCard()
+                Text("Off by default. Reads local OpenCode session usage only when OpenCode is enabled. " + "Local-machine data is unattributed, not your account bill. Recorded amounts only; no estimates.")
+                    .symairaText(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

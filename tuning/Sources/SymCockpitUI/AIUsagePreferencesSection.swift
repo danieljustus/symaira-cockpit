@@ -240,7 +240,20 @@ struct ExternalAuthStateRow: View {
                 statusBadge(for: state.status)
             }
 
-            SymairaIconButton("Refresh auth state", icon: .refresh, size: 14, action: refresh)
+            Button {
+            refresh()
+        } label: {
+            Label {
+                Text("Refresh auth state")
+            } icon: {
+                Image(symairaIcon: .refresh, size: 14)
+            }
+            .labelStyle(.iconOnly)
+        }
+        .symairaButtonStyle(.toolbar)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Refresh auth state")
+        .help("Refresh auth state")
                 .foregroundStyle(SymairaTokens.ink2)
         }
         .padding(.leading, 20)

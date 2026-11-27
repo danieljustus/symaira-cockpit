@@ -158,26 +158,25 @@ private struct DeviceHealthView: View {
 
     private func tiles(_ metrics: DriveHealth.Metrics) -> some View {
         HStack(alignment: .top, spacing: SymairaSpacing.xLarge) {
-            SymairaStatTile(
+            CockpitStatValue(
                 value: metrics.temperatureCelsius.map { String(format: "%.0f °C", $0.value) } ?? "—",
-                label: "Temperature", showsCard: false
+                label: "Temperature"
             )
-            SymairaStatTile(
+            CockpitStatValue(
                 value: metrics.percentageUsed.map { "\(Int($0.value)) %" } ?? "—",
-                label: "Wear", detail: metrics.availableSpare.map { "\(Int($0.value)) % spare" }, showsCard: false
+                label: "Wear", detail: metrics.availableSpare.map { "\(Int($0.value)) % spare" }
             )
-            SymairaStatTile(
+            CockpitStatValue(
                 value: metrics.dataWritten.map { StorageFormat.measuredBytes($0.value) } ?? "—",
-                label: "Written", detail: metrics.dataRead.map { "\(StorageFormat.measuredBytes($0.value)) read" }, showsCard: false
+                label: "Written", detail: metrics.dataRead.map { "\(StorageFormat.measuredBytes($0.value)) read" }
             )
-            SymairaStatTile(
+            CockpitStatValue(
                 value: metrics.powerOnHours.map { "\($0.value.formatted(.number)) h" } ?? "—",
-                label: "Power-On Time", detail: metrics.powerCycles.map { "\($0.value.formatted(.number)) cycles" }, showsCard: false
+                label: "Power-On Time", detail: metrics.powerCycles.map { "\($0.value.formatted(.number)) cycles" }
             )
-            SymairaStatTile(
+            CockpitStatValue(
                 value: metrics.mediaErrors.map { $0.value.formatted(.number) } ?? "—",
-                label: "Media Errors", detail: metrics.unsafeShutdowns.map { "\($0.value.formatted(.number)) unsafe shutdowns" },
-                showsCard: false
+                label: "Media Errors", detail: metrics.unsafeShutdowns.map { "\($0.value.formatted(.number)) unsafe shutdowns" }
             )
         }
     }

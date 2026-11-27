@@ -16,7 +16,7 @@ struct StorageDuplicatesCard: View {
                     confirmTitle: "Move to Trash", onClose: { model.closeConfirmation() }
                 )
             } else if model.planning {
-                SymairaLoadingState("Checking the selected files and recording the removal plan…")
+                ProgressView("Checking the selected files and recording the removal plan…")
             } else {
                 SectionStateView(
                     state: model.state, loading: "Searching for identical files…",
@@ -36,10 +36,14 @@ struct StorageDuplicatesCard: View {
                 }
             }
             .symairaButtonStyle(.secondary)
-            SymairaFilterMenu(
-                "Minimum file size", selection: $model.minimumSize,
-                options: DuplicatesModel.minimumSizes.map { ($0.bytes, $0.label) }
-            )
+            Picker("Minimum file size", selection: $model.minimumSize) {
+                ForEach(DuplicatesModel.minimumSizes, id: \.bytes) { option in
+                    Text(option.label).tag(option.bytes)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .accessibilityLabel("Minimum file size")
             if model.folder != nil {
                 Button("Search Again") { Task { await model.search() } }
                     .symairaButtonStyle(.secondary)

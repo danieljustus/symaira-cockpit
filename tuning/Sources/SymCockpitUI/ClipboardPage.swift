@@ -318,7 +318,7 @@ private struct ClipboardDetailView: View {
                 }
             }
         } else {
-            SymairaLoadingState("Opening entry…")
+            ProgressView("Opening entry…")
         }
     }
 }

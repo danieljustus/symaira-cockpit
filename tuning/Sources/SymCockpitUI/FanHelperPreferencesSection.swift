@@ -39,7 +39,7 @@ struct FanHelperPreferencesSection: View {
                         .symairaText(.caption)
                         .foregroundStyle(SymairaTokens.ink)
                 }
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 .disabled(!preferences.canEnable || preferences.isWorking)
                 .accessibilityIdentifier("fan-helper-toggle")
                 Spacer()

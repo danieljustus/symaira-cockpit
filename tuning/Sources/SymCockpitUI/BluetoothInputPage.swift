@@ -74,7 +74,8 @@ public struct BluetoothInputPage: View {
         SymairaPageState(state: bluetooth.paired.devicePageState, loading: "Loading paired devices…", retry: {
             Task { await bluetooth.loadPaired() }
         }) { devices in
-            SymairaFormSection("Paired Devices") {
+                        GroupBox {
+
                 if devices.isEmpty {
                     SymairaFormRow("No Paired Devices", description: "Pair a device in System Settings, then refresh.") {
                         DeviceSettingsLink("Open Bluetooth Settings", pane: "com.apple.BluetoothSettings")
@@ -90,6 +91,10 @@ public struct BluetoothInputPage: View {
                         )
                     }
                 }
+                        } label: {
+                Text("Paired Devices")
+                    .symairaText(.sectionLabel)
+                    .accessibilityAddTraits(.isHeader)
             }
         }
     }

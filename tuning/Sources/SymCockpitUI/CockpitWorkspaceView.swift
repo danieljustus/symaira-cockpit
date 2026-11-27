@@ -81,7 +81,7 @@ public struct CockpitWorkspaceView<Page: View>: View {
                 SymairaSidebarToggle(sidebar: $sidebarLayout)
             }
             ToolbarItem(placement: .primaryAction) {
-                SymairaSettingsMenu(selection: $appearance.selection, openSettings: openPreferences)
+                SymairaSettingsButton(openSettings: openPreferences)
                     .accessibilityIdentifier("cockpit-settings-menu")
             }
         }

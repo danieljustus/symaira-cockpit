@@ -88,7 +88,7 @@ struct HealthCard: View {
                 .foregroundStyle(SymairaTokens.ink3)
             if let health {
                 HStack(alignment: .top, spacing: SymairaSpacing.xLarge) {
-                    SymairaStatTile(value: "\(health.score)", label: "Health Score", detail: "of 100", showsCard: false)
+                    CockpitStatGauge(value: Double(health.score), label: "Health Score", display: "\(health.score)", detail: "of 100")
                         .frame(width: 120, alignment: .leading)
                     VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
                         Text(health.message)
@@ -109,7 +109,7 @@ struct HealthCard: View {
                     }
                 }
             } else {
-                SymairaLoadingState("Reading health…")
+                ProgressView("Reading health…")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,7 +158,7 @@ struct SensorsCard: View {
                 readings(sensors)
             }
         } else {
-            SymairaLoadingState("Reading sensors…")
+            ProgressView("Reading sensors…")
         }
     }
 

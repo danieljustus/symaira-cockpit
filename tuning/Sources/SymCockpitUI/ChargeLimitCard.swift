@@ -42,10 +42,14 @@ struct ChargeLimitCard: View {
                 .foregroundStyle(SymairaTokens.ink3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: SymairaSpacing.small) {
-                SymairaFilterMenu(
-                    "Charge limit", selection: $percent,
-                    options: Self.choices.map { ($0, "\($0) %") }
-                )
+                Picker("Charge limit", selection: $percent) {
+                    ForEach(Self.choices, id: \.self) { choice in
+                        Text("\(choice) %").tag(choice)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .accessibilityLabel("Charge limit")
                 Button("Set Limit") { Task { await model.requestChargeLimit(percent) } }
                     .symairaButtonStyle(.secondary)
                 Button("Remove Limit") { Task { await model.requestChargeLimit(nil) } }
@@ -59,7 +63,7 @@ struct ChargeLimitCard: View {
                 )
                 .accessibilityIdentifier("charge-plan-confirmation")
             } else if model.chargeBusy {
-                SymairaLoadingState("Planning the change…")
+                ProgressView("Planning the change…")
             } else if let failure = model.chargeFailure {
                 SymairaNotice(message: failure, tone: .critical)
                     .accessibilityIdentifier("charge-error")

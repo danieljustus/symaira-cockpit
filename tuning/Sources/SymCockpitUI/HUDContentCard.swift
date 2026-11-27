@@ -133,7 +133,7 @@ struct HUDContentCard: View {
             .help(placement.stage.settingsCaption)
 
             Toggle("", isOn: enabledBinding(kind))
-                .toggleStyle(.symairaSwitch)
+                .toggleStyle(.switch).tint(SymairaTokens.selected)
                 .labelsHidden()
                 .frame(width: Self.toggleWidth)
                 .help("Show \(kind.displayName) on the HUD")

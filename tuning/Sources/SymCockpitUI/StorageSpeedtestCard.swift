@@ -25,10 +25,14 @@ struct StorageSpeedtestCard: View {
             identifier: "storage-speedtest"
         ) {
             HStack(spacing: SymairaSpacing.small) {
-                SymairaFilterMenu(
-                    "Test volume", selection: Binding(get: { model.target }, set: { model.chooseTarget($0) }),
-                    options: targets
-                )
+                Picker("Test volume", selection: Binding(get: { model.target }, set: { model.chooseTarget($0) })) {
+                    ForEach(targets, id: \.value) { target in
+                        Text(target.label).tag(target.value)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .accessibilityLabel("Test volume")
                 TextField("Size (MiB)", value: $model.sizeMiB, format: .number)
                     .frame(idealWidth: 72, maxWidth: 88)
                     .help("Test file size, 1–1024 MiB")
@@ -78,11 +82,10 @@ struct StorageSpeedtestCard: View {
     }
 
     private func phase(_ name: String, _ phase: SpeedResult.Phase) -> some View {
-        SymairaStatTile(
+        CockpitStatValue(
             value: "\(phase.mibPerS.formatted(.number.precision(.fractionLength(1)))) MiB/s",
             label: name,
-            detail: "\(phase.mbPerS.formatted(.number.precision(.fractionLength(1)))) MB/s · \(phase.durationSeconds.formatted(.number)) s",
-            showsCard: false
+            detail: "\(phase.mbPerS.formatted(.number.precision(.fractionLength(1)))) MB/s · \(phase.durationSeconds.formatted(.number)) s"
         )
     }
 }

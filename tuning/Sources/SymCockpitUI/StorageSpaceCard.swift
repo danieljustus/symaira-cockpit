@@ -34,10 +34,14 @@ struct StorageSpaceCard: View {
             }
             .symairaButtonStyle(isPrimary ? .primary : .secondary)
             .disabled(gate.isBusy)
-            SymairaFilterMenu(
-                "Tree depth", selection: $model.depth,
-                options: SpaceModel.depths.map { ($0, $0 == 1 ? "1 level" : "\($0) levels") }
-            )
+            Picker("Tree depth", selection: $model.depth) {
+                ForEach(SpaceModel.depths, id: \.self) { depth in
+                    Text(depth == 1 ? "1 level" : "\(depth) levels").tag(depth)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .accessibilityLabel("Tree depth")
             .disabled(gate.isBusy)
             .onChange(of: model.depth) { _, _ in
                 if model.folder != nil { Task { await model.analyze() } }
@@ -58,10 +62,10 @@ struct StorageSpaceCard: View {
         let total = max(report.root.allocatedBytes, 1)
         return VStack(alignment: .leading, spacing: SymairaSpacing.xSmall) {
             HStack(spacing: SymairaSpacing.xLarge) {
-                SymairaStatTile(value: StorageFormat.size(report.root.allocatedBytes), label: "In This Folder", showsCard: false)
-                SymairaStatTile(
+                CockpitStatValue(value: StorageFormat.size(report.root.allocatedBytes), label: "In This Folder")
+                CockpitStatValue(
                     value: StorageFormat.count(report.entriesVisited), label: "Items Looked At",
-                    detail: report.errorCount > 0 ? "\(report.errorCount) could not be read" : nil, showsCard: false
+                    detail: report.errorCount > 0 ? "\(report.errorCount) could not be read" : nil
                 )
             }
             if report.truncated {

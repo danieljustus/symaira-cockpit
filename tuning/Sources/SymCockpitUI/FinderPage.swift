@@ -49,10 +49,9 @@ public struct FinderPage: View {
     // MARK: Extensions
 
     private var extensionsSection: some View {
-        SymairaFormSection(
-            "Extensions",
-            footer: "Cockpit cannot see whether macOS has switched an extension on. Check it in System Settings."
-        ) {
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+        GroupBox {
+
             ForEach(Array(model.extensions.enumerated()), id: \.element.id) { offset, ext in
                 if offset > 0 { SymairaFormDivider() }
                 SymairaFormRow(ext.name, description: ext.summary) {
@@ -68,6 +67,14 @@ public struct FinderPage: View {
                 Button("Open Extension Settings") { NSWorkspace.shared.open(FinderModel.extensionSettingsURL) }
                     .symairaButtonStyle(.primary)
             }
+                } label: {
+            Text("Extensions")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
+        }
+            Text("Cockpit cannot see whether macOS has switched an extension on. Check it in System Settings.")
+                .symairaText(.caption)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("finder-extensions")
     }
@@ -75,14 +82,21 @@ public struct FinderPage: View {
     // MARK: Actions
 
     private var actionsSection: some View {
-        SymairaFormSection(
-            "Context Menu",
-            footer: "Finder passes your choice to Cockpit, which runs it once. Cockpit has to be running for it to work."
-        ) {
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+        GroupBox {
+
             ForEach(Array(FinderAction.all.enumerated()), id: \.element.id) { offset, action in
                 if offset > 0 { SymairaFormDivider() }
                 SymairaFormRow(action.title, description: action.summary)
             }
+                } label: {
+            Text("Context Menu")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
+        }
+            Text("Finder passes your choice to Cockpit, which runs it once. Cockpit has to be running for it to work.")
+                .symairaText(.caption)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("finder-actions")
     }
@@ -90,10 +104,9 @@ public struct FinderPage: View {
     // MARK: Jobs
 
     private var jobsSection: some View {
-        SymairaFormSection(
-            "Job Files",
-            footer: "A job is dropped when it is older than a minute or was already run."
-        ) {
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+        GroupBox {
+
             if let directory = model.jobsDirectory {
                 SymairaFormRow("Folder", description: "Where the Finder extension leaves a file for each action.") {
                     HStack(spacing: SymairaSpacing.small) {
@@ -121,6 +134,14 @@ public struct FinderPage: View {
             }
             SymairaFormDivider()
             counts
+                } label: {
+            Text("Job Files")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
+        }
+            Text("A job is dropped when it is older than a minute or was already run.")
+                .symairaText(.caption)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("finder-jobs")
     }
@@ -129,7 +150,7 @@ public struct FinderPage: View {
     private var counts: some View {
         switch model.state {
         case .idle, .loading:
-            SymairaLoadingState("Reading job status…")
+            ProgressView("Reading job status…")
                 .padding(.vertical, SymairaSpacing.small)
         case .failed(let message):
             VStack(alignment: .leading, spacing: SymairaSpacing.small) {
@@ -161,11 +182,21 @@ public struct FinderPage: View {
     // MARK: Steps
 
     private var stepsSection: some View {
-        SymairaFormSection("Turn Them On", footer: "Nothing is switched on by installing the app; each extension is yours to enable.") {
+                VStack(alignment: .leading, spacing: SymairaSpacing.small) {
+        GroupBox {
+
             ForEach(Array(Self.steps.enumerated()), id: \.offset) { offset, step in
                 if offset > 0 { SymairaFormDivider() }
                 SymairaFormRow("\(offset + 1). \(step.title)", description: step.detail)
             }
+                } label: {
+            Text("Turn Them On")
+                .symairaText(.sectionLabel)
+                .accessibilityAddTraits(.isHeader)
+        }
+            Text("Nothing is switched on by installing the app; each extension is yours to enable.")
+                .symairaText(.caption)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("finder-steps")
     }

@@ -89,7 +89,7 @@ struct ProcessList: View {
                 Button("Try Again") { model.refreshNow() }
                     .symairaButtonStyle(.secondary)
             } else if !model.hasSample || model.report.sortedBy != model.sortedBy {
-                SymairaLoadingState("Sampling processes…")
+                ProgressView("Sampling processes…")
             } else if model.report.processes.isEmpty {
                 if model.sortedBy == .gpu {
                     gpuEmptyState
@@ -146,7 +146,7 @@ struct ProcessList: View {
                     : "Check PID \(process.pid) again")
             }
             if let pid = termination.requesting {
-                SymairaLoadingState("Preparing termination plan for PID \(pid)…")
+                ProgressView("Preparing termination plan for PID \(pid)…")
             }
             if let failure = termination.failure {
                 SymairaNotice(message: failure, tone: .warning)
