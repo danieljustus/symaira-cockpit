@@ -16,6 +16,8 @@ use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -25,6 +27,7 @@ use symcockpit_core::audio::AudioService;
 use symcockpit_core::battery::{ChargeLimitProbe, battery_json, read_battery};
 use symcockpit_core::bluetooth::{Advertisement, BleCentral, BleLink};
 use symcockpit_core::display::{any_edr_capable, brightness_get_json, displays_json};
+use symcockpit_core::helper_engine::selection_action;
 use symcockpit_core::metrics::{self, PowerReading, SystemMetricsService};
 use symcockpit_core::midi::MidiService;
 use symcockpit_core::plan::SystemClock;
@@ -33,12 +36,13 @@ use symcockpit_core::processes::{
     ProcessSortKey, ProcessUsageService, processes_output, sample_twice,
 };
 use symcockpit_core::sensors::{
-    PowerReport, RawKey, SmcPort, detect_charge_limit_key_family, fan_status_json,
+    GovernorProbe, PowerReport, RawKey, SmcPort, detect_charge_limit_key_family, fan_status_json,
     read_fan_max_rpm, read_fan_mode, read_fan_target_rpm, read_key_uint, read_system_power,
     sensors_json, software_override_detected,
 };
 use symcockpit_core::system::{HardwareFacts, HostInfo, PrivilegedExecutable};
 use symcockpit_db::{plans::SqlitePlanStore, smart_history::SmartHistoryStore};
+use symcockpit_helper_proto::{Action, HEARTBEAT_INTERVAL_MS, Reply, Request};
 use symcockpit_macos::apps::SystemApps;
 use symcockpit_macos::battery::{LiveBatterySource, shared_apple_health};
 use symcockpit_macos::bluetooth::{CoreBluetoothCentral, SystemProfiler};
@@ -46,7 +50,7 @@ use symcockpit_macos::coreaudio::{RealAudioHal, RealTapHal, install_signal_handl
 use symcockpit_macos::coremidi::RealMidiHal;
 use symcockpit_macos::display::{DisplayServicesBrightness, LiveDisplays};
 use symcockpit_macos::fs_stats::{LiveSpeedHost, StdSpaceFs};
-use symcockpit_macos::helper::HelperClient;
+use symcockpit_macos::helper::{HelperClient, helper_governor_running};
 use symcockpit_macos::host::live_metrics_service;
 use symcockpit_macos::input::{AfplaySound, JsonFileSettings, LiveProbe, MultitouchHaptics};
 use symcockpit_macos::nvme::IoKitNvme;
@@ -197,6 +201,67 @@ impl HardwareFacts for LiveHardware {
 
 // ---------------------------------------------------------------- fan control
 
+/// `fan status` sees either governor: the legacy standalone process or the
+/// privileged helper's engine (both can exist on one Mac).
+struct AnyGovernorProbe;
+
+impl GovernorProbe for AnyGovernorProbe {
+    fn is_running(&self) -> bool {
+        PgrepGovernorProbe.is_running() || helper_governor_running()
+    }
+}
+
+static HEARTBEAT_STOP: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
+
+/// The helper's dead-man watchdog needs a beat every two seconds while a
+/// governed profile is active. One heartbeat thread per process is enough:
+/// the long-lived agent keeps the governor alive, while a one-shot CLI exits
+/// and the app agent takes over on its next event.
+fn keep_helper_governor_alive() {
+    let mut guard = HEARTBEAT_STOP.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_some() {
+        return;
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    *guard = Some(stop.clone());
+    drop(guard);
+    let thread = std::thread::Builder::new()
+        .name("fan-governor-heartbeat".into())
+        .spawn(move || {
+            while !stop.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(HEARTBEAT_INTERVAL_MS / 2));
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                match HelperClient::connect() {
+                    Ok(client) => {
+                        if let Err(reason) = client.request(&Request::new(Action::Heartbeat)) {
+                            eprintln!("symtune: helper heartbeat failed: {reason}");
+                        }
+                    }
+                    Err(reason) => {
+                        eprintln!(
+                            "symtune: privileged helper unavailable: {reason}; governor will stop"
+                        );
+                    }
+                }
+            }
+        });
+    if let Err(e) = thread {
+        eprintln!("symtune: could not start fan governor heartbeat: {e}");
+    }
+}
+
+fn stop_helper_governor_heartbeat() {
+    if let Some(stop) = HEARTBEAT_STOP
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
+        stop.store(true, Ordering::Relaxed);
+    }
+}
+
 /// The elevation-dependent half of a fan profile change. Reads the raw SMC
 /// state without rights; hands the fans back and checks the available path
 /// through the same write code the CLI uses (helper first, root copy second),
@@ -220,8 +285,14 @@ impl crate::app::FanControl for LiveFanControl {
         if cfg!(debug_assertions) && std::env::var_os(crate::NO_HARDWARE_ENV).is_some() {
             return Ok(());
         }
-        if system::running_as_root() || HelperClient::connect().is_ok() {
+        if system::running_as_root() {
             return Ok(());
+        }
+        match HelperClient::connect() {
+            Ok(_) => return Ok(()),
+            Err(reason) => {
+                eprintln!("symtune: privileged helper unavailable: {reason}");
+            }
         }
         let copy = inspect_privileged(
             &crate::platform::executable_candidates("symcockpit", ctx.env),
@@ -238,6 +309,40 @@ impl crate::app::FanControl for LiveFanControl {
                 "fan control has no elevation path: {}",
                 copy.detail
             )))
+        }
+    }
+
+    fn route_selection(
+        &self,
+        _ctx: &crate::app::Context,
+        selection: symcockpit_core::sensors::FanSelection,
+    ) -> Result<(), Error> {
+        if cfg!(debug_assertions) && std::env::var_os(crate::NO_HARDWARE_ENV).is_some() {
+            return Ok(());
+        }
+        let Some(action) = selection_action(selection) else {
+            return Ok(());
+        };
+        let governing = action != Action::GovernorStop;
+        let client = HelperClient::connect().map_err(|reason| {
+            Error::Permission(format!("privileged helper unavailable: {reason}"))
+        })?;
+        match client.request(&Request::new(action)) {
+            Ok(Reply::Ok) => {
+                if governing {
+                    keep_helper_governor_alive();
+                } else {
+                    stop_helper_governor_heartbeat();
+                }
+                Ok(())
+            }
+            Ok(reply) => Err(Error::Failed(format!(
+                "helper refused governor routing: {}",
+                reply.to_json()
+            ))),
+            Err(reason) => Err(Error::Failed(format!(
+                "helper governor request failed: {reason}"
+            ))),
         }
     }
 }
@@ -484,7 +589,7 @@ pub fn wire(app: &mut App) {
     handlers.register("fan.status", move |_, _| {
         json_output(fan_status_json(
             &FileFanSelection::default_location(),
-            &PgrepGovernorProbe,
+            &AnyGovernorProbe,
             &s,
             &LiveHost,
         ))

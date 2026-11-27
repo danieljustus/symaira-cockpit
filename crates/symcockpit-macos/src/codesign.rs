@@ -120,6 +120,13 @@ mod tests {
     }
 
     #[test]
+    fn the_agent_identifier_is_part_of_the_client_requirement() {
+        let requirement = app_requirement("ABCDE12345").unwrap();
+        assert!(requirement.contains("identifier \"com.symaira.cockpit.symcockpit\""));
+        assert!(is_well_formed(&requirement));
+    }
+
+    #[test]
     fn an_unsigned_test_binary_has_no_team_and_satisfies_no_developer_id_requirement() {
         // `cargo test` binaries are ad-hoc signed: no team, not Developer ID.
         assert_eq!(own_team_identifier(), None);

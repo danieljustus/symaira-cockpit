@@ -27,7 +27,7 @@ use symcockpit_store::state_perms::Owner;
 use crate::battery::BatterySource;
 use crate::charge_limit::{self, ChargeEnv, Mechanism};
 use crate::clock::Monotonic;
-use crate::fan::{FanEnv, has_software_override, restore_auto};
+use crate::fan::{self, FanEnv, has_software_override, restore_auto};
 use crate::governor::{DEFAULT_INTERVAL, FixedHold, Governor, Tick};
 use crate::restore::RestoreTracker;
 use crate::sensors::{FanProfile, FanSelection, SensorHost, SmcPort};
@@ -124,6 +124,26 @@ fn error_reply(e: &Error) -> Reply {
         Error::Failed(_) => ErrorKind::Failed,
     };
     Reply::error(kind, e.to_string())
+}
+
+/// The helper action a stored fan selection needs. `system` hands the fans
+/// back and stops the governor; either governed profile starts it, or
+/// retargets an already running one (including a Cool target change).
+/// Platform-free so the routing can be tested without XPC or an SMC.
+pub fn selection_action(selection: FanSelection) -> Option<Action> {
+    Some(match selection.profile {
+        FanProfile::System => Action::GovernorStop,
+        FanProfile::Comfort => Action::GovernorStart {
+            profile: GovernorProfile::Comfort,
+            cool_target_celsius: crate::sensors::sanitize_cool_target(fan::effective_cool_target(
+                &selection,
+            )),
+        },
+        FanProfile::Performance => Action::GovernorStart {
+            profile: GovernorProfile::Performance,
+            cool_target_celsius: None,
+        },
+    })
 }
 
 impl Engine {

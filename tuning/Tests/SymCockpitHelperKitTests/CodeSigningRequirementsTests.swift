@@ -35,8 +35,20 @@ final class CodeSigningRequirementsTests: XCTestCase {
         let requirement = try XCTUnwrap(CodeSigningRequirements.appRequirement(teamID: team))
         XCTAssertTrue(requirement.contains("anchor apple generic"))
         XCTAssertTrue(requirement.contains("identifier \"com.symaira.cockpit\""))
+        XCTAssertTrue(requirement.contains("identifier \"com.symaira.cockpit.symcockpit\""))
         XCTAssertTrue(requirement.contains("certificate leaf[subject.OU] = \"ABCDE12345\""))
         XCTAssertFalse(requirement.contains("com.symaira.symtune-helper"))
+    }
+
+    func testAppRequirementAcceptsTheBundledAgentIdentifier() throws {
+        let requirement = try XCTUnwrap(CodeSigningRequirements.appRequirement(teamID: team))
+        XCTAssertEqual(FanHelperConstants.agentIdentifier, "com.symaira.cockpit.symcockpit")
+        XCTAssertTrue(requirement.hasPrefix("anchor apple generic and ("))
+        for entitlement in CodeSigningRequirements.forbiddenEntitlements {
+            XCTAssertTrue(requirement.contains("!entitlement[\"\(entitlement)\"] exists"), entitlement)
+        }
+        let compiled = try XCTUnwrap(CodeSigningRequirements.appRequirement(teamID: team))
+        XCTAssertTrue(CodeSignatureInspector.isWellFormed(requirement: compiled))
     }
 
     func testHelperRequirementPinsHelperIdentityAndTeam() throws {

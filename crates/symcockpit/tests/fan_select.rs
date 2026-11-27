@@ -148,6 +148,37 @@ fn selecting_system_with_a_stale_override_hands_the_fans_back() {
 }
 
 #[test]
+fn profile_and_target_changes_route_the_helper_governor() {
+    // The agent/CLI starts or retargets the governor for a non-System
+    // selection and stops it for System; the fake port records the calls so
+    // no XPC or SMC is touched. The action mapping itself is unit-tested in
+    // symcockpit-core.
+    let tmp = tempfile::tempdir().unwrap();
+    let mut a = fan_app(tmp.path());
+    let fake = FakeFanControl::default();
+    let routed = fake.routed.clone();
+    a.services.fan_control = Some(Box::new(fake));
+
+    for argv in [
+        &["fan", "profile", "comfort"][..],
+        &["fan", "target", "72.5"],
+        &["fan", "profile", "performance"],
+        &["fan", "profile", "system"],
+    ] {
+        assert_eq!(done(&a, argv).code, 0);
+    }
+
+    use symcockpit_core::sensors::FanProfile;
+    let calls = routed.borrow();
+    assert_eq!(calls.len(), 4, "every selection is routed");
+    assert_eq!(calls[0].profile, FanProfile::Comfort);
+    assert_eq!(calls[1].profile, FanProfile::Comfort);
+    assert_eq!(calls[1].cool_target_celsius, Some(72.5), "target retargets");
+    assert_eq!(calls[2].profile, FanProfile::Performance);
+    assert_eq!(calls[3].profile, FanProfile::System, "System stops it");
+}
+
+#[test]
 fn a_failed_handback_is_a_failed_profile_switch() {
     let tmp = tempfile::tempdir().unwrap();
     let mut a = fan_app(tmp.path());

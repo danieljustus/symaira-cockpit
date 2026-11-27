@@ -5,7 +5,8 @@ import Foundation
 /// to *one* team identifier, which is derived from the running binary's own
 /// signature (never hardcoded):
 ///
-/// - the helper accepts only `Symaira Cockpit.app` (``appRequirement(teamID:)``);
+/// - the helper accepts the app and the bundled agent/CLI
+///   (``appRequirement(teamID:)``);
 /// - the app accepts only the helper (``helperRequirement(teamID:)``).
 ///
 /// Peers that carry a hardened-runtime escape entitlement are refused as
@@ -29,23 +30,28 @@ public enum CodeSigningRequirements {
         }
     }
 
-    /// What the helper requires of its client.
+    /// What the helper requires of its client: the app or the bundled agent.
     public static func appRequirement(teamID: String) -> String? {
-        requirement(identifier: FanHelperConstants.appIdentifier, teamID: teamID)
+        let clients = "(identifier \"\(FanHelperConstants.appIdentifier)\""
+            + " or identifier \"\(FanHelperConstants.agentIdentifier)\")"
+        return requirement(identifierClause: clients, teamID: teamID)
     }
 
     /// What the app requires of the helper.
     public static func helperRequirement(teamID: String) -> String? {
-        requirement(identifier: FanHelperConstants.helperIdentifier, teamID: teamID)
+        requirement(
+            identifierClause: "identifier \"\(FanHelperConstants.helperIdentifier)\"",
+            teamID: teamID
+        )
     }
 
-    private static func requirement(identifier: String, teamID: String) -> String? {
+    private static func requirement(identifierClause: String, teamID: String) -> String? {
         guard isValidTeamIdentifier(teamID) else { return nil }
         let denied = forbiddenEntitlements
             .map { "!entitlement[\"\($0)\"] exists" }
             .joined(separator: " and ")
         return "anchor apple generic"
-            + " and identifier \"\(identifier)\""
+            + " and \(identifierClause)"
             // Developer ID Application leaf and the Developer ID CA: rules
             // out Mac App Store, development and plain Apple-issued certs.
             + " and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"

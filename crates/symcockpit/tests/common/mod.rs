@@ -3,9 +3,10 @@
 
 #![allow(dead_code)] // each test binary uses a different subset
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::rc::Rc;
 
 use serde_json::Value;
 use symcockpit::app::{App, Context, FanControl, Handlers, OverridePort, ReleaseSource, Services};
@@ -120,6 +121,8 @@ pub struct FakeFanControl {
     pub elevation_error: Option<String>,
     pub restore_error: Option<String>,
     pub counter: FanControlCounter,
+    /// Every governor route the agent/CLI asked for, without touching XPC.
+    pub routed: Rc<RefCell<Vec<symcockpit_core::sensors::FanSelection>>>,
 }
 
 impl FanControl for FakeFanControl {
@@ -140,6 +143,15 @@ impl FanControl for FakeFanControl {
             Some(reason) => Err(symcockpit_contract::Error::Permission(reason.clone())),
             None => Ok(()),
         }
+    }
+
+    fn route_selection(
+        &self,
+        _: &Context,
+        selection: symcockpit_core::sensors::FanSelection,
+    ) -> Result<(), symcockpit_contract::Error> {
+        self.routed.borrow_mut().push(selection);
+        Ok(())
     }
 }
 
