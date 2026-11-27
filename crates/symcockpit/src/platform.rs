@@ -235,7 +235,7 @@ impl crate::app::ReleaseSource for CurlReleases {
 pub fn local_time(unix: f64) -> String {
     jiff::Timestamp::from_second(unix.floor() as i64)
         .map(|t| {
-            t.to_zoned(jiff::tz::TimeZone::system())
+            t.to_zoned_datetime(jiff::tz::TimeZone::system())
                 .strftime("%Y-%m-%d %H:%M:%S")
                 .to_string()
         })
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(
             jiff::Timestamp::from_second(0)
                 .unwrap()
-                .to_zoned(jiff::tz::TimeZone::UTC)
+                .to_zoned_datetime(jiff::tz::TimeZone::UTC)
                 .strftime("%Y-%m-%d %H:%M:%S")
                 .to_string(),
             "1970-01-01 00:00:00"
