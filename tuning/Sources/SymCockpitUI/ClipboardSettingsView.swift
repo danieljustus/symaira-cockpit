@@ -145,8 +145,8 @@ struct ClipboardSettingsView: View {
                     ? "There is nothing saved."
                     : "Permanently removes every saved entry, including entries not shown in the list."
             ) {
-                Button("Delete All…") { confirmingClear = true }
-                    .symairaButtonStyle(.secondary)
+                Button("Delete All…", role: .destructive) { confirmingClear = true }
+                    .symairaButtonStyle(.destructive)
                     .disabled(model.isBusy || snapshot.items.isEmpty)
             }
         }
