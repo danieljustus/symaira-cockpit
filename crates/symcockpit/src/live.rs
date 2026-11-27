@@ -214,10 +214,14 @@ impl GovernorProbe for AnyGovernorProbe {
 static HEARTBEAT_STOP: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
 
 /// The helper's dead-man watchdog needs a beat every two seconds while a
-/// governed profile is active. One heartbeat thread per process is enough:
-/// the long-lived agent keeps the governor alive, while a one-shot CLI exits
-/// and the app agent takes over on its next event.
-fn keep_helper_governor_alive() {
+/// governed profile is active, and the helper ends the governor as soon as
+/// its last connection closes (#447). So `owner`, the connection that started
+/// the governor, lives in the heartbeat thread and carries the beats until the
+/// governor is stopped; dropping it any earlier hands the fans back at once.
+/// One heartbeat thread per process: a retarget while one runs drops its own
+/// connection, the running owner keeps the governor. A one-shot CLI ends the
+/// governor when it exits; the long-lived app agent is the lasting owner.
+fn keep_helper_governor_alive(owner: HelperClient) {
     let mut guard = HEARTBEAT_STOP.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_some() {
         return;
@@ -228,22 +232,36 @@ fn keep_helper_governor_alive() {
     let thread = std::thread::Builder::new()
         .name("fan-governor-heartbeat".into())
         .spawn(move || {
+            let mut client = Some(owner);
             while !stop.load(Ordering::Relaxed) {
                 std::thread::sleep(Duration::from_millis(HEARTBEAT_INTERVAL_MS / 2));
                 if stop.load(Ordering::Relaxed) {
                     break;
                 }
-                match HelperClient::connect() {
-                    Ok(client) => {
-                        if let Err(reason) = client.request(&Request::new(Action::Heartbeat)) {
-                            eprintln!("symtune: helper heartbeat failed: {reason}");
+                if client.is_none() {
+                    match HelperClient::connect() {
+                        Ok(c) => client = Some(c),
+                        Err(reason) => {
+                            eprintln!(
+                                "symtune: privileged helper unavailable: {reason}; governor will stop"
+                            );
+                            continue;
                         }
                     }
-                    Err(reason) => {
-                        eprintln!(
-                            "symtune: privileged helper unavailable: {reason}; governor will stop"
-                        );
+                }
+                let beat = client
+                    .as_ref()
+                    .map(|c| c.request(&Request::new(Action::Heartbeat)));
+                match beat {
+                    Some(Ok(Reply::Heartbeat { governing: false })) => {
+                        eprintln!("symtune: the helper's fan governor is no longer running");
                     }
+                    Some(Err(reason)) => {
+                        // The owner connection is gone, and with it the governor.
+                        eprintln!("symtune: helper heartbeat failed: {reason}");
+                        client = None;
+                    }
+                    _ => {}
                 }
             }
         });
@@ -330,7 +348,7 @@ impl crate::app::FanControl for LiveFanControl {
         match client.request(&Request::new(action)) {
             Ok(Reply::Ok) => {
                 if governing {
-                    keep_helper_governor_alive();
+                    keep_helper_governor_alive(client);
                 } else {
                     stop_helper_governor_heartbeat();
                 }

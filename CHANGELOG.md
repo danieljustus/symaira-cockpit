@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- Cool and Max take effect through the privileged fan helper (#447). On 0.13.1 the agent
+  started the helper's governor and dropped the connection right after the reply; the helper
+  ends a governor when its last connection closes, so the fans went straight back to firmware
+  control while the profile still read Cool or Max, without an error. The connection that
+  starts the governor now stays open in the agent and carries the heartbeats until the
+  governor is stopped. A one-shot `symcockpit fan profile comfort` from a terminal still ends
+  the governor when the command exits; the app keeps it running.
+
 ## [0.13.1] (2026-11-27)
 
 ### Fixed
