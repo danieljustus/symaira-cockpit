@@ -13,11 +13,11 @@ workspace = true
 
 [dependencies]
 symcockpit-contract.workspace = true
-symcockpit-core = { path = "../symcockpit-core", version = "=0.13.1" }
-symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.1" }
-symcockpit-macos = { path = "../symcockpit-macos", version = "=0.13.1" }
-symcockpit-store = { path = "../symcockpit-store", version = "=0.13.1" }
+symcockpit-core = { path = "../symcockpit-core", version = "=0.13.2" }
+symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.2" }
+symcockpit-macos = { path = "../symcockpit-macos", version = "=0.13.2" }
+symcockpit-store = { path = "../symcockpit-store", version = "=0.13.2" }
 
 [dev-dependencies]
-symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.1" }
+symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.2" }
 tempfile.workspace = true

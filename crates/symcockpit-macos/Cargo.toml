@@ -14,9 +14,9 @@ all = { level = "warn", priority = -1 }
 
 [dependencies]
 symcockpit-contract.workspace = true
-symcockpit-core = { path = "../symcockpit-core", version = "=0.13.1" }
-symcockpit-store = { path = "../symcockpit-store", version = "=0.13.1" }
-symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.1" }
+symcockpit-core = { path = "../symcockpit-core", version = "=0.13.2" }
+symcockpit-store = { path = "../symcockpit-store", version = "=0.13.2" }
+symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.2" }
 libc = "=0.2.191"
 # Moves files to the Trash through NSFileManager (MIT).
 trash = "=5.4.0"
@@ -48,6 +48,6 @@ coremidi-sys = "=3.2.1"
 serde_json.workspace = true
 
 [dev-dependencies]
-symcockpit-oracle = { path = "../symcockpit-oracle", version = "=0.13.1" }
-symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.1" }
+symcockpit-oracle = { path = "../symcockpit-oracle", version = "=0.13.2" }
+symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.2" }
 tempfile.workspace = true

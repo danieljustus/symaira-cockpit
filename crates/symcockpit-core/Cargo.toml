@@ -13,8 +13,8 @@ workspace = true
 
 [dependencies]
 symcockpit-contract.workspace = true
-symcockpit-store = { path = "../symcockpit-store", version = "=0.13.1" }
-symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.1" }
+symcockpit-store = { path = "../symcockpit-store", version = "=0.13.2" }
+symcockpit-helper-proto = { path = "../symcockpit-helper-proto", version = "=0.13.2" }
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true
@@ -28,6 +28,6 @@ aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "a
 getrandom = "=0.4.3"
 
 [dev-dependencies]
-symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.1" }
+symcockpit-testkit = { path = "../symcockpit-testkit", version = "=0.13.2" }
 csv = "=1.4.0"
 tempfile.workspace = true

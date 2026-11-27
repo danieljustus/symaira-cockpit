@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.2] (2026-11-27)
+
 ### Fixed
 - Cool and Max take effect through the privileged fan helper (#447). On 0.13.1 the agent
   started the helper's governor and dropped the connection right after the reply; the helper
