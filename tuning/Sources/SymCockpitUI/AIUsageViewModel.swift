@@ -43,6 +43,11 @@ final class AIUsageViewModel {
     /// Injected so tests see the alerts; the live one posts a macOS notification.
     var postAlert: @MainActor (_ title: String, _ body: String) -> Void = { AIUsageNotifier.post(title: $0, body: $1) }
     var requestNotificationPermission: @MainActor () -> Void = { AIUsageNotifier.requestPermission() }
+    /// Failure backoff and provider-requested waits per provider (#452).
+    private var backoff = AIUsageBackoff()
+    /// Injected for tests; offline, nothing is fetched and the last usage stays.
+    var isOnline: @MainActor () -> Bool = { NetworkStatus.shared.isOnline }
+    var now: @MainActor () -> Date = { Date() }
     let providers: [any AIUsageProvider]
     let preferences: AIUsagePreferences
     let localAPI = AIUsageAPIHost()
@@ -66,7 +71,7 @@ final class AIUsageViewModel {
     /// so a model built without an agent behaves as before.
     var requiresVisibility = false
     var isVisible = false {
-        didSet { if isVisible, !oldValue, requiresVisibility { refreshNow() } }
+        didSet { if isVisible, !oldValue, requiresVisibility { Task { await refresh(providerIDs: nil, automatic: true) } } }
     }
 
     /// The usage comes from the agent's `ai-usage`. `providers` is only the
@@ -191,7 +196,7 @@ final class AIUsageViewModel {
             while !Task.isCancelled {
                 guard let self else { return }
                 if !self.requiresVisibility || self.isVisible || self.preferences.menuBarEnabled {
-                    await self.refresh()
+                    await self.refresh(providerIDs: nil, automatic: true)
                 }
                 let interval = max(1, self.preferences.refreshInterval)
                 try? await Task.sleep(for: .seconds(interval))
@@ -255,7 +260,9 @@ final class AIUsageViewModel {
     }
 
     /// `nil`: every enabled provider. A set: only those of them that are enabled.
-    func refresh(providerIDs: Set<String>?, force: Bool = true) async {
+    /// `automatic` (the timer, opening the panel) also skips providers in failure
+    /// backoff; a provider-requested wait is skipped by every refresh.
+    func refresh(providerIDs: Set<String>?, force: Bool = true, automatic: Bool = false) async {
         guard !isStopped else { return }
         let enabled = preferences.enabledProviders
         let revision = preferences.enabledRevision
@@ -276,8 +283,10 @@ final class AIUsageViewModel {
             isRefreshing = false
             startQueuedRefresh()
         }
-        let selected = providerIDs.map { enabled.intersection($0) } ?? enabled
-        guard !selected.isEmpty else { return }
+        let start = now()
+        let selected = (providerIDs.map { enabled.intersection($0) } ?? enabled)
+            .filter { !backoff.isWaiting($0, now: start, manual: !automatic) }
+        guard !selected.isEmpty, isOnline() else { return }
         let results: [AIUsageService.ProviderResult]
         if let fetchEstimatedHistory {
             let consent = preferences.consentedHistoryProviders.intersection(selected)
@@ -295,6 +304,13 @@ final class AIUsageViewModel {
             results = await fetch(selected, force)
         }
         guard !isStopped, !Task.isCancelled else { return }
+        // A failure while the Mac went offline is the network, not the provider: keep
+        // the last usage and count nothing.
+        guard isOnline() else { return }
+        for id in selected {
+            backoff.record(provider: id, error: results.first { $0.providerID == id }.map { $0.error } ?? "no result",
+                           now: start, interval: preferences.refreshInterval)
+        }
         guard revision == preferences.enabledRevision else {
             // The selection changed mid-flight: drop these results and fetch again only
             // the providers they were for that are still enabled; the change itself

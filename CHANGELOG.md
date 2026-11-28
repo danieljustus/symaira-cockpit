@@ -13,6 +13,11 @@
   rest. *Notify when a limit runs low* posts a macOS notification when an enabled
   provider's limit crosses the warning or critical threshold or is used up; the first
   reading after launch only records the state. Both off by default.
+- AI usage backs off from failing providers (#452): after consecutive failures a provider
+  is asked again only after the refresh interval times 2^(n-1), at most an hour; a manual
+  refresh skips this. A wait the provider asked for (rate limit, `retry in Ns` from
+  symbrain) holds even for a manual refresh. While the Mac is offline nothing is fetched
+  and the last usage stays instead of turning into provider errors.
 
 ### Fixed
 - AI usage asks symbrain only for the providers enabled in the app (#394). The app called the
