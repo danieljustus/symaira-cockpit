@@ -31,6 +31,11 @@ final class AIUsageViewModel {
     private(set) var rows: [AIUsageRow] = []
     private(set) var statusItemText = ""
     private(set) var statusPins: [AIUsagePin] = []
+    /// Privacy Mode is on and the screen is being captured: no usage values are shown (#451).
+    private(set) var isConcealing = false
+    /// Injected so tests can fake a capture; the live probe asks the window server.
+    var isScreenCaptured: @MainActor () -> Bool = { ScreenCaptureProbe.isScreenCaptured() }
+    private var captureTask: Task<Void, Never>?
     let providers: [any AIUsageProvider]
     let preferences: AIUsagePreferences
     let localAPI = AIUsageAPIHost()
@@ -117,7 +122,10 @@ final class AIUsageViewModel {
         }
         preferenceObserver = preferences.objectWillChange.sink { [weak self] _ in
             // Published emits before mutation. Read the new preferences on the next main-actor turn.
-            Task { @MainActor [weak self] in self?.updateStatusItem() }
+            Task { @MainActor [weak self] in
+                self?.updateCaptureWatch()
+                self?.updateStatusItem()
+            }
         }
     }
 
@@ -163,6 +171,7 @@ final class AIUsageViewModel {
     func start() {
         guard refreshTask == nil else { return }
         isStopped = false
+        updateCaptureWatch()
         apply(cached(preferences.enabledProviders).map {
             .init(providerID: $0.providerID, snapshot: $0.snapshot, error: $0.error ?? "Cached usage; awaiting refresh")
         }, recordSamples: false)
@@ -178,8 +187,36 @@ final class AIUsageViewModel {
         }
     }
 
+    /// Watches for a screen capture only while Privacy Mode is on and the model runs.
+    /// A short poll; one window-server call per tick.
+    func updateCaptureWatch() {
+        guard preferences.concealWhileCaptured, !isStopped else {
+            captureTask?.cancel()
+            captureTask = nil
+            checkCapture()
+            return
+        }
+        checkCapture()
+        guard captureTask == nil else { return }
+        captureTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                self?.checkCapture()
+            }
+        }
+    }
+
+    func checkCapture() {
+        let concealing = preferences.concealWhileCaptured && !isStopped && isScreenCaptured()
+        guard concealing != isConcealing else { return }
+        isConcealing = concealing
+        updateStatusItem()
+    }
+
     func stop() {
         isStopped = true
+        captureTask?.cancel()
+        captureTask = nil
         queuedProviders.removeAll()
         refreshTask?.cancel()
         refreshTask = nil
@@ -322,6 +359,7 @@ final class AIUsageViewModel {
                 fraction: metric.fraction(remaining: preferences.layout.remaining), stale: row.isStale)]
         }
         if preferences.layout.bars { statusPins = Array(statusPins.prefix(4)) }
+        if isConcealing { statusPins = [] }
         statusItemText = statusPins.map(\.text).joined(separator: " · ")
         onStatusItemTextChanged?()
     }

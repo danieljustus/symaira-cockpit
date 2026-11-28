@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- AI usage Privacy Mode (#451): with *Hide usage while the screen is shared or recorded* on,
+  a screen share or recording hides the AI values in the menu bar, redacts the provider
+  cards, and redacts a copied usage image. Off by default; the capture check runs only
+  while the setting is on.
+
 ### Fixed
 - AI usage asks symbrain only for the providers enabled in the app (#394). The app called the
   agent's `ai-usage` without a selection, so symbrain discovered and queried every catalog

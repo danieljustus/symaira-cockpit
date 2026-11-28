@@ -56,12 +56,19 @@ struct AIUsageCardView: View {
             if customizing {
                 customization
             } else {
-                AIUsageLocalRecordedSpendView(model: model, preferences: preferences)
-                TimelineView(.periodic(from: .now, by: 30)) { context in
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(model.visibleRows) { row in providerCard(row, now: context.date) }
+                if model.isConcealing {
+                    Text("Usage hidden while the screen is shared or recorded.")
+                        .font(SymairaTypography.caption).foregroundStyle(.secondary)
+                }
+                Group {
+                    AIUsageLocalRecordedSpendView(model: model, preferences: preferences)
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(model.visibleRows) { row in providerCard(row, now: context.date) }
+                        }
                     }
                 }
+                .redacted(reason: model.isConcealing ? .placeholder : [])
                 if model.visibleRows.isEmpty {
                     Text("Choose providers in Customize to show usage.").foregroundStyle(.secondary)
                 }
@@ -89,7 +96,8 @@ struct AIUsageCardView: View {
     private func share(_ row: AIUsageRow) {
         let metrics = visibleMetrics(row, onDemand: false)
             + (preferences.layout.expanded.contains(row.id) ? visibleMetrics(row, onDemand: true) : [])
-        let card = AIUsageShareCard(row: row, metrics: metrics, layout: preferences.layout, now: Date())
+        let card = AIUsageShareCard(row: row, metrics: metrics, layout: preferences.layout, now: Date(),
+                                    concealed: model.isConcealing)
         guard let png = card.png(appearance: colorScheme) else {
             shareNotice = "Could not render usage image."
             return
@@ -400,6 +408,7 @@ struct AIUsageDisplayControls: View {
         Toggle("Exact reset time (off: countdown)", isOn: $preferences.layout.absoluteReset)
         Toggle("Menu-bar mini-bars (off: text)", isOn: $preferences.layout.bars)
         Toggle("Local usage API (port 6737)", isOn: $preferences.localAPIEnabled)
+        Toggle("Hide usage while the screen is shared or recorded", isOn: $preferences.concealWhileCaptured)
         Text("Off by default. Other local processes can read enabled providers' usage, never credentials. Browser-origin requests are blocked.")
             .font(SymairaTypography.caption).foregroundStyle(.secondary)
     }

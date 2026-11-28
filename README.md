@@ -347,6 +347,11 @@ Keychain items.
 - **Local cost history is opt-in per source.** Reading local Claude, Codex,
   Grok or OpenCode session usage is off until you switch it on, and recorded
   and estimated costs are shown separately.
+- **Privacy Mode (off by default).** *Hide usage while the screen is shared or
+  recorded* hides the AI values in the menu bar and redacts the cards and copied
+  usage images while any app captures the screen. Detection asks the window
+  server through a private, runtime-resolved call; without it only macOS Screen
+  Sharing is detected.
 - **Local usage API (off by default).** The card's *Local usage API* switch, or
   `symcockpit ai-usage serve [--port 6737]`, serves the cached snapshots as
   JSON on `127.0.0.1` only: `GET /v1/limits` and `GET /v1/usage`, optionally

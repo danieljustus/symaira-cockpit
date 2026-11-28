@@ -11,6 +11,8 @@ struct AIUsageShareCard: View {
     let metrics: [AIUsageMetric]
     let layout: AIUsageLayout
     let now: Date
+    /// Privacy Mode saw a capture: the image carries no names or values (#451).
+    var concealed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,6 +44,7 @@ struct AIUsageShareCard: View {
             Divider()
             Text("Symaira Cockpit").font(.caption.bold()).frame(maxWidth: .infinity)
         }
+        .redacted(reason: concealed ? .placeholder : [])
         .padding(20).frame(width: 420)
         .foregroundStyle(SymairaTokens.ink)
         .background(SymairaTokens.canvas)

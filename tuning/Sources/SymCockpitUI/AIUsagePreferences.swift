@@ -109,6 +109,11 @@ final class AIUsagePreferences: ObservableObject {
         didSet { defaults.set(localAPIEnabled, forKey: Keys.localAPIEnabled) }
     }
 
+    /// Privacy Mode (#451): hide usage values while the screen is shared or recorded.
+    @Published var concealWhileCaptured: Bool {
+        didSet { defaults.set(concealWhileCaptured, forKey: Keys.concealWhileCaptured) }
+    }
+
     // MARK: - Display options (issue #361)
 
     /// When true, the menu bar shows the currently active provider's usage
@@ -197,6 +202,7 @@ final class AIUsagePreferences: ObservableObject {
         static let localSpendPeriod = "com.symaira.symtune.aiUsage.localSpendPeriod"
         static let localSpendMode = "com.symaira.symtune.aiUsage.localSpendMode"
         static let localAPIEnabled = "com.symaira.symtune.aiUsage.localAPIEnabled"
+        static let concealWhileCaptured = "com.symaira.symtune.aiUsage.concealWhileCaptured"
         static let displayPinnedProvider = "com.symaira.symtune.aiUsage.displayPinnedProvider"
         static let displayAllowReorder = "com.symaira.symtune.aiUsage.displayAllowReorder"
         static let displayHideUnconfigured = "com.symaira.symtune.aiUsage.displayHideUnconfigured"
@@ -214,6 +220,7 @@ final class AIUsagePreferences: ObservableObject {
         self.refreshInterval = stored > 0 ? stored : 300
         self.menuBarEnabled = defaults.bool(forKey: Keys.menuBarEnabled)
         self.localAPIEnabled = defaults.bool(forKey: Keys.localAPIEnabled)
+        self.concealWhileCaptured = defaults.bool(forKey: Keys.concealWhileCaptured)
         self.codexHistoryEnabled = defaults.bool(forKey: Keys.codexHistoryEnabled)
         self.codexHistoryOnly = defaults.bool(forKey: Keys.codexHistoryOnly)
         self.claudeHistoryEnabled = defaults.bool(forKey: Keys.claudeHistoryEnabled)
