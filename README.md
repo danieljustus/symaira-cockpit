@@ -347,6 +347,11 @@ Keychain items.
 - **Local cost history is opt-in per source.** Reading local Claude, Codex,
   Grok or OpenCode session usage is off until you switch it on, and recorded
   and estimated costs are shown separately.
+- **Priority strip and alerts (off by default).** The menu bar can show the
+  most urgent limits instead of the starred ones (starred, used up, critical,
+  warning, then limits about to reset unused, plus `+N`), and Cockpit can notify
+  when a limit crosses the warning (default 80 % used) or critical (95 %)
+  threshold or is used up. macOS asks for notification permission once.
 - **Privacy Mode (off by default).** *Hide usage while the screen is shared or
   recorded* hides the AI values in the menu bar and redacts the cards and copied
   usage images while any app captures the screen. Detection asks the window

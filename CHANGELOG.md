@@ -7,6 +7,12 @@
   a screen share or recording hides the AI values in the menu bar, redacts the provider
   cards, and redacts a copied usage image. Off by default; the capture check runs only
   while the setting is on.
+- AI usage priority strip and quota alerts (#450): *Menu bar: most urgent limits first* shows
+  the configured number of limits in a documented order (starred, used up, critical,
+  warning, then limits that reset within a day with less than half used) plus `+N` for the
+  rest. *Notify when a limit runs low* posts a macOS notification when an enabled
+  provider's limit crosses the warning or critical threshold or is used up; the first
+  reading after launch only records the state. Both off by default.
 
 ### Fixed
 - AI usage asks symbrain only for the providers enabled in the app (#394). The app called the

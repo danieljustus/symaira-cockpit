@@ -36,6 +36,13 @@ final class AIUsageViewModel {
     /// Injected so tests can fake a capture; the live probe asks the window server.
     var isScreenCaptured: @MainActor () -> Bool = { ScreenCaptureProbe.isScreenCaptured() }
     private var captureTask: Task<Void, Never>?
+    /// Urgent limits that did not fit the priority strip (#450).
+    private(set) var statusOverflow = 0
+    private var quotaAlerts = AIUsageQuotaAlerts()
+    private var askedNotificationPermission = false
+    /// Injected so tests see the alerts; the live one posts a macOS notification.
+    var postAlert: @MainActor (_ title: String, _ body: String) -> Void = { AIUsageNotifier.post(title: $0, body: $1) }
+    var requestNotificationPermission: @MainActor () -> Void = { AIUsageNotifier.requestPermission() }
     let providers: [any AIUsageProvider]
     let preferences: AIUsagePreferences
     let localAPI = AIUsageAPIHost()
@@ -123,8 +130,13 @@ final class AIUsageViewModel {
         preferenceObserver = preferences.objectWillChange.sink { [weak self] _ in
             // Published emits before mutation. Read the new preferences on the next main-actor turn.
             Task { @MainActor [weak self] in
-                self?.updateCaptureWatch()
-                self?.updateStatusItem()
+                guard let self else { return }
+                self.updateCaptureWatch()
+                if self.preferences.quotaAlertsEnabled, !self.askedNotificationPermission {
+                    self.askedNotificationPermission = true
+                    self.requestNotificationPermission()
+                }
+                self.updateStatusItem()
             }
         }
     }
@@ -317,7 +329,48 @@ final class AIUsageViewModel {
                 history: historyBuffers[id]?.samples ?? [],
                 recordedHistory: preferences.consentedHistoryProviders.contains(id) ? result.history : nil)
         }
+        if recordSamples { evaluateQuotaAlerts() }
         updateStatusItem()
+    }
+
+    /// The bounded, visible limits of the enabled providers, in display order.
+    private func priorityCandidates() -> [(item: AIUsagePriorityItem, row: AIUsageRow, metric: AIUsageMetric)] {
+        visibleRows.flatMap { row in
+            let pins = Set(preferences.layout.pins[row.id] ?? [])
+            return metrics(for: row).filter { !$0.isBalance && !preferences.layout.hidden.contains($0.id) }
+                .compactMap { metric in
+                    metric.fraction(remaining: false).map { used in
+                        (AIUsagePriorityItem(providerID: row.id, metricID: metric.id, usedFraction: used,
+                                             resetsAt: metric.meter.resetsAt, pinned: pins.contains(metric.id)), row, metric)
+                    }
+                }
+        }
+    }
+
+    /// Fresh results only: the tracker always learns the new state, alerts are posted
+    /// only with the setting on. Under Privacy Mode an alert names no values.
+    private func evaluateQuotaAlerts() {
+        let candidates = priorityCandidates()
+        let alerts = quotaAlerts.evaluate(candidates.map(\.item), thresholds: preferences.thresholds)
+        guard preferences.quotaAlertsEnabled else { return }
+        for alert in alerts {
+            guard let match = candidates.first(where: { $0.item.metricID == alert.item.metricID }) else { continue }
+            let title = switch alert.severity {
+            case .usedUp: "AI limit used up"
+            case .critical: "AI limit nearly used up"
+            default: "AI limit running low"
+            }
+            let value = match.metric.displayValue(remaining: preferences.layout.remaining)
+            postAlert(title, isConcealing
+                ? match.row.displayName
+                : "\(match.row.displayName) \(match.metric.meter.label): \(value)")
+        }
+    }
+
+    private func pin(_ row: AIUsageRow, _ metric: AIUsageMetric) -> AIUsagePin? {
+        guard let value = metric.value(remaining: preferences.layout.remaining) else { return nil }
+        return AIUsagePin(label: "\(row.displayName) \(metric.meter.label)", value: value,
+                          fraction: metric.fraction(remaining: preferences.layout.remaining), stale: row.isStale)
     }
 
     private func recordHistory(id: String, snapshot: AIUsageSnapshot) {
@@ -359,8 +412,22 @@ final class AIUsageViewModel {
                 fraction: metric.fraction(remaining: preferences.layout.remaining), stale: row.isStale)]
         }
         if preferences.layout.bars { statusPins = Array(statusPins.prefix(4)) }
-        if isConcealing { statusPins = [] }
-        statusItemText = statusPins.map(\.text).joined(separator: " · ")
+        statusOverflow = 0
+        if preferences.menuBarEnabled, preferences.priorityMenuBar {
+            let candidates = priorityCandidates()
+            let strip = AIUsagePriority.strip(candidates.map(\.item), thresholds: preferences.thresholds,
+                                              now: Date(), count: preferences.priorityCount)
+            statusPins = strip.shown.compactMap { item in
+                candidates.first { $0.item.metricID == item.metricID }.flatMap { pin($0.row, $0.metric) }
+            }
+            statusOverflow = strip.overflow
+        }
+        if isConcealing {
+            statusPins = []
+            statusOverflow = 0
+        }
+        statusItemText = (statusPins.map(\.text) + (statusOverflow > 0 ? ["+\(statusOverflow)"] : []))
+            .joined(separator: " · ")
         onStatusItemTextChanged?()
     }
 }

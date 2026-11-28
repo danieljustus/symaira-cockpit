@@ -109,6 +109,29 @@ final class AIUsagePreferences: ObservableObject {
         didSet { defaults.set(localAPIEnabled, forKey: Keys.localAPIEnabled) }
     }
 
+    /// Priority strip (#450): the menu bar shows the most urgent limits instead of the starred ones.
+    @Published var priorityMenuBar: Bool {
+        didSet { defaults.set(priorityMenuBar, forKey: Keys.priorityMenuBar) }
+    }
+    /// How many limits the priority strip shows before "+N".
+    @Published var priorityCount: Int {
+        didSet { defaults.set(priorityCount, forKey: Keys.priorityCount) }
+    }
+    /// Used percentages at which a limit counts as warning and critical.
+    @Published var warningPercent: Int {
+        didSet { defaults.set(warningPercent, forKey: Keys.warningPercent) }
+    }
+    @Published var criticalPercent: Int {
+        didSet { defaults.set(criticalPercent, forKey: Keys.criticalPercent) }
+    }
+    /// Notify when an enabled provider's limit crosses warning, critical or used up.
+    @Published var quotaAlertsEnabled: Bool {
+        didSet { defaults.set(quotaAlertsEnabled, forKey: Keys.quotaAlertsEnabled) }
+    }
+    var thresholds: AIUsageThresholds {
+        AIUsageThresholds(warning: Double(warningPercent) / 100, critical: Double(criticalPercent) / 100)
+    }
+
     /// Privacy Mode (#451): hide usage values while the screen is shared or recorded.
     @Published var concealWhileCaptured: Bool {
         didSet { defaults.set(concealWhileCaptured, forKey: Keys.concealWhileCaptured) }
@@ -203,6 +226,11 @@ final class AIUsagePreferences: ObservableObject {
         static let localSpendMode = "com.symaira.symtune.aiUsage.localSpendMode"
         static let localAPIEnabled = "com.symaira.symtune.aiUsage.localAPIEnabled"
         static let concealWhileCaptured = "com.symaira.symtune.aiUsage.concealWhileCaptured"
+        static let priorityMenuBar = "com.symaira.symtune.aiUsage.priorityMenuBar"
+        static let priorityCount = "com.symaira.symtune.aiUsage.priorityCount"
+        static let warningPercent = "com.symaira.symtune.aiUsage.warningPercent"
+        static let criticalPercent = "com.symaira.symtune.aiUsage.criticalPercent"
+        static let quotaAlertsEnabled = "com.symaira.symtune.aiUsage.quotaAlertsEnabled"
         static let displayPinnedProvider = "com.symaira.symtune.aiUsage.displayPinnedProvider"
         static let displayAllowReorder = "com.symaira.symtune.aiUsage.displayAllowReorder"
         static let displayHideUnconfigured = "com.symaira.symtune.aiUsage.displayHideUnconfigured"
@@ -221,6 +249,11 @@ final class AIUsagePreferences: ObservableObject {
         self.menuBarEnabled = defaults.bool(forKey: Keys.menuBarEnabled)
         self.localAPIEnabled = defaults.bool(forKey: Keys.localAPIEnabled)
         self.concealWhileCaptured = defaults.bool(forKey: Keys.concealWhileCaptured)
+        self.priorityMenuBar = defaults.bool(forKey: Keys.priorityMenuBar)
+        self.priorityCount = (defaults.object(forKey: Keys.priorityCount) as? Int) ?? 2
+        self.warningPercent = (defaults.object(forKey: Keys.warningPercent) as? Int) ?? 80
+        self.criticalPercent = (defaults.object(forKey: Keys.criticalPercent) as? Int) ?? 95
+        self.quotaAlertsEnabled = defaults.bool(forKey: Keys.quotaAlertsEnabled)
         self.codexHistoryEnabled = defaults.bool(forKey: Keys.codexHistoryEnabled)
         self.codexHistoryOnly = defaults.bool(forKey: Keys.codexHistoryOnly)
         self.claudeHistoryEnabled = defaults.bool(forKey: Keys.claudeHistoryEnabled)

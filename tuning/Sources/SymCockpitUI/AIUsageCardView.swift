@@ -409,6 +409,17 @@ struct AIUsageDisplayControls: View {
         Toggle("Menu-bar mini-bars (off: text)", isOn: $preferences.layout.bars)
         Toggle("Local usage API (port 6737)", isOn: $preferences.localAPIEnabled)
         Toggle("Hide usage while the screen is shared or recorded", isOn: $preferences.concealWhileCaptured)
+        Toggle("Menu bar: most urgent limits first", isOn: $preferences.priorityMenuBar)
+        Picker("Urgent limits in menu bar", selection: $preferences.priorityCount) {
+            ForEach([1, 2, 3, 4], id: \.self) { Text("\($0)").tag($0) }
+        }
+        Picker("Warning at", selection: $preferences.warningPercent) {
+            ForEach([50, 70, 80, 90], id: \.self) { Text("\($0)% used").tag($0) }
+        }
+        Picker("Critical at", selection: $preferences.criticalPercent) {
+            ForEach([90, 95, 99], id: \.self) { Text("\($0)% used").tag($0) }
+        }
+        Toggle("Notify when a limit runs low", isOn: $preferences.quotaAlertsEnabled)
         Text("Off by default. Other local processes can read enabled providers' usage, never credentials. Browser-origin requests are blocked.")
             .font(SymairaTypography.caption).foregroundStyle(.secondary)
     }
