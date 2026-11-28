@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+- AI usage asks symbrain only for the providers enabled in the app (#394). The app called the
+  agent's `ai-usage` without a selection, so symbrain discovered and queried every catalog
+  provider, including disabled ones, and the app dropped the extra rows afterwards. The app
+  now sends its enabled providers (`providers`), the agent passes them on as
+  `--providers`, and credential references of other providers stay out of the child
+  environment. With nothing enabled no request is made.
+
 ## [0.13.2] (2026-11-27)
 
 ### Fixed

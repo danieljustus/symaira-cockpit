@@ -88,7 +88,9 @@ pub enum Params {
         limit: i64,
     },
     AiUsage {
-        provider: Option<String>,
+        /// `None`: every catalog provider. `Some`: only these (validated IDs);
+        /// an empty set asks nobody.
+        providers: Option<std::collections::BTreeSet<String>>,
     },
     /// A command of one of the newer areas (`areas.rs`).
     Area(AreaInput),

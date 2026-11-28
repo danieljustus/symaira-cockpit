@@ -356,8 +356,11 @@ Keychain items.
   it while it runs.
 
 From the shell, `symcockpit ai-usage [provider] [--json] [--force]` prints the
-same report. Without a provider argument it, and the MCP `get_ai_usage` tool,
-query every catalog provider regardless of the app's selection.
+same report. The app sends its enabled providers with every request (an
+optional `providers` array, which the frozen v0.12 schema of `get_ai_usage`
+does not advertise), so symbrain only discovers and queries those. Without a
+provider argument the CLI and the MCP `get_ai_usage` tool query every catalog
+provider regardless of the app's selection.
 
 ## Commands
 

@@ -69,10 +69,13 @@ final class AIUsageViewModel {
             fetch: { selected, _ in await Self.usage(from: session, selected: selected) })
     }
 
-    /// The agent answers for every catalog provider (`ai-usage` takes no
-    /// provider argument); the rows the app did not ask for are dropped here.
+    /// Asks the agent for the selected providers only (`providers`), so symbrain never
+    /// discovers or queries a provider the user did not enable (#394). Nothing selected:
+    /// no request at all. Rows outside the selection are still dropped as a second guard.
     nonisolated static func usage(from session: AgentSession, selected: Set<String>) async -> [AIUsageService.ProviderResult] {
-        switch await session.perform("ai-usage") {
+        guard !selected.isEmpty else { return [] }
+        let providers = AgentJSON.array(selected.sorted().map { .string($0) })
+        switch await session.perform("ai-usage", params: ["providers": providers]) {
         case .done(let json):
             guard let all = try? AgentDecoding.decode([AIUsageService.ProviderResult].self, from: json) else {
                 return selected.sorted().map { .init(providerID: $0, snapshot: nil, error: "AI usage could not be read from the Cockpit agent.") }

@@ -24,9 +24,9 @@ automated, and none of it has been run yet.
     itself (`docs/agent-protocol.md`, "Wake"). Check after waking the Mac: is the
     boost still on, is the warmth still there, does `pmset -g batt` still say the
     battery is not charging at the limit?
-  - **AI usage:** the agent's `ai-usage` asks every catalog provider (the app
-    keeps only the enabled ones), and the consent-based recorded-history readers
-    and the snapshot cache are not available through the agent.
+  - **AI usage:** the app passes its enabled providers to the agent's `ai-usage`
+    (`providers`), which asks symbrain for those only; the consent-based
+    recorded-history readers and the snapshot cache are not available through the agent.
   - **Brightness keys** (opt-in): the key is answered by the agent only if it
     replies within 0.3 s; otherwise macOS handles it.
 

@@ -464,6 +464,33 @@ pub struct Options {
     pub provider: Option<String>,
 }
 
+/// The optional `providers` argument of the agent/MCP read: absent or `null`
+/// means every catalog provider, an array of catalog IDs only those (an empty
+/// array asks nobody). The app passes its enabled providers, so a provider the
+/// user did not select is never discovered or queried through symbrain (#394).
+pub fn providers_argument(value: Option<&Value>) -> Result<Option<BTreeSet<String>>, Error> {
+    let items = match value {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Array(items)) => items,
+        Some(_) => {
+            return Err(Error::Usage(
+                "ai-usage: providers must be an array of provider IDs".into(),
+            ));
+        }
+    };
+    let mut selection = BTreeSet::new();
+    for item in items {
+        let id = item.as_str().ok_or_else(|| {
+            Error::Usage("ai-usage: providers must be an array of provider IDs".into())
+        })?;
+        if !CATALOG.iter().any(|(known, _)| *known == id) {
+            return Err(Error::Usage(format!("ai-usage: unknown provider '{id}'")));
+        }
+        selection.insert(id.to_owned());
+    }
+    Ok(Some(selection))
+}
+
 /// `ai-usage [provider] [--json] [--force]`; the caller handles `--help` and
 /// `serve` first.
 pub fn parse_options(args: &[String]) -> Result<Options, Error> {

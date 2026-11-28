@@ -440,6 +440,63 @@ fn ai_usage_tool_uses_only_the_runner_port() {
     );
 }
 
+/// The app passes its enabled providers: symbrain is asked for those only, and
+/// no other provider's row, argument or credential reference appears (#394).
+#[test]
+fn ai_usage_providers_argument_narrows_the_symbrain_call() {
+    let mut f = fixture();
+    let runner = std::rc::Rc::new(symcockpit_testkit::symbrain::FakeSymbrain::replying(
+        r#"{"schema_version":1,"providers":[]}"#,
+    ));
+    f.app.services.usage_runner = Box::new(SharedRunner(runner.clone()));
+    let text = text_of(&f.call("get_ai_usage", json!({"providers": ["openrouter"]}))).to_owned();
+    let results: Value = serde_json::from_str(&text).unwrap();
+    let ids: Vec<&str> = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["provider_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["openrouter"]);
+    let calls = runner.calls.borrow();
+    assert_eq!(calls.len(), 1);
+    let (args, env) = &calls[0];
+    assert_eq!(
+        args,
+        &["usage", "--output", "json", "--providers", "openrouter"]
+            .map(String::from)
+            .to_vec()
+    );
+    assert!(
+        env.keys()
+            .all(|k| !k.ends_with("_API_KEY") || k.starts_with("OPENROUTER")),
+        "no credential reference for an unselected provider: {env:?}"
+    );
+
+    // Nobody selected: nothing is asked at all.
+    let empty = text_of(&f.call("get_ai_usage", json!({"providers": []}))).to_owned();
+    assert_eq!(empty, "[]");
+    assert_eq!(runner.calls.borrow().len(), 1);
+
+    // An unknown ID is a usage error, not a silent all-provider read.
+    let bad = f.call("get_ai_usage", json!({"providers": ["nope"]}));
+    assert!(bad.to_string().contains("unknown provider 'nope'"), "{bad}");
+    assert_eq!(runner.calls.borrow().len(), 1);
+}
+
+struct SharedRunner(std::rc::Rc<symcockpit_testkit::symbrain::FakeSymbrain>);
+
+impl symcockpit_core::ai_usage::UsageRunner for SharedRunner {
+    fn run(
+        &self,
+        args: &[String],
+        env: &std::collections::BTreeMap<String, String>,
+    ) -> Result<symcockpit_core::ai_usage::CommandOutput, symcockpit_core::ai_usage::UsageError>
+    {
+        self.0.run(args, env)
+    }
+}
+
 #[test]
 fn doctor_and_status_tools_follow_the_ports() {
     let mut f = fixture();

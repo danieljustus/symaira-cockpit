@@ -144,6 +144,18 @@ final class AgentViewModelTests: XCTestCase {
         let results = await AIUsageViewModel.usage(from: session, selected: ["q"])
         XCTAssertEqual(results.map(\.providerID), ["q"])
         XCTAssertEqual(results.first?.snapshot?.providerID, "q")
+        // The selection travels with the request, so the agent asks symbrain for it only.
+        let call = requests("call").last { $0["command"] as? String == "ai-usage" }
+        XCTAssertEqual((call?["params"] as? [String: Any])?["providers"] as? [String], ["q"])
+    }
+
+    func testAIUsageWithNothingSelectedAsksTheAgentNothing() async {
+        let session = makeSession()
+        await session.start()
+        defer { session.stop() }
+        let results = await AIUsageViewModel.usage(from: session, selected: [])
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertFalse(requests("call").contains { $0["command"] as? String == "ai-usage" })
     }
 
     // MARK: - Actions

@@ -499,7 +499,11 @@ impl<'a> Server<'a> {
             "history" => Params::History {
                 limit: int_argument(arguments, "limit").unwrap_or(100),
             },
-            "ai-usage" => Params::AiUsage { provider: None },
+            "ai-usage" => Params::AiUsage {
+                providers: symcockpit_core::ai_usage::providers_argument(
+                    arguments.get("providers"),
+                )?,
+            },
             _ => Params::None,
         };
         let request = Request {

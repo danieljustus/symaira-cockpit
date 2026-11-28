@@ -2,8 +2,6 @@
 //! commands implemented in this crate. `Ok(None)` means "no native
 //! implementation (yet)": the caller answers `unsupported`.
 
-use std::collections::BTreeSet;
-
 use serde_json::Value;
 use symcockpit_contract::Error;
 use symcockpit_core::{ai_usage, history, profiles, status, system};
@@ -93,15 +91,13 @@ pub fn run_read(app: &App, ctx: &Context, req: &Request) -> Result<Option<Output
         }
         "profile.list" => Ok(Some(Output::Json(profiles::list_json(ctx.data_dir)))),
         "ai-usage" => {
-            let Params::AiUsage { provider } = &req.params else {
+            let Params::AiUsage { providers } = &req.params else {
                 return Err(Error::Failed("ai-usage: missing provider".into()));
             };
-            let selection: Option<BTreeSet<String>> =
-                provider.as_ref().map(|p| BTreeSet::from([p.clone()]));
             let results = ai_usage::usage_report(
                 &*app.services.usage_runner,
                 ctx.env,
-                selection.as_ref(),
+                providers.as_ref(),
                 &app.services.vault_entry_paths,
             );
             Ok(Some(if req.json {

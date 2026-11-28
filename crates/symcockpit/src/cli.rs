@@ -577,7 +577,9 @@ fn parse(command: &str, rest: &[String]) -> Result<Step, Error> {
                 "ai-usage",
                 options.json,
                 Params::AiUsage {
-                    provider: options.provider,
+                    providers: options
+                        .provider
+                        .map(|p| std::collections::BTreeSet::from([p])),
                 },
             )
         }
