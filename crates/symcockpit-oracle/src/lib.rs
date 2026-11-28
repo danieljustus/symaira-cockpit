@@ -189,6 +189,7 @@ fn run_manifest_in(
     }
     let dir = manifest_path.parent().unwrap_or(Path::new("."));
     let init = initialize_params(dir)?;
+    let allowed = allowed_drift(dir)?;
     Ok(manifest
         .cases
         .iter()
@@ -212,6 +213,9 @@ fn run_manifest_in(
             {
                 result.errors.push(error);
             }
+            if let Some(keys) = allowed.get(&case.id) {
+                apply_allowed_drift(keys, &mut result);
+            }
             if tripwire.is_some_and(Tripwire::fired) {
                 result.errors.clear();
                 result.hints.clear();
@@ -221,6 +225,43 @@ fn run_manifest_in(
             result
         })
         .collect())
+}
+
+/// Documented drift from the frozen fixtures, per case: `{"<case id>": {"<$.json.path.key>":
+/// "<reason>"}}` in `allowed-drift.json` one directory above the manifest, outside the
+/// frozen fixture directory. Missing file: nothing is allowed.
+type AllowedDrift = std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>;
+
+fn allowed_drift(dir: &Path) -> Result<AllowedDrift, String> {
+    let path = dir.join("../allowed-drift.json");
+    if !path.is_file() {
+        return Ok(AllowedDrift::new());
+    }
+    let mut value = read_json(&path)?;
+    let cases = value
+        .get_mut("cases")
+        .map(Value::take)
+        .ok_or_else(|| format!("{}: expected {{\"cases\": {{...}}}}", path.display()))?;
+    serde_json::from_value(cases).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Turns a missing or extra key listed for this case into a hint carrying its
+/// reason. Every other error stays an error, so unlisted drift still fails.
+fn apply_allowed_drift(keys: &std::collections::BTreeMap<String, String>, result: &mut CaseResult) {
+    let pattern = Regex::new(r"^(\S+): (?:missing|unexpected) key '(.+)'$").expect("static regex");
+    let (allowed, kept): (Vec<String>, Vec<String>) = std::mem::take(&mut result.errors)
+        .into_iter()
+        .partition(|error| {
+            pattern
+                .captures(error)
+                .is_some_and(|c| keys.contains_key(&format!("{}.{}", &c[1], &c[2])))
+        });
+    result.errors = kept;
+    for error in allowed {
+        let c = pattern.captures(&error).expect("matched above");
+        let reason = &keys[&format!("{}.{}", &c[1], &c[2])];
+        result.hints.push(format!("{error} (allowed: {reason})"));
+    }
 }
 
 fn initialize_params(dir: &Path) -> Result<Value, String> {
@@ -422,6 +463,47 @@ fn first_difference(expected: &[u8], actual: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_listed_drift_becomes_a_hint() {
+        let keys = std::collections::BTreeMap::from([
+            ("$.fans".to_owned(), "added in v0.13.1".to_owned()),
+            ("$.a.gone".to_owned(), "machine state".to_owned()),
+        ]);
+        let mut result = CaseResult {
+            id: "fan-status".into(),
+            errors: vec![
+                "$: unexpected key 'fans'".into(),
+                "$.a: missing key 'gone'".into(),
+                "$: unexpected key 'other'".into(),
+                "$.fans: expected type array, got object".into(),
+            ],
+            hints: Vec::new(),
+            skipped: None,
+        };
+        apply_allowed_drift(&keys, &mut result);
+        assert_eq!(
+            result.errors,
+            [
+                "$: unexpected key 'other'",
+                "$.fans: expected type array, got object"
+            ]
+        );
+        assert_eq!(
+            result.hints,
+            [
+                "$: unexpected key 'fans' (allowed: added in v0.13.1)",
+                "$.a: missing key 'gone' (allowed: machine state)"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_shipped_allow_list_parses() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../oracle/v0.12");
+        let allowed = allowed_drift(&dir).expect("allowed-drift.json parses");
+        assert!(allowed["fan-status"].contains_key("$.software_override"));
+    }
 
     #[test]
     fn normalize_rewrites_both_sides_and_exact_compare_is_byte_exact() {

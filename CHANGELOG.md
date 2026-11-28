@@ -9,6 +9,12 @@
   now sends its enabled providers (`providers`), the agent passes them on as
   `--providers`, and credential references of other providers stay out of the child
   environment. With nothing enabled no request is made.
+- Enabling a provider, or changing one provider's history consent, fetches only that provider
+  instead of every enabled one; disabling a provider fetches nothing (#449).
+- `make oracle` passes again: documented drift from the frozen v0.12 fixtures (the
+  `fans`/`software_override` fan-status additions of #429 and the machine-state dependent
+  `active_overrides.fan_fraction`) is listed with its reason in `oracle/allowed-drift.json`
+  and reported as a hint; unlisted drift still fails (#455).
 
 ## [0.13.2] (2026-11-27)
 

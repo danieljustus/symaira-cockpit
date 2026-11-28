@@ -1,0 +1,22 @@
+{
+  "cases": {
+    "status-json": {
+      "$.active_overrides.fan_fraction": "present only while every fan is in manual mode (oracle/README.md, Limits)"
+    },
+    "mcp-call-get_status": {
+      "$.active_overrides.fan_fraction": "present only while every fan is in manual mode (oracle/README.md, Limits)"
+    },
+    "fan-status": {
+      "$.fans": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target",
+      "$.software_override": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target"
+    },
+    "fan-profile-read": {
+      "$.fans": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target",
+      "$.software_override": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target"
+    },
+    "fan-target-read": {
+      "$.fans": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target",
+      "$.software_override": "added in v0.13.1 (#429): raw SMC override and per-fan mode/target"
+    }
+  }
+}

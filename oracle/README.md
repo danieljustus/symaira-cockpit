@@ -138,6 +138,16 @@ checked against the register and `snapshots/mcp/tools_list.json`, which the
 (`SYMCOCKPIT_UPDATE_SNAPSHOTS=1` rewrites it; review the diff). The fixture
 under `oracle/v0.12/` is never edited for a new tool.
 
+## Allowed drift
+
+`oracle/allowed-drift.json` (outside the frozen `v0.12/` directory) lists, per
+case id and JSON path, a missing or extra key that is expected, with the reason:
+a documented additive extension (for example `fans` and `software_override` in
+`fan status` since v0.13.1, #429) or a key that depends on machine state
+(`active_overrides.fan_fraction`, see Limits). A listed key is reported as a
+hint; any unlisted drift, and any type change of a listed key, still fails the
+case. Add an entry only together with the change that causes it (#455).
+
 ## Limits
 
 * Structure, not values. A Rust port can match every fixture and still report
