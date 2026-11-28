@@ -199,6 +199,8 @@ pub struct ProviderRow {
     pub configured: bool,
     pub error: String,
     pub snapshot: Option<Value>,
+    /// Brain's account attribution (`accounts`), raw; sanitised by `accounts_json`.
+    pub accounts: Vec<Value>,
 }
 
 pub fn fetch_report(
@@ -270,6 +272,11 @@ pub fn fetch_report(
                     Some(_) => return Err(UsageError::InvalidJson),
                 },
                 snapshot: o.get("snapshot").filter(|s| !s.is_null()).cloned(),
+                accounts: o
+                    .get("accounts")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default(),
             })
         })
         .collect()
@@ -390,7 +397,96 @@ fn snapshot_json(raw: &Value) -> Result<Value, UsageError> {
         "source".into(),
         json!(redact(&text("source").ok_or(UsageError::InvalidJson)?)),
     );
+    snapshot_extras(&mut snapshot, o);
     Ok(Value::Object(snapshot))
+}
+
+/// The optional extras of a Brain snapshot (#453, #454): `plan`, `org_billing`
+/// (Copilot seats billed to an organization) and `reset_grants` (read-only).
+/// Known fields only, every string redacted; a malformed extra is dropped, never
+/// failing the snapshot it rides on.
+fn snapshot_extras(snapshot: &mut Map<String, Value>, o: &Map<String, Value>) {
+    let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(redact);
+    if let Some(plan) = o.get("plan").and_then(Value::as_str) {
+        snapshot.insert("plan".into(), json!(redact(plan)));
+    }
+    if let Some(billing) = o.get("org_billing")
+        && let (Some(state), Some(detail)) = (text(billing, "state"), text(billing, "detail"))
+    {
+        let mut m = Map::new();
+        m.insert("state".into(), json!(state));
+        m.insert("detail".into(), json!(detail));
+        if let Some(org) = text(billing, "organization") {
+            m.insert("organization".into(), json!(org));
+        }
+        snapshot.insert("org_billing".into(), Value::Object(m));
+    }
+    let Some(status) = o.get("reset_grants") else {
+        return;
+    };
+    let grant = |g: &Value| -> Option<Value> {
+        let mut m = Map::new();
+        m.insert("id".into(), json!(text(g, "id")?));
+        m.insert("resets_left".into(), json!(g.get("resets_left")?.as_u64()?));
+        set_number(
+            &mut m,
+            "ends_at",
+            date_seconds(g.get("ends_at"), "ends_at").ok()?,
+        );
+        let clears: Vec<String> = g
+            .get("clears")?
+            .as_array()?
+            .iter()
+            .filter_map(Value::as_str)
+            .map(redact)
+            .collect();
+        m.insert("clears".into(), json!(clears));
+        Some(Value::Object(m))
+    };
+    let grants: Option<Vec<Value>> = status
+        .get("grants")
+        .and_then(Value::as_array)
+        .and_then(|gs| gs.iter().map(grant).collect());
+    if let (Some(eligible), Some(grants)) =
+        (status.get("eligible").and_then(Value::as_bool), grants)
+    {
+        let mut m = Map::new();
+        m.insert("eligible".into(), json!(eligible));
+        m.insert("grants".into(), Value::Array(grants));
+        if let Some(next) = text(status, "next_grant_id") {
+            m.insert("next_grant_id".into(), json!(next));
+        }
+        snapshot.insert("reset_grants".into(), Value::Object(m));
+    }
+}
+
+/// Which local login a row reads when Brain found several (#453): label, source,
+/// state and optional detail of each, all non-secret by Brain's contract and
+/// redacted again here. Entries missing a required field are dropped.
+fn accounts_json(raw: &[Value]) -> Vec<Value> {
+    raw.iter()
+        .filter_map(|a| {
+            let text = |key: &str| a.get(key).and_then(Value::as_str).map(redact);
+            let mut m = Map::new();
+            for key in ["label", "source", "state"] {
+                m.insert(key.into(), json!(text(key)?));
+            }
+            if let Some(detail) = text("detail") {
+                m.insert("detail".into(), json!(detail));
+            }
+            Some(Value::Object(m))
+        })
+        .collect()
+}
+
+fn with_accounts(mut result: Value, accounts: &[Value]) -> Value {
+    let accounts = accounts_json(accounts);
+    if !accounts.is_empty()
+        && let Some(o) = result.as_object_mut()
+    {
+        o.insert("accounts".into(), Value::Array(accounts));
+    }
+    result
 }
 
 fn result_json(id: &str, snapshot: Option<Value>, error: Option<String>) -> Value {
@@ -441,17 +537,18 @@ pub fn usage_report(
                 return result_json(id, None, Some(NOT_CONFIGURED.into()));
             }
             if !row.error.is_empty() {
-                return result_json(id, None, Some(redact(&row.error)));
+                return with_accounts(result_json(id, None, Some(redact(&row.error))), &row.accounts);
             }
             let converted = row
                 .snapshot
                 .as_ref()
                 .filter(|s| s.get("provider_id").and_then(Value::as_str) == Some(*id))
                 .and_then(|s| snapshot_json(s).ok());
-            match converted {
+            let result = match converted {
                 Some(snapshot) => result_json(id, Some(snapshot), None),
                 None => result_json(id, None, Some("AI usage unavailable.".into())),
-            }
+            };
+            with_accounts(result, &row.accounts)
         })
         .collect()
 }
@@ -686,6 +783,49 @@ mod tests {
                 .unwrap()
                 .starts_with("AI usage unavailable. symbrain did not report")
         );
+    }
+
+    #[test]
+    fn passes_plan_org_billing_reset_grants_and_accounts_through() {
+        let report = r#"{"schema_version":1,"providers":[
+          {"id":"claude","display_name":"Claude","configured":true,"auth_status":{"status":"available","detail":"x"},
+           "accounts":[{"label":"claude-1a2b3c4d","source":"claude_cli","state":"used"},
+                       {"label":"claude-9f8e7d6c","source":"claude_desktop","state":"not_read","detail":"token: abcdefghijklmnop1234"},
+                       {"label":"broken"}],
+           "snapshot":{"provider_id":"claude","meters":[],"fetched_at":"2026-11-20T10:00:00Z","source":"oauth","plan":"Max",
+             "reset_grants":{"eligible":true,"next_grant_id":"g1","grants":[{"id":"g1","resets_left":2,"ends_at":"2026-11-20T15:00:00Z","clears":["Weekly"]}]}},
+           "error":""},
+          {"id":"copilot","display_name":"Copilot","configured":true,"auth_status":{"status":"available","detail":"x"},
+           "snapshot":{"provider_id":"copilot","meters":[],"fetched_at":"2026-11-20T10:00:00Z","source":"api",
+             "org_billing":{"state":"available","detail":"month to date","organization":"acme"},
+             "reset_grants":{"eligible":true,"grants":[{"id":"g","resets_left":-1,"clears":[]}]}},
+           "error":""}
+        ]}"#;
+        let results = run(&Fake::ok(report), Some(&["claude", "copilot"]));
+        let claude = &results[0];
+        assert_eq!(claude["snapshot"]["plan"], "Max");
+        assert_eq!(
+            claude["snapshot"]["reset_grants"],
+            json!({"eligible": true, "next_grant_id": "g1",
+                   "grants": [{"id": "g1", "resets_left": 2, "ends_at": 816_879_600.0, "clears": ["Weekly"]}]})
+        );
+        assert_eq!(
+            claude["accounts"],
+            json!([{"label": "claude-1a2b3c4d", "source": "claude_cli", "state": "used"},
+                   {"label": "claude-9f8e7d6c", "source": "claude_desktop", "state": "not_read",
+                    "detail": "<redacted>"}]),
+            "incomplete entries are dropped, strings redacted"
+        );
+        let copilot = &results[1];
+        assert_eq!(
+            copilot["snapshot"]["org_billing"],
+            json!({"state": "available", "detail": "month to date", "organization": "acme"})
+        );
+        assert!(
+            copilot["snapshot"].get("reset_grants").is_none(),
+            "a malformed extra is dropped, the snapshot stays"
+        );
+        assert!(copilot.get("accounts").is_none());
     }
 
     #[test]

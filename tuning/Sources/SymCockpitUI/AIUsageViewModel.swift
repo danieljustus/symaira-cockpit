@@ -12,6 +12,8 @@ struct AIUsageRow: Identifiable, Equatable {
     let lastSuccessAt: Date?
     let history: [MetricSample]
     var recordedHistory: AIUsageRecordedHistory?
+    /// Local logins symbrain found when it has several to tell apart (#453).
+    var accounts: [AIUsageAccount] = []
     var id: String { providerID }
     var isUnavailable: Bool { snapshot == nil }
     var isStale: Bool { snapshot != nil && error != nil }
@@ -321,7 +323,8 @@ final class AIUsageViewModel {
             return
         }
         let untouched = rows.filter { !selected.contains($0.id) && enabled.contains($0.id) }.map {
-            AIUsageService.ProviderResult(providerID: $0.id, snapshot: $0.snapshot, error: $0.error, history: $0.recordedHistory)
+            AIUsageService.ProviderResult(providerID: $0.id, snapshot: $0.snapshot, error: $0.error, history: $0.recordedHistory,
+                                          accounts: $0.accounts)
         }
         apply(untouched + results.filter { selected.contains($0.providerID) })
     }
@@ -343,7 +346,8 @@ final class AIUsageViewModel {
                     entryPaths: preferences.entryPaths),
                 lastSuccessAt: snapshot?.fetchedAt ?? previous[id]?.lastSuccessAt,
                 history: historyBuffers[id]?.samples ?? [],
-                recordedHistory: preferences.consentedHistoryProviders.contains(id) ? result.history : nil)
+                recordedHistory: preferences.consentedHistoryProviders.contains(id) ? result.history : nil,
+                accounts: result.accounts ?? [])
         }
         if recordSamples { evaluateQuotaAlerts() }
         updateStatusItem()

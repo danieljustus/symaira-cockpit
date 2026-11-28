@@ -7,6 +7,10 @@
   a screen share or recording hides the AI values in the menu bar, redacts the provider
   cards, and redacts a copied usage image. Off by default; the capture check runs only
   while the setting is on.
+- AI usage shows what symbrain already reports beyond the meters (#453, #454): the plan,
+  organization billing of Copilot seats, read-only usage-reset grants, and which local
+  login a row reads when several exist. The agent passed none of it through before.
+  Known fields only, every string redacted, a malformed extra is dropped.
 - AI usage priority strip and quota alerts (#450): *Menu bar: most urgent limits first* shows
   the configured number of limits in a documented order (starred, used up, critical,
   warning, then limits that reset within a day with less than half used) plus `+N` for the

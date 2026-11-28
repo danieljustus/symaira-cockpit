@@ -133,6 +133,9 @@ struct AIUsageCardView: View {
                 }
                 providerMoves(row.id)
             }
+            ForEach(AIUsageFormatting.detailLines(snapshot: row.snapshot, accounts: row.accounts, now: now), id: \.self) { line in
+                Text(line).font(SymairaTypography.caption).foregroundStyle(.secondary)
+            }
             if let error = row.error {
                 Text(error).font(SymairaTypography.caption).foregroundStyle(.secondary)
                 if let date = row.lastSuccessAt {

@@ -55,6 +55,11 @@ public struct AIUsageSnapshot: Codable, Sendable, Equatable {
     /// The symbrain strategy that produced the data (`oauth`, `cli`, `web`,
     /// `api`, or `local`).
     public let source: String
+    /// Extras symbrain reports for some providers (#453, #454): the plan name,
+    /// organization billing for Copilot seats, and the read-only reset-grant status.
+    public var plan: String?
+    public var orgBilling: AIUsageOrgBilling?
+    public var resetGrants: AIUsageResetGrants?
 
     public var staleness: TimeInterval { Date().timeIntervalSince(fetchedAt) }
 
@@ -65,6 +70,9 @@ public struct AIUsageSnapshot: Codable, Sendable, Equatable {
         case currency
         case fetchedAt
         case source
+        case plan
+        case orgBilling
+        case resetGrants
     }
 
     public init(
@@ -81,6 +89,65 @@ public struct AIUsageSnapshot: Codable, Sendable, Equatable {
         self.currency = currency
         self.fetchedAt = fetchedAt
         self.source = source
+    }
+}
+
+/// Copilot seats billed to an organization: what the billing lookup returned.
+public struct AIUsageOrgBilling: Codable, Sendable, Equatable {
+    /// `available`, `forbidden`, `no_organization`, `no_copilot_usage` or `unavailable`.
+    public let state: String
+    public let detail: String
+    public let organization: String?
+
+    public init(state: String, detail: String, organization: String? = nil) {
+        self.state = state
+        self.detail = detail
+        self.organization = organization
+    }
+}
+
+/// Read-only reset grants: how many resets remain and until when. Claiming one is
+/// not offered here; that would be a risky, confirmed action in Brain.
+public struct AIUsageResetGrants: Codable, Sendable, Equatable {
+    public struct Grant: Codable, Sendable, Equatable {
+        public let id: String
+        public let resetsLeft: Int
+        public let endsAt: Date?
+        public let clears: [String]
+
+        public init(id: String, resetsLeft: Int, endsAt: Date? = nil, clears: [String] = []) {
+            self.id = id
+            self.resetsLeft = resetsLeft
+            self.endsAt = endsAt
+            self.clears = clears
+        }
+    }
+
+    public let eligible: Bool
+    public let grants: [Grant]
+    public let nextGrantId: String?
+
+    public init(eligible: Bool, grants: [Grant], nextGrantId: String? = nil) {
+        self.eligible = eligible
+        self.grants = grants
+        self.nextGrantId = nextGrantId
+    }
+}
+
+/// One local login symbrain found for a provider, without credential material (#453).
+public struct AIUsageAccount: Codable, Sendable, Equatable {
+    /// Stable non-secret label such as `claude-1a2b3c4d`, or `unattributed`.
+    public let label: String
+    public let source: String
+    /// `used` (this row reads it), `not_read`, `candidate` or `unattributed`.
+    public let state: String
+    public let detail: String?
+
+    public init(label: String, source: String, state: String, detail: String? = nil) {
+        self.label = label
+        self.source = source
+        self.state = state
+        self.detail = detail
     }
 }
 

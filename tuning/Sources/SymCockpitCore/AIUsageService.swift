@@ -8,12 +8,16 @@ public struct AIUsageService: @unchecked Sendable {
         /// A generic, secret-free error. The subprocess output is never exposed.
         public let error: String?
         public let history: AIUsageRecordedHistory?
+        /// The local logins symbrain found, when there is more than one to tell apart (#453).
+        public var accounts: [AIUsageAccount]?
 
-        public init(providerID: String, snapshot: AIUsageSnapshot?, error: String?, history: AIUsageRecordedHistory? = nil) {
+        public init(providerID: String, snapshot: AIUsageSnapshot?, error: String?, history: AIUsageRecordedHistory? = nil,
+                    accounts: [AIUsageAccount]? = nil) {
             self.providerID = providerID
             self.snapshot = snapshot
             self.error = error
             self.history = history
+            self.accounts = accounts
         }
     }
 

@@ -178,3 +178,42 @@ public enum AIUsageVisibility {
         return isEnabled
     }
 }
+
+extension AIUsageFormatting {
+    /// Caption lines for the extras symbrain reports (#453, #454): plan, organization
+    /// billing, reset grants and which local login the row reads when there are several.
+    public static func detailLines(snapshot: AIUsageSnapshot?, accounts: [AIUsageAccount], now: Date) -> [String] {
+        var lines: [String] = []
+        if let plan = snapshot?.plan, !plan.isEmpty { lines.append("Plan: \(plan)") }
+        if let billing = snapshot?.orgBilling {
+            if billing.state == "available", let org = billing.organization {
+                lines.append("Billed to organization \(org)")
+            } else {
+                lines.append("Organization billing: \(billing.detail)")
+            }
+        }
+        if let status = snapshot?.resetGrants {
+            let open = status.grants.filter { $0.resetsLeft > 0 }
+            if !status.eligible {
+                lines.append("Usage resets: not eligible")
+            } else if open.isEmpty {
+                lines.append("Usage resets: none left")
+            }
+            for grant in open {
+                var text = "\(grant.resetsLeft) usage reset\(grant.resetsLeft == 1 ? "" : "s") left"
+                if !grant.clears.isEmpty { text += " (\(grant.clears.joined(separator: ", ")))" }
+                if let end = grant.endsAt, end > now { text += ", expires in \(countdownText(until: end, now: now))" }
+                lines.append(text)
+            }
+        }
+        if accounts.count > 1 || accounts.contains(where: { $0.state == "unattributed" }) {
+            if let used = accounts.first(where: { $0.state == "used" }) {
+                lines.append("Reads login \(used.label) (\(accounts.count) local logins found)")
+            } else {
+                let candidates = accounts.filter { $0.state == "candidate" }.count
+                lines.append("Login not attributed: \(candidates) possible owner\(candidates == 1 ? "" : "s")")
+            }
+        }
+        return lines
+    }
+}
