@@ -18,11 +18,14 @@ final class AIUsagePreferences: ObservableObject {
             defaults.set(Array(enabledProviders), forKey: Keys.enabledProviders)
             let disabled = oldValue.subtracting(enabledProviders)
             if !disabled.isEmpty { onProvidersDisabled?(disabled) }
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(enabledProviders.subtracting(oldValue))
         }
     }
     private(set) var enabledRevision = 0
-    var onUsageSelectionChanged: (() -> Void)?
+    /// Called after the enabled set or a history consent changed, with the providers
+    /// whose data must be fetched again: the newly enabled ones, or the one whose
+    /// consent changed. Disabling needs no fetch, so it passes an empty set (#449).
+    var onUsageSelectionChanged: ((Set<String>) -> Void)?
     /// Called with the providers that just left the enabled set, so their cached
     /// meters are purged and cannot be served by other surfaces afterwards.
     var onProvidersDisabled: ((Set<String>) -> Void)?
@@ -32,7 +35,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != claudeHistoryEnabled else { return }
             enabledRevision += 1
             defaults.set(claudeHistoryEnabled, forKey: Keys.claudeHistoryEnabled)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["claude"])
         }
     }
     @Published var claudeHistoryOnly: Bool {
@@ -40,7 +43,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != claudeHistoryOnly else { return }
             enabledRevision += 1
             defaults.set(claudeHistoryOnly, forKey: Keys.claudeHistoryOnly)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["claude"])
         }
     }
 
@@ -49,7 +52,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != codexHistoryEnabled else { return }
             enabledRevision += 1
             defaults.set(codexHistoryEnabled, forKey: Keys.codexHistoryEnabled)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["codex"])
         }
     }
     @Published var codexHistoryOnly: Bool {
@@ -57,7 +60,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != codexHistoryOnly else { return }
             enabledRevision += 1
             defaults.set(codexHistoryOnly, forKey: Keys.codexHistoryOnly)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["codex"])
         }
     }
 
@@ -66,7 +69,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != grokHistoryEnabled else { return }
             enabledRevision += 1
             defaults.set(grokHistoryEnabled, forKey: Keys.grokHistoryEnabled)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["grok"])
         }
     }
 
@@ -75,7 +78,7 @@ final class AIUsagePreferences: ObservableObject {
             guard oldValue != opencodeHistoryEnabled else { return }
             enabledRevision += 1
             defaults.set(opencodeHistoryEnabled, forKey: Keys.opencodeHistoryEnabled)
-            onUsageSelectionChanged?()
+            onUsageSelectionChanged?(["opencode"])
         }
     }
 

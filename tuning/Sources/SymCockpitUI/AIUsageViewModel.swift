@@ -104,14 +104,16 @@ final class AIUsageViewModel {
         self.fetchClaudeHistory = fetchClaudeHistory
         self.fetchEstimatedHistory = fetchEstimatedHistory
         preferences.onProvidersDisabled = { [weak self] ids in self?.purge(ids) }
-        preferences.onUsageSelectionChanged = { [weak self] in
+        preferences.onUsageSelectionChanged = { [weak self] changed in
             guard let self else { return }
             self.rows.removeAll { !self.preferences.isEnabled($0.id) }
             for index in self.rows.indices where !self.preferences.consentedHistoryProviders.contains(self.rows[index].id) {
                 self.rows[index].recordedHistory = nil
             }
             self.updateStatusItem()
-            self.refreshNow()
+            // Only the providers this change touched are fetched again (#449).
+            let stale = changed.intersection(self.preferences.enabledProviders)
+            if !stale.isEmpty { self.refreshNow(providerIDs: stale) }
         }
         preferenceObserver = preferences.objectWillChange.sink { [weak self] _ in
             // Published emits before mutation. Read the new preferences on the next main-actor turn.
@@ -186,17 +188,25 @@ final class AIUsageViewModel {
 
     func refreshNow(providerID: String? = nil) { Task { await refresh(providerID: providerID) } }
 
-    /// Runs one queued per-provider refresh; each finished refresh chains the next.
+    func refreshNow(providerIDs: Set<String>) { Task { await refresh(providerIDs: providerIDs) } }
+
+    /// Runs the providers queued while another refresh ran, in one request.
     private func startQueuedRefresh() {
-        guard !isStopped, let next = queuedProviders.sorted().first else {
+        guard !isStopped, !queuedProviders.isEmpty else {
             queuedProviders.removeAll()
             return
         }
-        queuedProviders.remove(next)
-        refreshNow(providerID: next)
+        let next = queuedProviders
+        queuedProviders.removeAll()
+        refreshNow(providerIDs: next)
     }
 
     func refresh(providerID: String? = nil, force: Bool = true) async {
+        await refresh(providerIDs: providerID.map { [$0] }, force: force)
+    }
+
+    /// `nil`: every enabled provider. A set: only those of them that are enabled.
+    func refresh(providerIDs: Set<String>?, force: Bool = true) async {
         guard !isStopped else { return }
         let enabled = preferences.enabledProviders
         let revision = preferences.enabledRevision
@@ -209,7 +219,7 @@ final class AIUsageViewModel {
             // A per-provider request (for example "Refresh X") must not vanish
             // while another refresh runs: queue it for when that one finishes.
             // Whole-set requests stay coalesced into the running one.
-            if let providerID, enabled.contains(providerID) { queuedProviders.insert(providerID) }
+            if let providerIDs { queuedProviders.formUnion(providerIDs.intersection(enabled)) }
             return
         }
         isRefreshing = true
@@ -217,7 +227,7 @@ final class AIUsageViewModel {
             isRefreshing = false
             startQueuedRefresh()
         }
-        let selected = providerID.map { enabled.intersection([$0]) } ?? enabled
+        let selected = providerIDs.map { enabled.intersection($0) } ?? enabled
         guard !selected.isEmpty else { return }
         let results: [AIUsageService.ProviderResult]
         if let fetchEstimatedHistory {
@@ -237,9 +247,12 @@ final class AIUsageViewModel {
         }
         guard !isStopped, !Task.isCancelled else { return }
         guard revision == preferences.enabledRevision else {
+            // The selection changed mid-flight: drop these results and fetch again only
+            // the providers they were for that are still enabled; the change itself
+            // already queued the providers it touched.
             rows.removeAll { !preferences.enabledProviders.contains($0.id) }
             updateStatusItem()
-            refreshNow()
+            queuedProviders.formUnion(selected.intersection(preferences.enabledProviders))
             return
         }
         let untouched = rows.filter { !selected.contains($0.id) && enabled.contains($0.id) }.map {
